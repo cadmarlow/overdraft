@@ -56,24 +56,15 @@ async function initApp() {
   await showLoadingStage('Ouverture de la ville…');
 
   // 1. Initialize Three.js WebGPURenderer with 32-bit float reversedDepthBuffer
-  // Ship the broadly supported renderer first. WebGPU remains available for hardware validation.
-  const forceWebGL = new URLSearchParams(location.search).get('renderer') !== 'webgpu';
-  let graphicsAdapter = null;
-  let graphicsDevice;
-  if (!forceWebGL && navigator.gpu) {
-    try {
-      graphicsAdapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
-      if (graphicsAdapter) graphicsDevice = await graphicsAdapter.requestDevice({ requiredFeatures: [...graphicsAdapter.features] });
-    } catch (error) { console.warn('[graphics] Native adapter unavailable; using compatibility renderer.', error); }
-  }
+  // Preserve upstream's WebGPU default and its automatic capability detection.
+  // Compatibility rendering is an explicit choice, never a cloud-QA workaround.
+  const forceWebGL = new URLSearchParams(location.search).get('renderer') === 'webgl';
   const renderer = new THREE.WebGPURenderer({
-    device: graphicsDevice,
-    forceWebGL: forceWebGL || !graphicsDevice,
+    forceWebGL,
     antialias: true,
     powerPreference: 'high-performance',
     reversedDepthBuffer: true
   });
-  renderer.graphicsAdapter = graphicsAdapter;
   renderer.setPixelRatio(performanceMode ? 0.65 : 1.0);
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = !performanceMode;
@@ -90,6 +81,16 @@ async function initApp() {
   };
 
   await renderer.init();
+  const rendererName = renderer.backend.isWebGPUBackend ? 'WebGPU' : 'WebGL 2';
+  console.info(`[graphics] ${rendererName}`);
+  let diagnostics = null;
+  if (new URLSearchParams(location.search).has('stats')) {
+    diagnostics = document.createElement('output');
+    diagnostics.id = 'graphics-stats';
+    diagnostics.style.cssText = 'position:fixed;right:24px;top:76px;z-index:50;padding:8px 12px;background:#10180ee8;color:#e1f3a0;font:12px monospace;pointer-events:none';
+    diagnostics.textContent = `${rendererName} · chargement…`;
+    document.body.append(diagnostics);
+  }
   renderer.onDeviceLost = info => {
     graphicsLost = true;
     console.error('[graphics]', info);
@@ -751,6 +752,7 @@ async function initApp() {
     fpsTimer += Math.max(0, rawDt);
     if (fpsTimer >= 0.25) {
       const currentFps = Math.round(frameCount / fpsTimer);
+      if (diagnostics) diagnostics.textContent = `${rendererName} · ${currentFps} FPS · ${(fpsTimer * 1000 / frameCount).toFixed(1)} ms/image`;
       frameCount = 0;
       fpsTimer = 0;
 

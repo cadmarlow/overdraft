@@ -1,6 +1,6 @@
 # CONTRE-MARÉE — Playground 01
 
-Version 0.1.0, based on Slop New York at e35c06c0d896052a80ff117aefe8b99e978913d4.
+Version 0.1.1, based on Slop New York at e35c06c0d896052a80ff117aefe8b99e978913d4.
 
 ## Play
 
@@ -17,15 +17,16 @@ claimed from its driver's side. Vehicles remain where left; local browser storag
 preserves the protagonist, the fleet and the selected vehicle. Reset is available
 in the menu. No accounts, missions, multiplayer or live events in this release.
 
-WebGL 2 is the default renderer (without screen-space reflections).
-`?renderer=webgpu` selects the experimental WebGPU path for hardware validation.
+WebGPU is the default renderer, matching the upstream project.
+`?renderer=webgl` explicitly selects compatibility rendering without screen-space reflections.
+`?stats=1` displays the actual renderer and measured frame rate.
 `?quality=performance` selects lower resolution and disables expensive sun shadows.
 
 ## Development
 
 No runtime CDN, package installation or application server is required. Three.js
 and its imported addons are vendored at the exact upstream commit. Serve the
-checkout over HTTP to develop. Run `npm test`, then `npm run build` to prepare
+checkout over HTTP with `npm run dev`. Run `npm test`, then `npm run build` to prepare
 the static production directory `dist/`.
 
 `scripts/browser-check.cjs` is an environment-specific browser QA runner. It

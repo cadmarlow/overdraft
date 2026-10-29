@@ -116,7 +116,7 @@ export class Playground {
       <div id="drive-gauge"><span id="drive-gear">N</span><strong id="drive-speed">000</strong><span class="gauge-unit">KM/H</span><div><i id="drive-power"></i></div></div>
       <div id="game-keybar"><span><kbd>ZQSD</kbd> / <kbd>WASD</kbd> Se déplacer</span><span><kbd>MAJ</kbd> Sprint</span><span><kbd>ESPACE</kbd> Sauter</span><span><kbd>F</kbd> Véhicule</span><span><kbd>ÉCHAP</kbd> Menu</span></div>
       <div id="game-menu" class="game-menu">
-        <div class="menu-top"><span class="edition-label">UNE VILLE. VOTRE TERRAIN DE JEU.</span><span class="build-label">BUILD 0.1.0</span></div>
+        <div class="menu-top"><span class="edition-label">UNE VILLE. VOTRE TERRAIN DE JEU.</span><span class="build-label">BUILD 0.1.1</span></div>
         <div class="menu-body"><div class="menu-eyebrow"><span></span> NEW YORK / OPEN WORLD</div><h1>CONTRE<span>MARÉE<span class="title-dot">.</span></span></h1>
           <p class="menu-copy">La ville est à vous.<br>Descendez dans la rue. Prenez le volant.</p>
           <button id="play-button" class="primary-play">ENTRER DANS LA VILLE <span>↗</span></button>
@@ -125,7 +125,7 @@ export class Playground {
         <div class="menu-bottom"><span>MANHATTAN, NY<span class="coordinates">40°45′ N — 73°59′ W</span></span><button id="credits-button">CRÉDITS ↗</button><span class="menu-description">EXPLORATION LIBRE<br>PERSONNAGE · VÉHICULES · CONDUITE</span></div>
         <div id="menu-options"><span>AMBIANCE</span><button data-game-time="golden" class="selected">Soleil bas</button><button data-game-time="twilight">Crépuscule</button><button data-game-time="midnight">Nuit</button><button id="sound-toggle">SON ACTIVÉ</button><button id="quality-toggle">QUALITÉ : HAUTE</button></div>
       </div>
-      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>CONTRE-MARÉE</h2><p>Playground 01 · Version 0.1.0</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL).</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
+      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>CONTRE-MARÉE</h2><p>Playground 01 · Version 0.1.1</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL).</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
       <button id="mobile-interact" class="touch-interact" hidden>F <span>VÉHICULE</span></button>
     `);
     this.ui = Object.fromEntries(['game-menu', 'game-prompt', 'game-toast', 'stamina-fill', 'drive-speed', 'drive-gear', 'drive-power', 'vehicle-name', 'game-keybar', 'play-button', 'mobile-interact'].map(id => [id, document.getElementById(id)]));
