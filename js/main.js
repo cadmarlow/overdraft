@@ -53,7 +53,7 @@ async function initApp() {
     });
   }
 
-  await showLoadingStage('Initializing graphics...');
+  await showLoadingStage('Ouverture de la ville…');
 
   // 1. Initialize Three.js WebGPURenderer with 32-bit float reversedDepthBuffer
   // Ship the broadly supported renderer first. WebGPU remains available for hardware validation.
@@ -107,30 +107,30 @@ async function initApp() {
   markInit('renderer');
 
   // 2. Scene, atmosphere and lighting
-  await showLoadingStage('Creating sky and environment lighting...');
+  await showLoadingStage('Préparation de la lumière…');
   const scene = new THREE.Scene();
   const lightingSystem = new LightingSystem(scene, renderer);
   markInit('lighting');
 
   // 3. Build Manhattan Geography, Iconic Landmarks, Blocks, Street Details & Traffic
-  await showLoadingStage('Building streets, parks and waterfronts...');
+  await showLoadingStage('Préparation des rues et des quais…');
   const cityGrid = buildCityGrid(scene);
   markInit('cityGrid');
-  await showLoadingStage('Building bridges and surrounding boroughs...');
+  await showLoadingStage('Préparation des ponts et des quartiers…');
   const boroughs = buildBoroughs(scene, { sidewalks: cityGrid.sidewalks });
   markInit('boroughs');
-  await showLoadingStage('Building landmarks...');
+  await showLoadingStage('Préparation de Manhattan…');
   const { colliders: landmarkColliders } = buildLandmarks(scene);
   markInit('landmarks');
-  await showLoadingStage('Generating building footprints and facades...');
+  await showLoadingStage('Préparation des bâtiments…');
   const cityBlocks = buildCityBlocks(scene, landmarkColliders);
   markInit('blocks');
   const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...boroughs.colliders, ...(cityGrid.colliders || [])];
 
-  await showLoadingStage('Placing trees, streetlights and street furniture...');
+  await showLoadingStage('Préparation des rues…');
   const streetDetails = buildStreetDetails(scene, allColliders);
   markInit('streetDetails');
-  await showLoadingStage('Creating traffic and pedestrian routes...');
+  await showLoadingStage('La ville prend vie…');
   // Buildings turned along non-grid streets have oriented colliders whose world bounds reach past their lots: they stay
   // inside the property line anyway, so the road network (lanes & sidewalks) doesn't need them.
   // Elevated building sections that clear even a bus don't obstruct ground traffic.
@@ -141,12 +141,12 @@ async function initApp() {
   ], streetDetails.signalIntersections);
   markInit('traffic');
   const highwayTraffic = createHighwayTraffic(scene, cityGrid.highwayLanes);
-  await showLoadingStage('Adding road markings...');
+  await showLoadingStage('Derniers préparatifs…');
   buildRoadPaint(scene, trafficSystem.network, cityGrid.roadPaint);
   markInit('roadPaint');
 
   // 4. Initialize Third-Person Controllers (Person, Car, Cyclist, Helicopter) & Multi-Camera System
-  await showLoadingStage('Preparing player, vehicles and controls...');
+  await showLoadingStage('Préparation de votre personnage…');
   const controllerManager = new ThirdPersonControllerManager(scene, allColliders);
   function savePlayerState() { gameplay?.save(); }
 
@@ -176,7 +176,7 @@ async function initApp() {
 
   // Island-wide static geometry: chunk & distance-cull the small props, shadow stand-ins for the big casters
   // (scene-culling.js)
-  await showLoadingStage('Preparing scene visibility and shadows...');
+  await showLoadingStage('Préparation du quartier…');
   const cullingRoots = ['ManhattanCityGrid', 'ManhattanCityBlocks', 'ManhattanStreetDetails', 'ManhattanLandmarks', 'Boroughs', 'RoadMarkings']
     .map((name) => scene.getObjectByName(name))
     .filter(Boolean);
@@ -209,7 +209,7 @@ async function initApp() {
 
   // 5. TSL RenderPipeline with Half-Res Screen Space Reflections (SSRNode), Bloom & Filmic Toning
   //    Fade out distant and matte surfaces so SSR spends its rays on visible glossy reflections.
-  await showLoadingStage('Setting up visual effects, map and interface...');
+  await showLoadingStage('Préparation de votre arrivée…');
   const scenePass = pass(scene, cameraSystem.camera);
   // The multisampled colour attachments (output, normal, metalRough) only need resolving, never storing: discarding
   // them spares the GPU writing 3 x 4 samples per pixel to memory every frame (transient, memoryless attachments where
@@ -576,7 +576,7 @@ async function initApp() {
   const COMPILE_POOL = 8;
   const nextTask = () => (globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise((resolve) => setTimeout(resolve, 0)));
   async function precompileShaders() {
-    await showLoadingStage('Preparing reflections and bloom...');
+    await showLoadingStage('Derniers préparatifs…');
     // An empty frame first: it sets up the post-processing chain, which configures the scene pass's render target
     // (MSAA samples, depth format), so the pipelines compiled below are the very ones the scene pass asks for
     scene.visible = false;
@@ -613,7 +613,7 @@ async function initApp() {
       job.push(o);
     });
 
-    await showLoadingStage(`Compiling scene shaders... 0 / ${jobs.length} batches`);
+    await showLoadingStage(`Derniers préparatifs… 0 %`);
     setLoadingProgress(0);
     renderer.setRenderTarget(scenePass.renderTarget);
     renderer.setMRT(sceneMRT);
@@ -635,7 +635,7 @@ async function initApp() {
         for (const object of job) await compile(object);
         done++;
         if (loadingStatus) {
-          loadingStatus.textContent = `Compiling scene shaders... ${done} / ${jobs.length} batches (${Math.round((done / jobs.length) * 100)}%)`;
+          loadingStatus.textContent = `Derniers préparatifs… ${Math.round((done / jobs.length) * 100)} %`;
         }
         setLoadingProgress(done / jobs.length);
       }
@@ -649,7 +649,7 @@ async function initApp() {
   if (renderer.backend.isWebGPUBackend) await precompileShaders();
   if (graphicsLost) throw new Error('Graphics device lost during loading');
   markInit('compile');
-  await showLoadingStage('Preparing shadows and the first frame...');
+  await showLoadingStage('Votre quartier est presque prêt…');
 
   // 6. Animation Loop
   let lastTime = performance.now();
@@ -658,10 +658,19 @@ async function initApp() {
   let fpsTimer = 0;
   let nextPlayerSave = 0;
   let warmedUp = false; // see the first frame below
+  if (new URLSearchParams(location.search).has('qa')) {
+    gameplay.renderForQA = () => {
+      cameraSystem.update(0.016, elapsed);
+      updateSceneCulling(cameraSystem.camera.position);
+      for (const root of dynamicRoots) root.updateMatrixWorld();
+      renderPipeline.render();
+    };
+  }
 
   if (elFps) elFps.textContent = '60';
 
   renderer.setAnimationLoop((now) => {
+    if (gameplay.qaFrozen) { lastTime = now; return; }
     const rawDt = (now - lastTime) * 0.001;
     lastTime = now;
     const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
@@ -724,7 +733,7 @@ async function initApp() {
       // The loading screen stays up until the GPU has got through the first frame (and the pipelines its warm-up
       // compiled), i.e. until the city is actually on screen
       const device = renderer.backend.device;
-      if (loadingStatus) loadingStatus.textContent = 'Waiting for graphics to finish the first frame...';
+      if (loadingStatus) loadingStatus.textContent = 'Encore un instant…';
       Promise.resolve(device && device.queue.onSubmittedWorkDone()).catch(() => {}).then(() => {
         if (graphicsLost) return;
         markInit('gpu');

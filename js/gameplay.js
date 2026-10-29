@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { streetZ, isTypingInField } from './city-config.js';
 import { angleDelta, doorPosition, smooth, clamp, canInteract, validPosition } from './interaction-state.js';
+import { HeroModel } from './hero.js';
 
 const SAVE_KEY = 'contre-maree:playground:1';
 const LABELS = { sedan: 'EXECUTIVE', suv: 'SUMMIT', taxi: 'CITY CAB', pickup: 'RANCH', van: 'CARGO', minivan: 'VOYAGER' };
@@ -74,6 +75,7 @@ export class Playground {
     this.buildInterface();
     this.bind();
     this.setupMarker();
+    this.hero = new HeroModel(scene, controllers.entities.person);
     if (new URLSearchParams(location.search).has('qa')) window.__playground = this;
   }
 
@@ -188,6 +190,7 @@ export class Playground {
     this.touch.setEnabled(this.active);
     document.body.classList.toggle('in-menu', paused || !this.playing);
     this.ui['game-menu'].classList.toggle('dismissed', !paused && this.playing);
+    this.ui['game-menu'].hidden = !paused && this.playing;
     if (paused) { this.save(); document.exitPointerLock?.(); }
     else this.camera.domElement.focus();
   }
@@ -370,6 +373,7 @@ export class Playground {
   }
 
   update(dt) {
+    this.hero.update();
     const car = this.controllers.entities.car;
     for (const vehicle of this.fleet) {
       vehicle.door.rotation.y = -vehicle.doorOpen;

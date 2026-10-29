@@ -1,17 +1,41 @@
-# Slop New York
+# CONTRE-MARÉE
 
-A New York City simulation built with [three.js](https://threejs.org/), WebGPURenderer, and TSL. Explore Manhattan on foot, by car, by bicycle, or by helicopter.
+Un playground de monde ouvert pour navigateur, basé sur Slop New York.
+Version 0.1.0 : personnage à la troisième personne, marche, sprint, saut,
+approche d'un véhicule, portière animée, entrée, conduite et sortie.
 
-[Try it live](https://mrdoob.github.io/slop-newyork/)
+Trois véhicules sont disponibles au départ. Les véhicules civils arrêtés dans
+la circulation peuvent également être récupérés. La partie et les véhicules
+sont sauvegardés localement dans le navigateur.
 
-## Make it your own
+## Jouer
 
-Fork it, remix it, improve it, break it. Make games, animations, films, experiments, or something completely different. Use it as a starting point and take it wherever you want. Have fun!
+- WASD / ZQSD ou flèches : déplacement et conduite.
+- Souris maintenue : regarder autour de soi.
+- Maj : sprint. Espace : saut à pied, frein à main en voiture.
+- F : entrer ou sortir d'un véhicule à l'arrêt.
+- B : klaxon. V : caméra. M : carte. Échap : pause.
 
-Explore other cities and community remixes in [Slop Cities](https://github.com/zz85/slop-cities).
+Clavier/souris et manette standard. Navigateur de bureau avec accélération
+matérielle recommandé. Un mode Fluidité est disponible dans le menu.
 
-## License and data
+## Développer
 
-The project code is available under the [MIT License](LICENSE).
+Servir le dossier du projet en HTTP pour le développement. Les dépendances
+de rendu sont incluses avec le code : aucune installation npm n'est nécessaire.
 
-Geographic data: NYC Open Data (including [building footprints and heights](https://data.cityofnewyork.us/City-Government/BUILDING/5zhs-2jue) and [tree locations](https://data.cityofnewyork.us/Environment/Forestry-Tree-Points/hn5i-inap)), [MTA subway entrances](https://data.ny.gov/Transportation/MTA-Subway-Entrances-and-Exits-2024/i9wp-a4ja), and © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) (ODbL). Third-party data and dependencies retain their respective licenses.
+```sh
+npm test
+npm run build
+```
+
+Le build statique est généré dans `dist/`. Les détails d'architecture,
+de sauvegarde et de vérification se trouvent dans [PLAYGROUND.md](PLAYGROUND.md).
+
+Le scénario, les missions, les comptes et les fonctions multijoueurs sont des
+étapes ultérieures. La V1 se concentre sur les déplacements et les véhicules.
+
+## Sources et licences
+
+[CREDITS.md](CREDITS.md), [LICENSE](LICENSE) et [README original](UPSTREAM.md).
+Slop New York : https://github.com/mrdoob/slop-newyork
