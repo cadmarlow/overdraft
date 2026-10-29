@@ -1,6 +1,6 @@
 # Credits
 
-CONTRE-MARÉE is based on Slop New York by Mr.doob (MIT).
+OVERDRAFT is based on Slop New York by Mr.doob (MIT).
 Upstream: https://github.com/mrdoob/slop-newyork
 Base commit: e35c06c0d896052a80ff117aefe8b99e978913d4.
 

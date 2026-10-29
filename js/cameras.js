@@ -50,6 +50,15 @@ class CameraSystem {
     this._desiredPos = new THREE.Vector3();
     this._desiredLook = new THREE.Vector3();
 
+    // Shooter controls (gameplay.js): mouse look under pointer lock, an over-the-shoulder aim, impact shake
+    this.aimMode = false;
+    this.aimBlend = 0;
+    this.shake = 0;
+    this.mouseSensitivity = 0.0022;
+    this._aimPos = new THREE.Vector3();
+    this._aimLook = new THREE.Vector3();
+    this._shakeOffset = new THREE.Vector3();
+
     this.bindPointerControls();
   }
 
@@ -108,6 +117,19 @@ class CameraSystem {
     window.addEventListener('blur', clearPointers);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) clearPointers();
+    });
+
+    // Pointer lock: relative mouse motion turns the view (on foot the walking frame, in a car the orbit)
+    document.addEventListener('mousemove', (e) => {
+      if (document.pointerLockElement !== canvas) return;
+      const k = this.mouseSensitivity * (this.aimMode ? 0.6 : 1);
+      const dx = Math.max(-200, Math.min(200, e.movementX || 0));
+      const dy = Math.max(-200, Math.min(200, e.movementY || 0));
+      if (this.controllerManager.activeMode === 'person') this.footYaw -= dx * k;
+      else this.orbitYawOffset -= dx * k;
+      const [lo, hi] = this.aimMode ? [-0.95, 1.05] : [-0.32, 0.68];
+      this.orbitPitchOffset = Math.max(lo, Math.min(hi, this.orbitPitchOffset + dy * k));
+      this.userOrbitTimer = 2.5;
     });
 
     canvas.addEventListener('wheel', (e) => {
@@ -188,10 +210,12 @@ class CameraSystem {
     this.smoothedSpeed += (Math.abs(entity.speed) - this.smoothedSpeed) * (1 - Math.exp(-dt * 3.0));
     const speedLag = this.smoothedSpeed * 0.1;
 
+    if (!this.aimMode) this.orbitPitchOffset = Math.max(-0.32, Math.min(0.68, this.orbitPitchOffset));
     const totalYaw = entity.type === 'person' ? this.footYaw : entity.heading + this.orbitYawOffset;
 
     switch (this.activePresetId) {
       case 'chase': {
+        if (entity.type === 'person' && this.aimBlend > 0.001) this.aimFrame(entity);
         const dist = entity.chaseDistance * this.zoomMultiplier * (1 + Math.min(0.25, this.smoothedSpeed * 0.01));
         const height = entity.chaseHeight * this.zoomMultiplier + Math.sin(this.orbitPitchOffset) * dist * 0.85;
         const horizDist = Math.cos(this.orbitPitchOffset) * dist + speedLag;
@@ -209,6 +233,10 @@ class CameraSystem {
           entity.position.y + entity.cameraTargetOffset.y + lookUpBias,
           entity.position.z + Math.cos(totalYaw) * lookAhead
         );
+        if (entity.type === 'person' && this.aimBlend > 0.001) {
+          desiredPos.lerp(this._aimPos, this.aimBlend);
+          desiredLook.lerp(this._aimLook, this.aimBlend);
+        }
         break;
       }
 
@@ -347,7 +375,8 @@ class CameraSystem {
         this.followOffset.subVectors(this.currentPos, entity.position);
         this.followLookOffset.subVectors(this.currentLookAt, entity.position);
       }
-      const k = 1 - Math.exp(-dt * 8.5);
+      const locked = document.pointerLockElement === this.domElement;
+      const k = 1 - Math.exp(-dt * (entity.type === 'person' && (locked || this.aimBlend > 0.5) ? 24 : 8.5));
       this.followBaseY += (entity.position.y - this.followBaseY) * k;
       this.followOffset.lerp(desiredPos.sub(entity.position), k);
       this.followLookOffset.lerp(desiredLook.sub(entity.position), k);
@@ -383,6 +412,32 @@ class CameraSystem {
     }
     this.camera.position.copy(this.currentPos);
     this.camera.lookAt(this.currentLookAt);
+    if (this.shake > 0.001) {
+      const a = this.shake * this.shake;
+      this._shakeOffset.set((Math.random() - 0.5) * a, (Math.random() - 0.5) * a, (Math.random() - 0.5) * a);
+      this.camera.position.add(this._shakeOffset);
+      this.camera.rotation.z += (Math.random() - 0.5) * a * 0.05;
+      this.shake *= Math.exp(-dt * 6);
+    }
+    // Aiming narrows the view
+    if (this.activePresetId === 'chase') {
+      this.aimBlend += ((this.aimMode && entity.type === 'person' ? 1 : 0) - this.aimBlend) * (1 - Math.exp(-dt * 12));
+      const fov = 56 - 12 * this.aimBlend;
+      if (Math.abs(this.camera.fov - fov) > 0.05) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
+    }
+  }
+
+  // Over-the-shoulder framing: orbit a pivot at the right shoulder, pitch from the mouse
+  aimFrame(entity) {
+    const yaw = this.footYaw, pitch = this.orbitPitchOffset;
+    const lx = Math.sin(yaw) * Math.cos(pitch), ly = -Math.sin(pitch), lz = Math.cos(yaw) * Math.cos(pitch);
+    const px = entity.position.x - Math.cos(yaw) * 0.55, py = entity.position.y + 1.58, pz = entity.position.z + Math.sin(yaw) * 0.55;
+    this._aimPos.set(px - lx * 2.35, py - ly * 2.35, pz - lz * 2.35);
+    this._aimLook.set(px + lx * 30, py + ly * 30, pz + lz * 30);
+  }
+
+  addShake(amount) {
+    this.shake = Math.min(1.6, this.shake + amount);
   }
 }
 

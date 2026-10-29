@@ -28,4 +28,4 @@ const server = createServer(async (request, response) => {
   }
 });
 server.on('error', error => { console.error(error.message); process.exitCode = 1; });
-server.listen(port, '127.0.0.1', () => console.log(`CONTRE-MARÉE\nLocal : http://localhost:${port}\nDiagnostic : http://localhost:${port}/?stats=1\nCtrl+C pour arrêter.`));
+server.listen(port, '127.0.0.1', () => console.log(`OVERDRAFT\nLocal : http://localhost:${port}\nDiagnostic : http://localhost:${port}/?stats=1\nCtrl+C pour arrêter.`));

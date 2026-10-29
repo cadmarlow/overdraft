@@ -185,7 +185,7 @@ function trafficHarness(vehicles) {
     shove(v, dx, dz) { v.x += dx; v.z += dz; },
     reportCollision() {}, spawnCollisionSparks() {}, changeLanes() {},
     accelerate(v) { v.acc = -3; }, steer() {}, enter() {}, leave() {} };
-  for (const name of ['readTrafficBody', 'writeTrafficVelocity', 'impactSuspension', 'collideWithPlayer', 'collideTraffic', 'drive']) {
+  for (const name of ['readTrafficBody', 'writeTrafficVelocity', 'impactSuspension', 'collideWithPlayer', 'collideWithEntity', 'collideTraffic', 'drive']) {
     const source = trafficSource.match(new RegExp(`  function ${name}\\([^]*?\\n  \\}`))?.[0];
     assert.ok(source, name);
     context[name] = vm.runInNewContext(`(${source})`, context);

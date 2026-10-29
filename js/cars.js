@@ -1342,8 +1342,8 @@ function carPlateTexture() {
  * Every mask is built once and shared by the colour, roughness, metalness & emissive graphs (TSL turns nodes used
  * more than once into temporaries), so the fragment shader evaluates each SDF a single time.
  */
-function createLoftedCarMaterial(spec, fixedColorHex = null) {
-  const cacheKey = `${spec.name}_${fixedColorHex ?? 'instanced'}`;
+function createLoftedCarMaterial(spec, fixedColorHex = null, fixedLivery = 0) {
+  const cacheKey = `${spec.name}_${fixedColorHex ?? 'instanced'}_${fixedLivery}`;
   if (_carMaterialCache.has(cacheKey)) {
     return _carMaterialCache.get(cacheKey);
   }
@@ -1453,7 +1453,7 @@ function createLoftedCarMaterial(spec, fixedColorHex = null) {
   const maxEdgeW = (a, b, wa, wb) => mix(wa, wb, step(a, b));
   const minEdgeW = (a, b, wa, wb) => mix(wa, wb, step(b, a));
 
-  const isPolice = fixed ? float(0.0) : isLivery(1.0);
+  const isPolice = fixed ? float(fixedLivery === 1 ? 1.0 : 0.0) : isLivery(1.0);
   const isBoro = fixed ? float(0.0) : isLivery(2.0);
   const isTLC = fixed ? float(0.0) : isLivery(3.0);
   const isTwoTone = fixed ? float(0.0) : max(isLivery(4.0), step(abs(trimCode.sub(3.0)), 0.25));

@@ -2,6 +2,7 @@ import { createSynthResources, createMotorVoice, setControlRate } from './audio-
 import { createEventResources, playEvent, createWindVoice } from './audio-events.js';
 import { CityAudioSources } from './audio-sources.js';
 import { CityAcoustics } from './audio-acoustics.js';
+import { createCombatResources, COMBAT_SOUNDS } from './audio-combat.js';
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const smooth = (param, value, now, time = 0.035, immediate = false) => {
@@ -170,6 +171,14 @@ class CityAudioSystem {
     this.reflectionFilter.Q.value = 0.5;
     this.reflections.connect(this.reverb).connect(this.reflectionFilter).connect(this.mix);
     this.wind = createWindVoice(context, this.resources, this.mix);
+    // Gameplay one-shots (spatial, through the city's acoustics) and flat interface / music buses
+    this.combat = createCombatResources(context);
+    this.sfxVoices = [];
+    this.flat = context.createGain();
+    this.flat.connect(this.master);
+    this.music = context.createGain();
+    this.music.connect(this.master);
+    this.onInitialize?.(context);
     context.onstatechange = () => this.onStateChange();
   }
 
@@ -193,7 +202,54 @@ class CityAudioSystem {
     }).catch(() => {});
   }
 
+  get running() {
+    return this.ready && this.enabled && this.context?.state === 'running' && !document.hidden;
+  }
+
+  // Positional one-shot from audio-combat.js (gunshots, blasts, impacts), occluded like the city's other sounds
+  sfx(kind, x, y, z, { intensity = 1, rate = 1 } = {}) {
+    if (!this.running || !this.combat || !this.haveListener) return false;
+    const spec = COMBAT_SOUNDS[kind], buffers = this.combat[kind];
+    if (!spec || !buffers || !spec.range) return false;
+    if (Math.hypot(x - this.listener.x, y - this.listener.y, z - this.listener.z) > spec.range) return false;
+    const now = this.context.currentTime;
+    for (let i = this.sfxVoices.length - 1; i >= 0; i--) {
+      if (now >= this.sfxVoices[i].end) { this.sfxVoices[i].dispose(); this.sfxVoices.splice(i, 1); }
+    }
+    if (this.sfxVoices.length >= 16) this.sfxVoices.shift().dispose();
+    const emitter = new SpatialEmitter(this.context, this.mix, this.reflections, this.acoustics, spec.ref, 0, false);
+    emitter.update({ x, y, z, seed: Math.random() }, this.listener, now, spec.range, true, true);
+    const source = this.context.createBufferSource();
+    source.buffer = buffers[Math.floor(Math.random() * buffers.length)];
+    source.playbackRate.value = rate * (0.94 + Math.random() * 0.12);
+    const gain = this.context.createGain();
+    gain.gain.value = spec.level * intensity;
+    source.connect(gain).connect(emitter.input);
+    source.start(now);
+    this.sfxVoices.push({
+      end: now + source.buffer.duration / source.playbackRate.value + 0.1,
+      dispose() { try { source.stop(); } catch { /* already ended */ } source.disconnect(); gain.disconnect(); emitter.dispose(); }
+    });
+    return true;
+  }
+
+  // Interface sound, not positioned (cash, mission stings, wanted level changes)
+  ui(kind, intensity = 1) {
+    if (!this.running || !this.combat) return;
+    const spec = COMBAT_SOUNDS[kind], buffers = this.combat[kind];
+    if (!spec || !buffers) return;
+    const source = this.context.createBufferSource();
+    source.buffer = buffers[0];
+    const gain = this.context.createGain();
+    gain.gain.value = spec.level * intensity;
+    source.connect(gain).connect(this.flat);
+    source.onended = () => { source.disconnect(); gain.disconnect(); };
+    source.start();
+  }
+
   reset() {
+    for (const voice of this.sfxVoices || []) voice.dispose();
+    if (this.sfxVoices) this.sfxVoices.length = 0;
     for (const pool of [this.motors, this.sirens]) {
       for (const slot of pool.values()) { slot.voice.dispose(); slot.emitter.dispose(); }
       pool.clear();

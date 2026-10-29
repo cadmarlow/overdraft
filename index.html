@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>CONTRE-MARÉE — Playground 01</title>
+  <title>OVERDRAFT — Opening Bell</title>
   <link rel="icon" href="data:," />
-  <meta name="description" content="CONTRE-MARÉE. Un monde ouvert jouable : explorez Manhattan à pied, prenez une voiture et découvrez la ville." />
+  <meta name="description" content="OVERDRAFT. Un jeu d’action en monde ouvert dans Manhattan : missions, poursuites, combats et niveau de recherche à cinq étoiles." />
   <!-- three.js dev branch pinned to a commit (builds committed to mrdoob/three.js@dev, served by jsDelivr) -->
   <script type="importmap">
     {
@@ -67,11 +67,22 @@
   <link rel="modulepreload" href="./js/main.js" />
   <link rel="modulepreload" href="./js/gameplay.js" />
   <link rel="modulepreload" href="./js/interaction-state.js" />
-  <link rel="modulepreload" href="./js/hero.js" />
+  <link rel="modulepreload" href="./js/audio-combat.js" />
+  <link rel="modulepreload" href="./js/fx.js" />
+  <link rel="modulepreload" href="./js/characters.js" />
+  <link rel="modulepreload" href="./js/weapons.js" />
+  <link rel="modulepreload" href="./js/actors.js" />
+  <link rel="modulepreload" href="./js/navigation.js" />
+  <link rel="modulepreload" href="./js/wanted.js" />
+  <link rel="modulepreload" href="./js/missions.js" />
+  <link rel="modulepreload" href="./js/mission-director.js" />
+  <link rel="modulepreload" href="./js/hud.js" />
+  <link rel="modulepreload" href="./js/radio.js" />
   <script type="module" src="./js/main.js"></script>
   <!-- Inter (UI) & Overpass (street-name signs: modelled on Highway Gothic, the US road sign typeface) -->
   <link rel="stylesheet" href="./css/style.css" />
   <link rel="stylesheet" href="./css/game.css" />
+  <link rel="stylesheet" href="./css/hud.css" />
 </head>
 <body>
   <!-- Icon sprite (24 × 24 stroke icons, drawn in currentColor) -->
@@ -107,15 +118,15 @@
   <!-- Loading Screen -->
   <div id="loading-overlay" role="status" aria-live="polite">
     <div class="loader">
-      <span class="mta-bullet loader-bullet" aria-hidden="true">CM</span>
-      <div class="loader-title">CONTRE-MARÉE</div>
+      <span class="mta-bullet loader-bullet" aria-hidden="true">OD</span>
+      <div class="loader-title">OVERDRAFT</div>
       <div class="loader-track is-indeterminate" aria-hidden="true"><span id="loading-progress" class="loader-fill"></span></div>
       <div id="loading-status">Préparation de Manhattan…</div>
     </div>
   </div>
 
   <!-- 3D WebGPU Viewport Container -->
-  <main id="canvas-container" aria-label="3D Interactive CONTRE-MARÉE Viewport"></main>
+  <main id="canvas-container" aria-label="OVERDRAFT 3D viewport"></main>
 
   <!-- Top-Left: Brand & Renderer Telemetry -->
   <header class="hud hud-top-left">
@@ -123,8 +134,8 @@
       <span class="mta-bullet" aria-hidden="true">NY</span>
       <div class="brand-titles">
         <div class="brand-heading">
-          <h1>CONTRE-MARÉE</h1>
-          <a class="repo-link" href="https://github.com/mrdoob/slop-newyork/" target="_blank" rel="noopener noreferrer" aria-label="CONTRE-MARÉE on GitHub (opens in a new tab)">GitHub <span aria-hidden="true">↗</span></a>
+          <h1>OVERDRAFT</h1>
+          <a class="repo-link" href="https://github.com/mrdoob/slop-newyork/" target="_blank" rel="noopener noreferrer" aria-label="Slop New York on GitHub (opens in a new tab)">GitHub <span aria-hidden="true">↗</span></a>
         </div>
         <div class="brand-subtitle">three.js · WebGPU · TSL · <span id="hud-fps" class="fps-ok">60</span> fps</div>
       </div>

@@ -1426,8 +1426,13 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
   }
 
   function collideWithPlayer(v) {
-    const pe = player.entity;
-    const reach = v.half + player.halfL + player.halfW;
+    collideWithEntity(v, player.entity, player.halfW, player.halfL);
+  }
+
+  // Extra driven cars outside the road model (pursuers, see wanted.js) push and get pushed like the player's car
+  const extraBodies = [];
+  function collideWithEntity(v, pe, halfW, halfL) {
+    const reach = v.half + halfL + halfW;
     const prevX = pe.prevX ?? pe.position.x, prevZ = pe.prevZ ?? pe.position.z;
     const dx = pe.position.x - prevX - v.x + v.prevX;
     const dz = pe.position.z - prevZ - v.z + v.prevZ;
@@ -1438,7 +1443,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     a.x = pe.position.x; a.z = pe.position.z;
     a.prevX = prevX; a.prevZ = prevZ;
     a.sin = Math.sin(heading); a.cos = Math.cos(heading);
-    a.halfW = player.halfW; a.halfL = player.halfL;
+    a.halfW = halfW; a.halfL = halfL;
     a.mass = pe.type === 'car' ? 1700 : pe.type === 'cyclist' ? 95 : 80;
     a.vx = a.sin * (pe.speed || 0) + (pe.vx || 0);
     a.vz = a.cos * (pe.speed || 0) + (pe.vz || 0);
@@ -1469,7 +1474,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
       pe.heaveVel += Math.min(0.7, kick * 0.06);
     }
     impactSuspension(v, -hit.nx, -hit.nz, hit.impulse / b.mass);
-    if (pe.type !== 'person') reportCollision(pe, v, hit.x, 0.58, hit.z, hit.nx, hit.nz, speed);
+    reportCollision(pe, v, hit.x, 0.58, hit.z, hit.nx, hit.nz, speed);
     if (speed > 2.2) spawnCollisionSparks(hit.x, 0.58, hit.z, hit.nx, hit.nz, speed);
   }
 
@@ -1540,6 +1545,8 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     v.dl = v.dlv = 0;
     v.evade = v.alarm = v.panicUntil = v.panicAcc = 0;
     v.vx = v.vz = v.yawOffset = v.yawVel = v.pitch = v.pitchVel = v.roll = v.rollVel = 0;
+    v.hp = 100; // gameplay damage (gameplay.js); a fresh car for every placement
+    v.serial = (v.serial || 0) + 1;
     locate(v);
     v.prevX = v.x;
     v.prevZ = v.z;
@@ -1944,6 +1951,23 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     if (player.active) {
       for (const v of vehicles) if (v.edge) collideWithPlayer(v);
     }
+    for (const body of extraBodies) {
+      if (!body.mesh?.visible) continue;
+      for (const v of vehicles) if (v.edge) collideWithEntity(v, body, 0.86, 2.18);
+      // Drivers pull over for a siren closing in behind them: brake and edge towards the curb (their right)
+      if (!body.siren || Math.abs(body.speed) < 4) continue;
+      const sx = Math.sin(body.heading), sz = Math.cos(body.heading);
+      for (const v of vehicles) {
+        if (!v.edge || v.bus || clock < v.panicUntil) continue;
+        const dx = v.x - body.position.x, dz = v.z - body.position.z;
+        if (Math.abs(dx) > 40 || Math.abs(dz) > 40) continue;
+        const ahead = dx * sx + dz * sz;
+        if (ahead < 0 || ahead > 35 || Math.abs(dx * sz - dz * sx) > 4.5 || v.tx * sx + v.tz * sz < 0.5) continue;
+        v.panicUntil = clock + 2.5;
+        v.panicAcc = -1;
+        v.evade = swerveRoom(v, 1);
+      }
+    }
     collideTraffic();
     for (const v of vehicles) {
       if (!v.edge) continue;
@@ -2009,13 +2033,39 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     updateSparks(dt);
   }
 
+  // Drivers near (x, z) floor it away from gunfire or a blast for a few seconds
+  function flee(x, z, radius, duration = 6) {
+    const r2 = radius * radius;
+    for (const v of vehicles) {
+      if (!v.edge) continue;
+      const dx = v.x - x, dz = v.z - z;
+      if (dx * dx + dz * dz > r2) continue;
+      v.panicUntil = clock + duration * (0.6 + Math.random() * 0.8);
+      v.panicAcc = 1;
+      v.evade = 0;
+    }
+  }
+
+  // Take a car off the road (stolen, wrecked): the pool re-places it out of view later
+  function removeVehicle(v) {
+    v.edge = null;
+    v.conn = null;
+    v.move = null;
+  }
+
   return {
     group,
     update,
     setCollisionListener,
     cars,
     buses,
+    vehicles,
     peds: pedestrianSystem.peds,
+    pedestrians: pedestrianSystem,
+    extraBodies,
+    flee,
+    removeVehicle,
+    spawnSparks: spawnCollisionSparks,
     network
   };
 }

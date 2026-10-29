@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Radio — aperçu</title>
+  <style>
+    :root {
+      --bg: #0e1014;
+      --panel: #171a21;
+      --line: #2a2f3a;
+      --text: #e8e9ee;
+      --muted: #8a90a0;
+      --accent: #d9a066;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font: 15px/1.45 system-ui, -apple-system, 'Segoe UI', sans-serif;
+      display: flex;
+      justify-content: center;
+      padding: 32px 16px;
+    }
+    main { width: 100%; max-width: 760px; }
+    h1 { font-size: 18px; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 4px; }
+    .sub { color: var(--muted); margin: 0 0 24px; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; margin-bottom: 16px; }
+    button {
+      font: inherit;
+      color: var(--text);
+      background: #222733;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+    }
+    button:hover { border-color: #3d4454; }
+    button:disabled { opacity: 0.4; cursor: default; }
+    button.primary { background: var(--accent); color: #17120b; border-color: transparent; font-weight: 600; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .stations { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin-top: 12px; }
+    .stations button { text-align: left; border-left: 4px solid var(--c, var(--line)); }
+    .stations button[aria-pressed='true'] { background: #2c3240; border-color: var(--c, #fff); }
+    .now { border-left: 6px solid var(--accent); }
+    .now .name { font-size: 26px; font-weight: 700; margin: 0; color: var(--accent); }
+    .now .tagline { color: var(--muted); margin: 2px 0 14px; }
+    .now .song { font-size: 18px; margin: 0; }
+    .now .artist { color: var(--muted); margin: 0; }
+    .meta { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--muted); font-size: 13px; margin-top: 14px; font-variant-numeric: tabular-nums; }
+    .bar { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; margin-top: 10px; }
+    .bar > div { height: 100%; width: 0; background: var(--accent); }
+    .sections { display: flex; height: 18px; margin-top: 6px; border-radius: 3px; overflow: hidden; font-size: 10px; }
+    .sections span { display: flex; align-items: center; justify-content: center; color: #0e1014; overflow: hidden; white-space: nowrap; border-right: 1px solid var(--bg); }
+    label { display: grid; grid-template-columns: 110px 1fr 44px; align-items: center; gap: 10px; margin: 6px 0; color: var(--muted); }
+    input[type=range] { width: 100%; }
+    .hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+    kbd { background: #222733; border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>OVERDRAFT — radio de bord</h1>
+    <p class="sub">Aperçu de développement : musique générée et synthétisée en direct (Web Audio).</p>
+
+    <section class="panel">
+      <div class="row">
+        <button id="start" class="primary">Démarrer l’audio</button>
+        <button id="car" disabled>Sortir du véhicule</button>
+        <button id="prev" disabled>◀ Précédente</button>
+        <button id="next" disabled>Suivante ▶</button>
+        <button id="reseed" disabled>Nouvelle session</button>
+      </div>
+      <div class="stations" id="stations"></div>
+      <p class="hint"><kbd>←</kbd> <kbd>→</kbd> changer de station · <kbd>Espace</kbd> entrer/sortir du véhicule</p>
+    </section>
+
+    <section class="panel now" id="now">
+      <p class="name" id="name">—</p>
+      <p class="tagline" id="tagline">Appuyez sur « Démarrer l’audio ».</p>
+      <p class="song" id="song"></p>
+      <p class="artist" id="artist"></p>
+      <div class="bar"><div id="progress"></div></div>
+      <div class="sections" id="sections"></div>
+      <div class="meta" id="meta"></div>
+    </section>
+
+    <section class="panel">
+      <label>Volume <input id="volume" type="range" min="0" max="1" step="0.01" value="0.8"><output id="volumeOut">80</output></label>
+      <label>Étouffé <input id="muffle" type="range" min="0" max="1" step="0.01" value="0"><output id="muffleOut">0</output></label>
+    </section>
+  </main>
+
+  <script type="module">
+    import { STATIONS, RadioSystem, stationClock, generateSong } from '../js/radio.js';
+
+    const $ = id => document.getElementById(id);
+    const SECTION_NAMES = { intro: 'intro', verse: 'couplet', chorus: 'refrain', break: 'pont', outro: 'outro' };
+    const SECTION_COLORS = { intro: '#6b7280', verse: '#9ca3af', chorus: '#e5e7eb', break: '#4b5563', outro: '#6b7280' };
+    let context = null, radio = null, inCar = true, songCache = null;
+
+    const buttons = [...STATIONS.map((station, index) => ({ index, label: station.name, color: station.color })), { index: -1, label: 'Radio coupée', color: '#555' }]
+      .map(({ index, label, color }) => {
+        const button = document.createElement('button');
+        button.textContent = label;
+        button.style.setProperty('--c', color);
+        button.disabled = true;
+        button.addEventListener('click', () => radio?.setStation(index));
+        $('stations').append(button);
+        return { index, button };
+      });
+
+    function show(info) {
+      for (const { index, button } of buttons) button.setAttribute('aria-pressed', String(index === radio?.stationIndex));
+      const color = info?.color || '#555';
+      document.documentElement.style.setProperty('--accent', color);
+      $('name').textContent = info ? info.name : 'Radio coupée';
+      $('tagline').textContent = info ? `${info.tagline} — ${info.genre}` : 'Silence radio.';
+      $('song').textContent = info ? `« ${info.song} »` : '';
+      $('artist').textContent = info ? info.artist : '';
+      songCache = null;
+      $('sections').replaceChildren();
+    }
+
+    function createRadio(seed) {
+      const station = radio ? radio.stationIndex : 0;
+      radio?.dispose();
+      radio = new RadioSystem(context, context.destination, { seed, station });
+      radio.onChange = show;
+      radio.setVolume(Number($('volume').value));
+      radio.setMuffled(Number($('muffle').value));
+      radio.setPlaying(inCar);
+      show(radio.nowPlaying);
+    }
+
+    function drawSections(song) {
+      const strip = $('sections');
+      strip.replaceChildren(...song.sections.map(section => {
+        const span = document.createElement('span');
+        span.style.flex = String(section.bars);
+        span.style.background = SECTION_COLORS[section.name];
+        span.textContent = SECTION_NAMES[section.name];
+        return span;
+      }));
+    }
+
+    function frame() {
+      requestAnimationFrame(frame);
+      if (!radio) return;
+      radio.update();
+      const index = radio.stationIndex;
+      if (index < 0) {
+        $('meta').textContent = `voix actives : ${radio.voices}`;
+        $('progress').style.width = '0';
+        return;
+      }
+      const clock = stationClock(index, context.currentTime, radio.session);
+      if (!songCache || songCache.seed !== clock.seed) {
+        songCache = generateSong(STATIONS[index].id, clock.seed);
+        drawSections(songCache);
+      }
+      const song = songCache;
+      const bar = Math.min(song.totalBars - 1, Math.floor(clock.position / (song.stepDur * 16)));
+      const section = song.sections.find(s => bar < s.startBar + s.bars);
+      const format = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+      $('progress').style.width = `${(100 * clock.position / clock.duration).toFixed(2)}%`;
+      $('meta').replaceChildren(...[
+        `${format(clock.position)} / ${format(clock.duration)}`,
+        `${song.bpm} bpm`,
+        `tonalité : ${song.keyName}`,
+        `section : ${SECTION_NAMES[section.name]} (mesure ${bar - section.startBar + 1}/${section.bars})`,
+        `morceau n° ${clock.songIndex + 1}`,
+        `voix actives : ${radio.voices}`,
+        `contexte : ${context.state}`,
+      ].map(text => Object.assign(document.createElement('span'), { textContent: text })));
+    }
+
+    $('start').addEventListener('click', async () => {
+      if (!context) {
+        context = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' });
+        createRadio(Math.floor(Math.random() * 1e9));
+        for (const id of ['car', 'prev', 'next', 'reseed']) $(id).disabled = false;
+        for (const { button } of buttons) button.disabled = false;
+        requestAnimationFrame(frame);
+      }
+      await context.resume();
+      $('start').textContent = 'Audio actif';
+      $('start').disabled = true;
+    });
+    $('car').addEventListener('click', () => {
+      inCar = !inCar;
+      radio.setPlaying(inCar);
+      $('car').textContent = inCar ? 'Sortir du véhicule' : 'Entrer dans le véhicule';
+    });
+    $('prev').addEventListener('click', () => radio.prev());
+    $('next').addEventListener('click', () => radio.next());
+    $('reseed').addEventListener('click', () => createRadio(Math.floor(Math.random() * 1e9)));
+    for (const [id, method, scale] of [['volume', 'setVolume', 100], ['muffle', 'setMuffled', 100]]) {
+      $(id).addEventListener('input', event => {
+        const value = Number(event.target.value);
+        $(`${id}Out`).textContent = Math.round(value * scale);
+        radio?.[method](value);
+      });
+    }
+    addEventListener('keydown', event => {
+      if (!radio || event.target.tagName === 'INPUT') return;
+      if (event.key === 'ArrowRight') radio.next();
+      else if (event.key === 'ArrowLeft') radio.prev();
+      else if (event.key === ' ') { event.preventDefault(); $('car').click(); }
+    });
+  </script>
+</body>
+</html>

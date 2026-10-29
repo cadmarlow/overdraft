@@ -89,6 +89,7 @@ class CityAudioSources {
     this.buses = trafficSystem.buses;
     this.peds = trafficSystem.peds;
     this.highwayCars = highwayTraffic.cars;
+    this.extraVehicles = [];
     this.signalSites = streetDetails.audioSignals;
     this.motors = new NearestSources(10);
     this.sirens = new NearestSources(2);
@@ -188,6 +189,14 @@ class CityAudioSources {
         this.motor(entity, kind, x, y + (helicopter ? 2.66 : 0.7), z, player ? entity.speed : 0, load, entity.heading,
           false, player, seedAt(i), false, gain, range, verticalSpeed);
       }
+    }
+
+    // Gameplay-driven cars (pursuers, see wanted.js): engines, and sirens while they chase
+    for (let i = 0; i < this.extraVehicles.length; i++) {
+      const e = this.extraVehicles[i];
+      if (!e.mesh?.visible) continue;
+      this.motor(e, 'sedan', e.position.x, 0.7, e.position.z, Math.abs(e.speed), 0.6, e.heading, !!e.siren, false,
+        seedAt(3000 + i), false, 0.8, 160);
     }
 
     this.streetVehicles(this.cars, elapsed, 100);

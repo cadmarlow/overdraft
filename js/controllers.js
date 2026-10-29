@@ -495,7 +495,7 @@ class ThirdPersonControllerManager {
   // =========================================================================
   // 2. CAR (3D LOFTED SCULPTED NYC MEDALLION YELLOW TAXI SEDAN)
   // =========================================================================
-  createCarEntity({ kind = 'taxi', paint = 0xffbe14 } = {}) {
+  createCarEntity({ kind = 'taxi', paint = 0xffbe14, livery = 0 } = {}) {
     const root = new THREE.Group();
     root.name = 'PlayerTaxiCar';
 
@@ -503,7 +503,7 @@ class ThirdPersonControllerManager {
     root.add(chassisPivot);
 
     const spec = BODY_SPECS[kind] || BODY_SPECS.sedan;
-    const taxiLoftMat = createLoftedCarMaterial(spec, paint);
+    const taxiLoftMat = createLoftedCarMaterial(spec, paint, livery);
 
     // 1. 3D Lofted Taxi Body + Curved Windscreens + Crowned Roof + Side Mirrors + Roof Sign
     const carBodyGeo = buildCarGeometry(spec, false);
@@ -589,7 +589,7 @@ class ThirdPersonControllerManager {
       spec,
       paint,
       bodyMesh: carBodyMesh,
-      label: ({ sedan: 'Albany · Executive', suv: 'Declasse · Summit', taxi: 'Vapid · City Cab', pickup: 'Bravado · Ranch', van: 'Vapid · Cargo', minivan: 'Dundreary · Voyager' })[kind] || 'Berline',
+      label: ({ sedan: 'Valmont · Écume', suv: 'Brisant · Récif', taxi: 'Valmont · Cab 7', pickup: 'Gréville · Falaise', van: 'Hauturier · Cargo', minivan: 'Gréville · Escale' })[kind] || 'Berline',
       mesh: root,
       chassisPivot,
       carState,
@@ -921,13 +921,13 @@ class ThirdPersonControllerManager {
     return out;
   }
 
-  resolveHorizontalCollision(pos, radius, carEntity = null, entity = carEntity) {
+  resolveHorizontalCollision(pos, radius, carEntity = null, entity = carEntity, mode = carEntity ? 'car' : this.activeMode) {
     // The detailed island (the helicopter may roam out over the harbour & the boroughs)
-    const heli = this.activeMode === 'helicopter';
+    const heli = mode === 'helicopter';
     const m = heli ? 6000 : 0;
     pos.x = Math.max(ISLAND_BOUNDS.minX - m, Math.min(ISLAND_BOUNDS.maxX + m, pos.x));
     pos.z = Math.max(ISLAND_BOUNDS.minZ + (heli ? -6000 : 30), Math.min(ISLAND_BOUNDS.maxZ + m, pos.z));
-    if (this.activeMode !== 'helicopter' && getIslandBoundsAtZ) {
+    if (!heli && getIslandBoundsAtZ) {
       const shore = getIslandBoundsAtZ(pos.z);
       const minShoreX = shore.westX + 8.0;
       const maxShoreX = shore.eastX - 8.0;
@@ -940,7 +940,7 @@ class ThirdPersonControllerManager {
       }
     }
 
-    const body = collisionBody(this.activeMode, radius, carEntity ? carEntity.heading : 0);
+    const body = collisionBody(mode, radius, carEntity ? carEntity.heading : 0);
     const { sin: sinH, cos: cosH, extX, extZ } = body;
     const contact = this._buildingContact ??= { nx: 0, nz: 0, depth: 0 };
 
@@ -1024,7 +1024,8 @@ class ThirdPersonControllerManager {
         p._charHidden = false;
         if (p.mesh) p.mesh.visible = true;
         const air = p.position.y - this.getGroundHeight(p.position.x, p.position.z, 'person');
-        p.rig.update(dt, p.position.x, p.position.z, p.heading, personGround, this, air > 0.02 ? air : 0);
+        // diveTime (gameplay.js): knocked down or fallen, the evasive-dive pose instead of walking
+        p.rig.update(dt, p.position.x, p.position.z, p.heading, personGround, this, air > 0.02 ? air : 0, true, p.diveTime ?? -1);
         p.crowd.begin();
         p.crowd.add(p.rig, 0);
         p.crowd.end();
@@ -1162,18 +1163,19 @@ class ThirdPersonControllerManager {
 
   updateCar(dt) {
     if (dt <= 0) return;
-    const c = this.entities.car;
-
     let throttle = 0;
     if (this.keys.forward) throttle = this.keys.forward;
     else if (this.keys.backward) throttle = -this.keys.backward;
-
-    const braking = c.speed * throttle < 0;
-
     let steerInput = 0;
     if (this.keys.left) steerInput = this.keys.left;
     if (this.keys.right) steerInput = -this.keys.right;
+    this.simulateCar(this.entities.car, throttle, steerInput, this.keys.handbrake || this.keys.up, dt);
+  }
 
+  // One car's tire, steering, collision and suspension step; shared by the player and AI drivers (wanted.js).
+  simulateCar(c, throttle, steerInput, handbrakeInput, dt) {
+    if (dt <= 0) return;
+    const braking = c.speed * throttle < 0;
     const prevX = c.position.x;
     const prevZ = c.position.z;
     c.prevX = prevX;
@@ -1196,7 +1198,7 @@ class ThirdPersonControllerManager {
       const tireAcceleration = acceleration + drive.drag * forward * Math.abs(forward);
       const grip = Math.sqrt(Math.max(0, drive.grip ** 2 - tireAcceleration ** 2));
       // A handbrake slide preserves steering while reducing lateral grip; fade it out at low speed.
-      const handbrake = (this.keys.handbrake || this.keys.up) ? Math.min(1, Math.abs(forward) / 5) : 0;
+      const handbrake = handbrakeInput ? Math.min(1, Math.abs(forward) / 5) : 0;
       const lateralGrip = grip * (1 - 0.7 * handbrake);
       const steeringGrip = grip + (drive.grip - grip) * handbrake;
 

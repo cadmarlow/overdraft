@@ -1224,6 +1224,10 @@ class PersonRig {
     this.diving = false;
     this.diveGround = 0;
     this.feet = [makeFoot(1), makeFoot(-1)];
+    this.aim = null; // { x, y, z, twoHanded }: arms raised towards a world point (weapons), see solveAim()
+    this.punch = 0; // 0..1 right arm thrust
+    this.hand = new THREE.Vector3(); // right wrist and the direction it points, after the last solve
+    this.handDir = new THREE.Vector3(0, 0, 1);
     this.pose = new Float32Array(STRIDE * 4);
     this.pose.set([seed, this.female, girth, hair], (STRIDE - 1) * 4);
   }
@@ -1762,6 +1766,49 @@ class PersonRig {
       this.jointFrom(BONE.PELVIS, LIMB.thigh[i], _qPelvis, _pelvis, _hip);
       const ankle = this.solveLeg(i, _hip, _target.set(foot.ax, foot.ay, foot.az), footYaw);
       this.writeFoot(i, ankle, qY(_qa, footYaw).multiply(qX(_q, foot.pitch)), foot.toe);
+    }
+    if (this.aim || this.punch > 0.01) this.solveAim();
+    else {
+      this.jointFrom(BONE.CHEST, LIMB.upperArm[1], _qChest, _chest, _shoulder);
+      this.hand.set(0, -(UPPER_ARM + FOREARM) * s, 0).applyQuaternion(_qChest).add(_shoulder);
+      this.handDir.set(Math.sin(yaw), 0, Math.cos(yaw));
+    }
+  }
+
+  // Arms over the walking pose: the right arm points at the aim (the left hand supporting it for two-handed weapons),
+  // or thrusts forward for a punch. Runs after solve(), whose chest transform it reuses.
+  solveAim() {
+    const s = this.s;
+    const reach = (UPPER_ARM + FOREARM + 0.07) * s;
+    const yaw = this.yaw;
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    this.jointFrom(BONE.CHEST, LIMB.upperArm[1], _qChest, _chest, _shoulder);
+    if (this.aim) {
+      _fwd.set(this.aim.x - _shoulder.x, this.aim.y - _shoulder.y, this.aim.z - _shoulder.z);
+      if (_fwd.lengthSq() < 1e-4) _fwd.set(fx, 0, fz);
+      _fwd.normalize();
+      // Keep the arm within a believable cone in front of the chest
+      const along = _fwd.x * fx + _fwd.z * fz;
+      if (along < 0.2) _fwd.addScaledVector(_rootPos.set(fx, 0, fz), 0.2 - along).normalize();
+      _target.copy(_shoulder).addScaledVector(_fwd, reach * 0.93);
+    } else {
+      const k = this.punch;
+      _fwd.set(fx, -0.12, fz).normalize();
+      _target.copy(_shoulder).addScaledVector(_fwd, reach * (0.35 + 0.6 * k));
+      _target.x += Math.cos(yaw) * 0.12 * k; _target.z -= Math.sin(yaw) * 0.12 * k;
+    }
+    _pole.set(-Math.cos(yaw) * 0.6, -1, Math.sin(yaw) * 0.6);
+    _front.copy(_fwd);
+    const wrist = this.limb(LIMB.upperArm[1], LIMB.forearm[1], _shoulder, _target, UPPER_ARM * s, (FOREARM + 0.07) * s, _pole, _front, -ARM_BIND_ABDUCTION);
+    this.hand.copy(wrist);
+    this.handDir.copy(_fwd);
+    if (this.aim && this.aim.twoHanded) {
+      // The supporting hand meets the grip just behind the right wrist
+      _target.copy(this.hand).addScaledVector(_fwd, -0.12 * s);
+      _target.x += Math.cos(yaw) * 0.05; _target.z -= Math.sin(yaw) * 0.05;
+      this.jointFrom(BONE.CHEST, LIMB.upperArm[0], _qChest, _chest, _shoulder);
+      _pole.set(Math.cos(yaw) * 0.6, -1, -Math.sin(yaw) * 0.6);
+      this.limb(LIMB.upperArm[0], LIMB.forearm[0], _shoulder, _target, UPPER_ARM * s, (FOREARM + 0.07) * s, _pole, _front, ARM_BIND_ABDUCTION);
     }
   }
 

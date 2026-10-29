@@ -433,6 +433,8 @@ class NYCMapSystem {
     this.allBlocks = allBlocks;
     this.onTeleport = onTeleport;
     this.onToggle = onToggle;
+    // Gameplay layer drawn over both maps: overlay(ctx, toX, toY, w, h, scale, isMinimap)
+    this.overlay = null;
 
     this.miniCanvas = document.getElementById('minimap-canvas');
     this.miniCtx = this.miniCanvas ? this.miniCanvas.getContext('2d') : null;
@@ -1034,6 +1036,8 @@ class NYCMapSystem {
       }
     }
 
+    if (this.overlay) this.overlay(ctx, toX, toY, w, h, scale, true);
+
     // GPS route to the active waypoint
     if (this.waypoint) {
       const wx = toX(this.waypoint.x);
@@ -1123,6 +1127,8 @@ class NYCMapSystem {
     v.screen(ctx);
     const toX = (wx) => v.toX(wx);
     const toY = (wz) => v.toY(wz);
+
+    if (this.overlay) this.overlay(ctx, toX, toY, w, h, v.s, false);
 
     // GPS route on the full map
     if (this.waypoint) {

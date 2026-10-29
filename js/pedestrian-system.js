@@ -181,6 +181,9 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
       p.resumeDir = 0;
       p.dodge = p.dodgeTarget = 0;
       p.diveStart = -Infinity;
+      p.dead = false;
+      p.hp = 100;
+      p.panicUntil = 0;
       p.avoidCheck = clock + Math.random() * PED_AVOID_INTERVAL;
       p.nextRoute = null;
       p.nextLeg = 0;
@@ -383,6 +386,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
   const walkedNodes = [];
   function walk(p, dt) {
     const avoiding = clock < p.avoidUntil;
+    const panicking = clock < p.panicUntil;
     const diving = clock - p.diveStart < PEDESTRIAN_DIVE_DURATION;
     const dodging = p.dodge !== 0 || p.dodgeTarget !== 0;
     const brake = avoiding ? PED_ESCAPE_BRAKE : PED_BRAKE;
@@ -400,11 +404,11 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
       p.nextLeg = 0;
       if (!p.node && p.nextRoute) atCurb(p);
     }
-    if (!p.node && p.route?.edge && p.t > 6 && p.t < p.len - 6 && clock >= p.restTime) {
+    if (!panicking && !p.node && p.route?.edge && p.t > 6 && p.t < p.len - 6 && clock >= p.restTime) {
       p.pause = 1.5 + Math.random() * 3;
       p.restTime = clock + 35 + Math.random() * 55;
     }
-    let vMax = avoiding ? p.avoidSpeed : p.pause > 0 || p.conversation ? 0 : p.speed;
+    let vMax = avoiding ? p.avoidSpeed : p.pause > 0 || p.conversation ? 0 : panicking ? p.panicSpeed : p.speed;
     if (dodging || diving) p.v = vMax = 0;
     if (!p.nextRoute) vMax = Math.min(vMax, Math.sqrt(2 * brake * ahead));
     let room = Infinity;
@@ -456,7 +460,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
         if (!walk) p.walkAt = -1;
         else if (p.walkAt < 0) p.walkAt = clock + p.walkDelay;
         // React to WALK independently of the queue or vehicles still clearing the crossing.
-        canCross = walk && (avoiding || clock >= p.walkAt) && mayCross(p);
+        canCross = (panicking || (walk && (avoiding || clock >= p.walkAt))) && mayCross(p);
       }
       room = s <= KERB + 1e-6 && !canCross ? Math.max(0, KERB - s) : Infinity;
       for (const q of p.node.curb) {
@@ -592,6 +596,21 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
   // the next leg of their route over its last metre so the body rounds corners instead of swinging about on the spot.
   function renderPed(p, dt) {
     const draw = !hasView || visible(p.x, p.z, 7);
+    if (p.dead) {
+      // Knocked down: the dive's fall, held prone; a struck body slides on with the impact
+      const fallen = clock - p.deadAt;
+      if (p.kvx || p.kvz) {
+        p.x += p.kvx * dt; p.z += p.kvz * dt;
+        const damp = Math.exp(-4 * dt);
+        p.kvx *= damp; p.kvz *= damp;
+        if (Math.abs(p.kvx) + Math.abs(p.kvz) < 0.05) p.kvx = p.kvz = 0;
+      }
+      const ddx = p.x - focusX, ddz = p.z - focusZ;
+      if (fallen > 45 && !draw) { p.placed = false; p.dead = false; p.rig.placed = false; return; }
+      p.rig.update(dt, p.x, p.z, p.deadHeading, pedGround, p, 0, draw, Math.min(fallen * 1.3, 0.95));
+      if (draw) pedCrowd.add(p.rig, Math.sqrt(ddx * ddx + ddz * ddz));
+      return;
+    }
     const diveTime = clock - p.diveStart;
     const diving = diveTime < PEDESTRIAN_DIVE_DURATION;
     const dx = p.x - focusX, dz = p.z - focusZ;
@@ -645,7 +664,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
     }
     for (let i = 0; i < NUM_PEDS; i++) {
       const p = peds[i];
-      if (p.placed) avoidPlayer(p);
+      if (p.placed && !p.dead) avoidPlayer(p);
     }
     meet(dt);
     gatherCurbs();
@@ -653,13 +672,54 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
     for (let i = 0; i < NUM_PEDS; i++) {
       const p = peds[i];
       if (!p.placed) continue;
-      walk(p, dt);
+      if (!p.dead) walk(p, dt);
       renderPed(p, dt);
     }
     pedCrowd.end();
   }
 
-  return { peds, meshes: pedCrowd.meshes, update };
+  // Knock a pedestrian down where they stand (shot, struck): they fall along heading, sliding on at `push` m/s
+  function kill(p, heading = p.rig.yaw, push = 0) {
+    if (!p.placed || p.dead) return false;
+    if (p.conversation) endConversation(p.conversation);
+    p.dead = true;
+    p.deadAt = clock;
+    p.deadHeading = heading;
+    p.kvx = Math.sin(heading) * push;
+    p.kvz = Math.cos(heading) * push;
+    p.v = 0;
+    p.diveStart = -Infinity;
+    p.dodge = p.dodgeTarget = 0;
+    return true;
+  }
+
+  // Everyone within radius runs away from (x, z) for about `duration` seconds, crossing against the lights
+  function panic(x, z, radius, duration = 10) {
+    const r2 = radius * radius;
+    let count = 0;
+    for (const p of peds) {
+      if (!p.placed || p.dead) continue;
+      const dx = p.x - x, dz = p.z - z;
+      if (dx * dx + dz * dz > r2) continue;
+      count++;
+      const fresh = clock >= p.panicUntil;
+      p.panicUntil = Math.max(p.panicUntil, clock + duration * (0.7 + Math.random() * 0.6));
+      p.panicSpeed = 3.4 + Math.random() * 1.4;
+      if (p.conversation) endConversation(p.conversation);
+      p.goalX = p.x + dx * 6;
+      p.goalZ = p.z + dz * 6;
+      p.goalTime = p.panicUntil;
+      p.pause = 0;
+      p.restTime = p.panicUntil + 10;
+      if (fresh && (p.ux * dx + p.uz * dz) * p.dir < 0 && (p.node || p.route?.edge)) {
+        turnPed(p, -p.dir);
+        p.v = 1.5;
+      }
+    }
+    return count;
+  }
+
+  return { peds, meshes: pedCrowd.meshes, update, kill, panic };
 }
 
 export { createPedestrianSystem };
