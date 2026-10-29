@@ -1,20 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="fr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Slop New York</title>
+  <title>CONTRE-MARÉE — Playground 01</title>
   <link rel="icon" href="data:," />
-  <meta name="description" content="Photorealistic GTA-style 3D Slop New York simulation built with Three.js WebGPURenderer and TSL shaders featuring complete Manhattan street map (125th St to Battery Park), third-person navigation (Person, Car, Cyclist, Helicopter), and 11 cinematic cameras at 60 FPS." />
-  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <meta name="description" content="CONTRE-MARÉE. Un monde ouvert jouable : explorez Manhattan à pied, prenez une voiture et découvrez la ville." />
   <!-- three.js dev branch pinned to a commit (builds committed to mrdoob/three.js@dev, served by jsDelivr) -->
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@b3396270682287470d161658ac01084d25e8dba6/build/three.webgpu.js",
-        "three/webgpu": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@b3396270682287470d161658ac01084d25e8dba6/build/three.webgpu.js",
-        "three/tsl": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@b3396270682287470d161658ac01084d25e8dba6/build/three.tsl.js",
-        "three/addons/": "https://cdn.jsdelivr.net/gh/mrdoob/three.js@b3396270682287470d161658ac01084d25e8dba6/examples/jsm/"
+        "three": "./vendor/three/build/three.webgpu.js",
+        "three/webgpu": "./vendor/three/build/three.webgpu.js",
+        "three/tsl": "./vendor/three/build/three.tsl.js",
+        "three/addons/": "./vendor/three/examples/jsm/"
       }
     }
   </script>
@@ -66,12 +65,12 @@
   <link rel="modulepreload" href="./js/audio-acoustics.js" />
   <link rel="modulepreload" href="./js/audio-system.js" />
   <link rel="modulepreload" href="./js/main.js" />
+  <link rel="modulepreload" href="./js/gameplay.js" />
+  <link rel="modulepreload" href="./js/interaction-state.js" />
   <script type="module" src="./js/main.js"></script>
   <!-- Inter (UI) & Overpass (street-name signs: modelled on Highway Gothic, the US road sign typeface) -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&amp;family=Overpass:wght@600;700&amp;display=swap" />
-  <link rel="stylesheet" href="./css/style.css?v=20261022-repo-link" />
+  <link rel="stylesheet" href="./css/style.css" />
+  <link rel="stylesheet" href="./css/game.css" />
 </head>
 <body>
   <!-- Icon sprite (24 × 24 stroke icons, drawn in currentColor) -->
@@ -107,15 +106,15 @@
   <!-- Loading Screen -->
   <div id="loading-overlay" role="status" aria-live="polite">
     <div class="loader">
-      <span class="mta-bullet loader-bullet" aria-hidden="true">NY</span>
-      <div class="loader-title">Slop New York</div>
+      <span class="mta-bullet loader-bullet" aria-hidden="true">CM</span>
+      <div class="loader-title">CONTRE-MARÉE</div>
       <div class="loader-track is-indeterminate" aria-hidden="true"><span id="loading-progress" class="loader-fill"></span></div>
       <div id="loading-status">Loading city code and data...</div>
     </div>
   </div>
 
   <!-- 3D WebGPU Viewport Container -->
-  <main id="canvas-container" aria-label="3D Interactive Slop New York Viewport"></main>
+  <main id="canvas-container" aria-label="3D Interactive CONTRE-MARÉE Viewport"></main>
 
   <!-- Top-Left: Brand & Renderer Telemetry -->
   <header class="hud hud-top-left">
@@ -123,8 +122,8 @@
       <span class="mta-bullet" aria-hidden="true">NY</span>
       <div class="brand-titles">
         <div class="brand-heading">
-          <h1>Slop New York</h1>
-          <a class="repo-link" href="https://github.com/mrdoob/slop-newyork/" target="_blank" rel="noopener noreferrer" aria-label="Slop New York on GitHub (opens in a new tab)">GitHub <span aria-hidden="true">↗</span></a>
+          <h1>CONTRE-MARÉE</h1>
+          <a class="repo-link" href="https://github.com/mrdoob/slop-newyork/" target="_blank" rel="noopener noreferrer" aria-label="CONTRE-MARÉE on GitHub (opens in a new tab)">GitHub <span aria-hidden="true">↗</span></a>
         </div>
         <div class="brand-subtitle">three.js · WebGPU · TSL · <span id="hud-fps" class="fps-ok">60</span> fps</div>
       </div>

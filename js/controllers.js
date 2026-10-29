@@ -195,7 +195,7 @@ class ThirdPersonControllerManager {
     this.scene = scene;
     this.colliders = colliders;
     this._colliderCells = null; // built on first use, see nearColliders()
-    this.activeMode = 'car'; // 'person' | 'car' | 'cyclist' | 'helicopter'
+    this.activeMode = 'person'; // The playable character is the persistent owner of vehicle interactions.
 
     this.keys = {
       forward: false,
@@ -203,7 +203,9 @@ class ThirdPersonControllerManager {
       left: false,
       right: false,
       up: false,
-      down: false
+      down: false,
+      sprint: false,
+      handbrake: false
     };
 
     this.entities = {
@@ -254,7 +256,9 @@ class ThirdPersonControllerManager {
       left: ['KeyA', 'ArrowLeft'],
       right: ['KeyD', 'ArrowRight'],
       up: ['Space', 'KeyE'],
-      down: ['KeyQ', 'KeyC']
+      down: ['KeyQ', 'KeyC'],
+      sprint: ['ShiftLeft', 'ShiftRight'],
+      handbrake: ['ControlLeft', 'ControlRight']
     };
     const actionsByCode = new Map(Object.entries(bindings).flatMap(([action, codes]) => codes.map((code) => [code, action])));
     this._pressedCodes = new Set();
@@ -460,7 +464,7 @@ class ThirdPersonControllerManager {
     // One skinned person, posed in world space every frame by its rig (walk, run, turn, jump)
     const crowd = new PersonCrowd(1, { farDistance: Infinity });
     crowd.meshes.forEach((m) => this.scene.add(m));
-    const rig = new PersonRig({ seed: 4.2, scale: 1.0, girth: 1.02, hair: 0.18, armSwing: 1.0 });
+    const rig = new PersonRig({ seed: 9.73, scale: 1.04, girth: 1.03, hair: 0.12, armSwing: 0.85 });
 
     // Soft Under-Foot Contact Shadow (AO)
     const shadowGeo = new THREE.PlaneGeometry(0.95, 0.95);
@@ -474,11 +478,11 @@ class ThirdPersonControllerManager {
 
     return {
       type: 'person',
-      label: 'Pedestrian',
+      label: 'À pied',
       mesh: root,
       crowd,
       rig,
-      position: new THREE.Vector3(-11.6, ISLAND_BOUNDS.sidewalkHeight, SPAWN_Z + 12),
+      position: new THREE.Vector3(12.2, ISLAND_BOUNDS.sidewalkHeight, SPAWN_Z + 12),
       heading: 0,
       speed: 0,
       verticalVel: 0,
@@ -491,15 +495,15 @@ class ThirdPersonControllerManager {
   // =========================================================================
   // 2. CAR (3D LOFTED SCULPTED NYC MEDALLION YELLOW TAXI SEDAN)
   // =========================================================================
-  createCarEntity() {
+  createCarEntity({ kind = 'taxi', paint = 0xffbe14 } = {}) {
     const root = new THREE.Group();
     root.name = 'PlayerTaxiCar';
 
     const chassisPivot = new THREE.Group();
     root.add(chassisPivot);
 
-    const spec = BODY_SPECS.taxi;
-    const taxiLoftMat = createLoftedCarMaterial(spec, 0xffbe14);
+    const spec = BODY_SPECS[kind] || BODY_SPECS.sedan;
+    const taxiLoftMat = createLoftedCarMaterial(spec, paint);
 
     // 1. 3D Lofted Taxi Body + Curved Windscreens + Crowned Roof + Side Mirrors + Roof Sign
     const carBodyGeo = buildCarGeometry(spec, false);
@@ -519,7 +523,7 @@ class ThirdPersonControllerManager {
       polygonOffsetUnits: -2
     });
     const doorMid = (spec.doors[0] + spec.doors[1]) / 2;
-    for (const side of [-1, 1]) {
+    for (const side of (kind === 'taxi' ? [-1, 1] : [])) {
       const decal = new THREE.Mesh(buildCarSidePatch(spec, side, doorMid - 0.36, doorMid + 0.36, 0.53, 0.81, 0.003), doorDecalMat);
       chassisPivot.add(decal);
     }
@@ -581,7 +585,11 @@ class ThirdPersonControllerManager {
 
     return {
       type: 'car',
-      label: 'NYC Yellow Taxi',
+      kind,
+      spec,
+      paint,
+      bodyMesh: carBodyMesh,
+      label: ({ sedan: 'Albany · Executive', suv: 'Declasse · Summit', taxi: 'Vapid · City Cab', pickup: 'Bravado · Ranch', van: 'Vapid · Cargo', minivan: 'Dundreary · Voyager' })[kind] || 'Berline',
       mesh: root,
       chassisPivot,
       carState,
@@ -1012,7 +1020,7 @@ class ThirdPersonControllerManager {
     if (p) {
       const dx = focus ? p.position.x - focus.x : 0;
       const dz = focus ? p.position.z - focus.z : 0;
-      if (this.activeMode === 'person' || dx * dx + dz * dz <= maxDistSq) {
+      if (!p.inVehicle && (this.activeMode === 'person' || dx * dx + dz * dz <= maxDistSq)) {
         p._charHidden = false;
         if (p.mesh) p.mesh.visible = true;
         const air = p.position.y - this.getGroundHeight(p.position.x, p.position.z, 'person');
@@ -1081,14 +1089,10 @@ class ThirdPersonControllerManager {
     if (this.activeMode === 'person') {
       this.updatePerson(dt, elapsed);
     } else {
-      // Keep the sidewalk pedestrian walking naturally when not actively controlled
+      // The protagonist remains inside the controlled vehicle.
       const p = this.entities.person;
-      const walkSpeed = 1.48;
-      p.speed = walkSpeed;
-      p.position.x += Math.sin(p.heading) * walkSpeed * dt;
-      p.position.z += Math.cos(p.heading) * walkSpeed * dt;
-      if (p.position.z < -340) p.heading = 0;
-      else if (p.position.z > 340) p.heading = Math.PI;
+      p.speed = 0;
+      if (p.inVehicle) p.position.copy(this.entities.car.position);
     }
 
     if (this.activeMode === 'car') {
@@ -1175,6 +1179,7 @@ class ThirdPersonControllerManager {
     c.prevX = prevX;
     c.prevZ = prevZ;
     // Short steps keep grip, impacts and suspension consistent at different display rates.
+    const drive = c.drive || CAR_DRIVE;
     const steps = Math.ceil(dt * 120);
     const step = dt / steps;
     const steerResponse = 1 - Math.exp(-10 * step);
@@ -1185,22 +1190,22 @@ class ThirdPersonControllerManager {
       const vx = sin * c.speed + c.vx, vz = cos * c.speed + c.vz;
       const forward = vx * sin + vz * cos;
       const sideways = vx * cos - vz * sin;
-      const speed = driveSpeed(forward, throttle, step, CAR_DRIVE);
+      const speed = driveSpeed(forward, throttle, step, drive);
       const acceleration = (speed - forward) / step;
       // Braking and cornering share tire grip; air resistance does not use it.
-      const tireAcceleration = acceleration + CAR_DRIVE.drag * forward * Math.abs(forward);
-      const grip = Math.sqrt(Math.max(0, CAR_DRIVE.grip ** 2 - tireAcceleration ** 2));
+      const tireAcceleration = acceleration + drive.drag * forward * Math.abs(forward);
+      const grip = Math.sqrt(Math.max(0, drive.grip ** 2 - tireAcceleration ** 2));
       // A handbrake slide preserves steering while reducing lateral grip; fade it out at low speed.
-      const handbrake = forward * throttle < 0 ? Math.abs(throttle) * Math.min(1, Math.abs(forward) / 5) : 0;
+      const handbrake = (this.keys.handbrake || this.keys.up) ? Math.min(1, Math.abs(forward) / 5) : 0;
       const lateralGrip = grip * (1 - 0.7 * handbrake);
-      const steeringGrip = grip + (CAR_DRIVE.grip - grip) * handbrake;
+      const steeringGrip = grip + (drive.grip - grip) * handbrake;
 
       // Full lock at parking speeds, progressively less steering at road speeds.
-      const turn = CAR_DRIVE.wheelbase * CAR_DRIVE.cornering;
+      const turn = drive.wheelbase * drive.cornering;
       const maxSteer = Math.atan(turn / Math.max(speed * speed, turn / Math.tan(0.60)));
       c.steerAngle += (steerInput * maxSteer - c.steerAngle) * steerResponse;
       const yawLimit = steeringGrip / Math.max(2, Math.abs(speed));
-      const targetYaw = Math.max(-yawLimit, Math.min(yawLimit, speed * Math.tan(c.steerAngle) / CAR_DRIVE.wheelbase));
+      const targetYaw = Math.max(-yawLimit, Math.min(yawLimit, speed * Math.tan(c.steerAngle) / drive.wheelbase));
       // Collision spin remains part of the yaw velocity; the tires gradually regain control.
       const yawStep = steeringGrip * 0.65 * step;
       c.angularVel += Math.max(-yawStep, Math.min(yawStep, (targetYaw - c.angularVel) * yawResponse));
@@ -1212,6 +1217,7 @@ class ThirdPersonControllerManager {
       const worldX = sin * speed + cos * sideways;
       const worldZ = cos * speed - sin * sideways;
       c.speed = worldX * nextSin + worldZ * nextCos;
+      if (handbrake) c.speed *= Math.exp(-1.8 * step);
       const slip = worldX * nextCos - worldZ * nextSin;
       const correction = Math.max(-lateralGrip * step, Math.min(lateralGrip * step, -slip * tireResponse));
       c.vx = nextCos * (slip + correction);

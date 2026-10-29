@@ -35,6 +35,7 @@ class CameraSystem {
     this.zoomMultiplier = 1.0;
     this.isDragging = false;
     this.userOrbitTimer = 0;
+    this.footYaw = 0;
 
     this.currentPos = new THREE.Vector3(0, 10, 380);
     this.currentLookAt = new THREE.Vector3(0, 8, 440);
@@ -85,7 +86,8 @@ class CameraSystem {
           this.zoomMultiplier = Math.max(0.45, Math.min(2.4, this.zoomMultiplier * previousDistance / distance));
         }
       } else {
-        this.orbitYawOffset -= dx * 0.0065;
+        if (this.controllerManager.activeMode === 'person') this.footYaw -= dx * 0.0065;
+        else this.orbitYawOffset -= dx * 0.0065;
         this.orbitPitchOffset = Math.max(-0.32, Math.min(0.68, this.orbitPitchOffset + dy * 0.005));
       }
       this.userOrbitTimer = 4.0;
@@ -131,7 +133,8 @@ class CameraSystem {
     // POV uses the orbit angles, but only chase renders a zoomed camera distance.
     if (this.activePresetId !== 'chase') zoom = 0;
     if (!lookX && !lookY && !zoom) return;
-    this.orbitYawOffset -= lookX * 2.0 * dt;
+    if (this.controllerManager.activeMode === 'person') this.footYaw -= lookX * 2.0 * dt;
+    else this.orbitYawOffset -= lookX * 2.0 * dt;
     this.orbitPitchOffset = Math.max(-0.32, Math.min(0.68, this.orbitPitchOffset + lookY * 1.25 * dt));
     this.zoomMultiplier = Math.max(0.45, Math.min(2.4, this.zoomMultiplier + zoom * 0.9 * dt));
     this.userOrbitTimer = 4.0;
@@ -185,7 +188,7 @@ class CameraSystem {
     this.smoothedSpeed += (Math.abs(entity.speed) - this.smoothedSpeed) * (1 - Math.exp(-dt * 3.0));
     const speedLag = this.smoothedSpeed * 0.1;
 
-    const totalYaw = entity.heading + this.orbitYawOffset;
+    const totalYaw = entity.type === 'person' ? this.footYaw : entity.heading + this.orbitYawOffset;
 
     switch (this.activePresetId) {
       case 'chase': {
@@ -199,11 +202,12 @@ class CameraSystem {
           entity.position.z - Math.cos(totalYaw) * horizDist
         );
 
-        const lookUpBias = entity.type === 'helicopter' ? 0.2 : (entity.type === 'car' ? 0.52 : 1.55);
+        const lookUpBias = entity.type === 'helicopter' ? 0.2 : (entity.type === 'car' ? 0.52 : 0);
+        const lookAhead = entity.type === 'person' ? 0.7 : 5.2;
         desiredLook.set(
-          entity.position.x + Math.sin(entity.heading) * 5.2,
+          entity.position.x + Math.sin(totalYaw) * lookAhead,
           entity.position.y + entity.cameraTargetOffset.y + lookUpBias,
-          entity.position.z + Math.cos(entity.heading) * 5.2
+          entity.position.z + Math.cos(totalYaw) * lookAhead
         );
         break;
       }
@@ -357,6 +361,26 @@ class CameraSystem {
       this.currentLookAt.lerp(desiredLook, k);
     }
 
+    // Keep the third-person camera on the player's side of nearby solid geometry.
+    if ((this.activePresetId === 'chase' || this.activePresetId === 'action') && this.controllerManager.playground) {
+      const origin = entity.position.clone().add(new THREE.Vector3(0, entity.type === 'person' ? 1.5 : 1.2, 0));
+      const direction = this.currentPos.clone().sub(origin);
+      const length = direction.length();
+      if (length > 0.01) {
+        direction.divideScalar(length);
+        let distance = length;
+        for (const collider of this.controllerManager.nearColliders(origin.x, origin.z, length + 3)) {
+          const box = new THREE.Box3(
+            new THREE.Vector3(collider.minX - 0.15, (collider.minY ?? 0) - 0.1, collider.minZ - 0.15),
+            new THREE.Vector3(collider.maxX + 0.15, collider.maxY + 0.1, collider.maxZ + 0.15)
+          );
+          if (box.containsPoint(origin)) continue;
+          const hit = new THREE.Ray(origin, direction).intersectBox(box, new THREE.Vector3());
+          if (hit) distance = Math.min(distance, Math.max(0.55, origin.distanceTo(hit) - 0.2));
+        }
+        if (distance < length) this.currentPos.copy(origin).addScaledVector(direction, distance);
+      }
+    }
     this.camera.position.copy(this.currentPos);
     this.camera.lookAt(this.currentLookAt);
   }

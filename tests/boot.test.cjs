@@ -19,9 +19,10 @@ test('city module preloads start after the import map and before stylesheets', (
   assert.equal(entries.length, 1);
   assert.ok(importMap.index < entries[0].index);
   assert.ok(entries[0].index < stylesheetIndex, 'the module graph starts loading early too');
-  assert.match(html, /<link rel="preconnect" href="https:\/\/cdn\.jsdelivr\.net" crossorigin\s*\/>/);
+  assert.doesNotMatch(html, /https:\/\/cdn\.jsdelivr\.net/);
   const { imports } = JSON.parse(importMap[1]);
   assert.equal(imports.three, imports['three/webgpu'], 'Three.js aliases share one module instance');
+  assert.match(imports.three, /^\.\/vendor\/three\//, 'runtime dependencies ship with the game');
 });
 
 test('native module entry and imports share canonical preloaded URLs on GitHub Pages', () => {

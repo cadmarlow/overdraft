@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { pass, mrt, output, normalView, positionView, metalness, roughness, vec2, smoothstep } from 'three/tsl';
+import { pass, mrt, output, normalView, positionView, metalness, roughness, vec2, vec3, smoothstep } from 'three/tsl';
 import { ssr } from 'three/addons/tsl/display/SSRNode.js';
 import { createPostProcessing } from './post-processing.js';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
@@ -19,10 +19,14 @@ import { LightingSystem } from './lighting.js';
 import { NYCMapSystem } from './nyc-map.js';
 import { setupSceneCulling, updateSceneCulling } from './scene-culling.js';
 import { CityAudioSystem } from './audio-system.js';
+import { Playground } from './gameplay.js';
 
 // Application setup, shader warm-up and frame loop.
 
 async function initApp() {
+  let gameplay = null;
+  let graphicsLost = false;
+  const performanceMode = new URLSearchParams(location.search).get('quality') === 'performance';
   const container = document.getElementById('canvas-container');
   const loadingOverlay = document.getElementById('loading-overlay');
   const loadingStatus = document.getElementById('loading-status');
@@ -52,14 +56,27 @@ async function initApp() {
   await showLoadingStage('Initializing graphics...');
 
   // 1. Initialize Three.js WebGPURenderer with 32-bit float reversedDepthBuffer
+  // Ship the broadly supported renderer first. WebGPU remains available for hardware validation.
+  const forceWebGL = new URLSearchParams(location.search).get('renderer') !== 'webgpu';
+  let graphicsAdapter = null;
+  let graphicsDevice;
+  if (!forceWebGL && navigator.gpu) {
+    try {
+      graphicsAdapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
+      if (graphicsAdapter) graphicsDevice = await graphicsAdapter.requestDevice({ requiredFeatures: [...graphicsAdapter.features] });
+    } catch (error) { console.warn('[graphics] Native adapter unavailable; using compatibility renderer.', error); }
+  }
   const renderer = new THREE.WebGPURenderer({
+    device: graphicsDevice,
+    forceWebGL: forceWebGL || !graphicsDevice,
     antialias: true,
     powerPreference: 'high-performance',
     reversedDepthBuffer: true
   });
-  renderer.setPixelRatio(1.0);
+  renderer.graphicsAdapter = graphicsAdapter;
+  renderer.setPixelRatio(performanceMode ? 0.65 : 1.0);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = !performanceMode;
   renderer.lighting = new ClusteredLighting(256, 32, 28, 48);
   container.appendChild(renderer.domElement);
 
@@ -73,6 +90,20 @@ async function initApp() {
   };
 
   await renderer.init();
+  renderer.onDeviceLost = info => {
+    graphicsLost = true;
+    console.error('[graphics]', info);
+    renderer.setAnimationLoop(null);
+    document.getElementById('loading-overlay')?.classList.remove('hidden');
+    const status = document.getElementById('loading-status');
+    if (status) status.textContent = 'Le navigateur a interrompu le rendu graphique. Rechargez la page ou utilisez le mode compatibilité.';
+    if (!document.getElementById('compatibility-button')) {
+      const button = document.createElement('button');
+      button.id = 'compatibility-button'; button.className = 'retry-button'; button.textContent = 'Mode compatibilité';
+      button.addEventListener('click', () => { const url = new URL(location.href); url.searchParams.set('renderer', 'webgl'); location.href = url.href; });
+      document.getElementById('loading-overlay')?.append(button);
+    }
+  };
   markInit('renderer');
 
   // 2. Scene, atmosphere and lighting
@@ -117,28 +148,7 @@ async function initApp() {
   // 4. Initialize Third-Person Controllers (Person, Car, Cyclist, Helicopter) & Multi-Camera System
   await showLoadingStage('Preparing player, vehicles and controls...');
   const controllerManager = new ThirdPersonControllerManager(scene, allColliders);
-  // Reuse teleport placement so saved players return at rest, close to their last positions.
-  try {
-    const saved = JSON.parse(localStorage.getItem('nyc-player-state'));
-    if (saved?.version === 1) {
-      for (const mode of Object.keys(controllerManager.entities)) {
-        const p = saved.entities?.[mode];
-        if (!p || ![p.x, p.y, p.z, p.heading].every(Number.isFinite)) continue;
-        controllerManager.setMode(mode);
-        controllerManager.teleportActiveTo(p.x, p.z, p.heading, p.y);
-      }
-      controllerManager.setMode(Object.hasOwn(controllerManager.entities, saved.activeMode) ? saved.activeMode : 'car');
-    }
-  } catch { /* Missing or unavailable storage does not prevent playing. */ }
-
-  function savePlayerState() {
-    try {
-      const entities = Object.fromEntries(Object.entries(controllerManager.entities).map(([mode, entity]) => [mode, {
-        x: entity.position.x, y: entity.position.y, z: entity.position.z, heading: entity.heading
-      }]));
-      localStorage.setItem('nyc-player-state', JSON.stringify({ version: 1, activeMode: controllerManager.activeMode, entities }));
-    } catch { /* Storage may be disabled or full. */ }
-  }
+  function savePlayerState() { gameplay?.save(); }
 
   const cameraSystem = new CameraSystem(renderer.domElement, controllerManager);
   const touchControls = new TouchControls(controllerManager);
@@ -238,7 +248,7 @@ async function initApp() {
 
   // Roughness mip blur must not spread reflections back onto matte or nonreflective surfaces.
   const reflectionMask = scenePassMetalRough.r.greaterThan(0).select(smoothstep(maxSSRRoughness, 0.55, scenePassMetalRough.g), 0);
-  const reflections = ssrPass.mul(reflectionMask);
+  const reflections = renderer.backend.isWebGPUBackend && !performanceMode ? ssrPass.mul(reflectionMask) : vec3(0);
   const colorGrade = createPostProcessing(renderer, scenePassColor, reflections);
   const renderPipeline = new THREE.RenderPipeline(renderer, colorGrade.outputNode);
 
@@ -260,10 +270,7 @@ async function initApp() {
   const elLocation = document.getElementById('hud-location');
   const elControlsHint = document.getElementById('hud-controls-hint');
   const gamepadControls = new GamepadControls(controllerManager, cameraSystem, {
-    onCycleMode: (step) => {
-      const modes = ['person', 'car', 'cyclist', 'helicopter'];
-      selectMode(modes[(modes.indexOf(controllerManager.activeMode) + step + modes.length) % modes.length]);
-    },
+    onCycleMode: () => gameplay?.interact(),
     onCycleCamera: cycleCamera,
     onToggleMap: () => mapSystem.toggleFullMap(!mapSystem.isFullMapOpen),
     onCloseMap: () => mapSystem.toggleFullMap(false)
@@ -337,9 +344,10 @@ async function initApp() {
 
   // Steps through CAMERA_PRESETS (V / Shift+V, and the arrows either side of the camera name)
   function cycleCamera(step) {
-    const n = CAMERA_PRESETS.length;
-    const idx = CAMERA_PRESETS.findIndex((p) => p.id === cameraSystem.activePresetId);
-    selectCamera(CAMERA_PRESETS[(idx + step + n) % n].id, true);
+    const presets = CAMERA_PRESETS.filter(p => p.category === 'follow');
+    const n = presets.length;
+    const idx = presets.findIndex((p) => p.id === cameraSystem.activePresetId);
+    selectCamera(presets[(idx + step + n) % n].id, true);
   }
 
   function selectTime(timeId) {
@@ -521,38 +529,8 @@ async function initApp() {
 
   // Global keyboard shortcuts for modes (1-4), cameras (V / 5-0), and HUD (H)
   window.addEventListener('keydown', (e) => {
-    if (isTypingInField(e)) return;
+    if (isTypingInField(e) || !gameplay?.active) return;
     switch (e.code) {
-      case 'Digit1':
-        selectMode('person');
-        break;
-      case 'Digit2':
-        selectMode('car');
-        break;
-      case 'Digit3':
-        selectMode('cyclist');
-        break;
-      case 'Digit4':
-        selectMode('helicopter');
-        break;
-      case 'Digit5':
-        selectCamera('chase', true);
-        break;
-      case 'Digit6':
-        selectCamera('action', true);
-        break;
-      case 'Digit7':
-        selectCamera('pov', true);
-        break;
-      case 'Digit8':
-        selectCamera('fifthAve', true);
-        break;
-      case 'Digit9':
-        selectCamera('timesSquare', true);
-        break;
-      case 'Digit0':
-        selectCamera('chryslerGCT', true);
-        break;
       case 'KeyV':
         cycleCamera(e.shiftKey ? -1 : 1);
         break;
@@ -582,13 +560,20 @@ async function initApp() {
   selectMode(controllerManager.activeMode);
   selectCamera('chase', true);
   selectTime('golden');
+  gameplay = new Playground({ controllers: controllerManager, camera: cameraSystem, traffic: trafficSystem,
+    scene, onMode: selectMode, onTime: selectTime, audio: audioSystem, map: mapSystem, touch: touchControls, gamepad: gamepadControls });
+  gameplay.onQuality = low => { renderer.setPixelRatio(low ? 0.75 : 1); renderer.setSize(window.innerWidth, window.innerHeight); };
+  cameraSystem.initialized = false;
+  controllerManager.update(0.016, 0, controllerManager.getActiveEntity().position);
+  cameraSystem.update(0.016, 0);
+  updateSceneCulling(cameraSystem.camera.position);
   // the web fonts change the buttons' widths once they arrive
   if (document.fonts) document.fonts.ready.then(placeModeIndicator);
   markInit('ui');
 
   // Compile shaders behind the loading screen. Overlapping compileAsync() jobs keep compilation moving
   // while individual jobs yield to the browser.
-  const COMPILE_POOL = 16;
+  const COMPILE_POOL = 8;
   const nextTask = () => (globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise((resolve) => setTimeout(resolve, 0)));
   async function precompileShaders() {
     await showLoadingStage('Preparing reflections and bloom...');
@@ -607,10 +592,7 @@ async function initApp() {
     const jobByMaterial = new Map();
     const pipelines = new Set();
     scene.traverseVisible((o) => {
-      if (o.frustumCulled) {
-        culled.push(o);
-        o.frustumCulled = false;
-      }
+      // Distance-culling stays active during warm-up: compile the starting area first.
       if (!o.isMesh && !o.isLine && !o.isPoints && !o.isSprite) return;
       // Use the first visible chunk: the original representative may be in an inactive tree cell. Shadow stand-ins
       // only draw in the shadow maps (the warm-up frame compiles those).
@@ -664,7 +646,8 @@ async function initApp() {
     for (const o of culled) o.frustumCulled = true;
   }
 
-  await precompileShaders();
+  if (renderer.backend.isWebGPUBackend) await precompileShaders();
+  if (graphicsLost) throw new Error('Graphics device lost during loading');
   markInit('compile');
   await showLoadingStage('Preparing shadows and the first frame...');
 
@@ -683,21 +666,25 @@ async function initApp() {
     lastTime = now;
     const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
     elapsed += dt;
+    const simulationDt = gameplay.active ? dt : 0;
+    const worldDt = !gameplay.playing ? dt : simulationDt;
 
     // Update 3rd-person controllers, camera, signals, traffic & vehicle collisions, building LODs, and dynamic shadow focus
-    gamepadControls.update(dt);
-    controllerManager.update(dt, elapsed, cameraSystem.initialized ? cameraSystem.currentPos : null);
+    gamepadControls.update(simulationDt);
+    gameplay.beforeUpdate(simulationDt);
+    if (simulationDt > 0) controllerManager.update(simulationDt, elapsed, cameraSystem.initialized ? cameraSystem.currentPos : null);
     cameraSystem.update(dt, elapsed);
     streetDetails.signalClock.value = elapsed;
-    trafficSystem.update(
-      dt,
+    if (worldDt > 0) trafficSystem.update(
+      worldDt,
       elapsed,
       cameraSystem.currentPos,
       controllerManager.getActiveEntity(),
       controllerManager.activeMode,
       cameraSystem.camera
     );
-    highwayTraffic.update(dt, cameraSystem.camera, controllerManager.getActiveEntity(), controllerManager.activeMode);
+    if (worldDt > 0) highwayTraffic.update(worldDt, cameraSystem.camera, controllerManager.getActiveEntity(), controllerManager.activeMode);
+    gameplay.update(simulationDt);
     if (!document.hidden && now >= nextPlayerSave) {
       savePlayerState();
       nextPlayerSave = now + 5000;
@@ -709,7 +696,7 @@ async function initApp() {
     lightingSystem.update(cameraSystem.currentPos);
     mapSystem.update();
     audioSystem.update(dt, elapsed, cameraSystem.camera, lightingSystem.activePresetId === 'midnight');
-    if (warmedUp) updateSceneCulling(cameraSystem.camera.position); // the warm-up frame draws every chunk
+    updateSceneCulling(cameraSystem.camera.position);
     // Traffic collisions can move the player after controller updates; finalize moving hierarchies here.
     for (const root of dynamicRoots) root.updateMatrixWorld();
 
@@ -724,10 +711,7 @@ async function initApp() {
         const pipeline = o.userData.sharesPipelineWith || o;
         if (pipelines.has(pipeline)) return;
         pipelines.add(pipeline);
-        if (o.frustumCulled) {
-          culled.push(o);
-          o.frustumCulled = false;
-        }
+        // Preserve view and distance culling on the first frame too.
       });
       renderPipeline.render();
       for (const o of culled) o.frustumCulled = true;
@@ -742,6 +726,7 @@ async function initApp() {
       const device = renderer.backend.device;
       if (loadingStatus) loadingStatus.textContent = 'Waiting for graphics to finish the first frame...';
       Promise.resolve(device && device.queue.onSubmittedWorkDone()).catch(() => {}).then(() => {
+        if (graphicsLost) return;
         markInit('gpu');
         console.log(`[init] ${initTimings.join(', ')}`);
         initTimings = null;
@@ -779,4 +764,13 @@ async function initApp() {
   });
 }
 
-initApp();
+initApp().catch(error => {
+  console.error('[startup]', error);
+  const status = document.getElementById('loading-status');
+  if (status) status.textContent = 'Impossible de lancer le rendu 3D. Essayez Chrome ou Edge à jour, avec l’accélération matérielle activée.';
+  const overlay = document.getElementById('loading-overlay');
+  if (overlay) {
+    const retry = document.createElement('button'); retry.className = 'retry-button';
+    retry.textContent = 'Réessayer'; retry.addEventListener('click', () => location.reload()); overlay.append(retry);
+  }
+});

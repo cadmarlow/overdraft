@@ -308,12 +308,12 @@ test('releasing car steering settles smoothly and suspension leans outward', () 
   assert.ok(Math.abs(sim.car.steerAngle) < 0.001);
 });
 
-test('braking while turning initiates a slide that recovers on release', () => {
+test('the dedicated handbrake initiates a slide that recovers on release', () => {
   for (const speed of [15, 25]) {
     for (const turn of ['left', 'right']) {
       const braking = carDynamicsHarness({ speed });
       const coasting = carDynamicsHarness({ speed });
-      braking.controller.keys.backward = true;
+      braking.controller.keys.handbrake = true;
       for (const sim of [braking, coasting]) {
         sim.controller.keys[turn] = true;
         sim.advance(0.75);
@@ -321,7 +321,7 @@ test('braking while turning initiates a slide that recovers on release', () => {
       const slip = (car) => Math.atan2(Math.hypot(car.vx, car.vz), Math.abs(car.speed));
       assert.ok(slip(braking.car) > slip(coasting.car) * 1.5, 'the handbrake lets the rear slide out');
       assert.ok(Math.hypot(...carVelocity(braking.car)) < speed, 'the slide cannot add momentum');
-      braking.controller.keys.backward = false;
+      braking.controller.keys.handbrake = false;
       braking.controller.keys[turn] = false;
       braking.advance(2);
       assert.ok(Math.hypot(braking.car.vx, braking.car.vz) < 0.1, 'grip returns smoothly after releasing the brake');
