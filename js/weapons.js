@@ -10,9 +10,13 @@ const WEAPONS = {
   smg: { id: 'smg', name: 'HORNET', sub: 'Pistolet-mitrailleur', damage: 21, interval: 0.085, mag: 30, reload: 1.8, spread: 0.018,
     moveSpread: 0.03, range: 160, sound: 'smg', auto: true, hands: 2, recoil: 0.011, shake: 0.08, heat: 7 },
   shotgun: { id: 'shotgun', name: 'BREAKER 12', sub: 'Fusil à pompe', damage: 15, pellets: 9, interval: 0.85, mag: 6, reload: 2.4,
-    spread: 0.075, moveSpread: 0.02, range: 70, sound: 'shotgun', auto: false, hands: 2, recoil: 0.06, shake: 0.35, heat: 9 }
+    spread: 0.075, moveSpread: 0.02, range: 70, sound: 'shotgun', auto: false, hands: 2, recoil: 0.06, shake: 0.35, heat: 9 },
+  rifle: { id: 'rifle', name: 'SENTINEL', sub: 'Fusil d’assaut', damage: 29, interval: 0.11, mag: 30, reload: 2.1, spread: 0.006,
+    moveSpread: 0.035, range: 280, sound: 'rifle', auto: true, hands: 2, recoil: 0.013, shake: 0.1, heat: 8 },
+  // Thrown: the magazine is the number carried; no reload
+  grenade: { id: 'grenade', name: 'ÉCLAT', sub: 'Grenade', throwable: true, damage: 0, interval: 0.9, mag: 10, reload: 0, range: 40, hands: 1, heat: 12 }
 };
-const WEAPON_ORDER = ['fists', 'pistol', 'smg', 'shotgun'];
+const WEAPON_ORDER = ['fists', 'pistol', 'smg', 'shotgun', 'rifle', 'grenade'];
 
 const CELL = 24;
 const _seen = new Set();
@@ -157,7 +161,7 @@ function castShot(world, ox, oy, oz, dx, dy, dz, maxDist, ignore = null) {
   }
   for (const c of cars) {
     if (c === ignore || c === world.ignoreCar || !c.mesh?.visible || !near(c.position.x, c.position.z, 6)) continue;
-    const t = rayBox(ox, oy, oz, dx, dy, dz, c.position.x, c.position.z, c.heading, 0.9, 2.2, 0.15, 1.55, hit.t);
+    const t = rayBox(ox, oy, oz, dx, dy, dz, c.position.x, c.position.z, c.heading, c.halfW ?? 0.9, c.halfL ?? 2.2, 0.15, 1.55, hit.t);
     if (t < hit.t) { hit.t = t; hit.kind = 'car'; hit.target = c; }
   }
   for (const a of actors) {

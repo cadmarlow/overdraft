@@ -1444,7 +1444,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     a.prevX = prevX; a.prevZ = prevZ;
     a.sin = Math.sin(heading); a.cos = Math.cos(heading);
     a.halfW = halfW; a.halfL = halfL;
-    a.mass = pe.type === 'car' ? 1700 : pe.type === 'cyclist' ? 95 : 80;
+    a.mass = pe.moto ? 260 : pe.type === 'car' ? 1700 : pe.type === 'cyclist' ? 95 : 80;
     a.vx = a.sin * (pe.speed || 0) + (pe.vx || 0);
     a.vz = a.cos * (pe.speed || 0) + (pe.vz || 0);
     a.angularVel = pe.type === 'car' ? pe.angularVel || 0 : 0;
@@ -1910,8 +1910,8 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
       player.vx = player.fx * speed + (playerEntity.vx || 0);
       player.vz = player.fz * speed + (playerEntity.vz || 0);
     }
-    player.halfW = activeMode === 'cyclist' ? 0.35 : activeMode === 'person' ? 0.32 : 0.86;
-    player.halfL = activeMode === 'cyclist' ? 0.85 : activeMode === 'person' ? 0.32 : 2.18;
+    player.halfW = activeMode === 'cyclist' ? 0.35 : activeMode === 'person' ? 0.32 : playerEntity?.halfW ?? 0.86;
+    player.halfL = activeMode === 'cyclist' ? 0.85 : activeMode === 'person' ? 0.32 : playerEntity?.halfL ?? 2.18;
 
     // 1. Cars & buses
     // Limit attempted placements, not just successes, and rotate through the pool so an awkward location
@@ -1953,7 +1953,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     }
     for (const body of extraBodies) {
       if (!body.mesh?.visible) continue;
-      for (const v of vehicles) if (v.edge) collideWithEntity(v, body, 0.86, 2.18);
+      for (const v of vehicles) if (v.edge) collideWithEntity(v, body, body.halfW ?? 0.86, body.halfL ?? 2.18);
       // Drivers pull over for a siren closing in behind them: brake and edge towards the curb (their right)
       if (!body.siren || Math.abs(body.speed) < 4) continue;
       const sx = Math.sin(body.heading), sz = Math.cos(body.heading);

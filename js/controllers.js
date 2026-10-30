@@ -67,10 +67,10 @@ function driveSpeed(speed, throttle, dt, drive) {
 // Walking surface for the player's pedestrian (its rig samples it around its feet)
 const personGround = (controllers, x, z) => controllers.getGroundHeight(x, z, 'person');
 
-function collisionBody(mode, radius, heading, margin = 0) {
+function collisionBody(mode, radius, heading, margin = 0, halfW = 0.86, halfL = 2.18) {
   const car = mode === 'car';
   const sin = Math.sin(heading), cos = Math.cos(heading);
-  const hx = 0.86 + margin, hz = 2.18 + margin;
+  const hx = halfW + margin, hz = halfL + margin;
   return {
     car, sin, cos, hx, hz, radius: radius + margin,
     extX: car ? Math.abs(cos) * hx + Math.abs(sin) * hz : radius + margin,
@@ -940,7 +940,7 @@ class ThirdPersonControllerManager {
       }
     }
 
-    const body = collisionBody(mode, radius, carEntity ? carEntity.heading : 0);
+    const body = collisionBody(mode, radius, carEntity ? carEntity.heading : 0, 0, carEntity?.halfW ?? 0.86, carEntity?.halfL ?? 2.18);
     const { sin: sinH, cos: cosH, extX, extZ } = body;
     const contact = this._buildingContact ??= { nx: 0, nz: 0, depth: 0 };
 
@@ -1182,6 +1182,8 @@ class ThirdPersonControllerManager {
     c.prevZ = prevZ;
     // Short steps keep grip, impacts and suspension consistent at different display rates.
     const drive = c.drive || CAR_DRIVE;
+    // Wet streets cost grip (gripFactor is set by the weather, atmosphere.js)
+    const maxGrip = drive.grip * (this.gripFactor ?? 1);
     const steps = Math.ceil(dt * 120);
     const step = dt / steps;
     const steerResponse = 1 - Math.exp(-10 * step);
@@ -1196,11 +1198,11 @@ class ThirdPersonControllerManager {
       const acceleration = (speed - forward) / step;
       // Braking and cornering share tire grip; air resistance does not use it.
       const tireAcceleration = acceleration + drive.drag * forward * Math.abs(forward);
-      const grip = Math.sqrt(Math.max(0, drive.grip ** 2 - tireAcceleration ** 2));
+      const grip = Math.sqrt(Math.max(0, maxGrip ** 2 - tireAcceleration ** 2));
       // A handbrake slide preserves steering while reducing lateral grip; fade it out at low speed.
       const handbrake = handbrakeInput ? Math.min(1, Math.abs(forward) / 5) : 0;
       const lateralGrip = grip * (1 - 0.7 * handbrake);
-      const steeringGrip = grip + (drive.grip - grip) * handbrake;
+      const steeringGrip = grip + (maxGrip - grip) * handbrake;
 
       // Full lock at parking speeds, progressively less steering at road speeds.
       const turn = drive.wheelbase * drive.cornering;

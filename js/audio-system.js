@@ -239,7 +239,7 @@ class CityAudioSystem {
     const spec = COMBAT_SOUNDS[kind], buffers = this.combat[kind];
     if (!spec || !buffers) return;
     const source = this.context.createBufferSource();
-    source.buffer = buffers[0];
+    source.buffer = buffers[Math.floor(Math.random() * buffers.length)];
     const gain = this.context.createGain();
     gain.gain.value = spec.level * intensity;
     source.connect(gain).connect(this.flat);

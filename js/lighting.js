@@ -257,18 +257,25 @@ class LightingSystem {
     if (!force && this.activePresetId === p.id && this.envRenderTarget !== null) {
       return;
     }
+    this.applyParams(p, true);
+  }
+
+  // Apply a full parameter set (a preset, or a blend of presets from atmosphere.js). Colours may be hex numbers or
+  // THREE.Color; baking the environment map is the costly part, so continuous changes bake only now and then.
+  applyParams(p, bake = true) {
+    const hex = (c) => (typeof c === 'number' ? c : c.getHex());
     this.activePresetId = p.id;
 
-    this.sunLight.color.setHex(p.sunColor);
+    this.sunLight.color.setHex(hex(p.sunColor));
     this.sunLight.intensity = p.sunIntensity;
     this.sunLight.position.copy(p.sunDir);
     this.sunLight.updateMatrixWorld();
 
-    this.hemiLight.color.setHex(p.hemiSky);
-    this.hemiLight.groundColor.setHex(p.hemiGround);
+    this.hemiLight.color.setHex(hex(p.hemiSky));
+    this.hemiLight.groundColor.setHex(hex(p.hemiGround));
     this.hemiLight.intensity = p.hemiIntensity;
 
-    this.scene.fog.color.setHex(p.fogColor);
+    this.scene.fog.color.setHex(hex(p.fogColor));
     this.scene.fog.density = p.fogDensity;
     if (this.uFogDensity) this.uFogDensity.value = p.fogDensity;
 
@@ -283,16 +290,16 @@ class LightingSystem {
     this.uSkyExposure.value = p.skyExposure;
     this.uNightFactor.value = p.nightFactor;
 
-    cityUniforms.uSunColor.value.setHex(p.sunColor);
-    cityUniforms.uSkyTopColor.value.setHex(p.skyTop);
-    cityUniforms.uSkyHorizonColor.value.setHex(p.skyHorizon);
+    cityUniforms.uSunColor.value.setHex(hex(p.sunColor));
+    cityUniforms.uSkyTopColor.value.setHex(hex(p.skyTop));
+    cityUniforms.uSkyHorizonColor.value.setHex(hex(p.skyHorizon));
     cityUniforms.uSkySunDir.value.copy(p.sunDir);
     cityUniforms.uInteriorGlow.value = p.interiorGlow;
     cityUniforms.uRoadWetness.value = p.roadWetness;
     cityUniforms.uCanyonBounce.value = p.canyonBounce;
 
     this.scene.environmentIntensity = p.envIntensity;
-    this.bakeEnvironmentMap();
+    if (bake) this.bakeEnvironmentMap();
   }
 
   update(focusPos) {
@@ -305,4 +312,4 @@ class LightingSystem {
   }
 }
 
-export { LightingSystem };
+export { LightingSystem, TIME_PRESETS };

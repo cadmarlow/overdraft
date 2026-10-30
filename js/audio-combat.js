@@ -157,11 +157,27 @@ function wasted(ctx, seed) {
   }, 0.6, 2);
 }
 
+function thunder(ctx, seed) {
+  const random = rng(seed);
+  const sub = onePole(ctx, 45), low = onePole(ctx, 160), mid = onePole(ctx, 700);
+  const rolls = Array.from({ length: 9 }, () => ({ t: random() * 2.6, d: 0.25 + random() * 0.9, l: 0.3 + random() * 0.7 }));
+  return makeBuffer(ctx, 4.5, (t, c) => {
+    const n = random() * 2 - 1;
+    const s = sub(n), l = low(n), m = mid(n);
+    let env = (1 - Math.exp(-t * 30)) * Math.exp(-t / 1.4) * 0.6;
+    for (const r of rolls) { const u = t - r.t; if (u > 0) env += Math.exp(-u / r.d) * Math.min(1, u * 8) * r.l; }
+    const crack = (m - l) * Math.exp(-t / 0.12) * 1.5;
+    return Math.tanh(s * env * 7 + l * env * 2.2 + crack) * (c ? 0.97 : 1);
+  }, 0.85, 2);
+}
+
 export function createCombatResources(ctx) {
   return {
     pistol: [1, 2, 3].map((s) => gunshot(ctx, 700 + s, { body: 120, crack: 1, length: 0.5 })),
     smg: [1, 2, 3].map((s) => gunshot(ctx, 720 + s, { body: 150, crack: 1.2, length: 0.32, weight: 0.7 })),
     shotgun: [1, 2].map((s) => gunshot(ctx, 740 + s, { body: 80, crack: 0.8, length: 0.9, weight: 1.6 })),
+    rifle: [1, 2, 3].map((s) => gunshot(ctx, 750 + s, { body: 105, crack: 1.4, length: 0.6, weight: 1.1 })),
+    throw: [clickClack(ctx, 812, [0.01, 0.06])],
     explosion: [1, 2].map((s) => explosion(ctx, 760 + s)),
     impact: [1, 2, 3, 4].map((s) => impact(ctx, 780 + s)),
     impactMetal: [1, 2].map((s) => impact(ctx, 790 + s, true)),
@@ -175,7 +191,10 @@ export function createCombatResources(ctx) {
     checkpoint: [arpeggio(ctx, [12, 19], { gap: 0.06, decay: 0.18, length: 0.45 })],
     wantedUp: [sweep(ctx, 820, true)],
     wantedDown: [sweep(ctx, 821, false)],
-    wasted: [wasted(ctx, 830)]
+    wasted: [wasted(ctx, 830)],
+    thunder: [thunder(ctx, 840), thunder(ctx, 841)],
+    shop: [arpeggio(ctx, [12, 16, 19], { gap: 0.05, decay: 0.2, length: 0.5 })],
+    deny: [arpeggio(ctx, [-5, -6], { gap: 0.08, decay: 0.15, length: 0.35 })]
   };
 }
 
@@ -184,6 +203,8 @@ export const COMBAT_SOUNDS = {
   pistol: { level: 0.9, range: 320, ref: 12 },
   smg: { level: 0.75, range: 300, ref: 11 },
   shotgun: { level: 1, range: 360, ref: 14 },
+  rifle: { level: 0.95, range: 380, ref: 13 },
+  throw: { level: 0.4, range: 25, ref: 2 },
   explosion: { level: 1, range: 900, ref: 40 },
   impact: { level: 0.35, range: 60, ref: 3 },
   impactMetal: { level: 0.4, range: 70, ref: 3 },
@@ -197,5 +218,8 @@ export const COMBAT_SOUNDS = {
   checkpoint: { level: 0.4 },
   wantedUp: { level: 0.35 },
   wantedDown: { level: 0.3 },
-  wasted: { level: 0.6 }
+  wasted: { level: 0.6 },
+  thunder: { level: 0.7 },
+  shop: { level: 0.4 },
+  deny: { level: 0.35 }
 };

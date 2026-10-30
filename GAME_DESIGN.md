@@ -55,6 +55,15 @@ Un système à **cinq étoiles**, dans la tradition du genre, avec une police qu
 - **Interface** : santé/gilet, argent animé, étoiles de recherche, arme et munitions, réticule et
   marqueurs d'impact, objectifs, sous-titres, chronomètre, bandeaux de fin de mission, GPS qui suit les rues.
 
+## Contenu de la version 0.3 « Margin Call »
+
+- **Acte II — Margin Call** : *Appel de marge*, *Délit d’initié*, *Liquidation*, *Vente à découvert*.
+  Sacha prend l’offensive contre Varga, aidé de Jules Ambrose, ancien trader.
+- **Le temps** : journée continue d’environ 32 minutes, météo changeante (pluie, orage), rues glissantes.
+- **Motos**, **armurerie**, **carrosserie** (semer la police en changeant de couleur), **planques**.
+- **Armes** : fusil d’assaut *Sentinel*, grenades *Éclat*.
+- **IA de conduite** partagée : la police et les véhicules de mission suivent la ville comme des conducteurs.
+
 ## Direction artistique
 
 - Manhattan réel, ambiances lumineuses (soleil bas, midi, crépuscule, nuit), reflets en temps réel.
@@ -74,7 +83,7 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | Version | Nom | Grands axes |
 |---|---|---|
 | 0.1 | Playground | Marche, conduite, entrée et sortie des véhicules (base Codex) |
-| **0.2** | **Opening Bell** | Combat, niveau de recherche, Acte I, activités, radio procédurale, dégâts et explosions |
-| 0.3 | Margin Call | Acte II, planques achetables, armurerie, garage de personnalisation, motos et bateaux, cycle jour/nuit continu, météo |
-| 0.4 | Hostile Takeover | Gangs et territoires, braquages en plusieurs étapes, téléphone et contacts, hélicoptère pilotable |
+| 0.2 | Opening Bell | Combat, niveau de recherche, Acte I, activités, radio procédurale, dégâts et explosions |
+| **0.3** | **Margin Call** | Acte II, planques, armurerie, carrosserie, motos, cycle jour/nuit continu, météo, IA de conduite |
+| 0.4 | Hostile Takeover | Acte III, gangs et territoires, braquages en plusieurs étapes, bateaux, téléphone et contacts, hélicoptère pilotable |
 | 0.5 | Closing Bell | Acte III et fin, coopération en ligne, mode photo, optimisation mobile |

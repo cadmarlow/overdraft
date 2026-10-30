@@ -104,15 +104,38 @@ test('spread directions stay unit length inside the cone', () => {
 });
 
 test('the weapon catalogue is complete and ordered for selection', () => {
-  assert.deepEqual(WEAPON_ORDER, ['fists', 'pistol', 'smg', 'shotgun']);
+  assert.deepEqual(WEAPON_ORDER, ['fists', 'pistol', 'smg', 'shotgun', 'rifle', 'grenade']);
   for (const id of WEAPON_ORDER) {
     const w = WEAPONS[id];
     assert.equal(w.id, id);
-    assert.ok(w.damage > 0 && w.interval > 0 && w.name);
-    if (!w.melee) assert.ok(w.mag > 0 && w.reload > 0 && w.range > 0 && w.sound);
+    assert.ok(w.interval > 0 && w.name);
+    if (w.throwable) assert.ok(w.mag > 0 && w.range > 0);
+    else assert.ok(w.damage > 0);
+    if (!w.melee && !w.throwable) assert.ok(w.mag > 0 && w.reload > 0 && w.range > 0 && w.sound);
   }
 });
 
 function close(actual, expected, epsilon = 1e-6) {
   assert.ok(Math.abs(actual - expected) <= epsilon, `${actual} ≉ ${expected}`);
 }
+
+test('the AI driver slides its steering point along the route and slows for bends', async () => {
+  const { AIDriver } = await import('../js/ai-driver.js');
+  const calls = [];
+  const controllers = { simulateCar: (car, throttle, steer) => calls.push({ throttle, steer }) };
+  const nav = { route: () => [{ x: 0, z: 100 }, { x: 100, z: 100 }] };
+  const car = { position: { x: 0, z: 0, copy() {} }, heading: 0, speed: 10, mesh: { position: { copy() {} }, rotation: {} } };
+  const driver = new AIDriver(controllers, nav, car, { maxSpeed: 30, corner: 8 });
+  driver.setGoal(100, 100, true);
+  driver.update(0.016);
+  assert.equal(driver.path.length, 3, 'the car position starts the route');
+  close(driver.aim.x, 0);
+  assert.ok(driver.aim.z > 5 && driver.aim.z < 20, 'aims a few metres ahead on the route');
+  assert.ok(Math.abs(calls[0].steer) < 0.05 && calls[0].throttle > 0, 'straight on, accelerating');
+  // close to the corner the planned speed drops to the cornering speed
+  car.position.z = 92; car.speed = 25;
+  driver.update(0.016);
+  assert.ok(driver.target < 15, `target ${driver.target}`);
+  assert.ok(calls.at(-1).throttle < 0, 'brakes into the bend');
+  assert.ok(calls.at(-1).steer > 0, 'turns towards +x (the left of a car heading +z)');
+});

@@ -70,6 +70,9 @@ class GameHud {
     this.damage = el('div', 'gh-damage', root);
     this.edge = el('div', 'gh-wanted-edge', root);
     this.mission = el('div', 'gh-mission-title', root);
+    this.clock = el('div', 'gh-clock', root);
+    this.clockTime = el('strong', null, this.clock, '17:00');
+    this.clockWeather = el('span', null, this.clock, '');
 
     this.shownMoney = 0;
     this.targetMoney = 0;
@@ -92,6 +95,12 @@ class GameHud {
       this.moneyDelta.classList.add('show');
       this.deltaT = 2.4;
     }
+  }
+
+  setClock(time, weather, night) {
+    if (this.state.clock !== time) { this.state.clock = time; this.clockTime.textContent = time; }
+    if (this.state.weather !== weather) { this.state.weather = weather; this.clockWeather.textContent = weather; }
+    this.clock.classList.toggle('night', night);
   }
 
   setVitals(health, armor) {

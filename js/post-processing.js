@@ -73,7 +73,11 @@ function createPostProcessing(renderer, sceneColor, reflections) {
   })();
 
   function applyPreset(id) {
-    const look = LOOKS[id] || LOOKS.golden;
+    applyLook(LOOKS[id] || LOOKS.golden);
+  }
+
+  // A look given directly (atmosphere.js blends them through the day)
+  function applyLook(look) {
     exposure.value = look.exposure;
     contrast.value = look.contrast;
     saturation.value = look.saturation;
@@ -83,7 +87,7 @@ function createPostProcessing(renderer, sceneColor, reflections) {
   }
 
   applyPreset('golden');
-  return { outputNode, applyPreset };
+  return { outputNode, applyPreset, applyLook };
 }
 
-export { createPostProcessing };
+export { createPostProcessing, LOOKS as GRADE_LOOKS };

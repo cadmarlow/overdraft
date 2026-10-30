@@ -1,6 +1,6 @@
 # OVERDRAFT — Notes de développement
 
-Version 0.2.0 (Opening Bell), based on Slop New York at e35c06c0d896052a80ff117aefe8b99e978913d4.
+Version 0.3.0 (Margin Call), based on Slop New York at e35c06c0d896052a80ff117aefe8b99e978913d4.
 
 ## Play
 

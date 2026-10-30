@@ -3,9 +3,9 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.2.0 — Opening Bell** : combat, poursuites policières avec niveau de recherche à cinq
-étoiles, missions de l'Acte I, activités répétables, véhicules destructibles et radio à musique
-générée en temps réel.
+Version **0.3.0 — Margin Call** : deux actes d'histoire (8 missions), cycle jour/nuit continu et
+météo (pluie, orages), motos, boutiques et planques, grenades et fusil d'assaut, police à cinq
+étoiles pilotée par une IA de conduite, véhicules destructibles et radio générée en temps réel.
 
 Vision, niveau de recherche et feuille de route : [GAME_DESIGN.md](GAME_DESIGN.md).
 Nouveautés : [CHANGELOG.md](CHANGELOG.md).
@@ -26,7 +26,7 @@ Cliquez dans la vue pour verrouiller la souris ; Échap la libère et ouvre le m
 | Clic gauche | Frapper / tirer |
 | Clic droit (maintenu) | Viser à l'épaule |
 | R | Recharger |
-| 1 à 4, molette | Choisir une arme |
+| 1 à 6, molette | Choisir une arme (6 : grenades, clic pour lancer) |
 | F | Voler / monter dans un véhicule |
 
 ### En voiture
@@ -36,6 +36,7 @@ Cliquez dans la vue pour verrouiller la souris ; Échap la libère et ouvre le m
 | ZQSD / WASD | Accélérer, freiner, tourner |
 | Espace | Frein à main |
 | Clic droit + clic gauche | Tirer par la vitre (pistolet, pistolet-mitrailleur) |
+| Maj (moto) | Wheeling |
 | T / Maj+T | Station de radio suivante / précédente |
 | B | Klaxon |
 | R | Remettre le véhicule d'aplomb (à l'arrêt) |
@@ -47,6 +48,16 @@ M : carte (un clic place un point de passage) · V : caméra · Entrée : passer
 H : masquer l'interface · N : couper le son · Échap : pause.
 
 Manette standard prise en charge (sticks, gâchettes, A pour sauter, épaule pour interagir, Y pour la caméra).
+
+## Dans la ville
+
+- **Marqueurs verts** : missions d'histoire. **Orange** : courses, convoyages, primes.
+- **Violet** : armurerie *Calibre* (armes, munitions, gilets, grenades) et carrosserie *Éclair*
+  (réparation et peinture ; une nouvelle couleur fait perdre la police si elle ne vous voit pas entrer).
+- **Vert** : planques. Achetez-les, dormez-y (8 heures passent, santé complète) et sauvegardez.
+- L'heure tourne (une journée dure environ 32 minutes) et la météo change : la pluie mouille les
+  rues et réduit l'adhérence. Le menu pause permet de choisir l'heure et de fixer la météo.
+- Des motos sont garées près du départ, du garage, de l'East Village, de Harlem et du Village.
 
 ## Le niveau de recherche en bref
 
@@ -84,7 +95,11 @@ Le build statique est généré dans `dist/`. `tools/radio-preview.html` permet 
 | Module | Rôle |
 |---|---|
 | `js/gameplay.js` | Couche de jeu : joueur, armes, dégâts, véhicules, mort, arrestation, sauvegarde |
-| `js/wanted.js` | Niveau de recherche : étoiles, zone de recherche, IA de poursuite, agents, hélicoptère |
+| `js/wanted.js` | Niveau de recherche : étoiles, zone de recherche, poursuites, agents, hélicoptère |
+| `js/ai-driver.js` | Pilote IA (itinéraire, poursuite pure, virages, évitement) pour la police et les missions |
+| `js/atmosphere.js` | Heure du jour, météo, pluie, éclairs et tonnerre |
+| `js/shops.js` | Armureries, carrosseries, planques |
+| `js/motorbike.js` | Motos (modèle, inclinaison, wheeling) |
 | `js/actors.js` | Personnages armés (police, équipages, cibles) |
 | `js/weapons.js` | Catalogue d'armes et balistique (lancer de rayons sur la ville) |
 | `js/navigation.js` | A* sur le réseau routier (GPS, IA) |

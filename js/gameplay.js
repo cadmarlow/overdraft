@@ -13,6 +13,9 @@ import { GameHud } from './hud.js';
 import { vehicleContact, resolveVehicleContact, sweptVehicleContact } from './vehicle-physics.js';
 import { polygonContains } from './building-collision.js';
 import { RadioSystem, STATIONS } from './radio.js';
+import { Atmosphere } from './atmosphere.js';
+import { ShopSystem } from './shops.js';
+import { createMotorbike, poseMotorbike } from './motorbike.js';
 
 // OVERDRAFT — the game layer over the city simulation: the protagonist on foot and at the wheel, weapons and
 // damage, vehicles that smoke, burn and explode, the wanted level (police), missions, money, death and arrest, and saving.
@@ -20,11 +23,12 @@ import { RadioSystem, STATIONS } from './radio.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.2.0';
+const BUILD = '0.3.0';
 const CAR_NAMES = {
   sedan: ['VALMONT', 'ÉCUME', 'BERLINE / PROPULSION'], suv: ['BRISANT', 'RÉCIF', 'SUV / TRANSMISSION INTÉGRALE'],
   taxi: ['VALMONT', 'CAB 7', 'TAXI / PROPULSION'], pickup: ['GRÉVILLE', 'FALAISE', 'PICK-UP / PROPULSION'],
-  van: ['HAUTURIER', 'CARGO', 'UTILITAIRE / TRACTION'], minivan: ['GRÉVILLE', 'ESCALE', 'MONOSPACE / TRACTION']
+  van: ['HAUTURIER', 'CARGO', 'UTILITAIRE / TRACTION'], minivan: ['GRÉVILLE', 'ESCALE', 'MONOSPACE / TRACTION'],
+  moto: ['BRISANT', 'VANDALE 650', 'MOTO / SPORTIVE']
 };
 const PROFILES = {
   sedan: { speed: 47, acceleration: 7, powerSpeed: 21, grip: 10.5, cornering: 11 },
@@ -32,7 +36,8 @@ const PROFILES = {
   taxi: { speed: 40, acceleration: 5.8, powerSpeed: 18, grip: 9.4, cornering: 10 },
   pickup: { speed: 36, acceleration: 5, powerSpeed: 18, grip: 8.2, cornering: 8 },
   van: { speed: 32, acceleration: 4, powerSpeed: 16, grip: 8, cornering: 7.5 },
-  minivan: { speed: 36, acceleration: 4.8, powerSpeed: 17, grip: 8.8, cornering: 9 }
+  minivan: { speed: 36, acceleration: 4.8, powerSpeed: 17, grip: 8.8, cornering: 9 },
+  moto: {} // its own profile (motorbike.js)
 };
 const FLEET_MAX = 12;
 const WRECK_POOL = 4;
@@ -82,8 +87,9 @@ const _camDir = new THREE.Vector3();
 const bodyA = {}, bodyB = {}, hit = {};
 
 export class Game {
-  constructor({ controllers, camera, traffic, scene, onMode, onTime, audio, map, touch, gamepad }) {
+  constructor({ controllers, camera, traffic, scene, onMode, onTime, audio, map, touch, gamepad, lighting, grade }) {
     Object.assign(this, { controllers, camera, traffic, scene, onMode, onTime, audio, map, touch, gamepad });
+    this.atmosphere = new Atmosphere({ lighting, grade, scene, camera: camera.camera, controllers });
     this.state = 'onFoot'; this.playing = false; this.paused = false;
     this.transition = null; this.candidate = null; this.stamina = 100;
     this.distance = 0; this.stolen = 0; this.clock = 0; this.fleet = [];
@@ -121,6 +127,7 @@ export class Game {
     this.wanted.onBusted = () => this.busted();
     this.wanted.trafficCars = traffic.vehicles;
     this.wanted.traffic = traffic;
+    this.wanted.gameCars = this.allCars;
     this.markers = new MarkerSystem(scene);
     this.pickups = new PickupSystem(scene);
     this.world = { controllers, traffic, cars: this.allCars, actors: this.actors.actors, player: this.player };
@@ -144,14 +151,18 @@ export class Game {
     this.bind();
     this.hero = new CharacterModel(scene, controllers.entities.person.rig, LOOKS.hero, 'Protagonist');
     this.director = new MissionDirector(this);
+    this.shops = new ShopSystem(this);
+    this.shops.restore(this.savedShops);
+    this.shops.place();
     this.placeWorldPickups();
+    this.placeWorldBikes();
     this.setupRadio();
     this.setupMap();
     this.setupCollisions();
     if (new URLSearchParams(location.search).has('qa')) window.__playground = window.__game = this;
   }
 
-  get active() { return this.playing && !this.paused && !this.map.isFullMapOpen; }
+  get active() { return this.playing && !this.paused && !this.modal && !this.map.isFullMapOpen; }
   get person() { return this.controllers.entities.person; }
   get car() { return this.controllers.entities.car; }
   get weapon() { return WEAPONS[this.weaponId] || WEAPONS.fists; }
@@ -163,12 +174,13 @@ export class Game {
       const old = this.fleet.find((c) => !c.mission && c !== this.car && c.position.distanceTo(this.person.position) > 80);
       if (old) this.removeFleetCar(old);
     }
-    const car = this.controllers.createCarEntity({ kind, paint });
+    const moto = kind === 'moto';
+    const car = moto ? createMotorbike(this.scene, { paint }) : this.controllers.createCarEntity({ kind, paint });
     car.id = this.nextId++; car.stolen = stolen;
     car.position.copy(position); car.heading = heading; car.prevX = position.x; car.prevZ = position.z;
-    car.drive = { reverseSpeed: 10, rolling: 0.18, drag: 0.0012, coast: 0.7, brake: 12, wheelbase: car.spec.wheelZ * 2, ...PROFILES[kind] };
+    if (!moto) car.drive = { reverseSpeed: 10, rolling: 0.18, drag: 0.0012, coast: 0.7, brake: 12, wheelbase: car.spec.wheelZ * 2, ...PROFILES[kind] };
     car.hp = 100; car.burnT = 0; car.destroyed = false;
-    splitDoor(car);
+    if (!moto) splitDoor(car);
     car.mesh.position.copy(car.position); car.mesh.rotation.y = heading;
     this.fleet.push(car);
     return car;
@@ -211,7 +223,7 @@ export class Game {
   buildInterface() {
     document.body.insertAdjacentHTML('beforeend', `
       <div id="game-vignette" aria-hidden="true"></div>
-      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · OPENING BELL</small></span></div>
+      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · MARGIN CALL</small></span></div>
       <div id="session-badge"><i></i><span>MANHATTAN</span><b id="session-mode">LIBRE</b><button id="pause-button" aria-label="Ouvrir le menu pause">Ⅱ</button></div>
       <div id="game-prompt" role="status" aria-live="polite"><kbd>F</kbd><span>Voler la voiture<small>VÉHICULE</small></span></div>
       <div id="game-toast" role="status" aria-live="polite"></div>
@@ -221,15 +233,15 @@ export class Game {
       <div id="game-keybar"></div>
       <div id="game-menu" class="game-menu">
         <div class="menu-top"><span class="edition-label">EVERY DEBT GETS PAID.</span><span class="build-label">BUILD ${BUILD}</span></div>
-        <div class="menu-body"><div class="menu-eyebrow"><span></span> ACTE I — LA DETTE</div><h1>OVER<span>DRAFT<span class="title-dot">.</span></span></h1>
+        <div class="menu-body"><div class="menu-eyebrow"><span></span> <b id="menu-act">ACTE I — LA DETTE</b></div><h1>OVER<span>DRAFT<span class="title-dot">.</span></span></h1>
           <p class="menu-copy">Sacha Roux est arrivé à New York avec une dette qui ne lui appartient pas.<br>Deux cent cinquante mille dollars. Une ville entière pour les trouver.</p>
           <button id="play-button" class="primary-play">ENTRER DANS LA VILLE <span>↗</span></button>
           <div class="menu-secondary"><button id="new-session">Nouvelle partie</button><span id="menu-progress">CLAVIER + SOURIS / MANETTE</span></div>
         </div>
         <div class="menu-bottom"><span>MANHATTAN, NY<span class="coordinates">40°45′ N — 73°59′ W</span></span><button id="credits-button">CRÉDITS ↗</button><span class="menu-description">MISSIONS · COURSES · PRIMES<br>COMBAT · POURSUITES · 5 ÉTOILES</span></div>
-        <div id="menu-options"><span>AMBIANCE</span><button data-game-time="golden" class="selected">Soleil bas</button><button data-game-time="midday">Midi</button><button data-game-time="twilight">Crépuscule</button><button data-game-time="midnight">Nuit</button><button id="sound-toggle">SON ACTIVÉ</button><button id="quality-toggle">QUALITÉ : HAUTE</button></div>
+        <div id="menu-options"><span>HEURE &amp; MÉTÉO</span><button data-game-time="golden">Soleil bas</button><button data-game-time="midday">Midi</button><button data-game-time="twilight">Crépuscule</button><button data-game-time="midnight">Nuit</button><button id="weather-toggle">MÉTÉO : AUTO</button><button id="sound-toggle">SON ACTIVÉ</button><button id="quality-toggle">QUALITÉ : HAUTE</button></div>
       </div>
-      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Opening Bell</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL).</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
+      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Margin Call</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL).</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
       <button id="mobile-interact" class="touch-interact" hidden>F <span>VÉHICULE</span></button>
     `);
     this.ui = Object.fromEntries(['game-menu', 'game-prompt', 'game-toast', 'stamina-fill', 'drive-speed', 'drive-gear', 'drive-power', 'drive-health', 'vehicle-name', 'game-keybar', 'play-button', 'mobile-interact', 'session-mode', 'menu-progress'].map(id => [id, document.getElementById(id)]));
@@ -240,6 +252,8 @@ export class Game {
   }
 
   updateMenuProgress() {
+    const act = document.getElementById('menu-act');
+    if (act) act.textContent = this.missionsDone.includes('decouvert') ? 'ACTE III — À SUIVRE' : this.missionsDone.includes('grande') ? 'ACTE II — MARGIN CALL' : 'ACTE I — LA DETTE';
     const done = this.missionsDone.length;
     if (this.ui['menu-progress']) this.ui['menu-progress'].textContent = done || this.money ? `${done} MISSION${done > 1 ? 'S' : ''} · ${Math.round(this.money).toLocaleString('fr-FR')} $` : 'CLAVIER + SOURIS / MANETTE';
   }
@@ -262,12 +276,22 @@ export class Game {
       location.href = url.href;
     });
     if (new URLSearchParams(location.search).get('quality') === 'performance') document.getElementById('quality-toggle').textContent = 'QUALITÉ : FLUIDITÉ';
+    // The day runs on its own; these jump the clock
+    const hours = { golden: 18, midday: 13, twilight: 20, midnight: 0.5 };
     document.querySelectorAll('[data-game-time]').forEach(button => button.addEventListener('click', () => {
-      this.onTime(button.dataset.gameTime);
+      this.atmosphere.setHour(hours[button.dataset.gameTime]);
       document.querySelectorAll('[data-game-time]').forEach(b => b.classList.toggle('selected', b === button));
     }));
+    const weathers = ['auto', 'clear', 'cloudy', 'rain', 'storm'];
+    const weatherNames = { auto: 'AUTO', clear: 'DÉGAGÉ', cloudy: 'NUAGEUX', rain: 'PLUIE', storm: 'ORAGE' };
+    document.getElementById('weather-toggle').addEventListener('click', (e) => {
+      this.weatherMode = weathers[(weathers.indexOf(this.weatherMode || 'auto') + 1) % weathers.length];
+      if (this.weatherMode !== 'auto') this.atmosphere.setWeather(this.weatherMode);
+      this.atmosphere.lockWeather = this.weatherMode !== 'auto';
+      e.currentTarget.textContent = `MÉTÉO : ${weatherNames[this.weatherMode]}`;
+    });
     window.addEventListener('keydown', e => {
-      if (isTypingInField(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.defaultPrevented || this.modal || isTypingInField(e) || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.repeat) return;
       if (e.code === 'KeyF' && this.active) { e.preventDefault(); this.interact(); }
       if (e.code === 'Escape' && !document.querySelector('dialog[open]')) {
@@ -287,7 +311,7 @@ export class Game {
         if (e.shiftKey) this.radio.prev(); else this.radio.next();
         this.showRadio();
       }
-      const digit = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code);
+      const digit = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].indexOf(e.code);
       if (digit >= 0 && (this.state === 'onFoot' || this.state === 'driving')) this.selectWeapon(WEAPON_ORDER[digit]);
     });
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.playing) this.setPaused(true); });
@@ -377,7 +401,7 @@ export class Game {
     const k = (keys, label) => `<span>${keys.map((x) => `<kbd>${x}</kbd>`).join(' ')} ${label}</span>`;
     const armed = this.weaponId !== 'fists';
     this.ui['game-keybar'].innerHTML = this.state === 'driving'
-      ? [k(['ZQSD'], 'Conduire'), k(['ESPACE'], 'Frein à main'), armed && this.weaponId !== 'shotgun' ? k(['CLIC D.', 'CLIC'], 'Tirer par la vitre') : '', k(['B'], 'Klaxon'), k(['T'], 'Radio'), k(['F'], 'Descendre'), k(['V'], 'Caméra'), k(['M'], 'Carte'), k(['ÉCHAP'], 'Menu')].join('')
+      ? [k(['ZQSD'], 'Conduire'), k(['ESPACE'], 'Frein à main'), this.car.moto ? k(['MAJ'], 'Wheeling') : '', armed && this.weaponId !== 'shotgun' ? k(['CLIC D.', 'CLIC'], 'Tirer par la vitre') : '', k(['B'], 'Klaxon'), k(['T'], 'Radio'), k(['F'], 'Descendre'), k(['V'], 'Caméra'), k(['M'], 'Carte'), k(['ÉCHAP'], 'Menu')].join('')
       : [k(['ZQSD'], 'Se déplacer'), k(['MAJ'], 'Sprint'), k(['CLIC'], armed ? 'Tirer' : 'Frapper'), armed ? k(['CLIC D.'], 'Viser') : '', armed ? k(['R'], 'Recharger') : '',
         k(['1-4', 'MOLETTE'], 'Armes'), k(['F'], 'Véhicule'), k(['M'], 'Carte'), k(['ÉCHAP'], 'Menu')].join('');
   }
@@ -397,8 +421,9 @@ export class Game {
         console.warn('[radio]', error);
       }
     };
-    if (this.audio.context && this.audio.music) attach(this.audio.context);
-    else this.audio.onInitialize = (context) => queueMicrotask(() => attach(context));
+    const both = (context) => { attach(context); this.atmosphere.attachAudio(this.audio, context); };
+    if (this.audio.context && this.audio.music) both(this.audio.context);
+    else this.audio.onInitialize = (context) => queueMicrotask(() => both(context));
   }
 
   showRadio() {
@@ -483,7 +508,9 @@ export class Game {
     for (const m of this.markers.markers) {
       if (!m.used || m.blip === false) continue;
       let x = toX(m.x), y = toY(m.z);
-      const color = { objective: '#ffd54a', destination: '#5ec8ff', contact: '#e1f3a0', target: '#ff4d4d', race: '#ff9a3c' }[m.kind] || '#fff';
+      const color = { objective: '#ffd54a', destination: '#5ec8ff', contact: '#e1f3a0', target: '#ff4d4d', race: '#ff9a3c', shop: '#c99bff', home: '#7ee08a', homeSale: '#3e8a4a' }[m.kind] || '#fff';
+      const pinned = m.kind !== 'shop' && m.kind !== 'home' && m.kind !== 'homeSale';
+      if (mini && !pinned && (Math.abs(x) > w * 0.5 - 6 || Math.abs(y) > h * 0.5 - 6)) continue;
       if (mini) {
         // pin markers to the radar's edge
         const r = Math.min(w, h) * 0.5 - 8;
@@ -540,6 +567,7 @@ export class Game {
       }
       if (self.type === 'car' && self.hp !== undefined && !self.destroyed && speed > 4.5) {
         this.damageCar(self, (speed - 4.5) * 2.6, self === this.car && this.state === 'driving' ? 'crash' : 'hit');
+        if (self === this.car && this.state === 'driving' && self.moto && speed > 8) { this.bail(self, speed); continue; }
         if (self === this.car && this.state === 'driving' && speed > 13) this.damagePlayer((speed - 13) * 1.5, 'crash');
         if (other && other.police && self === this.car && this.state === 'driving') this.crime('copCarHit', e.x, e.z);
       }
@@ -555,8 +583,8 @@ export class Game {
     body.x = car.position.x; body.z = car.position.z;
     body.prevX = car.prevX ?? car.position.x; body.prevZ = car.prevZ ?? car.position.z;
     body.sin = sin; body.cos = cos;
-    body.halfW = 0.92; body.halfL = Math.max(car.spec.zFront, -car.spec.zRear);
-    body.mass = car.wreck ? 1300 : car.police ? 1850 : 1650;
+    body.halfW = car.halfW ?? 0.92; body.halfL = car.halfL ?? Math.max(car.spec.zFront, -car.spec.zRear);
+    body.mass = car.moto ? 260 : car.wreck ? 1300 : car.police ? 1850 : 1650;
     body.vx = sin * car.speed + (car.vx || 0);
     body.vz = cos * car.speed + (car.vz || 0);
     body.angularVel = car.angularVel || 0;
@@ -604,7 +632,7 @@ export class Game {
     if (Math.abs(dx) > 4 || Math.abs(dz) > 4) return;
     const sin = Math.sin(car.heading), cos = Math.cos(car.heading);
     const x = dx * cos - dz * sin, z = dx * sin + dz * cos;
-    const hx = 0.95, hz = Math.max(car.spec.zFront, -car.spec.zRear);
+    const hx = (car.halfW ?? 0.92) + 0.03, hz = car.halfL ?? Math.max(car.spec.zFront, -car.spec.zRear);
     const qx = x - clamp(x, -hx, hx), qz = z - clamp(z, -hz, hz);
     const distance = Math.hypot(qx, qz);
     if (distance >= 0.34) return;
@@ -664,6 +692,43 @@ export class Game {
     if (p.position.y < ground) { p.position.y = ground; p.verticalVel = 0; }
   }
 
+  // Thrown off a motorbike by a hard impact: the rider tumbles on, the bike slides and falls
+  bail(bike, speed) {
+    const p = this.person;
+    const h = bike.heading;
+    this.transition = null;
+    p.inVehicle = false;
+    this.state = 'onFoot';
+    const x = bike.position.x + Math.sin(h) * 1.3, z = bike.position.z + Math.cos(h) * 1.3;
+    p.position.set(x, this.controllers.getGroundHeight(x, z, 'person'), z);
+    this.onMode('person');
+    this.radio?.setPlaying(false);
+    this.camera.footYaw = h;
+    bike.fallen = true;
+    bike.speed *= 0.4;
+    this.invulnerable = 0;
+    this.damagePlayer(Math.min(55, speed * 2.2), 'crash');
+    if (this.state === 'onFoot') {
+      this.knockDown(h);
+      this.knock = { vx: Math.sin(h) * Math.min(11, speed * 0.55), vz: Math.cos(h) * Math.min(11, speed * 0.55) };
+    }
+    this.audio.sfx('punch', x, 0.8, z, { rate: 0.6 });
+    this.camera.addShake(0.6);
+  }
+
+  // Parked motorbikes around the city (kept once moved, like any car the player has used)
+  placeWorldBikes() {
+    if (this.worldBikesPlaced) return;
+    this.worldBikesPlaced = true;
+    const spots = [[8.15, streetZ(37) + 48, 0, 0xc81e2a], [-1403, streetZ(44) + 58, 0, 0x1f5fbf], [1072, streetZ(12) + 58, Math.PI, 0xf2c230],
+      [-578, streetZ(116) + 45, Math.PI, 0x161616], [-296, streetZ(14) + 50, 0, 0x2e8b57]];
+    for (const [x, z, heading, paint] of spots) {
+      if (this.fleet.some((c) => c.moto && Math.hypot(c.position.x - x, c.position.z - z) < 30)) continue;
+      const bike = this.makeCar('moto', paint, new THREE.Vector3(x, 0, z), heading);
+      bike.lean = 0.12;
+    }
+  }
+
   isAiming() {
     return this.state === 'onFoot' && this.aimHeld && this.weaponId !== 'fists';
   }
@@ -685,8 +750,9 @@ export class Game {
     const fresh = !this.weapons[id];
     if (fresh) this.weapons[id] = { mag: 0, ammo: 0 };
     const slot = this.weapons[id];
-    slot.ammo += ammo;
-    if (slot.mag < w.mag) {
+    if (w.throwable) slot.mag = Math.min(w.mag, slot.mag + ammo);
+    else slot.ammo += ammo;
+    if (!w.throwable && slot.mag < w.mag) {
       const take = Math.min(w.mag - slot.mag, slot.ammo);
       slot.mag += take; slot.ammo -= take;
     }
@@ -735,7 +801,7 @@ export class Game {
 
     const shooting = onFoot && (w.auto ? this.fireHeld : this.firePressed);
     // Drive-by: aim out of the driver's window with a one-handed or compact weapon
-    const driveBy = this.state === 'driving' && this.aimHeld && !w.melee && w.id !== 'shotgun' && !!slot;
+    const driveBy = this.state === 'driving' && this.aimHeld && !w.melee && !w.throwable && w.id !== 'shotgun' && w.id !== 'rifle' && !!slot;
     this.world.ignoreCar = this.state === 'driving' ? this.car : null;
     if (driveBy) {
       this.hud.setCrosshair(true, w.spread + 0.02);
@@ -745,7 +811,7 @@ export class Game {
       }
     }
     // Arms: raised while aiming or just after a shot
-    const raised = onFoot && !w.melee && (aiming || this.cooldown > 0 || shooting);
+    const raised = onFoot && !w.melee && !w.throwable && (aiming || this.cooldown > 0 || shooting);
     if (raised) {
       this.aimPoint();
       rig.aim = { x: _aim.x, y: _aim.y, z: _aim.z, twoHanded: w.hands === 2 };
@@ -761,6 +827,8 @@ export class Game {
         this.punchT = 0.38;
         this.punchHit = false;
         person.heading = this.camera.footYaw;
+      } else if (w.throwable) {
+        if (slot.mag > 0) this.throwGrenade(w, slot);
       } else if (this.reloadT <= 0) {
         if (slot.mag > 0) this.fire(w, slot);
         else if (slot.ammo > 0) this.reload();
@@ -768,7 +836,72 @@ export class Game {
       }
     }
     this.firePressed = false;
-    this.hud.setWeapon(w.name, w.melee ? w.sub.toUpperCase() : `${slot.mag} / ${slot.ammo}${this.reloadT > 0 ? ' · RECHARGE' : ''}`);
+    this.hud.setWeapon(w.name, w.melee ? w.sub.toUpperCase() : w.throwable ? `× ${slot.mag}` : `${slot.mag} / ${slot.ammo}${this.reloadT > 0 ? ' · RECHARGE' : ''}`);
+    this.updateGrenades(dt);
+  }
+
+  // Grenades: thrown along the view with an arc, bouncing off the street and walls, exploding when the fuse runs out
+  throwGrenade(w, slot) {
+    slot.mag--;
+    this.cooldown = w.interval;
+    const person = this.person;
+    person.heading = this.camera.footYaw;
+    this.punchT = 0.38;
+    this.punchHit = true;
+    this.camera.camera.getWorldDirection(_camDir);
+    const start = this.hero.muzzle(new THREE.Vector3()).add(_v.set(0, 0.25, 0));
+    const pitch = Math.max(-0.2, _camDir.y);
+    const flat = Math.hypot(_camDir.x, _camDir.z) || 1;
+    const speed = 15;
+    const vel = new THREE.Vector3(_camDir.x / flat * speed * Math.cos(pitch), 4.5 + pitch * 12, _camDir.z / flat * speed * Math.cos(pitch));
+    if (!this.grenadePool) {
+      const geo = new THREE.SphereGeometry(0.06, 10, 8).scale(1, 1.25, 1);
+      const mat = new THREE.MeshStandardNodeMaterial({ color: 0x2c3328, roughness: 0.6, metalness: 0.4 });
+      this.grenadePool = Array.from({ length: 8 }, () => { const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.visible = false; this.scene.add(m); return m; });
+      this.grenades = [];
+    }
+    const mesh = this.grenadePool.find((m) => !m.visible) || this.grenadePool[0];
+    mesh.visible = true;
+    this.grenades.push({ pos: start, vel, fuse: 2.3, mesh });
+    this.audio.sfx('throw', start.x, start.y, start.z);
+    if (slot.mag === 0) {
+      const next = WEAPON_ORDER.filter((id) => this.weapons[id] && id !== 'grenade').pop();
+      setTimeout(() => this.selectWeapon(next || 'fists'), 500);
+    }
+  }
+
+  updateGrenades(dt) {
+    if (!this.grenades) return;
+    for (let i = this.grenades.length - 1; i >= 0; i--) {
+      const g = this.grenades[i];
+      g.fuse -= dt;
+      g.vel.y -= 9.8 * dt;
+      g.pos.addScaledVector(g.vel, dt);
+      // walls: push out, reflect the velocity off the push direction
+      const probe = { x: g.pos.x, y: g.pos.y, z: g.pos.z };
+      this.controllers.resolveHorizontalCollision(probe, 0.08, null, null, 'person');
+      const nx = probe.x - g.pos.x, nz = probe.z - g.pos.z, nl = Math.hypot(nx, nz);
+      if (nl > 1e-4) {
+        const dot = (g.vel.x * nx + g.vel.z * nz) / nl;
+        if (dot < 0) { g.vel.x -= 1.5 * dot * nx / nl; g.vel.z -= 1.5 * dot * nz / nl; }
+        g.pos.x = probe.x; g.pos.z = probe.z;
+      }
+      const ground = this.controllers.getGroundHeight(g.pos.x, g.pos.z, 'person') + 0.07;
+      if (g.pos.y < ground) {
+        g.pos.y = ground;
+        if (g.vel.y < -1.5) this.audio.sfx('impactMetal', g.pos.x, g.pos.y, g.pos.z, { intensity: 0.4, rate: 1.6 });
+        g.vel.y = Math.abs(g.vel.y) * 0.32;
+        g.vel.x *= 0.62; g.vel.z *= 0.62;
+      }
+      g.mesh.position.copy(g.pos);
+      g.mesh.rotation.x += dt * 9;
+      g.mesh.updateMatrixWorld();
+      if (g.fuse <= 0) {
+        g.mesh.visible = false;
+        this.grenades.splice(i, 1);
+        this.explode(g.pos.x, g.pos.y, g.pos.z, 1.05, 'player');
+      }
+    }
   }
 
   // Where the crosshair points in the world (the camera's centre ray), into _aim
@@ -908,7 +1041,7 @@ export class Game {
       case 'player': {
         if (h.melee) this.audio.sfx('punch', h.x, h.y, h.z);
         else this.fx.impact(h.x, h.y, h.z, h.nx, h.ny, h.nz, this.player.inVehicle ? 'metal' : 'flesh');
-        if (this.player.inVehicle) {
+        if (this.player.inVehicle && !this.car.moto) {
           this.damageCar(this.car, damage * 0.5, 'shot');
           this.damagePlayer(damage * 0.25, 'shot');
         } else this.damagePlayer(damage, h.melee ? 'melee' : 'shot');
@@ -1043,7 +1176,7 @@ export class Game {
       this.removeFleetCar(car);
     }
     car.mesh.visible = false;
-    this.placeWreck(x, z, heading);
+    if (!car.moto) this.placeWreck(x, z, heading);
     if (playerInside) {
       // thrown clear, fatally
       this.transition = null;
@@ -1136,7 +1269,7 @@ export class Game {
         const dx = x - car.position.x, dz = z - car.position.z;
         if (Math.abs(dx) > 4 || Math.abs(dz) > 4) return false;
         const lx = dx * cos - dz * sin, lz = dx * sin + dz * cos;
-        return Math.abs(lx) < 1.15 && Math.abs(lz) < halfL;
+        return Math.abs(lx) < (car.halfW ?? 0.9) + 0.25 && Math.abs(lz) < halfL;
       };
       const byPlayer = car === this.car && this.state === 'driving';
       for (const p of this.traffic.peds) {
@@ -1320,7 +1453,7 @@ export class Game {
     const person = this.person;
     let best = null, nearest = 3.2;
     const consider = (car) => {
-      if (car.destroyed || car.wreck || !car.mesh.visible) return;
+      if (car.destroyed || car.wreck || car.locked || !car.mesh.visible) return;
       const door = doorPosition(car);
       const d = Math.hypot(door.x - person.position.x, door.z - person.position.z);
       if (d < nearest && Math.abs(car.position.y - person.position.y) < 1 && Math.abs(car.speed) < 2) { best = { car, distance: d }; nearest = d; }
@@ -1348,6 +1481,7 @@ export class Game {
     const candidate = this.findCandidate();
     if (!candidate) return;
     let car = candidate.car;
+    if (car?.ai) car.ai = null; // a mission car the player takes over
     if (!car) {
       const source = candidate.source;
       const color = new THREE.Color().setRGB(...source.paint);
@@ -1424,6 +1558,8 @@ export class Game {
       car.doorOpen = 0; p.speed = 0; p.verticalVel = 0;
       if (t.entering) {
         p.inVehicle = true;
+        car.fallen = false;
+        car.ridden = true;
         this.state = 'driving'; this.onMode('car');
         if (!car.stolen) { car.stolen = true; this.stolen++; }
         const [brand, model] = CAR_NAMES[car.kind] || ['', 'VÉHICULE'];
@@ -1434,6 +1570,7 @@ export class Game {
         this.showRadio();
       } else {
         p.inVehicle = false; p.position.copy(t.exit);
+        car.ridden = false;
         p.position.y = this.controllers.getGroundHeight(p.position.x, p.position.z, 'person');
         this.state = 'onFoot'; this.camera.footYaw = car.heading;
         this.onMode('person');
@@ -1470,6 +1607,8 @@ export class Game {
   }
 
   update(dt) {
+    this.atmosphere.update(dt, dt > 0);
+    this.hud.setClock(this.atmosphere.clockLabel, this.atmosphere.weatherLabel, this.atmosphere.night > 0.5);
     // Pools stay drawn for the first frames so their pipelines compile behind the loading screen
     if (++this.frames === 5) for (const w of this.wrecks) if (!w.burnT && !w.smokeT) w.mesh.visible = false;
     this.collectCars();
@@ -1497,6 +1636,7 @@ export class Game {
       for (const c of this.allCars) {
         if (c === car && this.state === 'driving') continue;
         if (c.police && this.wanted.units.some((u) => u.car === c && u.active)) continue;
+        if (c.ai && c !== car) continue; // mission AI drives it (mission-director.js)
         const moving = Math.abs(c.speed) > 0.05 || Math.abs(c.vx || 0) + Math.abs(c.vz || 0) > 0.05 || Math.abs(c.angularVel || 0) > 0.02;
         if (moving && !c.wreck) this.controllers.simulateCar(c, 0, 0, true, dt);
         else if (moving) {
@@ -1517,6 +1657,7 @@ export class Game {
       this.updateCarDamage(dt);
       this.pickups.update(dt, (x, z) => this.controllers.getGroundHeight(x, z, 'person'), person.position.x, person.position.y, person.position.z, (it) => this.collect(it));
       this.director.update(dt);
+      this.shops.update(dt);
       this.updateGps(dt);
     }
     this.fx.update(dt, (x, z) => this.controllers.getGroundHeight(x, z, 'person'));
@@ -1532,10 +1673,18 @@ export class Game {
     for (const vehicle of this.allCars) {
       if (vehicle.door) vehicle.door.rotation.y = -vehicle.doorOpen;
       vehicle.mesh.position.copy(vehicle.position); vehicle.mesh.rotation.y = vehicle.heading;
+      if (vehicle.moto) poseMotorbike(vehicle, dt, vehicle === car && this.state === 'driving' && this.controllers.keys.sprint);
       vehicle.mesh.updateMatrixWorld();
     }
+    // On a motorbike the protagonist stays in view, posed on the seat
+    if (person.inVehicle && car.moto) {
+      person.rig.ride(car.chassisPivot, 1.1, { seat: car.seat, bars: car.bars, gripHalf: 0.33, bracket: car.pegs, crankLength: 0.02 });
+      this.hero.setWeapon(null);
+      this.hero.update(true);
+    }
     if (this.clock - this.lastSave > 5) { this.lastSave = this.clock; this.save(); }
-    if (this.keybarState !== this.state + this.weaponId) { this.keybarState = this.state + this.weaponId; this.updateKeybar(); }
+    const keybarKey = this.state + this.weaponId + (this.car.moto ? 'm' : '');
+    if (this.keybarState !== keybarKey) { this.keybarState = keybarKey; this.updateKeybar(); }
     this.updatePrompt();
     this.updateHud(dt);
     this.radio?.update();
@@ -1587,7 +1736,7 @@ export class Game {
 
   // ---- Saving ------------------------------------------------------------------------------------------------------
   save() {
-    if (this.transition || this.state === 'dead' || this.state === 'busted') return;
+    if (this.resetting || this.transition || this.state === 'dead' || this.state === 'busted') return;
     try {
       const p = this.person;
       const fleet = this.fleet.filter((c) => !c.mission && !c.destroyed);
@@ -1597,6 +1746,7 @@ export class Game {
         active: fleet.indexOf(this.car), stolen: this.stolen, distance: this.distance, firstEntry: this.firstEntry,
         money: this.money, health: this.health, armor: this.armor, weapons: this.weapons, weaponId: this.weaponId,
         missionsDone: this.missionsDone, stats: this.stats, radio: this.radio?.stationIndex ?? this.radioIndex,
+        atmosphere: this.atmosphere.serialize(), safehouses: this.shops?.serialize(), worldBikes: !!this.worldBikesPlaced,
         fleet: fleet.map(car => ({ kind: car.kind, paint: car.paint, position: { x: car.position.x, y: car.position.y, z: car.position.z }, heading: car.heading, stolen: car.stolen, hp: car.hp }))
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
@@ -1641,11 +1791,15 @@ export class Game {
         if (Array.isArray(data.missionsDone)) this.missionsDone = data.missionsDone.filter((id) => typeof id === 'string');
         if (data.stats) for (const k of Object.keys(this.stats)) if (Number.isFinite(data.stats[k])) this.stats[k] = data.stats[k];
         if (Number.isInteger(data.radio)) this.radioIndex = data.radio;
+        this.atmosphere.restore(data.atmosphere);
+        this.savedShops = data.safehouses;
+        this.worldBikesPlaced = !!data.worldBikes;
       }
     } catch { /* An old or corrupted save falls back to a fresh session. */ }
   }
 
   reset() {
+    this.resetting = true; // the unload that follows must not write the old game back
     try { for (const key of [SAVE_KEY, ...LEGACY_SAVE_KEYS]) localStorage.removeItem(key); } catch { /* storage optional */ }
     location.reload();
   }

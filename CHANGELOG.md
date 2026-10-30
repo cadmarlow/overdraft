@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.0 — Margin Call
+
+### Nouveau
+- **Acte II — Margin Call** : *Appel de marge* (défense du garage en trois vagues), *Délit d’initié*
+  (filature discrète, puis poursuite si vous êtes repéré), *Liquidation* (fourgon blindé et escorte
+  à immobiliser, convoyeurs, sacs de billets) et *Vente à découvert* (assaut de l’entrepôt de Varga,
+  fuite en voiture, face-à-face).
+- **Cycle jour/nuit continu** (environ 32 minutes par jour) qui fond les ambiances lumineuses entre elles,
+  horloge à l’écran, choix de l’heure dans le menu.
+- **Météo** : dégagé, nuageux, pluie, orage ; pluie autour de la caméra, rues mouillées et glissantes,
+  éclairs et tonnerre, bruit de pluie.
+- **Motos** : Brisant Vandale 650, physique dédiée, inclinaison dans les virages, wheeling (Maj),
+  pilote visible, chute et éjection en cas de choc violent.
+- **Boutiques** : armurerie *Calibre*, carrosserie *Éclair* (réparation, peinture, semer la police),
+  quatre planques à acheter ou à gagner (dormir 8 heures, soins, sauvegarde).
+- **Armes** : fusil d’assaut *Sentinel* et grenades *Éclat* (lancer en cloche, rebonds, explosion).
+- **Pilote IA** commun à la police et aux missions : suivi d’itinéraire par point de visée glissant,
+  vitesse adaptée aux virages, contournement du trafic et des véhicules arrêtés.
+
+### Corrigé
+- Les voitures de police ne tournent plus en rond autour d’un carrefour : quatre unités sur quatre
+  rejoignent désormais le joueur.
+- Les explosions en chaîne sont limitées.
+- Les marqueurs de mission ne restent plus affichés après la fin d’une étape.
+
 ## 0.2.0 — Opening Bell
 
 Le playground devient un jeu, et prend son nom : **OVERDRAFT**.

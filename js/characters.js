@@ -24,7 +24,10 @@ const WEAPON_GEOMETRY = {
   pistol: () => mergeGeometries([box(0.035, 0.05, 0.2, 0, 0.035, 0.06), box(0.03, 0.1, 0.045, 0, -0.02, 0)]),
   smg: () => mergeGeometries([box(0.045, 0.07, 0.36, 0, 0.04, 0.1), box(0.03, 0.12, 0.045, 0, -0.03, 0), box(0.025, 0.14, 0.035, 0, -0.04, 0.14),
     box(0.02, 0.02, 0.12, 0, 0.05, 0.33)]),
-  shotgun: () => mergeGeometries([box(0.05, 0.07, 0.62, 0, 0.04, 0.16), box(0.035, 0.035, 0.3, 0, 0.0, 0.32), box(0.04, 0.12, 0.2, 0, -0.03, -0.12)])
+  shotgun: () => mergeGeometries([box(0.05, 0.07, 0.62, 0, 0.04, 0.16), box(0.035, 0.035, 0.3, 0, 0.0, 0.32), box(0.04, 0.12, 0.2, 0, -0.03, -0.12)]),
+  rifle: () => mergeGeometries([box(0.05, 0.08, 0.5, 0, 0.045, 0.12), box(0.025, 0.025, 0.32, 0, 0.06, 0.52), box(0.035, 0.16, 0.05, 0, -0.04, 0.16),
+    box(0.045, 0.1, 0.24, 0, 0.0, -0.2), box(0.03, 0.05, 0.12, 0, 0.115, 0.1)]),
+  grenade: () => mergeGeometries([new THREE.SphereGeometry(0.045, 10, 8).scale(1, 1.25, 1), box(0.02, 0.04, 0.02, 0, 0.065, 0)])
 };
 const _geoCache = new Map();
 function weaponGeometry(kind) {
@@ -129,7 +132,7 @@ class CharacterModel {
   // Muzzle position of the held weapon (world), for flashes and tracers
   muzzle(out) {
     const r = this.rig;
-    const length = this.weaponKind === 'shotgun' ? 0.5 : this.weaponKind === 'smg' ? 0.36 : 0.18;
+    const length = { shotgun: 0.5, smg: 0.36, rifle: 0.68, grenade: 0.05 }[this.weaponKind] ?? 0.18;
     return out.copy(r.hand).addScaledVector(r.handDir, length).add(_up.set(0, 0.05, 0));
   }
 

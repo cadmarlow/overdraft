@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { PLACES, STORY, ACTIVITIES } from './missions.js';
 import { RoadNavigator } from './navigation.js';
 import { WEAPONS } from './weapons.js';
+import { AIDriver } from './ai-driver.js';
 
 // Runs the mission scripts of missions.js: shows contacts, starts a mission when the player walks (or drives) into one,
 // steps its generator every frame, enforces fail conditions and timers, and pays out.
@@ -17,6 +18,7 @@ class MissionContext {
     this.cars = [];
     this.actorsSpawned = [];
     this.pickupsSpawned = [];
+    this.npcCars = [];
     this.markersUsed = [];
     this.dt = 0;
     this.clock = 0;
@@ -171,6 +173,37 @@ class MissionContext {
     return null;
   }
 
+  // -- AI-driven cars (couriers, escorts, armoured vans, fleeing targets) --
+  spawnNpcCar(kind, x, z, heading, paint, { label = '', hp = 100, maxSpeed = 17, corner = 8 } = {}) {
+    const g = this.game;
+    const car = this.spawnCar(kind, x, z, heading, paint, { label });
+    car.locked = true;
+    car.npc = true;
+    car.hp = car.maxHp = hp;
+    car.driver = new AIDriver(g.controllers, g.nav, car, { maxSpeed, corner, traffic: g.traffic.vehicles });
+    car.driver.others = g.allCars;
+    car.ai = { mode: 'stop' };
+    this.npcCars.push(car);
+    return car;
+  }
+  driveTo(car, x, z, { stopAt = 6, maxSpeed } = {}) { car.ai = { mode: 'goto', x, z, stopAt }; if (maxSpeed) car.driver.maxSpeed = maxSpeed; car.driver.setGoal(x, z, true); }
+  escort(car, leader, distance = 14) { car.ai = { mode: 'escort', leader, distance }; }
+  flee(car, maxSpeed = 30) { car.ai = { mode: 'flee' }; car.driver.maxSpeed = maxSpeed; }
+  stopNpc(car) { car.ai = { mode: 'stop' }; }
+  arrived(car) { return car.ai?.mode === 'goto' && Math.hypot(car.position.x - car.ai.x, car.position.z - car.ai.z) < car.ai.stopAt + 4 && Math.abs(car.speed) < 1.2; }
+  disabled(car) { return car.destroyed || car.hp < (car.maxHp ?? 100) * 0.3; }
+  // The crew climbs out of a stopped car (doors on both sides) and the car is free to take
+  unload(car, list) {
+    car.locked = false;
+    this.stopNpc(car);
+    return list.map((opts, i) => {
+      const side = i % 2 ? -1 : 1;
+      const h = car.heading;
+      const s = this.spot(car.position.x + Math.cos(h) * 1.6 * side + Math.sin(h) * (i > 1 ? -1.2 : 0.4), car.position.z - Math.sin(h) * 1.6 * side + Math.cos(h) * (i > 1 ? -1.2 : 0.4), 0.4);
+      return this.spawnActor({ heading: h, ...opts, x: s.x, z: s.z });
+    });
+  }
+
   // -- outcome --
   failIf(predicate, reason) { this.fails.push({ predicate, reason }); }
   clearFails() { this.fails.length = 0; }
@@ -266,6 +299,7 @@ class MissionDirector {
     g.hud.showBanner(subtitle && subtitle.startsWith('FIN') ? subtitle : 'MISSION RÉUSSIE', def.title, `+${reward.toLocaleString('fr-FR')} $${subtitle && !subtitle.startsWith('FIN') ? ' · ' + subtitle : ''}`, 5, 'pass');
     g.audio.ui('pass');
     this.cleanup(true);
+    g.shops?.place();
     g.save();
     if (def.id === 'courant') setTimeout(() => g.toast('Nouvelles activités', 'Courses, convoyages et primes apparaissent en orange sur la carte.'), 5200);
   }
@@ -314,12 +348,47 @@ class MissionDirector {
     for (const f of ctx.fails) {
       if (f.predicate()) { this.fail(f.reason); return; }
     }
+    this.driveNpcs(dt);
     try {
       const r = this.gen.next();
       if (r.done && this.current) this.complete(0);
     } catch (error) {
       console.error('[mission]', error);
       this.fail('Erreur de mission.');
+    }
+  }
+
+  // Mission cars with an AI driver: go somewhere, keep behind a leader, flee the player, or stop (also when disabled)
+  driveNpcs(dt) {
+    const g = this.game;
+    for (const car of this.ctx.npcCars) {
+      if (car.destroyed || !car.ai || (g.car === car && g.state !== 'onFoot')) continue;
+      const ai = car.ai;
+      const d = car.driver;
+      if (car.hp < (car.maxHp ?? 100) * 0.3 && ai.mode !== 'stop') { car.ai = { mode: 'stop' }; car.locked = false; }
+      if (ai.mode === 'goto') {
+        d.update(dt, { stopAt: ai.stopAt });
+      } else if (ai.mode === 'escort') {
+        const L = ai.leader;
+        if (!L || L.destroyed || L.ai?.mode === 'stop') { car.ai = { mode: 'stop' }; continue; }
+        d.setGoal(L.position.x - Math.sin(L.heading) * ai.distance, L.position.z - Math.cos(L.heading) * ai.distance);
+        d.maxSpeed = Math.max(6, Math.abs(L.speed) + (Math.hypot(L.position.x - car.position.x, L.position.z - car.position.z) - ai.distance) * 0.5);
+        d.update(dt, { stopAt: 3 });
+      } else if (ai.mode === 'flee') {
+        // a goal far from the player, picked again whenever the player gets close to it or it is reached
+        const goal = ai.goal;
+        const reached = goal && Math.hypot(goal.x - car.position.x, goal.z - car.position.z) < 40;
+        const cut = goal && Math.hypot(goal.x - g.player.x, goal.z - g.player.z) < Math.hypot(goal.x - car.position.x, goal.z - car.position.z) * 0.7;
+        if (!goal || reached || cut) {
+          const away = Math.atan2(car.position.x - g.player.x, car.position.z - g.player.z) + (Math.random() - 0.5) * 1.4;
+          const i = g.nav.nearest(car.position.x + Math.sin(away) * 600, car.position.z + Math.cos(away) * 600, 400);
+          ai.goal = i >= 0 ? { x: g.nav.nodes[i].x, z: g.nav.nodes[i].z } : { x: car.position.x, z: car.position.z };
+          d.setGoal(ai.goal.x, ai.goal.z, true);
+        }
+        d.update(dt);
+      } else {
+        this.game.controllers.simulateCar(car, 0, 0, true, dt);
+      }
     }
   }
 

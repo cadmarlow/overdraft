@@ -562,7 +562,8 @@ async function initApp() {
   selectCamera('chase', true);
   selectTime('golden');
   gameplay = new Playground({ controllers: controllerManager, camera: cameraSystem, traffic: trafficSystem,
-    scene, onMode: selectMode, onTime: selectTime, audio: audioSystem, map: mapSystem, touch: touchControls, gamepad: gamepadControls });
+    scene, onMode: selectMode, onTime: selectTime, audio: audioSystem, map: mapSystem, touch: touchControls, gamepad: gamepadControls,
+    lighting: lightingSystem, grade: colorGrade });
   gameplay.onQuality = low => { renderer.setPixelRatio(low ? 0.75 : 1); renderer.setSize(window.innerWidth, window.innerHeight); };
   cameraSystem.initialized = false;
   controllerManager.update(0.016, 0, controllerManager.getActiveEntity().position);

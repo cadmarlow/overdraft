@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { BODY_SPECS, buildLightbarGeometry, createLightbarMaterial } from './cars.js';
 import { lineOfSight } from './weapons.js';
+import { AIDriver } from './ai-driver.js';
 
 // WANTED LEVEL — the city's police response, one to five stars.
 // Witnessed crimes build heat (0..120) that sets the stars. Police don't simply know where the player is: they search
@@ -144,7 +145,7 @@ class WantedSystem {
     car.burnT = 0;
     car.position.set(i * 8, -40, -3000);
     car.mesh.position.copy(car.position);
-    return { car, active: false, mode: 'idle', path: null, wp: 0, pathT: 0, stuckT: 0, reverseT: 0, crew: [], deployed: false,
+    return { car, driver: new AIDriver(this.controllers, this.nav, car, { maxSpeed: 40, corner: 11 }), active: false, mode: 'idle', crew: [], deployed: false,
       searchX: 0, searchZ: 0, losT: 0, los: false, idle: 0 };
   }
 
@@ -206,9 +207,9 @@ class WantedSystem {
     car.siren = true;
     u.active = true;
     u.mode = 'pursue';
-    u.path = null;
-    u.pathT = 0;
-    u.stuckT = u.reverseT = 0;
+    u.driver.path = null;
+    u.driver.repathT = 0;
+    u.driver.stuckT = u.driver.reverseT = 0;
     u.deployed = false;
     u.crew = [];
     u.idle = 0;
@@ -354,108 +355,40 @@ class WantedSystem {
       gx = u.searchX; gz = u.searchZ;
     }
 
-    // Steering point: straight at the goal when it is close and visible, else along a road route
+    // Drive: along a road route by pure pursuit, straight at the player when close and in sight
+    const driver = u.driver;
+    driver.traffic = this.trafficCars;
+    driver.others = this.gameCars;
+    driver.maxSpeed = car.drive.speed * (this.level <= 1 ? 0.75 : u.mode === 'leave' ? 0.5 : 1);
+    driver.setGoal(gx, gz);
     const gd = Math.hypot(gx - car.position.x, gz - car.position.z);
-    let sx = gx, sz = gz;
-    const direct = gd < 45 && (u.los || gd < 18);
-    if (!direct) {
-      u.pathT -= dt;
-      if (!u.path || u.pathT <= 0 || u.wp >= u.path.length) {
-        u.path = this.nav.route(car.position.x, car.position.z, gx, gz, 6000);
-        u.wp = 0;
-        u.pathT = 2.2;
-      }
-      if (u.path) {
-        while (u.wp < u.path.length - 1 && Math.hypot(u.path[u.wp].x - car.position.x, u.path[u.wp].z - car.position.z) < 11) u.wp++;
-        // Skip a waypoint the car has already driven past: beyond it along the next leg, and within that street
-        if (u.wp < u.path.length - 1) {
-          const p = u.path[u.wp], q = u.path[u.wp + 1];
-          const lx = q.x - p.x, lz = q.z - p.z, len2 = lx * lx + lz * lz || 1;
-          const cx = car.position.x - p.x, cz = car.position.z - p.z;
-          const t = (cx * lx + cz * lz) / len2;
-          const off = Math.abs(cx * lz - cz * lx) / Math.sqrt(len2);
-          if (t > 0.04 && t < 1 && off < 9) u.wp++;
-        }
-        sx = u.path[u.wp].x; sz = u.path[u.wp].z;
-        // Brake into sharp corners: the next leg turns hard and the corner is near
-        if (u.wp < u.path.length - 1) {
-          const p = u.path[u.wp], q = u.path[u.wp + 1];
-          const turn = Math.abs(angleTo(Math.atan2(p.x - car.position.x, p.z - car.position.z), Math.atan2(q.x - p.x, q.z - p.z)));
-          const near = Math.hypot(p.x - car.position.x, p.z - car.position.z);
-          u.cornerCap = turn > 0.6 && near < 10 + car.speed * 1.4 ? 8 + (1 - Math.min(1, turn / 1.6)) * 8 : Infinity;
-        } else u.cornerCap = Infinity;
-      }
-    } else u.cornerCap = Infinity;
-
-    // Local avoidance: traffic in the corridor ahead pushes the steering point aside
-    const sinH = Math.sin(car.heading), cosH = Math.cos(car.heading);
-    let blockedAhead = Infinity, shift = 0;
-    for (const v of this.trafficCars || []) {
-      if (!v.edge) continue;
-      const dx = v.x - car.position.x, dz = v.z - car.position.z;
-      if (Math.abs(dx) > 24 || Math.abs(dz) > 24) continue;
-      const ahead = dx * sinH + dz * cosH, side = dx * cosH - dz * sinH;
-      if (ahead < 2 || ahead > 6 + Math.abs(car.speed) * 1.2 || Math.abs(side) > 2.6) continue;
-      blockedAhead = Math.min(blockedAhead, ahead);
-      shift += (side >= 0 ? -1 : 1) * (2.8 - Math.abs(side)) * (1 - ahead / 30);
-    }
-    if (shift) {
-      // +side is the car's left (heading frame), so move the aim the other way round the obstacle
-      sx += cosH * shift * 1.4; sz -= sinH * shift * 1.4;
-    }
-
-    const desired = Math.atan2(sx - car.position.x, sz - car.position.z);
-    const delta = angleTo(car.heading, desired);
-    let steer = Math.max(-1, Math.min(1, delta * 2.4));
-    let throttle = 1;
-    const speed = car.speed;
-    if (Math.abs(delta) > 0.75 && speed > 9) throttle = -0.7;
-    else if (Math.abs(delta) > 0.4 && speed > 18) throttle = 0.2;
-    if (speed > u.cornerCap) throttle = -0.8;
-    if (blockedAhead < 7 && speed > 6) throttle = Math.min(throttle, -0.4);
-    const cautious = this.level <= 1 ? 0.78 : 1;
-    if (speed > car.drive.speed * cautious) throttle = Math.min(throttle, 0);
-
+    const direct = gd < 40 && (u.los || gd < 16);
     // Stop beside a player on foot and send the officers out
-    if (target.onFoot && d < 22 && u.mode === 'pursue') {
-      throttle = speed > 1 ? -1 : 0;
-      if (speed < 1.2 && !u.deployed) this.deploy(u, target);
-    }
-    if (u.mode === 'leave') throttle = Math.min(throttle, 0.6);
+    const stopping = target.onFoot && d < 24 && u.mode === 'pursue';
+    driver.update(dt, { direct, stopAt: stopping ? 9 : 0 });
+    if (stopping && Math.abs(car.speed) < 1.2 && !u.deployed) this.deploy(u, target);
 
-    // Unstick: reverse out with the wheel the other way
-    if (u.reverseT > 0) {
-      u.reverseT -= dt;
-      throttle = -1;
-      steer = -steer;
-    } else if (throttle > 0.5 && Math.abs(speed) < 1.2) {
-      u.stuckT += dt;
-      if (u.stuckT > 1.4) { u.reverseT = 1.1 + Math.random() * 0.6; u.stuckT = 0; }
-    } else {
-      u.stuckT = Math.max(0, u.stuckT - dt);
-    }
     // No progress for a while and out of the camera's sight: put the unit back into play elsewhere
+    const camSees = this.inView(car.position) && camD < 200;
     u.progressT = (u.progressT || 0) + dt;
     if (u.bestD === undefined || d < u.bestD - 4) { u.bestD = d; u.progressT = 0; }
-    if (u.progressT > 9 && d > 40 && camD > 60 && u.mode === 'pursue') {
+    if (u.progressT > 10 && d > 40 && !camSees && u.mode === 'pursue') {
       this.retire(u);
-      u.bestD = undefined;
       return;
     }
-    // Wedged out of the camera's sight: hop forward to the next waypoint, as if it had found its way round
-    if ((u.stuckT > 1 || u.reverseT > 0) && u.path && u.wp < u.path.length && camD > 70 && !this.inView(car.position)) {
-      const p = u.path[u.wp], q = u.path[Math.min(u.path.length - 1, u.wp + 1)];
-      car.position.set(p.x, 0, p.z);
-      car.heading = Math.atan2(q.x - p.x, q.z - p.z) || car.heading;
-      car.prevX = p.x; car.prevZ = p.z;
-      car.speed = 8; car.vx = car.vz = car.angularVel = 0;
-      u.reverseT = u.stuckT = 0;
-      u.wp = Math.min(u.path.length - 1, u.wp + 1);
+    // Wedged out of sight: hop on along the route, as if it had found its way round
+    if ((driver.stuckT > 0.8 || driver.reverseT > 0) && camD > 70 && !camSees) {
+      const next = driver.nextPoint();
+      if (next) {
+        car.position.set(next.p.x, 0, next.p.z);
+        car.heading = Math.atan2(next.q.x - next.p.x, next.q.z - next.p.z) || car.heading;
+        car.prevX = next.p.x; car.prevZ = next.p.z;
+        car.speed = 8; car.vx = car.vz = car.angularVel = 0;
+        driver.reverseT = driver.stuckT = 0;
+        driver.repathT = 0;
+      }
     }
-    u.last = { throttle, steer, delta, blockedAhead, cap: u.cornerCap };
-    this.controllers.simulateCar(car, throttle, steer, false, dt);
-    car.mesh.position.copy(car.position);
-    car.mesh.rotation.y = car.heading;
+    u.last = { throttle: driver.throttle, steer: driver.steer, target: driver.target, blocked: driver.blocked };
   }
 
   deploy(u, target) {
@@ -469,7 +402,7 @@ class WantedSystem {
       const z = car.position.z - Math.sin(car.heading) * 1.5 * side;
       const a = this.actors.spawn({
         x, z, heading: Math.atan2(target.x - x, target.z - z), look: 'cop', team: 'police',
-        weapon: level >= 4 && side < 0 ? 'smg' : level >= 3 && side < 0 ? 'shotgun' : 'pistol',
+        weapon: level >= 5 && side < 0 ? 'rifle' : level >= 4 && side < 0 ? 'smg' : level >= 3 && side < 0 ? 'shotgun' : 'pistol',
         hp: 70 + level * 10, armor: level >= 3 ? 30 : 0, behavior: level <= 1 ? 'arrest' : 'combat', hostile: true,
         accuracy: 0.35 + level * 0.09, alert: true
       });

@@ -148,7 +148,12 @@ class ActorSystem {
       a.sightT = 0.22 + Math.random() * 0.1;
       a.los = target.alive && d < 120 && lineOfSight(this.controllers, a.x, eyeY, a.z, target.x, target.y + 1.2, target.z);
       if (a.los) { a.lastX = target.x; a.lastZ = target.z; }
-      if (!a.alert && a.hostile && a.los && d < (target.threat ? 45 : 18)) a.alert = true;
+      if (!a.alert && a.hostile && a.los && d < (target.threat ? 45 : 18)) {
+        // spotted: this one opens fire and calls the others nearby
+        a.alert = true;
+        if (a.behavior === 'guard' || a.behavior === 'idle') a.behavior = 'combat';
+        this.alertTeam(a.team, a.x, a.z, 45);
+      }
     }
 
     let mx = 0, mz = 0, speed = 0, face = a.heading;
