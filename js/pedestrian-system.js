@@ -1,6 +1,8 @@
 import { blockAt } from './city-config.js';
 import { createPedestrianRoutes } from './pedestrian-routes.js';
-import { PersonCrowd, PersonRig, PEDESTRIAN_DIVE_DURATION } from './pedestrians.js';
+import { PersonCrowd, PersonRig, PEDESTRIAN_DIVE_DURATION, PROP } from './pedestrians.js';
+import { collapse } from './ragdoll.js';
+import { CrowdMotion, crowdMotionLoaded } from './crowd-motion.js';
 
 // Local pedestrian population: connected walks, curb queues, conversations and player avoidance.
 // Traffic supplies crossing permissions and view checks; this system owns the crowd and its animation.
@@ -25,7 +27,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
 
   // One instanced draw per level of detail; every pedestrian has a PersonRig that plants its footsteps on the
   // sidewalk (no sliding), with their own build, height, sex, hair, clothes and gait
-  const pedCrowd = new PersonCrowd(NUM_PEDS);
+  const pedCrowd = new PersonCrowd(NUM_PEDS, { sculpted: true, farDistance: 44 });
   const hash = (i, salt) => {
     const v = Math.sin(i * 12.9898 + salt * 78.233) * 43758.5453;
     return v - Math.floor(v);
@@ -73,6 +75,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
       dodge: 0,
       dodgeTarget: 0,
       diveStart: -Infinity,
+      cowerUntil: -Infinity,
       diveHeading: 0,
       diveT: 0,
       rig: new PersonRig({
@@ -86,6 +89,8 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
       })
     });
   }
+
+  if (crowdMotionLoaded()) for (const p of peds) p.rig.motion = new CrowdMotion(p.rig);
 
   const KERB = 1.6; // how far along a crosswalk track pedestrians wait to cross (the curb is 2 m along)
   const pedRoutes = createPedestrianRoutes(network, blockAt);
@@ -408,7 +413,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
       p.pause = 1.5 + Math.random() * 3;
       p.restTime = clock + 35 + Math.random() * 55;
     }
-    let vMax = avoiding ? p.avoidSpeed : p.pause > 0 || p.conversation ? 0 : panicking ? p.panicSpeed : p.speed;
+    let vMax = clock < p.cowerUntil ? 0 : avoiding ? p.avoidSpeed : p.pause > 0 || p.conversation ? 0 : panicking ? p.panicSpeed : p.speed;
     if (dodging || diving) p.v = vMax = 0;
     if (!p.nextRoute) vMax = Math.min(vMax, Math.sqrt(2 * brake * ahead));
     let room = Infinity;
@@ -606,7 +611,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
         if (Math.abs(p.kvx) + Math.abs(p.kvz) < 0.05) p.kvx = p.kvz = 0;
       }
       const ddx = p.x - focusX, ddz = p.z - focusZ;
-      if (fallen > 45 && !draw) { p.placed = false; p.dead = false; p.rig.placed = false; return; }
+      if (fallen > 45 && !draw) { p.placed = false; p.dead = false; p.rig.placed = false; p.rig.limp = null; return; }
       p.rig.update(dt, p.x, p.z, p.deadHeading, pedGround, p, 0, draw, Math.min(fallen * 1.3, 0.95));
       if (draw) pedCrowd.add(p.rig, Math.sqrt(ddx * ddx + ddz * ddz));
       return;
@@ -634,9 +639,21 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
     const heading = diving ? p.diveHeading : partner ? Math.atan2(partner.x - p.x, partner.z - p.z)
       : Math.abs(sideStep) > 0.01 ? Math.atan2(p.uz * Math.sign(sideStep), -p.ux * Math.sign(sideStep))
       : Math.atan2(fx, fz);
-    p.rig.update(dt, p.x, p.z, heading, pedGround, p, 0, draw, diving ? diveTime : -1);
+    const rig = p.rig;
+    const cowering = clock < p.cowerUntil;
+    if (draw && distSq < 2500 && rig.lookAt) {
+      // Nothing in the hands while running for it; an umbrella comes out in the rain
+      const fleeing = clock < p.panicUntil;
+      rig.carry = fleeing || cowering ? (rig.prop === PROP.BAG || rig.prop === PROP.BACKPACK ? rig.prop : -1) : rain && rig.umbrella ? PROP.UMBRELLA : rig.prop;
+      rig.crouchTarget = cowering && !p.heldUp ? 1 : 0;
+      rig.handsUpTarget = cowering ? 1 : 0;
+      // heads turn towards someone who comes close, or anything that makes them run
+      if (fleeing || distSq < 30 || partner) rig.lookAt(partner ? partner.x : focusX, partner ? partner.z : focusZ);
+      else rig.lookAt();
+    }
+    rig.update(dt, p.x, p.z, heading, pedGround, p, 0, draw, diving ? diveTime : -1);
     if (!draw) return;
-    pedCrowd.add(p.rig, Math.sqrt(distSq));
+    pedCrowd.add(rig, Math.sqrt(distSq));
   }
 
   function update(dt, elapsed, x, z, jump, view, activeMode) {
@@ -679,7 +696,12 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
   }
 
   // Knock a pedestrian down where they stand (shot, struck): they fall along heading, sliding on at `push` m/s
-  function kill(p, heading = p.rig.yaw, push = 0) {
+  // Up to this many bodies falling for real at a time; beyond it, or far away, the simple fall will do
+  const FALLING_MAX = 10;
+  let groundAt = () => SIDEWALK_Y;
+  let rain = false;
+
+  function kill(p, heading = p.rig.yaw, push = 0, cause = 'shot') {
     if (!p.placed || p.dead) return false;
     if (p.conversation) endConversation(p.conversation);
     p.dead = true;
@@ -687,10 +709,30 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
     p.deadHeading = heading;
     p.kvx = Math.sin(heading) * push;
     p.kvz = Math.cos(heading) * push;
+    const falling = peds.reduce((n, q) => n + (q.rig.limp && !q.rig.limp.asleep ? 1 : 0), 0);
+    const dfx = p.x - focusX, dfz = p.z - focusZ;
+    if (p.rig.placed && falling < FALLING_MAX && dfx * dfx + dfz * dfz < 6400) {
+      collapse(p.rig, { ground: groundAt, vx: p.rig.vx, vz: p.rig.vz, dirX: p.kvx, dirZ: p.kvz, cause });
+      p.kvx = p.kvz = 0;
+    }
     p.v = 0;
     p.diveStart = -Infinity;
     p.dodge = p.dodgeTarget = 0;
     return true;
+  }
+
+  // A gun pointed at someone: they freeze with their hands up, then run for it
+  function holdUp(x, z, dirX, dirZ, range = 14) {
+    for (const p of peds) {
+      if (!p.placed || p.dead) continue;
+      const dx = p.x - x, dz = p.z - z, d = Math.hypot(dx, dz);
+      if (d > range || (dx * dirX + dz * dirZ) / (d || 1) < 0.93) continue;
+      if (p.conversation) endConversation(p.conversation);
+      if (clock >= p.cowerUntil) p.heldUp = true;
+      p.cowerUntil = clock + 2.5;
+      p.panicUntil = Math.max(p.panicUntil, clock + 8);
+      p.panicSpeed = 3.6 + Math.random() * 1.2;
+    }
   }
 
   // Everyone within radius runs away from (x, z) for about `duration` seconds, crossing against the lights
@@ -705,6 +747,8 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
       const fresh = clock >= p.panicUntil;
       p.panicUntil = Math.max(p.panicUntil, clock + duration * (0.7 + Math.random() * 0.6));
       p.panicSpeed = 3.4 + Math.random() * 1.4;
+      // close to the danger, some freeze and cover their head instead of running
+      if (fresh && dx * dx + dz * dz < 200 && Math.random() < 0.28) { p.cowerUntil = clock + 4 + Math.random() * 5; p.heldUp = false; }
       if (p.conversation) endConversation(p.conversation);
       p.goalX = p.x + dx * 6;
       p.goalZ = p.z + dz * 6;
@@ -719,7 +763,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
     return count;
   }
 
-  return { peds, meshes: pedCrowd.meshes, update, kill, panic };
+  return { peds, meshes: pedCrowd.meshes, update, kill, panic, setGround: (fn) => { groundAt = fn; }, setRain: (on) => { rain = on; }, holdUp };
 }
 
 export { createPedestrianSystem };

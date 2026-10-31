@@ -12,12 +12,15 @@ import * as THREE from 'three/webgpu';
 // 3. Splits the remaining large batches into cells for view-frustum culling, keeping their full draw distance.
 
 const SHADOW_PROXY_LAYER = 3;
+const FAR_CASTER_LAYER = 4; // large casters left out of the stand-ins: with the stand-ins, all the far cascade may draw
 // Distance at which an instance of typical size s (m) is culled: about s / d * 1100 px tall on a 1300 px viewport
 const CULL_PER_METRE = 1100;
 const CULL_MIN = 300; // never closer: the shadow cascades reach ~300 m at street level
 const CULL_MAX = 2000; // beyond this the props are kept at any distance
+const BOROUGH_CULL_MAX_RADIUS = 900; // the bridges and whole shorelines stay
 const PROXY_CELL = 500; // the far cascade spans ~400 m at street level: a cascade sees a few cells
 const STATIC_CELL = 1000;
+const CULL_CELL = 500; // distance-culled meshes live in groups of this size: a far group hides all of them at once
 
 const _m = new THREE.Matrix4();
 const _wm = new THREE.Matrix4();
@@ -144,9 +147,10 @@ function replaceWithChunks(mesh, cell) {
 
 /**
  * Sets up the culling of the static city under `roots` (Object3Ds). `shadow` is the SunLightShadow whose cascade
- * cameras render the shadow stand-ins (none are made without it). Per-frame culling runs in updateSceneCulling().
+ * cameras render the shadow stand-ins (none are made without it). `quality` (quality.js) scales the cull distances and
+ * decides what the far cascade draws. Per-frame culling runs in updateSceneCulling().
  */
-function setupSceneCulling(scene, roots, shadow = null) {
+function setupSceneCulling(scene, roots, shadow = null, quality = {}) {
   scene.updateMatrixWorld(true);
   const culled = [];
 
@@ -343,19 +347,101 @@ function setupSceneCulling(scene, roots, shadow = null) {
     if (!mesh.castShadow) replaceWithChunks(mesh, STATIC_CELL);
   }
 
-  state.culled = culled;
+  // Far islands and their buildings go first when the frame budget is tight: haze hides most of them anyway
+  if (quality.boroughCull) {
+    const done = new Set(culled.map((c) => c.mesh));
+    scene.getObjectByName('Boroughs')?.traverse((o) => {
+      if (!o.isMesh || done.has(o)) return;
+      const sphere = meshSphere(o);
+      if (sphere.radius < BOROUGH_CULL_MAX_RADIUS) pushCulled(o, sphere, quality.boroughCull);
+    });
+  }
+
+  // The far cascade (beyond some 75 m) only needs what shapes the street's shade: small props and traffic are left out
+  if (cams.length > 1 && quality.farPropShadows === false) {
+    const small = new Set(culled.map((c) => c.mesh));
+    for (const root of roots) root.traverse((o) => { if (o.isMesh && o.castShadow && !small.has(o)) o.layers.enable(FAR_CASTER_LAYER); });
+    cams[cams.length - 1].layers.set(SHADOW_PROXY_LAYER);
+    cams[cams.length - 1].layers.enable(FAR_CASTER_LAYER);
+  }
+
+  groupIntoCells(scene, culled);
+  setCullScale(quality.cull ?? 1);
 }
 
-const state = { culled: [] };
+const state = { cells: [], loose: [] };
+
+function meshSphere(mesh) {
+  if (mesh.isInstancedMesh) {
+    if (!mesh.boundingSphere) mesh.computeBoundingSphere();
+    return mesh.boundingSphere.clone().applyMatrix4(mesh.matrixWorld);
+  }
+  if (!mesh.geometry.boundingSphere) mesh.geometry.computeBoundingSphere();
+  return mesh.geometry.boundingSphere.clone().applyMatrix4(mesh.matrixWorld);
+}
+
+// three.js walks every object of the scene for each camera, hidden or not: with ~20 000 chunks, three walks a frame
+// took more time than drawing. Hanging the chunks under one group per square lets a far square skip all of its chunks,
+// in that walk and here. The groups are identity transforms, so each chunk keeps its world matrix as its own.
+function groupIntoCells(scene, culled) {
+  const cells = new Map();
+  for (const c of culled) {
+    let inHiddenBranch = false;
+    c.mesh.traverseAncestors((a) => { if (!a.visible) inHiddenBranch = true; });
+    if (inHiddenBranch) { state.loose.push(c); continue; }
+    const key = Math.floor(c.x / CULL_CELL) + ',' + Math.floor(c.z / CULL_CELL);
+    let cell = cells.get(key);
+    if (!cell) {
+      cell = { group: new THREE.Group(), entries: [], x: 0, y: 0, z: 0, reachSq: 0 };
+      cell.group.name = 'CullCell';
+      scene.add(cell.group);
+      cells.set(key, cell);
+    }
+    cell.entries.push(c);
+    c.mesh.matrix.copy(c.mesh.matrixWorld);
+    c.mesh.matrix.decompose(c.mesh.position, c.mesh.quaternion, c.mesh.scale);
+    c.mesh.matrixAutoUpdate = false;
+    cell.group.add(c.mesh);
+  }
+  state.cells = [...cells.values()];
+  for (const cell of state.cells) {
+    for (const c of cell.entries) { cell.x += c.x; cell.y += c.y; cell.z += c.z; }
+    cell.x /= cell.entries.length; cell.y /= cell.entries.length; cell.z /= cell.entries.length;
+  }
+}
+
+// Scales the cull distances (quality levels); the shadow reach no longer sets a floor, cascades simply lose those props
+function setCullScale(scale) {
+  const apply = (c) => {
+    const maxDist = c.d * scale + c.r;
+    c.maxDistSq = maxDist * maxDist;
+    return maxDist;
+  };
+  state.loose.forEach(apply);
+  for (const cell of state.cells) {
+    let reach = 0;
+    for (const c of cell.entries) reach = Math.max(reach, apply(c) + Math.hypot(c.x - cell.x, c.y - cell.y, c.z - cell.z));
+    cell.reachSq = reach * reach;
+  }
+}
 
 // Per frame (after the warm-up frame, which must see everything): hide the chunks beyond their cull distance
 function updateSceneCulling(cameraPosition) {
   const { x, y, z } = cameraPosition;
-  for (const c of state.culled) {
+  const cull = (c) => {
     const dx = c.x - x;
     const dy = c.y - y;
     const dz = c.z - z;
     c.mesh.visible = dx * dx + dy * dy + dz * dz < c.maxDistSq;
+  };
+  state.loose.forEach(cull);
+  for (const cell of state.cells) {
+    const dx = cell.x - x;
+    const dy = cell.y - y;
+    const dz = cell.z - z;
+    const near = dx * dx + dy * dy + dz * dz < cell.reachSq;
+    cell.group.visible = near;
+    if (near) cell.entries.forEach(cull);
   }
 }
 

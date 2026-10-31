@@ -2313,7 +2313,7 @@ function createHighwayTraffic(scene, lanes) {
 
   function update(dt, camera, entity, mode) {
     // 1. Car following (IDM) in every lane, the player counting as a leader
-    const pl = entity && mode !== 'helicopter' ? {
+    const pl = entity && mode !== 'helicopter' && mode !== 'plane' ? {
       x: entity.position.x, y: entity.position.y, z: entity.position.z,
       vx: Math.sin(entity.heading || 0) * (entity.speed || 0) + (entity.vx || 0),
       vz: Math.cos(entity.heading || 0) * (entity.speed || 0) + (entity.vz || 0)

@@ -155,7 +155,7 @@ class GamepadControls {
     let vertical = 0;
     if (driving) {
       drive = buttonValue(pad, 7) - buttonValue(pad, 6);
-    } else if (mode === 'helicopter') {
+    } else if (mode === 'helicopter' || mode === 'plane') {
       vertical = buttonValue(pad, 7) - buttonValue(pad, 6);
     }
     this.controller.setGamepadInput('forward', Math.max(0, drive));

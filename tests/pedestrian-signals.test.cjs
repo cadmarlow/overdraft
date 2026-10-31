@@ -11,10 +11,13 @@ function crossing() {
     imports: {
       './city-config.js': { blockAt: () => null },
       './pedestrian-routes.js': { createPedestrianRoutes: () => ({ next: () => null }) },
+      './ragdoll.js': { collapse: () => null },
+      './crowd-motion.js': { CrowdMotion: class {}, crowdMotionLoaded: () => false },
       './pedestrians.js': {
         PersonRig: class { update() {} },
         PersonCrowd: class { meshes = []; begin() {} add() {} end() {} },
-        PEDESTRIAN_DIVE_DURATION: 2.5
+        PEDESTRIAN_DIVE_DURATION: 2.5,
+        PROP: {}
       }
     }
   });

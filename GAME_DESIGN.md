@@ -64,6 +64,19 @@ Un système à **cinq étoiles**, dans la tradition du genre, avec une police qu
 - **Armes** : fusil d’assaut *Sentinel*, grenades *Éclat*.
 - **IA de conduite** partagée : la police et les véhicules de mission suivent la ville comme des conducteurs.
 
+## Le garage rapide
+
+Le joueur doit pouvoir changer de monture sans jamais chercher un véhicule : le garage (touche G) fige le jeu et propose
+à pied, voiture, moto, vélo, hélicoptère ou avion. Ce que le garage fournit y retourne ; une voiture volée reste dans la
+rue. Le ciel de Manhattan devient ainsi un terrain de jeu : un saut en parachute depuis l’avion est toujours possible.
+
+## Les corps
+
+Les personnes viennent de la bibliothèque Microsoft Rocketbox : de vrais modèles d’artistes, peints à la main, avec leurs
+doigts, leurs paupières et leur mâchoire. Le mouvement est de la motion capture, calée sur la vitesse réelle pour que les
+pieds ne glissent pas ; les armes se tiennent par cinématique inverse sur des points de prise propres à chacune. La foule
+porte les mêmes corps, ramenés à un squelette de 23 os instancié : une rue pleine coûte à peine plus qu’un seul passant.
+
 ## Direction artistique
 
 - Manhattan réel, ambiances lumineuses (soleil bas, midi, crépuscule, nuit), reflets en temps réel.
@@ -84,6 +97,7 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 |---|---|---|
 | 0.1 | Playground | Marche, conduite, entrée et sortie des véhicules (base Codex) |
 | 0.2 | Opening Bell | Combat, niveau de recherche, Acte I, activités, radio procédurale, dégâts et explosions |
-| **0.3** | **Margin Call** | Acte II, planques, armurerie, carrosserie, motos, cycle jour/nuit continu, météo, IA de conduite |
-| 0.4 | Hostile Takeover | Acte III, gangs et territoires, braquages en plusieurs étapes, bateaux, téléphone et contacts, hélicoptère pilotable |
-| 0.5 | Closing Bell | Acte III et fin, coopération en ligne, mode photo, optimisation mobile |
+| 0.3 | Margin Call | Acte II, planques, armurerie, carrosserie, motos, cycle jour/nuit continu, météo, IA de conduite |
+| **0.4** | **Human Capital** | Vrais personnages, motion capture, foule vivante, police tactique, chutes physiques |
+| 0.5 | Hostile Takeover | Acte III, gangs et territoires, braquages en plusieurs étapes, bateaux, téléphone et contacts |
+| 0.6 | Closing Bell | Fin de l’histoire, coopération en ligne, mode photo, optimisation mobile |

@@ -16,17 +16,24 @@ import { TouchControls } from './touch-controls.js';
 import { GamepadControls } from './gamepad-controls.js';
 import { CameraSystem, CAMERA_PRESETS } from './cameras.js';
 import { LightingSystem } from './lighting.js';
+import { disableEffectOutputs } from './tsl-materials.js';
 import { NYCMapSystem } from './nyc-map.js';
 import { setupSceneCulling, updateSceneCulling } from './scene-culling.js';
 import { CityAudioSystem } from './audio-system.js';
 import { Playground } from './gameplay.js';
+import { loadCharacters } from './characters.js';
+import { loadCrowd } from './human-assets.js';
+import { CROWD_BODIES, CROWD_PROPS } from './human-crowd.js';
+import { loadCrowdMotion } from './crowd-motion.js';
+import { currentLevel, FramePacer } from './quality.js';
 
 // Application setup, shader warm-up and frame loop.
 
 async function initApp() {
   let gameplay = null;
   let graphicsLost = false;
-  const performanceMode = new URLSearchParams(location.search).get('quality') === 'performance';
+  const quality = currentLevel();
+  if (!quality.reflections) disableEffectOutputs();
   const container = document.getElementById('canvas-container');
   const loadingOverlay = document.getElementById('loading-overlay');
   const loadingStatus = document.getElementById('loading-status');
@@ -65,9 +72,9 @@ async function initApp() {
     powerPreference: 'high-performance',
     reversedDepthBuffer: true
   });
-  renderer.setPixelRatio(performanceMode ? 0.65 : 1.0);
+  renderer.setPixelRatio(quality.scale);
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.shadowMap.enabled = !performanceMode;
+  renderer.shadowMap.enabled = quality.shadows;
   renderer.lighting = new ClusteredLighting(256, 32, 28, 48);
   container.appendChild(renderer.domElement);
 
@@ -87,7 +94,7 @@ async function initApp() {
   if (new URLSearchParams(location.search).has('stats')) {
     diagnostics = document.createElement('output');
     diagnostics.id = 'graphics-stats';
-    diagnostics.style.cssText = 'position:fixed;right:24px;top:76px;z-index:50;padding:8px 12px;background:#10180ee8;color:#e1f3a0;font:12px monospace;pointer-events:none';
+    diagnostics.style.cssText = 'position:fixed;right:24px;top:76px;z-index:50;padding:8px 12px;background:#10180ee8;color:#e1f3a0;font:12px monospace;pointer-events:none;white-space:pre';
     diagnostics.textContent = `${rendererName} · chargement…`;
     document.body.append(diagnostics);
   }
@@ -110,7 +117,7 @@ async function initApp() {
   // 2. Scene, atmosphere and lighting
   await showLoadingStage('Préparation de la lumière…');
   const scene = new THREE.Scene();
-  const lightingSystem = new LightingSystem(scene, renderer);
+  const lightingSystem = new LightingSystem(scene, renderer, quality);
   markInit('lighting');
 
   // 3. Build Manhattan Geography, Iconic Landmarks, Blocks, Street Details & Traffic
@@ -132,6 +139,7 @@ async function initApp() {
   const streetDetails = buildStreetDetails(scene, allColliders);
   markInit('streetDetails');
   await showLoadingStage('La ville prend vie…');
+  await Promise.all([loadCharacters(), loadCrowd(CROWD_BODIES, CROWD_PROPS), loadCrowdMotion()]);
   // Buildings turned along non-grid streets have oriented colliders whose world bounds reach past their lots: they stay
   // inside the property line anyway, so the road network (lanes & sidewalks) doesn't need them.
   // Elevated building sections that clear even a bus don't obstruct ground traffic.
@@ -181,7 +189,7 @@ async function initApp() {
   const cullingRoots = ['ManhattanCityGrid', 'ManhattanCityBlocks', 'ManhattanStreetDetails', 'ManhattanLandmarks', 'Boroughs', 'RoadMarkings']
     .map((name) => scene.getObjectByName(name))
     .filter(Boolean);
-  setupSceneCulling(scene, cullingRoots, lightingSystem.sunLight.shadow);
+  setupSceneCulling(scene, cullingRoots, lightingSystem.sunLight.shadow, quality);
 
   // Initialize static world matrices once, including the chunks and shadow proxies created above.
   // Crowd, tree and building-detail animation changes instance/pose buffers, not Object3D transforms.
@@ -212,44 +220,53 @@ async function initApp() {
   //    Fade out distant and matte surfaces so SSR spends its rays on visible glossy reflections.
   await showLoadingStage('Préparation de votre arrivée…');
   const scenePass = pass(scene, cameraSystem.camera);
-  // The multisampled colour attachments (output, normal, metalRough) only need resolving, never storing: discarding
-  // them spares the GPU writing 3 x 4 samples per pixel to memory every frame (transient, memoryless attachments where
-  // the browser supports them). The multisampled depth stays stored: SSR reads it.
-  scenePass.renderTarget.storeMultisampledColorBuffer = false;
-  const ssrFade = smoothstep(360.0, 180.0, positionView.z.negate());
-  const maxSSRRoughness = 0.75;
-  const sceneMRT = mrt({
-    output: output,
-    normal: normalView,
-    metalRough: vec2(roughness.lessThan(maxSSRRoughness).select(metalness.mul(ssrFade), 0), roughness)
-  });
-  sceneMRT.setBlendMode('normal', new THREE.BlendMode(THREE.MaterialBlending));
-  sceneMRT.setBlendMode('metalRough', new THREE.BlendMode(THREE.MaterialBlending));
-  scenePass.setMRT(sceneMRT);
-
   const scenePassColor = scenePass.getTextureNode('output');
-  const scenePassDepth = scenePass.getTextureNode('depth');
-  const scenePassNormal = scenePass.getTextureNode('normal');
-  const scenePassMetalRough = scenePass.getTextureNode('metalRough');
+  let sceneMRT = null;
+  let reflections = vec3(0);
+  if (renderer.backend.isWebGPUBackend && quality.reflections) {
+    // The multisampled colour attachments (output, normal, metalRough) only need resolving, never storing: discarding
+    // them spares the GPU writing 3 x 4 samples per pixel to memory every frame (transient, memoryless attachments where
+    // the browser supports them). The multisampled depth stays stored: SSR reads it.
+    scenePass.renderTarget.storeMultisampledColorBuffer = false;
+    const ssrFade = smoothstep(360.0, 180.0, positionView.z.negate());
+    const maxSSRRoughness = 0.75;
+    sceneMRT = mrt({
+      output: output,
+      normal: normalView,
+      metalRough: vec2(roughness.lessThan(maxSSRRoughness).select(metalness.mul(ssrFade), 0), roughness)
+    });
+    sceneMRT.setBlendMode('normal', new THREE.BlendMode(THREE.MaterialBlending));
+    sceneMRT.setBlendMode('metalRough', new THREE.BlendMode(THREE.MaterialBlending));
+    scenePass.setMRT(sceneMRT);
 
-  const ssrPass = ssr(scenePassColor, scenePassDepth, scenePassNormal, {
-    metalnessNode: scenePassMetalRough.r,
-    roughnessNode: scenePassMetalRough.g,
-    camera: cameraSystem.camera
-  });
-  ssrPass.resolutionScale = 0.5;
-  ssrPass.blurQuality = 1;
-  ssrPass.maxDistance.value = 42;
-  ssrPass.thickness.value = 0.85;
-  // Fewer coarse steps, then refine detected hits to keep reflection edges precise.
-  ssrPass.quality.value = 0.25;
-  ssrPass.binaryRefine = true;
-  ssrPass.intensity.value = 0.50;
-  ssrPass.screenEdgeFadeBlack = true;
+    const scenePassDepth = scenePass.getTextureNode('depth');
+    const scenePassNormal = scenePass.getTextureNode('normal');
+    const scenePassMetalRough = scenePass.getTextureNode('metalRough');
 
-  // Roughness mip blur must not spread reflections back onto matte or nonreflective surfaces.
-  const reflectionMask = scenePassMetalRough.r.greaterThan(0).select(smoothstep(maxSSRRoughness, 0.55, scenePassMetalRough.g), 0);
-  const reflections = renderer.backend.isWebGPUBackend && !performanceMode ? ssrPass.mul(reflectionMask) : vec3(0);
+    const ssrPass = ssr(scenePassColor, scenePassDepth, scenePassNormal, {
+      metalnessNode: scenePassMetalRough.r,
+      roughnessNode: scenePassMetalRough.g,
+      camera: cameraSystem.camera
+    });
+    ssrPass.resolutionScale = 0.5;
+    ssrPass.blurQuality = 1;
+    ssrPass.maxDistance.value = 42;
+    ssrPass.thickness.value = 0.85;
+    // Fewer coarse steps, then refine detected hits to keep reflection edges precise.
+    ssrPass.quality.value = 0.25;
+    ssrPass.binaryRefine = true;
+    ssrPass.intensity.value = 0.50;
+    ssrPass.screenEdgeFadeBlack = true;
+
+    // Roughness mip blur must not spread reflections back onto matte or nonreflective surfaces.
+    const reflectionMask = scenePassMetalRough.r.greaterThan(0).select(smoothstep(maxSSRRoughness, 0.55, scenePassMetalRough.g), 0);
+    reflections = ssrPass.mul(reflectionMask);
+  } else {
+    // Materials made while the modules loaded, before the level was known (tsl-materials.js)
+    scene.traverse((o) => {
+      for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m?.mrtNode) m.mrtNode = null;
+    });
+  }
   const colorGrade = createPostProcessing(renderer, scenePassColor, reflections);
   const renderPipeline = new THREE.RenderPipeline(renderer, colorGrade.outputNode);
 
@@ -282,10 +299,11 @@ async function initApp() {
     person: [[['W', 'S'], 'Walk / Run'], [['A', 'D'], 'Turn'], [['Space'], 'Jump'], [['Drag'], 'Orbit']],
     car: [[['W', 'S'], 'Drive / Reverse'], [['A', 'D'], 'Steer'], [['B'], 'Horn'], [['Drag'], 'Orbit']],
     cyclist: [[['W', 'S'], 'Pedal / Brake'], [['A', 'D'], 'Lean & Turn'], [['Drag'], 'Orbit']],
-    helicopter: [[['W', 'S'], 'Pitch'], [['A', 'D'], 'Yaw'], [['Space', 'E'], 'Ascend'], [['Q', 'C'], 'Descend']]
+    helicopter: [[['W', 'S'], 'Pitch'], [['A', 'D'], 'Yaw'], [['Space', 'E'], 'Ascend'], [['Q', 'C'], 'Descend']],
+    plane: [[['W', 'S'], 'Nose'], [['A', 'D'], 'Bank'], [['Space', 'E'], 'Throttle up'], [['Q', 'C'], 'Throttle down']]
   };
   // Top speeds in mph (controllers.js caps them at 8.2, 36, 19 & 52 m/s): full scale of the speed meter
-  const topSpeedMph = { person: 18, car: 81, cyclist: 43, helicopter: 116 };
+  const topSpeedMph = { person: 18, car: 81, cyclist: 43, helicopter: 116, plane: 195 };
 
   function renderControlHints(mode) {
     if (!elControlsHint) return;
@@ -564,7 +582,6 @@ async function initApp() {
   gameplay = new Playground({ controllers: controllerManager, camera: cameraSystem, traffic: trafficSystem,
     scene, onMode: selectMode, onTime: selectTime, audio: audioSystem, map: mapSystem, touch: touchControls, gamepad: gamepadControls,
     lighting: lightingSystem, grade: colorGrade });
-  gameplay.onQuality = low => { renderer.setPixelRatio(low ? 0.75 : 1); renderer.setSize(window.innerWidth, window.innerHeight); };
   cameraSystem.initialized = false;
   controllerManager.update(0.016, 0, controllerManager.getActiveEntity().position);
   cameraSystem.update(0.016, 0);
@@ -618,7 +635,7 @@ async function initApp() {
     await showLoadingStage(`Derniers préparatifs… 0 %`);
     setLoadingProgress(0);
     renderer.setRenderTarget(scenePass.renderTarget);
-    renderer.setMRT(sceneMRT);
+    if (sceneMRT) renderer.setMRT(sceneMRT);
     const compile = async (object) => {
       // Each compile starts in a task of its own: compileAsync() keeps one precompilation state on the renderer,
       // which must not be mid-step for two of them in the same microtask checkpoint
@@ -660,7 +677,12 @@ async function initApp() {
   let fpsTimer = 0;
   let nextPlayerSave = 0;
   let warmedUp = false; // see the first frame below
+  const pacer = new FramePacer({ renderer, level: quality, isActive: () => gameplay.active });
+  let qaView = null;
   if (new URLSearchParams(location.search).has('qa')) {
+    window.__render = { renderer, scene, lightingSystem, cameraSystem, pacer, THREE,
+      // Inspection: the camera goes where it is told, whatever the game does
+      view(x, y, z, tx, ty, tz) { qaView = x === undefined ? null : [x, y, z, tx, ty, tz]; } };
     gameplay.renderForQA = () => {
       cameraSystem.update(0.016, elapsed);
       updateSceneCulling(cameraSystem.camera.position);
@@ -671,8 +693,19 @@ async function initApp() {
 
   if (elFps) elFps.textContent = '60';
 
+  // ?stats: milliseconds per system, averaged and shown beside the frame rate
+  const profile = diagnostics ? { marks: {}, last: 0, gpu: 0, gpuBusy: false, draws: 0, tris: 0 } : null;
+  const mark = (name) => {
+    const t = performance.now();
+    profile.marks[name] = (profile.marks[name] || 0) + t - profile.last;
+    profile.last = t;
+  };
+  if (profile) window.__profile = profile;
+
   renderer.setAnimationLoop((now) => {
     if (gameplay.qaFrozen) { lastTime = now; return; }
+    if (pacer.skip(now)) return;
+    if (profile) profile.last = performance.now();
     const rawDt = (now - lastTime) * 0.001;
     lastTime = now;
     const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
@@ -686,6 +719,7 @@ async function initApp() {
     if (simulationDt > 0) controllerManager.update(simulationDt, elapsed, cameraSystem.initialized ? cameraSystem.currentPos : null);
     cameraSystem.update(dt, elapsed);
     streetDetails.signalClock.value = elapsed;
+    if (profile) mark('joueur');
     if (worldDt > 0) trafficSystem.update(
       worldDt,
       elapsed,
@@ -695,7 +729,9 @@ async function initApp() {
       cameraSystem.camera
     );
     if (worldDt > 0) highwayTraffic.update(worldDt, cameraSystem.camera, controllerManager.getActiveEntity(), controllerManager.activeMode);
+    if (profile) mark('trafic');
     gameplay.update(simulationDt);
+    if (profile) mark('jeu');
     if (!document.hidden && now >= nextPlayerSave) {
       savePlayerState();
       nextPlayerSave = now + 5000;
@@ -710,6 +746,13 @@ async function initApp() {
     updateSceneCulling(cameraSystem.camera.position);
     // Traffic collisions can move the player after controller updates; finalize moving hierarchies here.
     for (const root of dynamicRoots) root.updateMatrixWorld();
+    if (qaView) {
+      const camera = cameraSystem.camera;
+      camera.position.set(qaView[0], qaView[1], qaView[2]);
+      camera.lookAt(qaView[3], qaView[4], qaView[5]);
+      camera.updateMatrixWorld();
+    }
+    if (profile) mark('ville');
 
     // Render frame via TSL RenderPipeline (SSR + Bloom)
     if (!warmedUp) {
@@ -729,6 +772,19 @@ async function initApp() {
       markInit('warmup');
     }
     renderPipeline.render();
+    pacer.submitted(now);
+    if (profile) {
+      mark('rendu');
+      profile.draws = renderer.info.render.drawCalls;
+      profile.tris = renderer.info.render.triangles;
+      // GPU time: from the submission to the moment the queue has drained (one measure in flight at a time)
+      const device = renderer.backend.device;
+      if (device && !profile.gpuBusy) {
+        profile.gpuBusy = true;
+        const t = performance.now();
+        device.queue.onSubmittedWorkDone().then(() => { profile.gpu = performance.now() - t; profile.gpuBusy = false; profile.gpuSum = (profile.gpuSum || 0) + profile.gpu; profile.gpuN = (profile.gpuN || 0) + 1; });
+      }
+    }
     if (!warmedUp) {
       warmedUp = true;
       markInit('firstFrame');
@@ -753,7 +809,13 @@ async function initApp() {
     fpsTimer += Math.max(0, rawDt);
     if (fpsTimer >= 0.25) {
       const currentFps = Math.round(frameCount / fpsTimer);
-      if (diagnostics) diagnostics.textContent = `${rendererName} · ${currentFps} FPS · ${(fpsTimer * 1000 / frameCount).toFixed(1)} ms/image`;
+      if (diagnostics) {
+        const parts = Object.entries(profile.marks).map(([k, v]) => `${k} ${(v / frameCount).toFixed(1)}`).join(' · ');
+        diagnostics.textContent = `${rendererName} · ${quality.label} · échelle ${pacer.scale} · ${currentFps} FPS · ${(fpsTimer * 1000 / frameCount).toFixed(1)} ms/image\n${parts}\nGPU ${profile.gpu.toFixed(1)} · ${profile.draws} draws · ${(profile.tris / 1e6).toFixed(2)} M tri`;
+        profile.summary = { fps: currentFps, ...Object.fromEntries(Object.entries(profile.marks).map(([k, v]) => [k, +(v / frameCount).toFixed(1)])), gpu: +((profile.gpuSum || 0) / (profile.gpuN || 1)).toFixed(1), scale: pacer.scale, draws: profile.draws, tris: profile.tris };
+        profile.gpuSum = 0; profile.gpuN = 0;
+        profile.marks = {};
+      }
       frameCount = 0;
       fpsTimer = 0;
 

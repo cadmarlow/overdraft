@@ -11,3 +11,11 @@ Geographic data: NYC Open Data, MTA, and © OpenStreetMap contributors (ODbL).
 See the upstream README for source datasets and their individual terms.
 
 The original MIT copyright and license are preserved in LICENSE.
+
+The people of the game (avatars, textures), the pistol, submachine gun and shotgun, and all motion capture come from the
+Microsoft Rocketbox Avatar Library (MIT): https://github.com/microsoft/Microsoft-Rocketbox
+Its license is reproduced in assets/people/LICENSE-Rocketbox.md.
+
+The assault rifle is "M4A1 Assault Rifle" by nisu, public domain (CC0): https://opengameart.org/content/m4a1-assault-rifle
+
+Objects carried by passers-by are sculpted by `tools/build-humans.mjs`.

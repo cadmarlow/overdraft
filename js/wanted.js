@@ -401,7 +401,7 @@ class WantedSystem {
       const x = car.position.x + Math.cos(car.heading) * 1.5 * side;
       const z = car.position.z - Math.sin(car.heading) * 1.5 * side;
       const a = this.actors.spawn({
-        x, z, heading: Math.atan2(target.x - x, target.z - z), look: 'cop', team: 'police',
+        x, z, heading: Math.atan2(target.x - x, target.z - z), look: level >= 4 ? 'swat' : level >= 3 && side < 0 ? 'detective' : Math.random() < 0.3 ? 'copB' : 'cop', team: 'police', cover: { car, side },
         weapon: level >= 5 && side < 0 ? 'rifle' : level >= 4 && side < 0 ? 'smg' : level >= 3 && side < 0 ? 'shotgun' : 'pistol',
         hp: 70 + level * 10, armor: level >= 3 ? 30 : 0, behavior: level <= 1 ? 'arrest' : 'combat', hostile: true,
         accuracy: 0.35 + level * 0.09, alert: true

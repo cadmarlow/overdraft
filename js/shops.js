@@ -70,6 +70,17 @@ class ShopSystem {
     }
   }
 
+  nearest(type) {
+    const g = this.game;
+    let best = null, bd = Infinity;
+    for (const m of this.markers) {
+      if (m.shop.type !== type) continue;
+      const d = Math.hypot(m.x - g.player.x, m.z - g.player.z);
+      if (d < bd) { bd = d; best = m; }
+    }
+    return best;
+  }
+
   update(dt) {
     const g = this.game;
     this.cooldown = Math.max(0, this.cooldown - dt);
@@ -234,4 +245,4 @@ class ShopSystem {
   restore(list) { if (Array.isArray(list)) for (const id of list) if (SHOPS.some((s) => s.id === id)) this.owned.add(id); }
 }
 
-export { ShopSystem, SHOPS };
+export { ShopSystem, SHOPS, GUN_ITEMS };

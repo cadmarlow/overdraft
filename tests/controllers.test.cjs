@@ -38,6 +38,8 @@ function keyboardHarness(nyc = {}) {
       './helicopter.js': {},
       './pedestrians.js': {},
       './vehicle-lights.js': {},
+      './airplane.js': {},
+      './flight.js': {},
       './landmarks.js': {},
       './building-collision.js': polygonCollision
     }

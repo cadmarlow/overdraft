@@ -1,0 +1,39 @@
+<!doctype html>
+<meta charset="utf-8"><title>Armes</title>
+<style>html,body{margin:0;height:100%;background:#20242a}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three/build/three.webgpu.js","three/webgpu":"../vendor/three/build/three.webgpu.js","three/tsl":"../vendor/three/build/three.tsl.js","three/addons/":"../vendor/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three/webgpu';
+import { loadGun } from '../js/people-assets.js';
+const q = new URLSearchParams(location.search);
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.append(renderer.domElement);
+await renderer.init();
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xb0bac8);
+const sun = new THREE.DirectionalLight(0xffffff, 3); sun.position.set(1, 3, 2); scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x888888, 1.6));
+const names = (q.get('names') || 'pistol,smg,shotgun,rifle').split(',');
+for (const [i, n] of names.entries()) {
+  const g = await loadGun(n);
+  for (const [j, ry] of [[0, Math.PI / 2], [1, -Math.PI / 2]]) {
+    const m = new THREE.Mesh(g.geometry, new THREE.MeshStandardNodeMaterial({ map: g.color, normalMap: g.normal, roughness: 0.5, metalness: 0.3 }));
+    m.position.set(j ? 0.5 : -0.5, 0.45 - i * 0.3, 0);
+    m.rotation.y = ry;
+    scene.add(m);
+    // a mark every 10 cm around the origin
+    for (let a = -6; a <= 7; a++) for (let b = -2; b <= 2; b++) {
+      const dot = new THREE.Mesh(new THREE.SphereGeometry(a === 0 && b === 0 ? 0.0055 : 0.003), new THREE.MeshBasicNodeMaterial({ color: a === 0 && b === 0 ? 0xff0000 : 0xffee00 }));
+      dot.position.copy(m.position).add(new THREE.Vector3(a * 0.1 * (j ? -1 : 1), b * 0.05, 0.1)); scene.add(dot);
+    }
+  }
+}
+const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 20);
+cam.position.set(0, 0, 3.0);
+await renderer.renderAsync(scene, cam);
+await new Promise((r) => setTimeout(r, 300));
+await renderer.renderAsync(scene, cam);
+document.title = 'done';
+</script>

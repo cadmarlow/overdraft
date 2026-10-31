@@ -122,7 +122,7 @@ class AIDriver {
       };
       if (this.traffic) for (const v of this.traffic) if (v.edge) consider(v.x, v.z);
       // other gameplay cars (cruisers, parked or wrecked cars)
-      if (this.others) for (const c of this.others) if (c !== car && c.mesh?.visible) consider(c.position.x, c.position.z);
+      if (this.others) for (const c of this.others) if (c !== car && c.mesh?.visible && c.position.y < 3) consider(c.position.x, c.position.z);
       // round the obstacle on the side it leaves free, by most of a lane
       if (shift) { const k = Math.sign(shift) * Math.min(4.5, Math.abs(shift) * 1.8); aim.x += cosH * k; aim.z -= sinH * k; }
     }

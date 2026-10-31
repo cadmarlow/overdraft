@@ -252,6 +252,13 @@ class Vector3 {
 class Quaternion {
   constructor(x = 0, y = 0, z = 0, w = 1) { this.x = x; this.y = y; this.z = z; this.w = w; }
   identity() { this.x = 0; this.y = 0; this.z = 0; this.w = 1; return this; }
+  set(x, y, z, w) { this.x = x; this.y = y; this.z = z; this.w = w; return this; }
+  slerp(q, t) {
+    this.x += (q.x - this.x) * t; this.y += (q.y - this.y) * t; this.z += (q.z - this.z) * t; this.w += (q.w - this.w) * t;
+    const l = Math.hypot(this.x, this.y, this.z, this.w) || 1;
+    this.x /= l; this.y /= l; this.z /= l; this.w /= l;
+    return this;
+  }
   copy(q) { this.x = q.x; this.y = q.y; this.z = q.z; this.w = q.w; return this; }
   setFromAxisAngle(axis, angle) {
     const half = angle * 0.5, s = Math.sin(half);
@@ -402,14 +409,18 @@ function mergeGeometries(geos) {
   return merged;
 }
 
+const humanSkeleton = loadModule(readFileSync(join(__dirname, '../js/human-skeleton.js'), 'utf8'));
 const { PersonCrowd, PersonRig, buildPersonGeometry, createPersonMaterial } = loadModule(pedestriansSource, {
   imports: {
+    './human-skeleton.js': humanSkeleton,
+    './human-assets.js': { crowd: { bodies: [], props: [] } },
+    './human-crowd.js': { createCrowdMaterial: () => ({}), createPropMaterial: () => ({}), MALE_BODIES: 12, FEMALE_BODIES: 12 },
     'three/webgpu': { Vector3, Quaternion, Matrix4, BufferAttribute, BufferGeometry, Float32BufferAttribute, MeshStandardNodeMaterial, Mesh },
     'three/tsl': tslStub,
     'three/addons/utils/BufferGeometryUtils.js': { mergeGeometries }
   }
 });
-const STRIDE = 31;
+const STRIDE = 47;
 
 test('PersonCrowd creates 2 LODs only when farDistance is finite and disables shadow casting on PeopleFar', () => {
   const streetCrowd = new PersonCrowd(16, { farDistance: 34, castShadow: true });
@@ -653,6 +664,8 @@ test('poseCharacters skips stationary inactive cyclist IK/uploads and culls park
       './helicopter.js': {},
       './pedestrians.js': {},
       './vehicle-lights.js': {},
+      './airplane.js': {},
+      './flight.js': {},
       './landmarks.js': {},
       './building-collision.js': polygonCollision
     }

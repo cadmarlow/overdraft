@@ -72,10 +72,10 @@ class Atmosphere {
     const right = vec3(toCam.z, 0, toCam.x.negate());
     const along = normalize(vec3(this.uWind.x, speed.negate(), this.uWind.z));
     const material = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
-    material.positionNode = center.add(right.mul(positionLocal.x.mul(0.02))).sub(along.mul(positionLocal.y.mul(0.85)));
+    material.positionNode = center.add(right.mul(positionLocal.x.mul(0.011))).sub(along.mul(positionLocal.y.mul(0.72)));
     const d = length(center.sub(cameraPosition));
     material.colorNode = this.uTint;
-    material.opacityNode = this.uAlpha.mul(smoothstep(0.6, 2.2, d)).mul(smoothstep(28.0, 14.0, d));
+    material.opacityNode = this.uAlpha.mul(smoothstep(1.4, 4.0, d)).mul(smoothstep(28.0, 14.0, d));
     const geometry = new THREE.PlaneGeometry(1, 1);
     this.rainMesh = new THREE.Mesh(geometry, material);
     this.rainMesh.name = 'Rain';

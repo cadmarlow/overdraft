@@ -1649,7 +1649,7 @@ function createParkLampPoolMaterial() {
     return color(0xffc890).mul(falloff.mul(night).mul(0.32));
   })();
   mat.opacityNode = float(1.0);
-  mat.mrtNode = _transparentEffectMRT; // SSR keeps seeing the walks & lawns underneath
+  if (_effectOutputs) mat.mrtNode = _transparentEffectMRT; // SSR keeps seeing the walks & lawns underneath
   return mat;
 }
 
@@ -1661,7 +1661,7 @@ function createParkLampPoolMaterial() {
 function createTunnelShadeMaterial() {
   const mat = new THREE.MeshBasicNodeMaterial({ color: 0x000000, transparent: true, depthWrite: false });
   mat.opacityNode = Fn(() => float(0.22).add(smoothstep(0.0, 1.0, uv().x).mul(0.76)))();
-  mat.mrtNode = _transparentEffectMRT; // SSR keeps seeing the road underneath
+  if (_effectOutputs) mat.mrtNode = _transparentEffectMRT; // SSR keeps seeing the road underneath
   return mat;
 }
 
@@ -2049,7 +2049,7 @@ function createRoadPaintMaterial() {
     depthWrite: false,
     metalness: 0.0
   });
-  mat.mrtNode = _transparentEffectMRT; // SSR keeps seeing the asphalt (and its puddles) underneath
+  if (_effectOutputs) mat.mrtNode = _transparentEffectMRT; // SSR keeps seeing the asphalt (and its puddles) underneath
 
   const paint = attribute('paint', 'vec3');
   const side = attribute('side', 'vec2');
@@ -3208,6 +3208,10 @@ function getSmokeCloudTexture() {
  *   sunlit top rims and cool urban-canyon self-shadowing.
  */
 // Transparent decal/effect planes & sprites preserve the underlying road/scene G-buffer in MRT (zero RGB & zero alpha on normal & metalRough)
+// Decals only address the reflection outputs: with no such outputs (quality.js), an MRT would leave them nothing to draw to
+let _effectOutputs = true;
+function disableEffectOutputs() { _effectOutputs = false; }
+
 const _transparentEffectMRT = mrt({
   normal: vec4(0.0, 0.0, 0.0, 0.0),
   metalRough: vec4(0.0, 0.0, 0.0, 0.0)
@@ -3220,7 +3224,7 @@ function createSteamMaterial() {
     transparent: true,
     depthWrite: false
   });
-  mat.mrtNode = _transparentEffectMRT;
+  if (_effectOutputs) mat.mrtNode = _transparentEffectMRT;
 
   const aOrigin = attribute('aSmokeOrigin', 'vec3');
   const aWind = attribute('aSmokeWind', 'vec3');
@@ -3297,7 +3301,7 @@ function createGodRayMaterial() {
     side: THREE.DoubleSide,
     blending: THREE.AdditiveBlending
   });
-  mat.mrtNode = _transparentEffectMRT;
+  if (_effectOutputs) mat.mrtNode = _transparentEffectMRT;
 
   mat.colorNode = Fn(() => {
     return mix(cityUniforms.uSunColor, cityUniforms.uSkyHorizonColor, 0.35);
@@ -3343,10 +3347,12 @@ function createContactShadowMaterial() {
   mat.colorNode = Fn(() => color(0x020305))();
   mat.opacityNode = shadowOpacity;
   // Smoothly occlude wet-road SSR under the vehicle footprint proportional to shadow opacity (0 at quad edges)
-  mat.mrtNode = mrt({
-    normal: vec4(0.0, 0.0, 0.0, 0.0),
-    metalRough: vec4(0.0, 1.0, 0.0, shadowOpacity.mul(0.88))
-  });
+  if (_effectOutputs) {
+    mat.mrtNode = mrt({
+      normal: vec4(0.0, 0.0, 0.0, 0.0),
+      metalRough: vec4(0.0, 1.0, 0.0, shadowOpacity.mul(0.88))
+    });
+  }
 
   return mat;
 }
@@ -3364,7 +3370,7 @@ function createCarFlareMaterial() {
     fog: false,
     blending: THREE.AdditiveBlending
   });
-  mat.mrtNode = _transparentEffectMRT;
+  if (_effectOutputs) mat.mrtNode = _transparentEffectMRT;
   const p = attribute('flarePos', 'vec4');
   mat.positionNode = p.xyz;
   mat.scaleNode = vec2(p.w, p.w);
@@ -3380,6 +3386,7 @@ function createCarFlareMaterial() {
 }
 
 export {
+  disableEffectOutputs,
   cityUniforms,
   WALL_KINDS,
   filteredPulse,

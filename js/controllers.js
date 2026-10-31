@@ -25,6 +25,8 @@ import {
 } from './helicopter.js';
 import { PersonCrowd, PersonRig } from './pedestrians.js';
 import { HEADLIGHTS, createVehicleHeadlight, placeVehicleHeadlight } from './vehicle-lights.js';
+import { createPlane, posePlane } from './airplane.js';
+import { stepPlane } from './flight.js';
 import { bryantParkLawn } from './landmarks.js';
 import { polygonContact } from './building-collision.js';
 
@@ -212,7 +214,8 @@ class ThirdPersonControllerManager {
       person: this.createPersonEntity(),
       car: this.createCarEntity(),
       cyclist: this.createCyclistEntity(),
-      helicopter: this.createHelicopterEntity()
+      helicopter: this.createHelicopterEntity(),
+      plane: createPlane(scene)
     };
 
     Object.values(this.entities).forEach((ent) => {
@@ -331,7 +334,7 @@ class ThirdPersonControllerManager {
     this.activeMode = mode;
     const active = this.entities[mode];
     if (active.mesh) active.mesh.visible = true;
-    if (active.helmet) active.helmet.visible = true;
+    if (active.helmet && !active.riderless) active.helmet.visible = true;
     if (mode === 'person') active._charHidden = false;
     else if (mode === 'cyclist') {
       active._riderHidden = false;
@@ -464,7 +467,7 @@ class ThirdPersonControllerManager {
     // One skinned person, posed in world space every frame by its rig (walk, run, turn, jump)
     const crowd = new PersonCrowd(1, { farDistance: Infinity });
     crowd.meshes.forEach((m) => this.scene.add(m));
-    const rig = new PersonRig({ seed: 9.73, scale: 1.04, girth: 1.03, hair: 0.12, armSwing: 0.85 });
+    const rig = new PersonRig({ seed: 9.73, scale: 0.97, girth: 1.03, hair: 0.12, armSwing: 0.85 });
 
     // Soft Under-Foot Contact Shadow (AO)
     const shadowGeo = new THREE.PlaneGeometry(0.95, 0.95);
@@ -1041,7 +1044,7 @@ class ThirdPersonControllerManager {
     }
 
     const b = this.entities.cyclist;
-    if (b) {
+    if (b && !b.riderless) {
       const dx = focus ? b.position.x - focus.x : 0;
       const dz = focus ? b.position.z - focus.z : 0;
       if (this.activeMode === 'cyclist' || dx * dx + dz * dz <= maxDistSq) {
@@ -1084,8 +1087,10 @@ class ThirdPersonControllerManager {
 
   update(dt, elapsed, focusPos = null) {
     const heli = this.entities.helicopter;
-    heli.mainRotorPivot.rotation.y += dt * 24.0;
-    heli.tailRotorPivot.rotation.x += dt * 32.0;
+    // The rotors wind down once the helicopter is left on the ground
+    heli.rotorSpin = Math.max(0, Math.min(1, (heli.rotorSpin ?? 1) + dt * (this.activeMode === 'helicopter' || heli.position.y > 1 ? 0.8 : -0.35)));
+    heli.mainRotorPivot.rotation.y += dt * 24.0 * heli.rotorSpin;
+    heli.tailRotorPivot.rotation.x += dt * 32.0 * heli.rotorSpin;
 
     if (this.activeMode === 'person') {
       this.updatePerson(dt, elapsed);
@@ -1102,7 +1107,10 @@ class ThirdPersonControllerManager {
       this.updateCyclist(dt, elapsed);
     } else if (this.activeMode === 'helicopter') {
       this.updateHelicopter(dt, elapsed);
+    } else if (this.activeMode === 'plane') {
+      this.updatePlane(dt);
     }
+    posePlane(this.entities.plane, dt);
 
     for (const key of Object.keys(this.entities)) {
       const e = this.entities[key];
@@ -1295,6 +1303,34 @@ class ThirdPersonControllerManager {
     if (throttle > 0 && wheelDelta > 0) b.pedalPhase += wheelDelta / 3.2;
     b.crankPivot.rotation.x = b.pedalPhase;
     for (const pedal of b.pedals) pedal.rotation.x = -b.pedalPhase;
+  }
+
+  // The stick for the player's plane, then the shared flight model (airplane.js)
+  updatePlane(dt) {
+    if (dt <= 0) return;
+    const k = this.keys;
+    const axis = (plus, minus) => (plus ? Number(plus) : 0) - (minus ? Number(minus) : 0);
+    stepPlane(this.entities.plane, { pitch: axis(k.backward, k.forward), roll: axis(k.left, k.right), throttle: axis(k.up, k.down) }, dt, this.planeEnvironment);
+  }
+
+  // What a plane can run into; gameplay.js flies abandoned planes through the same checks
+  get planeEnvironment() {
+    return this._planeEnvironment ??= {
+      ground: (x, z) => this.getGroundHeight(x, z, 'car'),
+      water: (x, z) => this.overWater(x, z),
+      hit: (pos) => {
+        const body = collisionBody('helicopter', 3, 0);
+        const contact = this._buildingContact ??= { nx: 0, nz: 0, depth: 0 };
+        for (const c of this.nearColliders(pos.x, pos.z, 9)) if (buildingContact(c, pos.x, pos.y, pos.z, body, contact)) return true;
+        return false;
+      }
+    };
+  }
+
+  overWater(x, z) {
+    if (z < ISLAND_BOUNDS.minZ || z > ISLAND_BOUNDS.maxZ) return true;
+    const shore = getIslandBoundsAtZ(z);
+    return x < shore.westX || x > shore.eastX;
   }
 
   updateHelicopter(dt, elapsed) {

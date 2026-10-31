@@ -26,6 +26,11 @@ import {
   smoothstep
 } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import {
+  BONE, BONE_COUNT, THIGH, SHIN, ANKLE_H, HIP_X, UPPER_ARM, FOREARM, ARM_BIND_ABDUCTION, PELVIS_Y, HIP_Y, SIDES, LIMB, shoulderJoint, bindJointPositions
+} from './human-skeleton.js';
+import { crowd } from './human-assets.js';
+import { createCrowdMaterial, createPropMaterial, MALE_BODIES, FEMALE_BODIES } from './human-crowd.js';
 
 // Skinned characters for pedestrian-system.js and the player controllers.
 // Each crowd level uses one instanced draw, with 15-bone poses in a storage buffer and seeded appearance.
@@ -35,71 +40,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 // ============================================================================
 // 1. SKELETON
 // ============================================================================
-const BONE = {
-  PELVIS: 0,
-  CHEST: 1,
-  HEAD: 2,
-  UPPER_ARM_L: 3,
-  FOREARM_L: 4,
-  UPPER_ARM_R: 5,
-  FOREARM_R: 6,
-  THIGH_L: 7,
-  SHIN_L: 8,
-  FOOT_L: 9,
-  TOE_L: 10,
-  THIGH_R: 11,
-  SHIN_R: 12,
-  FOOT_R: 13,
-  TOE_R: 14
-};
-const BONE_COUNT = 15;
 // vec4s per person in the pose buffer: (quaternion) and (translation, scale) per bone, then (seed, female, girth, hair)
 const STRIDE = BONE_COUNT * 2 + 1;
-
-// Bind pose (metres, a 1.75 m person standing at the origin facing +Z, +X on their left): legs straight down, arms
-// hanging 8 degrees out from the body
-const THIGH = 0.42;
-const SHIN = 0.42;
-const ANKLE_H = 0.08;
-const HIP_X = 0.09;
-const UPPER_ARM = 0.3;
-const FOREARM = 0.255;
-const ARM_BIND_ABDUCTION = 0.14;
-const PELVIS_Y = 0.96;
-const HIP_Y = ANKLE_H + SHIN + THIGH;
-const SIDES = [1, -1]; // left (+X), right (-X)
-const LIMB = {
-  upperArm: [BONE.UPPER_ARM_L, BONE.UPPER_ARM_R],
-  forearm: [BONE.FOREARM_L, BONE.FOREARM_R],
-  thigh: [BONE.THIGH_L, BONE.THIGH_R],
-  shin: [BONE.SHIN_L, BONE.SHIN_R],
-  foot: [BONE.FOOT_L, BONE.FOOT_R],
-  toe: [BONE.TOE_L, BONE.TOE_R]
-};
-
-function shoulderJoint(female) {
-  return female ? [0.165, 1.415, -0.015] : [0.185, 1.43, -0.015];
-}
-
-function bindJoints(female) {
-  const sh = shoulderJoint(female);
-  const ax = Math.sin(ARM_BIND_ABDUCTION) * UPPER_ARM;
-  const ay = -Math.cos(ARM_BIND_ABDUCTION) * UPPER_ARM;
-  const j = [];
-  j[BONE.PELVIS] = new THREE.Vector3(0, PELVIS_Y, 0);
-  j[BONE.CHEST] = new THREE.Vector3(0, 1.12, -0.01);
-  j[BONE.HEAD] = new THREE.Vector3(0, 1.52, -0.012);
-  SIDES.forEach((side, k) => {
-    j[LIMB.upperArm[k]] = new THREE.Vector3(side * sh[0], sh[1], sh[2]);
-    j[LIMB.forearm[k]] = new THREE.Vector3(side * (sh[0] + ax), sh[1] + ay, sh[2]);
-    j[LIMB.thigh[k]] = new THREE.Vector3(side * HIP_X, HIP_Y, 0);
-    j[LIMB.shin[k]] = new THREE.Vector3(side * HIP_X, ANKLE_H + SHIN, 0);
-    j[LIMB.foot[k]] = new THREE.Vector3(side * HIP_X, ANKLE_H, 0);
-    j[LIMB.toe[k]] = new THREE.Vector3(side * HIP_X, 0.02, 0.135);
-  });
-  return j;
-}
-const BIND = [bindJoints(false), bindJoints(true)];
+const BIND = [false, true].map((female) => bindJointPositions(female).map((p) => new THREE.Vector3(...p)));
 
 // ============================================================================
 // 2. SKINNED LOFTED BODY GEOMETRY
@@ -734,6 +677,22 @@ function pickColorFromPalette(hexArray, tNode) {
   return acc;
 }
 
+// One person's clothes and colouring, from their seed: the same picks at every level of detail
+function personTones(info) {
+  const lane = (salt) => fract(sin(info.x.add(salt).mul(12.9898)).mul(43758.5453));
+  const female = info.y;
+  const sneaker = step(0.4, lane(5.0));
+  return {
+    skin: pickColorFromPalette(SKIN_COLORS, lane(17.0)),
+    hair: pickColorFromPalette(HAIR_COLORS, lane(3.0)),
+    top: mix(pickColorFromPalette(COAT_COLORS, lane(29.0)), pickColorFromPalette(COAT_COLORS_F, lane(29.0)), female),
+    under: pickColorFromPalette(SHIRT_COLORS, lane(71.0)),
+    legs: mix(pickColorFromPalette(LEG_COLORS, lane(47.0)), pickColorFromPalette(LEG_COLORS_F, lane(47.0)), female),
+    upper: mix(mix(color(0x201e1c), color(0x4a3524), lane(23.0)), mix(color(0x252b32), color(0xc8c3b8), step(0.55, lane(31.0))), sneaker),
+    sole: mix(color(0x191816), color(0xd5d1c8), sneaker)
+  };
+}
+
 // v rotated by unit quaternion q
 const qrot = (q, v) => v.add(cross(q.xyz, cross(q.xyz, v).add(v.mul(q.w))).mul(2.0));
 
@@ -964,14 +923,28 @@ function createPersonMaterial(pose, detail = 1) {
 // ============================================================================
 // 4. CROWD: ONE INSTANCED, SKINNED DRAW PER LEVEL OF DETAIL
 // ============================================================================
+// Things people carry: the wrist's place in the chest's frame when one hand holds them, the head tipped down to a phone.
+// The order is the order of CROWD_PROPS
+const PROP = { PHONE: 0, COFFEE: 1, UMBRELLA: 2, BAG: 3, BACKPACK: 4 };
+const CARRY = [
+  { hand: 1, at: [-0.055, 1.235, 0.2], headDown: 0.34 },
+  { hand: 0, at: [0.15, 1.13, 0.17] },
+  { hand: 1, at: [-0.09, 1.28, 0.15] },
+  { hand: -1 },
+  { hand: -1 }
+];
+
+const NEAR_CAPACITY = 40; // most people of one avatar drawn up close at once
+
 class PersonCrowd {
   /**
    * @param {number} maxCount - most people drawn at once
    * @param {{ farDistance?: number, castShadow?: boolean }} options - beyond farDistance (m) people use the far LOD
    */
-  constructor(maxCount, { farDistance = 34, castShadow = true } = {}) {
+  constructor(maxCount, { farDistance = 34, castShadow = true, sculpted = false } = {}) {
     this.farDistance = farDistance;
     this.updates = 0;
+    if (sculpted) { this.buildSculpted(maxCount, castShadow); return; }
     const levels = Number.isFinite(farDistance) ? [1, 0] : [1];
     this.lods = levels.map((detail) => {
       const pose = attributeArray(maxCount * STRIDE, 'vec4').toReadOnly();
@@ -987,15 +960,44 @@ class PersonCrowd {
     this.meshes = this.lods.map((l) => l.mesh);
   }
 
+  // Up close: one instanced draw per sculpted outfit and per hairstyle. Further out: the light far body
+  buildSculpted(maxCount, castShadow) {
+    const level = (geometry, name, max, material, shadow) => {
+      const pose = attributeArray(max * STRIDE, 'vec4').toReadOnly();
+      const mesh = new THREE.Mesh(geometry, material(pose));
+      mesh.name = name;
+      mesh.count = 1;
+      mesh.frustumCulled = false;
+      mesh.castShadow = shadow;
+      mesh.receiveShadow = true;
+      mesh.matrixAutoUpdate = false;
+      return { pose, mesh, count: 0, max, hasZero: true };
+    };
+    this.bodies = crowd.bodies.map(({ geometry, atlas }, i) => level(geometry, `PeopleNear${i}`, NEAR_CAPACITY, (pose) => createCrowdMaterial(pose, STRIDE, atlas), castShadow));
+    this.props = crowd.props.map((g, i) => level(g, `PeopleProp${i}`, NEAR_CAPACITY, (pose) => createPropMaterial(pose, STRIDE), castShadow));
+    this.far = level(buildPersonGeometry(0), 'PeopleFar', maxCount, (pose) => createPersonMaterial(pose, 0), false);
+    this.lods = [...this.bodies, ...this.props, this.far];
+    this.meshes = this.lods.map((l) => l.mesh);
+  }
+
   begin() {
     for (const l of this.lods) l.count = 0;
   }
 
-  add(rig, distance = 0) {
-    const l = this.lods.length > 1 && distance > this.farDistance ? this.lods[1] : this.lods[0];
-    if (l.count >= l.max) return;
+  put(l, rig) {
+    if (l.count >= l.max) return false;
     l.pose.value.array.set(rig.pose, l.count * STRIDE * 4);
     l.count++;
+    return true;
+  }
+
+  add(rig, distance = 0) {
+    if (this.bodies) {
+      if (distance > this.farDistance || !this.put(this.bodies[rig.body], rig)) this.put(this.far, rig);
+      else if (rig.carry >= 0) this.put(this.props[rig.female && rig.carry < PROP.BAG ? rig.carry + 5 : rig.carry], rig);
+      return;
+    }
+    this.put(this.lods.length > 1 && distance > this.farDistance ? this.lods[1] : this.lods[0], rig);
   }
 
   end() {
@@ -1148,6 +1150,13 @@ const _by = new THREE.Vector3();
 const _bz = new THREE.Vector3();
 const _m = new THREE.Matrix4();
 const _rootPos = new THREE.Vector3();
+// The axis fingers curl about: across the palm, in the bind pose, left then right
+const HAND_AXIS = SIDES.map((side) => {
+  const a = ARM_BIND_ABDUCTION, twist = 0.45; // see the hand's frame in tools/humans/anatomy.mjs
+  const nx = -Math.cos(a) * Math.cos(twist), ny = Math.sin(a) * Math.cos(twist), nz = -Math.sin(twist);
+  const ux = Math.sin(a), uy = -Math.cos(a);
+  return new THREE.Vector3(uy * nz, -ux * nz * side, (ux * ny - uy * nx) * side).normalize();
+});
 const AX = new THREE.Vector3(1, 0, 0);
 const AY = new THREE.Vector3(0, 1, 0);
 const AZ = new THREE.Vector3(0, 0, 1);
@@ -1194,6 +1203,9 @@ class PersonRig {
     this.armSwing = armSwing;
     this.stride = stride;
     this.bind = BIND[this.female];
+    // who they are: one of the avatars of their sex
+    const pick = (salt, n) => Math.floor(hash01(seed * 13.37 + salt) * n * 0.999);
+    this.body = female ? MALE_BODIES + pick(1, FEMALE_BODIES) : pick(1, MALE_BODIES);
     this.placed = false;
     this.x = 0;
     this.z = 0;
@@ -1226,10 +1238,39 @@ class PersonRig {
     this.feet = [makeFoot(1), makeFoot(-1)];
     this.aim = null; // { x, y, z, twoHanded }: arms raised towards a world point (weapons), see solveAim()
     this.punch = 0; // 0..1 right arm thrust
+    this.limp = null; // a Ragdoll drives the bones instead of the gait (ragdoll.js)
+    this.motion = null; // captured motion instead of the walking solver (crowd-motion.js)
+    this.riding = false; // astride a bike: ride() places the bones
+    this.air = 0; // height of a jump
+    this.crouch = 0; // 0 standing .. 1 down on bent knees; set crouchTarget, it eases there
+    this.crouchTarget = 0;
+    this.handsUp = 0; // 0 .. 1 hands on the head (arrested, cowering); set handsUpTarget
+    this.handsUpTarget = 0;
+    this.lookTurn = 0; // the head turned towards something, relative to the body
+    this.lookTarget = 0;
+    this.carry = -1; // what is in their hands or on their back now: an index in CARRY
+    this.punchSide = 1; // the arm that strikes: 0 left, 1 right
+    this.holding = false; // something in the right hand
+    this.reloading = -1; // 0..1 through a reload, -1 otherwise
+    this.kickX = 0; // a blow the chest is still recoiling from
+    this.kickZ = 0;
+    this.aimTwist = 0; // chest turned towards what the arms aim at
+    this.aimPitch = 0;
+    this.wrist = [0, 0]; // bend at each wrist (rad)
+    this.grip = [0, 0]; // 0 relaxed fingers .. 1 closed fist, left then right
     this.hand = new THREE.Vector3(); // right wrist and the direction it points, after the last solve
     this.handDir = new THREE.Vector3(0, 0, 1);
     this.pose = new Float32Array(STRIDE * 4);
     this.pose.set([seed, this.female, girth, hair], (STRIDE - 1) * 4);
+    // what they carry through the city, from their seed (only the crowd shows it)
+    const trait = hash01(seed * 3.31 + 5);
+    this.prop = trait < 0.13 ? PROP.PHONE : trait < 0.2 ? PROP.COFFEE : trait < 0.33 ? PROP.BAG : trait < 0.44 ? PROP.BACKPACK : -1;
+    this.umbrella = hash01(seed * 5.13 + 9) < 0.45;
+  }
+
+  // Turns the head towards a world point (or straight ahead without one)
+  lookAt(x = null, z = null) {
+    this.lookTarget = x === null ? 0 : clampAbs(wrap(Math.atan2(x - this.x, z - this.z) - this.yaw), 1.25);
   }
 
   get legLength() {
@@ -1241,8 +1282,17 @@ class PersonRig {
     return y + ANKLE_H * this.s + this.legLength * 0.997 + (PELVIS_Y - HIP_Y) * this.s;
   }
 
+  // A blow that doesn't drop them: the chest gives way along (x, z), then recovers
+  flinch(x, z, amount = 0.32) {
+    const l = Math.hypot(x, z) || 1;
+    this.kickX = (x / l) * amount;
+    this.kickZ = (z / l) * amount;
+  }
+
   // Standing still at (x, z) facing yaw, feet side by side on the ground
   reset(x, z, yaw, ground, owner = null) {
+    this.limp = null;
+    this.kickX = this.kickZ = 0;
     this.x = x;
     this.z = z;
     this.yaw = yaw;
@@ -1289,6 +1339,13 @@ class PersonRig {
    * `diveTime` is elapsed seconds in an evasive dive, or -1 for ordinary locomotion.
    */
   update(dt, x, z, heading, ground, owner = null, air = 0, updatePose = true, diveTime = -1) {
+    this.riding = false;
+    this.air = air;
+    if (this.limp) {
+      this.limp.step(dt);
+      if (updatePose) this.limp.pose();
+      return;
+    }
     const dx = x - this.x;
     const dz = z - this.z;
     if (!this.placed || dx * dx + dz * dz > 9) {
@@ -1297,6 +1354,10 @@ class PersonRig {
     }
     dt = Math.min(Math.max(dt, 1e-4), 0.1);
     this.time += dt;
+    const postural = 1 - Math.exp(-dt * 8);
+    this.crouch += (this.crouchTarget - this.crouch) * postural;
+    this.handsUp += (this.handsUpTarget - this.handsUp) * postural;
+    this.lookTurn += (this.lookTarget - this.lookTurn) * (1 - Math.exp(-dt * 5));
 
     if (diveTime >= 0) {
       if (!this.diving) this.diveGround = ground(owner, this.x, this.z);
@@ -1338,7 +1399,7 @@ class PersonRig {
 
     if (air > 0.03) this.updateAirborne(x, z, ground, owner, air);
     else this.updateGait(dt, x, z, heading, yawErr, ground, owner);
-    if (updatePose) this.solve();
+    if (updatePose && !this.motion?.pose(this, dt)) this.solve();
   }
 
   // Airborne (jumping): legs tuck under the body, feet land wherever they come down
@@ -1623,6 +1684,42 @@ class PersonRig {
     a[o + 7] = s;
   }
 
+  // Where a bind-pose point ends up on a bone already written
+  carried(bone, point, q, out) {
+    const o = bone * 8, a = this.pose;
+    out.copy(point).multiplyScalar(this.s).applyQuaternion(q);
+    out.x += a[o + 4]; out.y += a[o + 5]; out.z += a[o + 6];
+    return out;
+  }
+
+  readBone(bone, q) {
+    const o = bone * 8, a = this.pose;
+    return q.set(a[o], a[o + 1], a[o + 2], a[o + 3]);
+  }
+
+  // The bones between those the solvers place follow from their neighbours, so every pose (walking, riding, falling) has
+  // them: the waist turns half as far as the chest, the neck between chest and head, hands and fingers from the forearm
+  finishBones() {
+    const j = this.bind;
+    this.readBone(BONE.PELVIS, _qa);
+    this.readBone(BONE.CHEST, _q2);
+    this.carried(BONE.PELVIS, j[BONE.SPINE], _qa, _v);
+    this.writeBone(BONE.SPINE, _qa.slerp(_q2, 0.5), _v);
+    this.readBone(BONE.HEAD, _qa);
+    this.carried(BONE.CHEST, j[BONE.NECK], _q2, _v);
+    this.writeBone(BONE.NECK, _qa.slerp(_q2, 0.55), _v);
+    for (let i = 0; i < 2; i++) {
+      this.carried(BONE.CHEST, j[LIMB.clavicle[i]], _q2, _v);
+      this.writeBone(LIMB.clavicle[i], _q2, _v);
+      this.readBone(LIMB.forearm[i], _qa);
+      this.carried(LIMB.forearm[i], j[LIMB.hand[i]], _qa, _v);
+      if (this.wrist[i]) _qa.multiply(_q.setFromAxisAngle(HAND_AXIS[i], this.wrist[i]));
+      this.writeBone(LIMB.hand[i], _qa, _v);
+      this.carried(LIMB.hand[i], j[LIMB.fingers[i]], _qa, _v);
+      this.writeBone(LIMB.fingers[i], _qa.multiply(_q.setFromAxisAngle(HAND_AXIS[i], 0.15 + this.grip[i] * 1.25)), _v);
+    }
+  }
+
   // Foot at `ankle` rotated by qFoot, toes bent by `toeBend` (+ down) at the ball of the foot
   writeFoot(i, ankle, qFoot, toeBend) {
     this.writeBone(LIMB.foot[i], qFoot, ankle);
@@ -1720,6 +1817,7 @@ class PersonRig {
       const ankle = this.limb(LIMB.thigh[i], LIMB.shin[i], _hip, _target, THIGH * s, SHIN * s, _pole, _front);
       this.writeFoot(i, ankle, _qa.copy(_qRoot).multiply(qX(_q, footPitch)), 0);
     }
+    this.finishBones();
   }
 
   // Bones of the whole body from the feet, pelvis and gait state (world space)
@@ -1730,7 +1828,8 @@ class PersonRig {
     const yaw = this.yaw;
     const idle = 1 - g;
     this.setPelvisRotation();
-    _pelvis.set(this.x + Math.cos(yaw) * this.sway, this.pelvisY, this.z - Math.sin(yaw) * this.sway);
+    const crouch = this.crouch;
+    _pelvis.set(this.x + Math.cos(yaw) * this.sway - Math.sin(yaw) * crouch * 0.07 * s, this.pelvisY - crouch * 0.34 * s, this.z - Math.sin(yaw) * this.sway - Math.cos(yaw) * crouch * 0.07 * s);
     this.writeBone(BONE.PELVIS, _qPelvis, _pelvis);
 
     // Chest counter-rotates against the pelvis and leans into the walk; the head stays level, looking ahead (and into
@@ -1738,11 +1837,36 @@ class PersonRig {
     const breathe = Math.sin(this.time * 1.7) * 0.008 * idle;
     _qChest.copy(_qPelvis)
       .multiply(qY(_q, -1.75 * this.pelvisYaw))
-      .multiply(qX(_q, 0.015 + 0.03 * g + 0.14 * run + breathe))
+      .multiply(qX(_q, 0.015 + 0.03 * g + 0.14 * run + breathe + crouch * 0.5))
       .multiply(qZ(_q, -0.8 * this.pelvisRoll));
+    if (this.punch > 0.01) _qChest.multiply(qY(_q, (this.punchSide ? 0.5 : -0.5) * this.punch));
+    // aiming, the chest and head turn and tilt towards the target ahead of the hips
+    if (this.aim) {
+      _fwd.set(this.aim.x - this.x, 0, this.aim.z - this.z);
+      const twist = clampAbs(wrap(Math.atan2(_fwd.x, _fwd.z) - yaw - this.pelvisYaw), 1.1);
+      const pitch = Math.atan2(this.aim.y - this.pelvisY - 0.45 * s, Math.max(0.4, _fwd.length()));
+      this.aimTwist += (twist - this.aimTwist) * 0.35;
+      this.aimPitch += (clampAbs(pitch, 0.7) - this.aimPitch) * 0.35;
+    } else {
+      this.aimTwist *= 0.8;
+      this.aimPitch *= 0.8;
+    }
+    if (Math.abs(this.aimTwist) + Math.abs(this.aimPitch) > 0.002) {
+      _qChest.premultiply(qY(_q, this.aimTwist * 0.8)).multiply(qX(_q, -this.aimPitch * 0.4));
+    }
+    if (this.kickX || this.kickZ) {
+      // tip the chest along the blow: about the horizontal axis across it
+      _v.set(this.kickZ, 0, -this.kickX);
+      const amount = _v.length();
+      _qChest.premultiply(_q.setFromAxisAngle(_v.divideScalar(amount || 1), amount));
+      const fade = 0.86;
+      this.kickX *= fade; this.kickZ *= fade;
+      if (amount < 0.005) this.kickX = this.kickZ = 0;
+    }
     this.writeBone(BONE.CHEST, _qChest, this.jointFrom(BONE.PELVIS, BONE.CHEST, _qPelvis, _pelvis, _chest));
     const look = Math.sin(this.time * 0.37 + this.seed) * 0.25 * idle * idle;
-    qY(_qa, yaw + this.headTurn + look).multiply(qX(_q, 0.05 - 0.1 * run));
+    const carrying = this.carry >= 0 ? CARRY[this.carry] : null;
+    qY(_qa, yaw + this.headTurn + look + this.aimTwist + this.lookTurn).multiply(qX(_q, 0.05 - 0.1 * run - this.aimPitch * 0.7 - crouch * 0.4 + (carrying?.headDown ?? 0)));
     this.writeBone(BONE.HEAD, _qa, this.jointFrom(BONE.CHEST, BONE.HEAD, _qChest, _chest, _v));
 
     // Arms swing against the legs, a little behind them (elbows bend more on the forward swing, ~90 degrees running)
@@ -1752,6 +1876,11 @@ class PersonRig {
       const flex = 0.06 - side * this.arm * swingAmp + idle * 0.02;
       const abduction = 0.1 + (this.girth - 1) * 0.35 + run * 0.08;
       this.jointFrom(BONE.CHEST, LIMB.upperArm[i], _qChest, _chest, _shoulder);
+      // the shoulder itself comes forward and rises a little with the arm's swing
+      const reachOut = clampAbs(side * this.arm, 0.8) * -0.05 * g * s;
+      _shoulder.addScaledVector(_v.set(0, 0, 1).applyQuaternion(_qChest), reachOut);
+      _shoulder.y += Math.max(0, reachOut) * 0.3;
+      this.wrist[i] = 0.1 + flex * 0.35;
       _qUpper.copy(_qChest).multiply(qZ(_q, side * (abduction - ARM_BIND_ABDUCTION))).multiply(qX(_q, -flex));
       this.writeBone(LIMB.upperArm[i], _qUpper, _shoulder);
       const elbow = 0.2 + 0.55 * Math.max(0, flex) + 0.1 * g + run * 1.05;
@@ -1772,6 +1901,42 @@ class PersonRig {
       this.jointFrom(BONE.CHEST, LIMB.upperArm[1], _qChest, _chest, _shoulder);
       this.hand.set(0, -(UPPER_ARM + FOREARM) * s, 0).applyQuaternion(_qChest).add(_shoulder);
       this.handDir.set(Math.sin(yaw), 0, Math.cos(yaw));
+      if (carrying?.hand >= 0) this.solveCarry(carrying);
+    }
+    if (this.handsUp > 0.01) this.solveHandsUp();
+    if (!this.aim && !this.punch && !carrying?.hand) {
+      // loose hands walking, half-closed running
+      const closed = 0.5 * run;
+      this.grip[0] += (closed - this.grip[0]) * 0.2;
+      if (!this.holding) this.grip[1] += (closed - this.grip[1]) * 0.2;
+    }
+    this.finishBones();
+  }
+
+  // Holding something in front of the chest, the wrist at a fixed place in the chest's frame
+  solveCarry(c) {
+    const s = this.s, i = c.hand, side = SIDES[i];
+    this.jointFrom(BONE.CHEST, LIMB.upperArm[i], _qChest, _chest, _shoulder);
+    this.carried(BONE.CHEST, _v.set(...c.at), _qChest, _target);
+    _pole.set(side * 0.7, -1, -0.5).applyQuaternion(_qChest);
+    _front.set(0, 0, 1).applyQuaternion(_qChest);
+    this.limb(LIMB.upperArm[i], LIMB.forearm[i], _shoulder, _target, UPPER_ARM * s, (FOREARM + 0.07) * s, _pole, _front, side * ARM_BIND_ABDUCTION);
+    this.grip[i] = 0.7;
+  }
+
+  // Hands raised to the head: arrested, or cowering from gunfire
+  solveHandsUp() {
+    const s = this.s, k = this.handsUp;
+    this.readBone(BONE.HEAD, _qa);
+    for (let i = 0; i < 2; i++) {
+      const side = SIDES[i];
+      this.jointFrom(BONE.CHEST, LIMB.upperArm[i], _qChest, _chest, _shoulder);
+      this.carried(BONE.HEAD, _v.set(side * 0.1, 1.74, -0.04), _qa, _target);
+      _hip.copy(_shoulder).addScaledVector(_v.set(side * 0.1, -1, 0).normalize(), (UPPER_ARM + FOREARM) * s * 0.96);
+      _target.lerp(_hip, 1 - k);
+      _pole.set(side * 1, 0.1, -0.2).applyQuaternion(_qChest);
+      _front.set(0, 0, 1).applyQuaternion(_qChest);
+      this.limb(LIMB.upperArm[i], LIMB.forearm[i], _shoulder, _target, UPPER_ARM * s, (FOREARM + 0.07) * s, _pole, _front, side * ARM_BIND_ABDUCTION);
     }
   }
 
@@ -1782,7 +1947,9 @@ class PersonRig {
     const reach = (UPPER_ARM + FOREARM + 0.07) * s;
     const yaw = this.yaw;
     const fx = Math.sin(yaw), fz = Math.cos(yaw);
-    this.jointFrom(BONE.CHEST, LIMB.upperArm[1], _qChest, _chest, _shoulder);
+    const stance = this.aim?.stance;
+    const arm = this.aim ? 1 : this.punchSide;
+    this.jointFrom(BONE.CHEST, LIMB.upperArm[arm], _qChest, _chest, _shoulder);
     if (this.aim) {
       _fwd.set(this.aim.x - _shoulder.x, this.aim.y - _shoulder.y, this.aim.z - _shoulder.z);
       if (_fwd.lengthSq() < 1e-4) _fwd.set(fx, 0, fz);
@@ -1790,26 +1957,44 @@ class PersonRig {
       // Keep the arm within a believable cone in front of the chest
       const along = _fwd.x * fx + _fwd.z * fz;
       if (along < 0.2) _fwd.addScaledVector(_rootPos.set(fx, 0, fz), 0.2 - along).normalize();
-      _target.copy(_shoulder).addScaledVector(_fwd, reach * 0.93);
+      if (stance === 'rifle') {
+        // stock in the shoulder: the grip hand just ahead of it and under the sight line
+        _target.copy(_shoulder).addScaledVector(_fwd, 0.2 * s);
+        _target.y -= 0.06 * s;
+        _target.x += Math.cos(yaw) * 0.03 * s; _target.z -= Math.sin(yaw) * 0.03 * s;
+      } else _target.copy(_shoulder).addScaledVector(_fwd, reach * 0.93);
     } else {
       const k = this.punch;
       _fwd.set(fx, -0.12, fz).normalize();
       _target.copy(_shoulder).addScaledVector(_fwd, reach * (0.35 + 0.6 * k));
-      _target.x += Math.cos(yaw) * 0.12 * k; _target.z -= Math.sin(yaw) * 0.12 * k;
+      const across = arm ? 1 : -1;
+      _target.x += across * Math.cos(yaw) * 0.12 * k; _target.z -= across * Math.sin(yaw) * 0.12 * k;
     }
-    _pole.set(-Math.cos(yaw) * 0.6, -1, Math.sin(yaw) * 0.6);
-    _front.copy(_fwd);
-    const wrist = this.limb(LIMB.upperArm[1], LIMB.forearm[1], _shoulder, _target, UPPER_ARM * s, (FOREARM + 0.07) * s, _pole, _front, -ARM_BIND_ABDUCTION);
-    this.hand.copy(wrist);
-    this.handDir.copy(_fwd);
+    const out = arm ? -1 : 1;
+    _pole.set(out * Math.cos(yaw) * (stance === 'rifle' ? 0.9 : 0.6), -1, -out * Math.sin(yaw) * (stance === 'rifle' ? 0.9 : 0.6));
+    if (this.aim) _front.set(0, 1, 0);
+    else _front.copy(_fwd);
+    const wrist = this.limb(LIMB.upperArm[arm], LIMB.forearm[arm], _shoulder, _target, UPPER_ARM * s, (FOREARM + 0.07) * s, _pole, _front, -out * ARM_BIND_ABDUCTION);
+    if (arm === 1) { this.hand.copy(wrist); this.handDir.copy(_fwd); }
+    if (this.aim) this.grip[1] = 0.8;
+    else this.grip[arm] = Math.max(this.grip[arm], this.punch);
     if (this.aim && this.aim.twoHanded) {
-      // The supporting hand meets the grip just behind the right wrist
-      _target.copy(this.hand).addScaledVector(_fwd, -0.12 * s);
+      // The supporting hand: out on the fore-end of a long gun, cupped under the grip of a pistol
+      _target.copy(this.hand).addScaledVector(_fwd, stance === 'rifle' ? 0.34 * s : -0.1 * s);
+      _target.y -= (stance === 'rifle' ? 0.025 : 0.03) * s;
       _target.x += Math.cos(yaw) * 0.05; _target.z -= Math.sin(yaw) * 0.05;
+      if (this.reloading >= 0) {
+        // down to the belt for a fresh magazine and back
+        const dip = Math.sin(Math.PI * Math.min(1, this.reloading * 1.15));
+        _hip.set(Math.cos(yaw) * 0.17 * s + fx * 0.05 + this.x, this.pelvisY - this.crouch * 0.34 * s, -Math.sin(yaw) * 0.17 * s + fz * 0.05 + this.z);
+        _target.lerp(_hip, dip * dip);
+      }
       this.jointFrom(BONE.CHEST, LIMB.upperArm[0], _qChest, _chest, _shoulder);
       _pole.set(Math.cos(yaw) * 0.6, -1, -Math.sin(yaw) * 0.6);
+      _front.crossVectors(_v.set(0, 1, 0), _fwd);
       this.limb(LIMB.upperArm[0], LIMB.forearm[0], _shoulder, _target, UPPER_ARM * s, (FOREARM + 0.07) * s, _pole, _front, ARM_BIND_ABDUCTION);
-    }
+      this.grip[0] = 0.8;
+    } else if (!this.punch) this.grip[0] = 0;
   }
 
   /**
@@ -1818,6 +2003,7 @@ class PersonRig {
    */
   ride(root, crank, { seat, bars, gripHalf = 0.22, bracket, crankLength = 0.17 }) {
     const s = this.s;
+    this.riding = true;
     this.gait = 0;
     this.run = 0;
     root.updateWorldMatrix(true, false);
@@ -1859,8 +2045,9 @@ class PersonRig {
       const ankle = this.solveLeg(i, _hip, _target, this.yaw);
       this.writeFoot(i, ankle, _qa.copy(_qRoot).multiply(qX(_q, footPitch)), 0);
     }
+    this.finishBones();
   }
 }
 
 
-export { BONE as PERSON_BONES, buildPersonGeometry, createPersonMaterial, PersonCrowd, PersonRig, PEDESTRIAN_DIVE_DURATION };
+export { PROP, BONE as PERSON_BONES, buildPersonGeometry, createPersonMaterial, PersonCrowd, PersonRig, PEDESTRIAN_DIVE_DURATION };

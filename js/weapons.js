@@ -160,18 +160,19 @@ function castShot(world, ox, oy, oz, dx, dy, dz, maxDist, ignore = null) {
     if (t < hit.t) { hit.t = t; hit.kind = 'traffic'; hit.target = v; }
   }
   for (const c of cars) {
-    if (c === ignore || c === world.ignoreCar || !c.mesh?.visible || !near(c.position.x, c.position.z, 6)) continue;
-    const t = rayBox(ox, oy, oz, dx, dy, dz, c.position.x, c.position.z, c.heading, c.halfW ?? 0.9, c.halfL ?? 2.2, 0.15, 1.55, hit.t);
+    if (c === ignore || c === world.ignoreCar || c.bicycle || !c.mesh?.visible || !near(c.position.x, c.position.z, 6)) continue;
+    const y = c.position.y || 0;
+    const t = rayBox(ox, oy, oz, dx, dy, dz, c.position.x, c.position.z, c.heading, c.halfW ?? 0.9, c.halfL ?? 2.2, y + 0.15, y + 1.55, hit.t);
     if (t < hit.t) { hit.t = t; hit.kind = 'car'; hit.target = c; }
   }
   for (const a of actors) {
     if (a === ignore || a.dead || !near(a.x, a.z, 1)) continue;
-    const t = rayCylinder(ox, oy, oz, dx, dy, dz, a.x, a.z, 0.32, a.y, a.y + 1.85, hit.t);
+    const t = rayCylinder(ox, oy, oz, dx, dy, dz, a.x, a.z, 0.32, a.y, a.y + (a.height ?? 1.85), hit.t);
     if (t < hit.t) { hit.t = t; hit.kind = 'actor'; hit.target = a; }
   }
   if (player && player !== ignore && !(player.inVehicle && world.ignoreCar) && near(player.x, player.z, 3)) {
     const t = player.inVehicle
-      ? rayBox(ox, oy, oz, dx, dy, dz, player.x, player.z, player.heading, 0.9, 2.2, 0.15, 1.55, hit.t)
+      ? rayBox(ox, oy, oz, dx, dy, dz, player.x, player.z, player.heading, 0.9, 2.2, player.y + 0.15, player.y + 1.55, hit.t)
       : rayCylinder(ox, oy, oz, dx, dy, dz, player.x, player.z, 0.32, player.y, player.y + 1.85, hit.t);
     if (t < hit.t) { hit.t = t; hit.kind = 'player'; hit.target = player; }
   }

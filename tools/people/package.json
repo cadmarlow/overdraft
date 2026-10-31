@@ -1,0 +1,11 @@
+{
+  "name": "overdraft-people-tools",
+  "private": true,
+  "type": "module",
+  "description": "Offline import of the Microsoft Rocketbox avatars and motion capture into assets/people",
+  "dependencies": {
+    "meshoptimizer": "^0.25.0",
+    "sharp": "^0.34.0",
+    "three": "0.180.0"
+  }
+}

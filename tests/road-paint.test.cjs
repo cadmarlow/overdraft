@@ -34,6 +34,10 @@ class Matrix4 {
     return this;
   }
   getMaxScaleOnAxis() { return 1; }
+  decompose(position) {
+    position.x = this.elements[12]; position.y = this.elements[13]; position.z = this.elements[14];
+    return this;
+  }
 }
 
 class Sphere {
@@ -133,6 +137,9 @@ class Object3D {
     fn(this);
     for (const c of this.children) c.traverse(fn);
   }
+  traverseAncestors(fn) {
+    for (let p = this.parent; p; p = p.parent) fn(p);
+  }
 }
 
 class Group extends Object3D {
@@ -220,13 +227,14 @@ test('buildRoadPaint chunks markings into compact spatial cells with shared pipe
 
   // Verify scene-culling hides distant road-paint chunks and keeps nearby ones visible
   setupSceneCulling(scene, [group], null);
+  const shown = (chunk) => chunk.visible && chunk.parent.visible; // far squares are hidden as a whole
   updateSceneCulling({ x: 180, y: 10, z: -1600 });
-  assert.equal(c0.visible, true, 'nearby chunk stays visible');
-  assert.equal(c1.visible, false, 'chunk 3.2 km away is distance-culled');
+  assert.equal(shown(c0), true, 'nearby chunk stays visible');
+  assert.equal(shown(c1), false, 'chunk 3.2 km away is distance-culled');
 
   updateSceneCulling({ x: 180, y: 10, z: 1600 });
-  assert.equal(c0.visible, false);
-  assert.equal(c1.visible, true);
+  assert.equal(shown(c0), false);
+  assert.equal(shown(c1), true);
 });
 
 test('createRoadPaintChunkBuilder subdivides long strips across cells with continuous dash phase and ramp height', () => {
@@ -324,6 +332,7 @@ test('createRoadPaintMaterial caches one material, gates dry/distant noise, and 
     Math,
     THREE: { MeshStandardNodeMaterial: class { constructor(o) { Object.assign(this, o); } } },
     _transparentEffectMRT: {},
+    _effectOutputs: true,
     canyonSkyAONode: () => wrap([1]),
     cityUniforms: { uRoadWetness: new TNode(() => [env.wetness]) },
     positionGeometry: wrap([0, 0.012, 0]),

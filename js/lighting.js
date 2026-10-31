@@ -128,7 +128,7 @@ const TIME_PRESETS = {
 };
 
 class LightingSystem {
-  constructor(scene, renderer = null) {
+  constructor(scene, renderer = null, quality = {}) {
     this.scene = scene;
     this.activePresetId = 'golden';
 
@@ -195,10 +195,11 @@ class LightingSystem {
     this.sunLight.castShadow = true;
     // Two cascades share an atlas: use 3072px tiles when a 6144px texture fits, otherwise 2048px tiles.
     const maxTex = (renderer && renderer.backend && renderer.backend.device && renderer.backend.device.limits.maxTextureDimension2D) || 4096;
-    const tile = maxTex >= 6144 ? 3072 : 2048;
+    const tile = Math.min(quality.shadowTile || 2048, maxTex >= 6144 ? 3072 : 2048);
     this.sunLight.shadow.mapSize.set(tile, tile);
     this.sunLight.shadow.camera.near = 0.5;
-    this.sunLight.shadow.camera.far = 300;
+    this.shadowFar = quality.shadowFar || 300;
+    this.sunLight.shadow.camera.far = this.shadowFar;
     // Suppress shadow acne along the surface normal in world units
     // so short casters like cars, curbs, tree trunks, and pedestrians keep crisp contact shadows
     this.sunLight.shadow.normalBias = 0.05;
@@ -308,7 +309,7 @@ class LightingSystem {
     // logarithmic split (the near cascade ends at ~far / 4). Keep far at 300 m at street level so the near cascade
     // stays sharp, and expand it with altitude (helicopter / observatory) so shadows reach all the way down to street level.
     const altitude = focusPos && Number.isFinite(focusPos.y) ? Math.max(0, focusPos.y) : 0;
-    this.sunLight.shadow.camera.far = Math.max(300, Math.min(720, 260 + altitude * 1.6));
+    this.sunLight.shadow.camera.far = Math.max(this.shadowFar, Math.min(720, this.shadowFar - 40 + altitude * 1.6));
   }
 }
 

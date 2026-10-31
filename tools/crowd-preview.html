@@ -1,0 +1,32 @@
+<!doctype html>
+<meta charset="utf-8"><title>Foule</title>
+<style>html,body{margin:0;height:100%;background:#20242a}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three/build/three.webgpu.js","three/webgpu":"../vendor/three/build/three.webgpu.js","three/tsl":"../vendor/three/build/three.tsl.js","three/addons/":"../vendor/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three/webgpu';
+import { loadCrowdBody } from '../js/people-assets.js';
+const q = new URLSearchParams(location.search);
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.append(renderer.domElement);
+await renderer.init();
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xb0bac8);
+const sun = new THREE.DirectionalLight(0xffffff, 2.6); sun.position.set(1, 3, 3); scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x888888, 1.4));
+const ids = (q.get('ids') || 'f01,m06').split(',');
+for (const [i, id] of ids.entries()) {
+  const { geometry, atlas } = await loadCrowdBody(id);
+  const m = new THREE.Mesh(geometry, new THREE.MeshStandardNodeMaterial({ map: atlas, roughness: 0.8, alphaTest: 0.4 }));
+  m.position.x = (i - (ids.length - 1) / 2) * 1.1;
+  scene.add(m);
+}
+const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 20);
+cam.position.set(0, 1.1, 5);
+cam.lookAt(0, 1, 0);
+await renderer.renderAsync(scene, cam);
+await new Promise((r) => setTimeout(r, 300));
+await renderer.renderAsync(scene, cam);
+document.title = 'done';
+</script>

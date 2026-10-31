@@ -3,7 +3,7 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.3.0 — Margin Call** : deux actes d'histoire (8 missions), cycle jour/nuit continu et
+Version **0.4.1 — Human Capital** : deux actes d'histoire (8 missions), cycle jour/nuit continu et
 météo (pluie, orages), motos, boutiques et planques, grenades et fusil d'assaut, police à cinq
 étoiles pilotée par une IA de conduite, véhicules destructibles et radio générée en temps réel.
 
@@ -20,6 +20,9 @@ Cliquez dans la vue pour verrouiller la souris ; Échap la libère et ouvre le m
 | Touche | Action |
 |---|---|
 | ZQSD / WASD / flèches | Se déplacer |
+| Tab | Sélecteur d'armes (souris, pavé tactile ou clavier) |
+| 1 à 6 | Choisir une arme directement |
+| G | Garage rapide : à pied, voiture, moto, vélo, hélicoptère, avion |
 | Souris | Regarder |
 | Maj | Sprint |
 | Espace | Sauter |
@@ -34,6 +37,8 @@ Cliquez dans la vue pour verrouiller la souris ; Échap la libère et ouvre le m
 | Touche | Action |
 |---|---|
 | ZQSD / WASD | Accélérer, freiner, tourner |
+| Hélicoptère | Z/S avancer, Q/D pivoter, Espace monter, C descendre, F sauter |
+| Avion | Z/S piquer ou cabrer, Q/D virer, Espace et C pour les gaz, F sauter |
 | Espace | Frein à main |
 | Clic droit + clic gauche | Tirer par la vitre (pistolet, pistolet-mitrailleur) |
 | Maj (moto) | Wheeling |
@@ -77,8 +82,8 @@ npm run dev
 
 Ouvrir http://localhost:5173. Paramètres utiles :
 
-- `?stats=1` : moteur graphique et images par seconde.
-- `?quality=performance` : résolution réduite, sans ombres du soleil.
+- `?stats=1` : moteur graphique, images par seconde et millisecondes par système.
+- `?quality=high|balanced|fluid` : niveau graphique (`balanced` par défaut, réglable dans le menu Échap).
 - `?renderer=webgl` : mode de compatibilité.
 - `?debug=1` : un clic sur la carte téléporte le joueur.
 - `?qa=1` : expose `window.__game` pour les tests automatisés.
@@ -100,6 +105,16 @@ Le build statique est généré dans `dist/`. `tools/radio-preview.html` permet 
 | `js/atmosphere.js` | Heure du jour, météo, pluie, éclairs et tonnerre |
 | `js/shops.js` | Armureries, carrosseries, planques |
 | `js/motorbike.js` | Motos (modèle, inclinaison, wheeling) |
+| `js/quick-strip.js` | Bouton et bandeau communs au garage et au sélecteur d'armes |
+| `js/garage.js`, `js/arsenal.js` | Garage rapide, sélecteur d'armes |
+| `tools/people/` | Importe les avatars, les armes et la motion capture Rocketbox dans `assets/people/` |
+| `tools/build-humans.mjs`, `tools/humans/` | Sculpte les accessoires de la foule dans `assets/humans/` |
+| `js/characters.js`, `js/person-body.js`, `js/person-motion.js` | Personnages : squelette, motion capture, tenue des armes |
+| `js/mocap.js`, `js/crowd-motion.js` | Lecture de la motion capture, poses de la foule |
+| `js/people-assets.js`, `js/people-material.js`, `js/human-crowd.js` | Chargement des modèles, matières, rendu de la foule |
+| `js/ragdoll.js` | Chutes physiques des corps |
+| `js/airplane.js`, `js/flight.js` | Avion et parachute (modèles), modèle de vol |
+| `js/quality.js` | Niveaux graphiques, rythme des images, résolution adaptative |
 | `js/actors.js` | Personnages armés (police, équipages, cibles) |
 | `js/weapons.js` | Catalogue d'armes et balistique (lancer de rayons sur la ville) |
 | `js/navigation.js` | A* sur le réseau routier (GPS, IA) |

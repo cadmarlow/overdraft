@@ -19,8 +19,8 @@ in the menu. No accounts, missions, multiplayer or live events in this release.
 
 WebGPU is the default renderer, matching the upstream project.
 `?renderer=webgl` explicitly selects compatibility rendering without screen-space reflections.
-`?stats=1` displays the actual renderer and measured frame rate.
-`?quality=performance` selects lower resolution and disables expensive sun shadows.
+`?stats=1` displays the actual renderer, the measured frame rate and the milliseconds spent per system.
+`?quality=high|balanced|fluid` selects a graphics level (`balanced` by default, also in the pause menu).
 
 ## Development
 

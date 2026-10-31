@@ -89,3 +89,23 @@ body.player-busted #canvas-container canvas{filter:saturate(.2) brightness(.9) h
 .shop-foot{margin-top:14px;font-size:9px;letter-spacing:.14em;color:#8f9a8a}
 body.sleeping:after{content:'';position:fixed;inset:0;background:#000;z-index:35;animation:ghSleep 1.6s ease forwards;pointer-events:none}
 @keyframes ghSleep{0%{opacity:0}35%{opacity:1}70%{opacity:1}100%{opacity:0}}
+/* Quick strips: arsenal and garage (js/quick-strip.js) */
+.quick-button{position:fixed;bottom:47px;z-index:8;width:40px;height:40px;display:grid;place-items:center;padding:0;color:var(--paper);background:#0d140fd9;border:1px solid #ffffff2b;border-radius:3px;cursor:pointer;box-shadow:0 2px 12px #0005;transition:border-color .15s,color .15s,opacity .3s}
+.quick-button:hover{border-color:var(--lime);color:var(--lime)}
+.quick-button .icon{width:20px;height:20px}
+.quick-button kbd{position:absolute;right:-5px;top:-6px;min-width:14px;height:14px;display:grid;place-items:center;padding:0 2px;font:800 8px/1 Arial,Helvetica,sans-serif;color:#161c13;background:var(--lime);border:0;border-radius:2px;box-shadow:none}
+#arsenal-button{left:266px}
+#garage-button{left:316px}
+body.in-menu .quick-button,body.hud-minimized .quick-button{opacity:0;pointer-events:none}
+.quick-panel{position:fixed;left:266px;bottom:96px;z-index:30;display:flex;gap:3px;padding:4px;background:linear-gradient(160deg,#0d140ff2,#121a16f5);border:1px solid #ffffff22;border-left:3px solid var(--lime);border-radius:3px;box-shadow:0 14px 44px #0008}
+.quick-panel[hidden]{display:none}
+.quick-panel button{position:relative;width:62px;height:62px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:0;color:#cfd8c6;background:transparent;border:1px solid transparent;border-radius:2px;cursor:pointer;font:800 8px/1 Arial,Helvetica,sans-serif;letter-spacing:.09em;transition:background .1s,color .1s}
+.quick-panel button .icon{width:22px;height:22px}
+.quick-panel button.sel{color:#161c13;background:var(--lime)}
+.quick-panel button.active:not(.sel){color:var(--lime);border-color:#e1f3a055}
+.quick-panel kbd{position:absolute;right:3px;top:3px;font:700 7px/1 Arial,Helvetica,sans-serif;color:inherit;opacity:.55;background:none;border:0;box-shadow:none;padding:0;min-width:0}
+#arsenal-panel button{width:84px;height:74px;gap:5px}
+#arsenal-panel small{font:700 9px/1 Arial,Helvetica,sans-serif;letter-spacing:.02em;font-variant-numeric:tabular-nums;opacity:.75;min-height:9px}
+#arsenal-panel button.locked{color:#7d877a}
+#arsenal-panel button.locked.sel{color:#161c13;background:#a9b39f}
+@media(max-width:760px){.quick-button{bottom:auto;top:112px}#arsenal-button{left:12px}#garage-button{left:62px}.quick-panel{left:12px;right:12px;bottom:auto;top:158px;flex-wrap:wrap;justify-content:center}#arsenal-panel button{width:76px}}

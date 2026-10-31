@@ -16,6 +16,12 @@ import { RadioSystem, STATIONS } from './radio.js';
 import { Atmosphere } from './atmosphere.js';
 import { ShopSystem } from './shops.js';
 import { createMotorbike, poseMotorbike } from './motorbike.js';
+import { currentLevel, cycleLevel } from './quality.js';
+import { createParachute } from './airplane.js';
+import { stepPlane } from './flight.js';
+import { Garage } from './garage.js';
+import { collapse } from './ragdoll.js';
+import { Arsenal } from './arsenal.js';
 
 // OVERDRAFT — the game layer over the city simulation: the protagonist on foot and at the wheel, weapons and
 // damage, vehicles that smoke, burn and explode, the wanted level (police), missions, money, death and arrest, and saving.
@@ -23,12 +29,14 @@ import { createMotorbike, poseMotorbike } from './motorbike.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.3.0';
+const BUILD = '0.4.1';
 const CAR_NAMES = {
   sedan: ['VALMONT', 'ÉCUME', 'BERLINE / PROPULSION'], suv: ['BRISANT', 'RÉCIF', 'SUV / TRANSMISSION INTÉGRALE'],
   taxi: ['VALMONT', 'CAB 7', 'TAXI / PROPULSION'], pickup: ['GRÉVILLE', 'FALAISE', 'PICK-UP / PROPULSION'],
   van: ['HAUTURIER', 'CARGO', 'UTILITAIRE / TRACTION'], minivan: ['GRÉVILLE', 'ESCALE', 'MONOSPACE / TRACTION'],
-  moto: ['BRISANT', 'VANDALE 650', 'MOTO / SPORTIVE']
+  moto: ['BRISANT', 'VANDALE 650', 'MOTO / SPORTIVE'],
+  bicycle: ['COURSIER', 'VÉLO', 'VÉLO / URBAIN'], helicopter: ['GRÉVILLE', 'LIBELLULE', 'HÉLICOPTÈRE / BITURBINE'],
+  plane: ['HAUTURIER', 'STERNE', 'AVION / MONOMOTEUR']
 };
 const PROFILES = {
   sedan: { speed: 47, acceleration: 7, powerSpeed: 21, grip: 10.5, cornering: 11 },
@@ -40,6 +48,12 @@ const PROFILES = {
   moto: {} // its own profile (motorbike.js)
 };
 const FLEET_MAX = 12;
+const WHEEL_STEP = 12; // pixels of scrolling to the next weapon
+const WHEEL_GESTURE_GAP = 160; // ms without a scroll event that ends a gesture
+const PARACHUTE_SPEED = 6.5; // m/s, falling
+const PARACHUTE_DRIFT = 8; // m/s, steering
+const EJECT_ALTITUDE = 20; // a crash above this throws the pilot clear, under a canopy
+const IDLE_STICK = { pitch: 0, roll: 0, throttle: 0 };
 const WRECK_POOL = 4;
 const DEBUG = new URLSearchParams(location.search).has('debug');
 
@@ -109,11 +123,19 @@ export class Game {
 
     controllers.playground = this;
     controllers.updatePerson = (dt) => this.updatePerson(dt);
-    for (const key of ['cyclist', 'helicopter']) {
-      const entity = controllers.entities[key];
-      entity.position.set(20000, -100, 20000);
-      entity.mesh.visible = false;
-    }
+    // One of a kind, waiting out of sight for the garage; drawn for the first frames so they compile behind the loading screen
+    const shared = { burnT: 0, destroyed: false, stolen: true, vx: 0, vz: 0, angularVel: 0, doorOpen: 0 };
+    this.rides = [
+      Object.assign(controllers.entities.cyclist, shared, { kind: 'bicycle', mode: 'cyclist', bicycle: true, riderless: true, halfW: 0.35, halfL: 0.9,
+        spec: { doors: [0.2, -0.2], zFront: 0.9, zRear: -0.9 }, drive: { speed: 19 } }),
+      Object.assign(controllers.entities.helicopter, shared, { kind: 'helicopter', mode: 'helicopter', air: true, hp: 100, halfW: 1.3, halfL: 3.6,
+        spec: { doors: [1.2, 0], zFront: 3.2, zRear: -6 }, drive: { speed: 52 } }),
+      Object.assign(controllers.entities.plane, shared, { hp: 100 })
+    ];
+    for (const ride of this.rides) this.park(ride);
+    controllers.entities.cyclist.helmet.visible = false;
+    this.parachute = createParachute(scene);
+    this.footCameraY = controllers.entities.person.cameraTargetOffset.y;
     controllers.entities.car.mesh.removeFromParent();
 
     this.nav = new RoadNavigator(traffic.network);
@@ -121,7 +143,9 @@ export class Game {
     this.actors = new ActorSystem({ scene, controllers, fx: this.fx, audio });
     this.actors.onShot = (h, damage, shooter) => this.applyShot(h, damage, shooter);
     this.actors.onKilled = (actor, cause) => this.onActorKilled(actor, cause);
+    this.actors.onBark = (text) => { if (!this.director.current) this.hud.say('POLICE', text, 2.4); };
     this.actors.onArrest = (dt) => { if (this.wanted.level <= 1 && !this.player.threat) this.wanted.arrestProgress(dt); };
+    traffic.pedestrians.setGround((x, z) => controllers.getGroundHeight(x, z, 'person'));
     this.wanted = new WantedSystem({ scene, controllers, nav: this.nav, actors: this.actors, audio, camera: camera.camera });
     this.wanted.onLevel = (level, previous) => this.onWantedLevel(level, previous);
     this.wanted.onBusted = () => this.busted();
@@ -143,6 +167,18 @@ export class Game {
 
     this.spawnFleet();
     this.restore();
+    if (Object.keys(this.weapons).length === 1) {
+      this.weapons.pistol = { mag: WEAPONS.pistol.mag, ammo: WEAPONS.pistol.mag * 3 };
+      this.weaponId = 'pistol';
+    }
+    // The garage's own car and motorbike, built now so that summoning them never stalls a frame
+    for (const [kind, paint] of [['sedan', 0x8f1a1d], ['moto', 0xc81e2a]]) {
+      const car = this.makeCar(kind, paint, new THREE.Vector3(), 0, true);
+      this.fleet.pop();
+      car.pooled = true;
+      this.rides.push(car);
+      this.park(car);
+    }
     controllers.entities.person.inVehicle = this.state === 'driving';
     this.onMode(this.state === 'driving' ? 'car' : 'person');
     this.buildInterface();
@@ -152,6 +188,8 @@ export class Game {
     this.hero = new CharacterModel(scene, controllers.entities.person.rig, LOOKS.hero, 'Protagonist');
     this.director = new MissionDirector(this);
     this.shops = new ShopSystem(this);
+    this.arsenal = new Arsenal(this);
+    this.garage = new Garage(this);
     this.shops.restore(this.savedShops);
     this.shops.place();
     this.placeWorldPickups();
@@ -186,11 +224,22 @@ export class Game {
     return car;
   }
 
+  park(ride) {
+    ride.position.set(20000, -100, 20000);
+    ride.speed = 0;
+    ride.mesh.position.copy(ride.position);
+  }
+
   removeFleetCar(car) {
     const i = this.fleet.indexOf(car);
     if (i >= 0) this.fleet.splice(i, 1);
-    car.mesh.removeFromParent();
-    for (const spot of car.headLights || []) { spot.removeFromParent(); spot.target.removeFromParent(); }
+    if (car.mode || car.pooled) {
+      this.park(car);
+      car.mesh.visible = false;
+    } else {
+      car.mesh.removeFromParent();
+      for (const spot of car.headLights || []) { spot.removeFromParent(); spot.target.removeFromParent(); }
+    }
     if (this.car === car) {
       const next = this.fleet[0] || this.wrecks[0];
       this.controllers.entities.car = next;
@@ -223,7 +272,7 @@ export class Game {
   buildInterface() {
     document.body.insertAdjacentHTML('beforeend', `
       <div id="game-vignette" aria-hidden="true"></div>
-      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · MARGIN CALL</small></span></div>
+      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · HUMAN CAPITAL</small></span></div>
       <div id="session-badge"><i></i><span>MANHATTAN</span><b id="session-mode">LIBRE</b><button id="pause-button" aria-label="Ouvrir le menu pause">Ⅱ</button></div>
       <div id="game-prompt" role="status" aria-live="polite"><kbd>F</kbd><span>Voler la voiture<small>VÉHICULE</small></span></div>
       <div id="game-toast" role="status" aria-live="polite"></div>
@@ -271,11 +320,10 @@ export class Game {
     document.getElementById('quality-toggle').addEventListener('click', () => {
       this.save();
       const url = new URL(location.href);
-      if (url.searchParams.get('quality') === 'performance') url.searchParams.delete('quality');
-      else url.searchParams.set('quality', 'performance');
+      url.searchParams.set('quality', cycleLevel());
       location.href = url.href;
     });
-    if (new URLSearchParams(location.search).get('quality') === 'performance') document.getElementById('quality-toggle').textContent = 'QUALITÉ : FLUIDITÉ';
+    document.getElementById('quality-toggle').textContent = `QUALITÉ : ${currentLevel().label}`;
     // The day runs on its own; these jump the clock
     const hours = { golden: 18, midday: 13, twilight: 20, midnight: 0.5 };
     document.querySelectorAll('[data-game-time]').forEach(button => button.addEventListener('click', () => {
@@ -300,6 +348,8 @@ export class Game {
         else if (this.playing && performance.now() - (this.lockPauseAt || 0) > 250) this.setPaused(!this.paused);
       }
       if (!this.active) return;
+      if (e.code === 'KeyG') this.garage.toggle();
+      if (e.code === 'Tab') { e.preventDefault(); this.arsenal.toggle(); }
       if (e.code === 'KeyR') {
         if (this.state === 'driving' && Math.abs(this.car.speed) < 1.5) {
           const car = this.car;
@@ -312,7 +362,11 @@ export class Game {
         this.showRadio();
       }
       const digit = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].indexOf(e.code);
-      if (digit >= 0 && (this.state === 'onFoot' || this.state === 'driving')) this.selectWeapon(WEAPON_ORDER[digit]);
+      if (digit >= 0 && (this.state === 'onFoot' || this.state === 'driving')) {
+        const id = WEAPON_ORDER[digit];
+        if (this.weapons[id]) this.selectWeapon(id);
+        else this.arsenal.missing(id);
+      }
     });
     document.addEventListener('visibilitychange', () => { if (document.hidden && this.playing) this.setPaused(true); });
     window.addEventListener('pagehide', () => this.save());
@@ -348,10 +402,17 @@ export class Game {
       if (owned.length < 2) return;
       e.stopPropagation();
       e.preventDefault();
-      if (this.clock - (this.wheelT || 0) < 0.12) return;
-      this.wheelT = this.clock;
+      // One weapon per gesture: a trackpad keeps sending events long after the fingers have left it
+      const now = performance.now();
+      const quiet = now - (this.wheelT ?? -Infinity) > WHEEL_GESTURE_GAP;
+      this.wheelT = now;
+      if (quiet) { this.wheelDone = false; this.wheelSum = 0; }
+      if (this.wheelDone) return;
+      this.wheelSum += e.deltaY;
+      if (Math.abs(this.wheelSum) < WHEEL_STEP) return;
+      this.wheelDone = true;
       const i = owned.indexOf(this.weaponId);
-      this.selectWeapon(owned[(i + (e.deltaY > 0 ? 1 : -1) + owned.length) % owned.length]);
+      this.selectWeapon(owned[(i + (this.wheelSum > 0 ? 1 : -1) + owned.length) % owned.length]);
     }, { capture: true, passive: false });
   }
 
@@ -400,10 +461,16 @@ export class Game {
   updateKeybar() {
     const k = (keys, label) => `<span>${keys.map((x) => `<kbd>${x}</kbd>`).join(' ')} ${label}</span>`;
     const armed = this.weaponId !== 'fists';
-    this.ui['game-keybar'].innerHTML = this.state === 'driving'
-      ? [k(['ZQSD'], 'Conduire'), k(['ESPACE'], 'Frein à main'), this.car.moto ? k(['MAJ'], 'Wheeling') : '', armed && this.weaponId !== 'shotgun' ? k(['CLIC D.', 'CLIC'], 'Tirer par la vitre') : '', k(['B'], 'Klaxon'), k(['T'], 'Radio'), k(['F'], 'Descendre'), k(['V'], 'Caméra'), k(['M'], 'Carte'), k(['ÉCHAP'], 'Menu')].join('')
+    const end = [k(['G'], 'Garage'), k(['V'], 'Caméra'), k(['M'], 'Carte'), k(['ÉCHAP'], 'Menu')];
+    const air = { helicopter: [k(['Z', 'S'], 'Avancer'), k(['Q', 'D'], 'Pivoter'), k(['ESPACE'], 'Monter'), k(['C'], 'Descendre')],
+      plane: [k(['Z', 'S'], 'Piquer / Cabrer'), k(['Q', 'D'], 'Virer'), k(['ESPACE'], 'Gaz +'), k(['C'], 'Gaz −')] };
+    const flying = this.state === 'driving' && this.car.air;
+    this.ui['game-keybar'].innerHTML = flying ? [...air[this.car.mode], k(['F'], 'Sauter'), k(['T'], 'Radio'), ...end].join('')
+      : this.state === 'falling' ? [k(['ZQSD'], 'Se diriger'), ...end].join('')
+      : this.state === 'driving' && this.car.bicycle ? [k(['ZQSD'], 'Pédaler'), k(['F'], 'Descendre'), k(['T'], 'Radio'), ...end].join('')
+      : this.state === 'driving' ? [k(['ZQSD'], 'Conduire'), k(['ESPACE'], 'Frein à main'), this.car.moto ? k(['MAJ'], 'Wheeling') : '', armed && this.weaponId !== 'shotgun' ? k(['CLIC D.', 'CLIC'], 'Tirer par la vitre') : '', k(['B'], 'Klaxon'), k(['T'], 'Radio'), k(['F'], 'Descendre'), ...end].join('')
       : [k(['ZQSD'], 'Se déplacer'), k(['MAJ'], 'Sprint'), k(['CLIC'], armed ? 'Tirer' : 'Frapper'), armed ? k(['CLIC D.'], 'Viser') : '', armed ? k(['R'], 'Recharger') : '',
-        k(['1-4', 'MOLETTE'], 'Armes'), k(['F'], 'Véhicule'), k(['M'], 'Carte'), k(['ÉCHAP'], 'Menu')].join('');
+        k(['TAB', '1-6'], 'Armes'), k(['F'], 'Véhicule'), k(['G'], 'Garage'), k(['M'], 'Carte'), k(['ÉCHAP'], 'Menu')].join('');
   }
 
   // ---- Radio ---------------------------------------------------------------------------------------------------------
@@ -565,7 +632,8 @@ export class Game {
         if (speed > 5) this.knockDown(Math.atan2(e.nx, e.nz));
         continue;
       }
-      if (self.type === 'car' && self.hp !== undefined && !self.destroyed && speed > 4.5) {
+      if (self.bicycle && self === this.car && this.state === 'driving' && speed > 11) { this.bail(self, speed); continue; }
+      if ((self.type === 'car' || self.air) && self.hp !== undefined && !self.destroyed && speed > 4.5) {
         this.damageCar(self, (speed - 4.5) * 2.6, self === this.car && this.state === 'driving' ? 'crash' : 'hit');
         if (self === this.car && this.state === 'driving' && self.moto && speed > 8) { this.bail(self, speed); continue; }
         if (self === this.car && this.state === 'driving' && speed > 13) this.damagePlayer((speed - 13) * 1.5, 'crash');
@@ -584,7 +652,7 @@ export class Game {
     body.prevX = car.prevX ?? car.position.x; body.prevZ = car.prevZ ?? car.position.z;
     body.sin = sin; body.cos = cos;
     body.halfW = car.halfW ?? 0.92; body.halfL = car.halfL ?? Math.max(car.spec.zFront, -car.spec.zRear);
-    body.mass = car.moto ? 260 : car.wreck ? 1300 : car.police ? 1850 : 1650;
+    body.mass = car.moto || car.bicycle ? 260 : car.wreck ? 1300 : car.police ? 1850 : 1650;
     body.vx = sin * car.speed + (car.vx || 0);
     body.vz = cos * car.speed + (car.vz || 0);
     body.angularVel = car.angularVel || 0;
@@ -599,6 +667,7 @@ export class Game {
   }
 
   collideCars(a, b) {
+    if (a.air || b.air) return;
     const reach = 6;
     if (Math.abs(a.position.x - b.position.x) > reach + 3 || Math.abs(a.position.z - b.position.z) > reach + 3) return;
     this.readBody(a, bodyA);
@@ -653,6 +722,7 @@ export class Game {
   // ---- Protagonist on foot ------------------------------------------------------------------------------------------
   updatePerson(dt) {
     if (dt <= 0 || this.transition) return;
+    if (this.state === 'falling') { this.updateParachute(dt); return; }
     const p = this.person, keys = this.controllers.keys;
     const grounded = this.state === 'onFoot';
     const x = grounded ? Number(keys.right) - Number(keys.left) : 0;
@@ -690,6 +760,49 @@ export class Game {
     p.verticalVel -= 15 * dt;
     p.position.y += p.verticalVel * dt;
     if (p.position.y < ground) { p.position.y = ground; p.verticalVel = 0; }
+  }
+
+  updateParachute(dt) {
+    const p = this.person, keys = this.controllers.keys;
+    const x = Number(keys.right) - Number(keys.left), z = Number(keys.forward) - Number(keys.backward);
+    const magnitude = Math.hypot(x, z);
+    if (magnitude > 0) {
+      const yaw = this.camera.footYaw;
+      const localX = -x / magnitude, localZ = z / magnitude;
+      p.position.x += (Math.cos(yaw) * localX + Math.sin(yaw) * localZ) * PARACHUTE_DRIFT * dt;
+      p.position.z += (-Math.sin(yaw) * localX + Math.cos(yaw) * localZ) * PARACHUTE_DRIFT * dt;
+      p.heading += angleDelta(p.heading, yaw + Math.atan2(-x, z)) * (1 - Math.exp(-dt * 5));
+    }
+    p.verticalVel += (-PARACHUTE_SPEED - p.verticalVel) * (1 - Math.exp(-dt * 2));
+    p.position.y += p.verticalVel * dt;
+    this.controllers.resolveHorizontalCollision(p.position, 0.34, null, null, 'person');
+    const ground = this.controllers.getGroundHeight(p.position.x, p.position.z, 'person');
+    if (p.position.y > ground) return;
+    p.position.y = ground;
+    p.verticalVel = 0;
+    this.state = 'onFoot';
+    document.body.dataset.gameState = this.state;
+    this.updateKeybar();
+    this.save();
+  }
+
+  // Left alone, a plane glides on until it falls or lands; a helicopter drops
+  flyAbandoned(c, dt) {
+    if (c.mode === 'plane') {
+      if (!c.onGround || c.speed > 0.01) stepPlane(c, IDLE_STICK, dt, this.controllers.planeEnvironment);
+    } else if (c.position.y > 0.25) {
+      c.verticalSpeed -= 9.81 * dt;
+      c.position.x += Math.sin(c.heading) * c.speed * dt;
+      c.position.z += Math.cos(c.heading) * c.speed * dt;
+      c.position.y += c.verticalSpeed * dt;
+      c.speed *= Math.exp(-dt * 0.5);
+      if (c.position.y <= 0.25) {
+        c.position.y = 0.25;
+        c.crashed = c.verticalSpeed < -9;
+        c.verticalSpeed = c.speed = 0;
+      }
+    }
+    if (c.crashed) this.destroyCar(c);
   }
 
   // Thrown off a motorbike by a hard impact: the rider tumbles on, the bike slides and falls
@@ -801,7 +914,7 @@ export class Game {
 
     const shooting = onFoot && (w.auto ? this.fireHeld : this.firePressed);
     // Drive-by: aim out of the driver's window with a one-handed or compact weapon
-    const driveBy = this.state === 'driving' && this.aimHeld && !w.melee && !w.throwable && w.id !== 'shotgun' && w.id !== 'rifle' && !!slot;
+    const driveBy = this.state === 'driving' && !this.car.bicycle && !this.car.air && this.aimHeld && !w.melee && !w.throwable && w.id !== 'shotgun' && w.id !== 'rifle' && !!slot;
     this.world.ignoreCar = this.state === 'driving' ? this.car : null;
     if (driveBy) {
       this.hud.setCrosshair(true, w.spread + 0.02);
@@ -811,10 +924,20 @@ export class Game {
       }
     }
     // Arms: raised while aiming or just after a shot
-    const raised = onFoot && !w.melee && !w.throwable && (aiming || this.cooldown > 0 || shooting);
+    const raised = onFoot && !w.melee && !w.throwable && (aiming || this.cooldown > 0 || shooting || this.reloadT > 0);
+    rig.reloading = this.reloadT > 0 ? 1 - this.reloadT / w.reload : -1;
+    // Sacha looks where the player looks
+    if (onFoot) rig.lookTarget = clamp(angleDelta(rig.yaw, this.camera.footYaw), -1.1, 1.1);
+    if (raised && !w.melee) {
+      this.holdUpT = (this.holdUpT ?? 0) - dt;
+      if (this.holdUpT <= 0) {
+        this.holdUpT = 0.25;
+        this.traffic.pedestrians.holdUp(this.player.x, this.player.z, Math.sin(this.camera.footYaw), Math.cos(this.camera.footYaw));
+      }
+    }
     if (raised) {
       this.aimPoint();
-      rig.aim = { x: _aim.x, y: _aim.y, z: _aim.z, twoHanded: w.hands === 2 };
+      rig.aim = { x: _aim.x, y: _aim.y, z: _aim.z, twoHanded: true, stance: w.hands === 2 ? 'rifle' : 'pistol' };
     } else rig.aim = null;
     this.player.threat = raised || this.cooldown > 0;
 
@@ -827,6 +950,7 @@ export class Game {
         this.punchT = 0.38;
         this.punchHit = false;
         person.heading = this.camera.footYaw;
+        rig.punchSide = 1 - rig.punchSide; // one hand, then the other
       } else if (w.throwable) {
         if (slot.mag > 0) this.throwGrenade(w, slot);
       } else if (this.reloadT <= 0) {
@@ -929,6 +1053,7 @@ export class Game {
     } else {
       person.heading = this.camera.footYaw;
       this.hero.muzzle(_muzzle);
+      this.hero.fired();
     }
     _dir.copy(_aim).sub(_muzzle).normalize();
     const spread = fromCar ? w.spread + 0.012 + Math.min(0.03, Math.abs(this.car.speed) * 0.0012) : w.spread + this.spread * (w.moveSpread || 0.02);
@@ -1058,7 +1183,7 @@ export class Game {
   }
 
   killPed(p, heading, push, cause) {
-    if (!this.traffic.pedestrians.kill(p, heading, push)) return;
+    if (!this.traffic.pedestrians.kill(p, heading, push, cause === 'explosion' ? 'explosion' : push > 2 ? 'vehicle' : 'shot')) return;
     this.traffic.pedestrians.panic(p.x, p.z, 35, 14);
     if (cause === 'player') {
       this.stats.kills++;
@@ -1108,6 +1233,7 @@ export class Game {
     }
     this.health -= amount;
     this.lastHurt = this.clock;
+    if (this.state === 'onFoot' && amount > 3 && this.health > 0) this.person.rig.flinch(Math.sin(this.lastHitHeading ?? this.person.heading + Math.PI), Math.cos(this.lastHitHeading ?? this.person.heading + Math.PI), 0.26);
     this.hud.hurt(amount);
     this.camera.addShake(Math.min(0.5, amount / 40));
     if (this.health <= 0) this.die(cause);
@@ -1138,11 +1264,11 @@ export class Game {
       const hood = (k) => ({ x: car.position.x + Math.sin(car.heading) * k, z: car.position.z + Math.cos(car.heading) * k });
       if (car.hp < 50 && car.hp > 0) {
         const h = hood(1.5);
-        this.fx.smokeTrail(h.x, 1.05, h.z, dt, (50 - car.hp) / 50, car.hp < 25 ? 0.7 : 0.2);
+        this.fx.smokeTrail(h.x, car.position.y + 1.05, h.z, dt, (50 - car.hp) / 50, car.hp < 25 ? 0.7 : 0.2);
       }
       if (car.burnT > 0) {
         const h = hood(1.3);
-        this.fx.fire(h.x, 0.9, h.z, dt, 0.7);
+        this.fx.fire(h.x, car.position.y + 0.9, h.z, dt, 0.7);
         car.burnT -= dt;
         if (car.burnT <= 0) this.destroyCar(car);
       }
@@ -1167,17 +1293,19 @@ export class Game {
   destroyCar(car) {
     car.destroyed = true;
     car.burnT = 0;
-    const { x, z } = car.position;
+    const { x, y, z } = car.position;
     const heading = car.heading;
     const playerInside = car === this.car && (this.state === 'driving' || this.state === 'entering' || this.state === 'exiting');
+    const ejected = playerInside && !!car.air && y > EJECT_ALTITUDE;
+    if (ejected) this.bailOut();
     if (car.police) {
       this.wanted.retire(this.wanted.units.find((u) => u.car === car));
     } else if (this.fleet.includes(car)) {
       this.removeFleetCar(car);
     }
     car.mesh.visible = false;
-    if (!car.moto) this.placeWreck(x, z, heading);
-    if (playerInside) {
+    if (!car.moto && !car.mode) this.placeWreck(x, z, heading);
+    if (playerInside && !ejected) {
       // thrown clear, fatally
       this.transition = null;
       this.state = 'onFoot';
@@ -1185,8 +1313,9 @@ export class Game {
       this.person.position.set(x + Math.cos(heading) * 2.2, this.controllers.getGroundHeight(x, z, 'person'), z - Math.sin(heading) * 2.2);
       this.onMode('person');
     }
-    this.explode(x, 0.8, z, 1, car === this.car ? 'player' : 'npc');
-    if (playerInside && this.state !== 'dead') this.damagePlayer(200, 'explosion');
+    this.explode(x, Math.max(0.8, y), z, car.air ? 1.5 : 1, car === this.car ? 'player' : 'npc');
+    if (playerInside && !ejected && this.state !== 'dead') this.damagePlayer(200, 'explosion');
+    if (ejected) this.toast('Éjecté !', 'ZQSD pour diriger le parachute.');
   }
 
   wreckTraffic(v, generation = 0) {
@@ -1223,7 +1352,7 @@ export class Game {
       const d = Math.hypot(a.x - x, a.z - z);
       if (d < radius * 1.2) this.actors.damage(a, 160 * (1 - d / (radius * 1.2)), a.x - x, a.z - z, 'explosion');
     }
-    if (this.state !== 'dead') {
+    if (this.state !== 'dead' && this.state !== 'falling') {
       const d = Math.hypot(this.player.x - x, this.player.z - z);
       if (d < radius * 1.3) {
         const amount = 140 * (1 - d / (radius * 1.3));
@@ -1260,7 +1389,7 @@ export class Game {
   // Cars striking people: the player's (and every other driven gameplay car) at speed
   runOver() {
     for (const car of this.allCars) {
-      if (car.wreck || car.destroyed) continue;
+      if (car.wreck || car.destroyed || car.mode) continue;
       const speed = Math.abs(car.speed);
       if (speed < 4.5) continue;
       const sin = Math.sin(car.heading), cos = Math.cos(car.heading);
@@ -1292,11 +1421,17 @@ export class Game {
     if (this.state === 'dead') return;
     this.health = 0;
     this.stats.deaths++;
+    const p = this.person;
     if (this.state === 'driving') {
       const car = this.car;
-      this.person.inVehicle = false;
-      this.person.position.set(car.position.x + Math.cos(car.heading) * 1.6, this.controllers.getGroundHeight(car.position.x, car.position.z, 'person'), car.position.z - Math.sin(car.heading) * 1.6);
+      p.inVehicle = false;
+      p.position.set(car.position.x + Math.cos(car.heading) * 1.6, this.controllers.getGroundHeight(car.position.x, car.position.z, 'person'), car.position.z - Math.sin(car.heading) * 1.6);
       this.onMode('person');
+      p.rig.reset(p.position.x, p.position.z, p.heading, (c, x, z) => c.getGroundHeight(x, z, 'person'), this.controllers);
+    }
+    if (!p.rig.limp) {
+      collapse(p.rig, { ground: (x, z) => this.controllers.getGroundHeight(x, z, 'person'), vx: p.rig.vx, vz: p.rig.vz,
+        dirX: Math.sin(this.lastHitHeading ?? p.heading + Math.PI), dirZ: Math.cos(this.lastHitHeading ?? p.heading + Math.PI), cause: cause === 'explosion' ? 'explosion' : 'shot' });
     }
     this.transition = null;
     this.state = 'dead';
@@ -1315,6 +1450,9 @@ export class Game {
     this.state = 'busted';
     this.stateT = 0;
     this.stats.busted++;
+    this.person.rig.crouchTarget = 1;
+    this.person.rig.handsUpTarget = 1;
+    this.person.rig.aim = null;
     document.body.classList.add('player-busted');
     document.body.dataset.gameState = this.state;
     this.hud.showBanner('LA POLICE VOUS A EU', 'CUFFED', 'Arrêté', 5, 'busted');
@@ -1333,10 +1471,7 @@ export class Game {
     const fee = Math.min(Math.round(this.money * 0.08), dead ? 1500 : 2500);
     this.money = Math.max(0, this.money - fee);
     this.hud.setMoney(this.money);
-    if (!dead) {
-      // the police keep half of every magazine and reserve
-      for (const [id, slot] of Object.entries(this.weapons)) if (id !== 'fists') slot.ammo = Math.floor(slot.ammo / 2);
-    }
+    this.rearm();
     this.wanted.reset();
     this.actors.clear((a) => a.dead || a.team === 'police');
     this.health = 100;
@@ -1344,14 +1479,27 @@ export class Game {
     this.state = 'onFoot';
     this.stateT = 0;
     this.person.diveTime = -1;
+    this.person.rig.crouchTarget = this.person.rig.handsUpTarget = 0;
     this.knock = null;
     this.invulnerable = 2;
     document.body.classList.remove('player-dead', 'player-busted');
     document.body.dataset.gameState = this.state;
     const spot = this.safeSpot(best.x, best.z, 0.5);
     this.teleportPlayer(spot.x, spot.z);
-    this.toast(best.name, dead ? `Soins : ${fee.toLocaleString('fr-FR')} $` : `Caution : ${fee.toLocaleString('fr-FR')} $ · munitions confisquées`);
+    this.toast(best.name, `${dead ? 'Soins' : 'Caution'} : ${fee.toLocaleString('fr-FR')} $ · armes conservées`);
     this.save();
+  }
+
+  // Back on the street with every weapon, ready to fire; a gun shot dry comes back with one magazine
+  rearm() {
+    for (const [id, slot] of Object.entries(this.weapons)) {
+      const w = WEAPONS[id];
+      if (w.melee || w.throwable) continue;
+      if (slot.mag + slot.ammo === 0) slot.mag = w.mag;
+      else { const take = Math.min(w.mag - slot.mag, slot.ammo); slot.mag += take; slot.ammo -= take; }
+    }
+    this.reloadT = 0;
+    this.cooldown = 0;
   }
 
   teleportPlayer(x, z) {
@@ -1473,6 +1621,7 @@ export class Game {
   }
 
   interact() {
+    if (this.active && this.state === 'driving' && this.car.air && this.car.position.y > 3) { this.bailOut(); return; }
     if (!this.active || !canInteract(this.state, this.car.speed)) {
       if (this.state === 'driving') this.toast('Ralentissez', 'Arrêtez le véhicule pour descendre.');
       return;
@@ -1507,6 +1656,27 @@ export class Game {
     document.body.dataset.gameState = this.state;
     person.rig.aim = null;
     this.camera.aimMode = false;
+  }
+
+  // Out of the aircraft, under a canopy; the aircraft flies on by itself
+  bailOut() {
+    const car = this.car, p = this.person;
+    const h = car.heading;
+    if (car.mode === 'plane') car.throttle = 0;
+    car.ridden = false;
+    this.transition = null;
+    p.inVehicle = false;
+    p.position.set(car.position.x - Math.sin(h) * 1.5, car.position.y - 1.5, car.position.z - Math.cos(h) * 1.5);
+    p.heading = h;
+    p.speed = 0;
+    p.verticalVel = -2;
+    this.camera.footYaw = h;
+    this.state = 'falling';
+    this.onMode('person');
+    this.radio?.setPlaying(false);
+    document.body.dataset.gameState = this.state;
+    this.audio.ui('pass');
+    this.updateKeybar();
   }
 
   beginExit() {
@@ -1560,10 +1730,9 @@ export class Game {
         p.inVehicle = true;
         car.fallen = false;
         car.ridden = true;
-        this.state = 'driving'; this.onMode('car');
+        this.state = 'driving'; this.onMode(car.mode || 'car');
         if (!car.stolen) { car.stolen = true; this.stolen++; }
-        const [brand, model] = CAR_NAMES[car.kind] || ['', 'VÉHICULE'];
-        this.toast(car.label2 || `${brand} ${model}`, car.police ? 'Véhicule de police : ils ne vous lâcheront pas.' : 'T : changer de radio');
+        this.announce(car);
         this.firstEntry = false;
         this.camera.resetOrbit();
         this.radio?.setPlaying(true);
@@ -1580,6 +1749,12 @@ export class Game {
       document.body.dataset.gameState = this.state;
       this.updateKeybar(); this.save();
     }
+  }
+
+  announce(car) {
+    const [brand, model] = CAR_NAMES[car.kind] || ['', 'VÉHICULE'];
+    const hint = car.police ? 'Véhicule de police : ils ne vous lâcheront pas.' : car.mode === 'plane' ? 'Trop lent, il décroche : gardez de la vitesse.' : 'T : changer de radio';
+    this.toast(car.label2 || `${brand} ${model}`, hint);
   }
 
   // ---- Frame -------------------------------------------------------------------------------------------------------
@@ -1608,17 +1783,27 @@ export class Game {
 
   update(dt) {
     this.atmosphere.update(dt, dt > 0);
+    this.traffic.pedestrians.setRain(this.atmosphere.rain > 0.3);
     this.hud.setClock(this.atmosphere.clockLabel, this.atmosphere.weatherLabel, this.atmosphere.night > 0.5);
     // Pools stay drawn for the first frames so their pipelines compile behind the loading screen
-    if (++this.frames === 5) for (const w of this.wrecks) if (!w.burnT && !w.smokeT) w.mesh.visible = false;
+    if (++this.frames === 5) {
+      for (const w of this.wrecks) if (!w.burnT && !w.smokeT) w.mesh.visible = false;
+      for (const ride of this.rides) if (!this.fleet.includes(ride)) ride.mesh.visible = false;
+    }
+    const falling = this.state === 'falling';
+    if (this.frames >= 5) this.parachute.visible = falling;
+    const walker = this.person;
+    walker.chaseDistance = falling ? 13 : 4.3;
+    walker.chaseHeight = falling ? 1.4 : 1.95;
+    walker.cameraTargetOffset.y = falling ? 3.4 : this.footCameraY;
     this.collectCars();
     const person = this.person, car = this.car;
     const inVehicle = this.state === 'driving' || this.state === 'exiting' || (this.state === 'entering' && person.inVehicle);
     const pl = this.player;
-    pl.inVehicle = inVehicle;
+    pl.inVehicle = inVehicle && !car.bicycle;
     pl.x = inVehicle ? car.position.x : person.position.x;
     pl.z = inVehicle ? car.position.z : person.position.z;
-    pl.y = inVehicle ? 0 : person.position.y;
+    pl.y = inVehicle ? car.position.y : person.position.y;
     pl.heading = inVehicle ? car.heading : person.heading;
     pl.speed = Math.abs(inVehicle ? car.speed : person.speed);
     pl.vx = inVehicle ? Math.sin(car.heading) * car.speed + (car.vx || 0) : 0;
@@ -1628,13 +1813,16 @@ export class Game {
 
     this.hero.setWeapon(this.weapon.melee || !pl.onFoot ? null : this.weaponId);
     for (const m of person.crowd.meshes) m.visible = false;
-    this.hero.update(!person.inVehicle);
+    this.hero.update(!person.inVehicle, 0, dt);
 
     if (dt > 0) {
       this.updateWeapons(dt);
+      if (this.state === 'driving' && car.crashed) this.destroyCar(car);
       // Loose cars (parked, pushed, abandoned) roll to a stop under physics; then every gameplay car pair collides
       for (const c of this.allCars) {
         if (c === car && this.state === 'driving') continue;
+        if (c.air) { this.flyAbandoned(c, dt); continue; }
+        if (c.mode) continue;
         if (c.police && this.wanted.units.some((u) => u.car === c && u.active)) continue;
         if (c.ai && c !== car) continue; // mission AI drives it (mission-director.js)
         const moving = Math.abs(c.speed) > 0.05 || Math.abs(c.vx || 0) + Math.abs(c.vz || 0) > 0.05 || Math.abs(c.angularVel || 0) > 0.02;
@@ -1666,7 +1854,7 @@ export class Game {
     // Traffic and audio see the cruisers and the parked fleet as solid, sounding cars
     const extra = this.traffic.extraBodies;
     extra.length = 0;
-    for (const c of this.allCars) if (c !== car || this.state !== 'driving') extra.push(c);
+    for (const c of this.allCars) if ((c !== car || this.state !== 'driving') && c.position.y < 3) extra.push(c);
     const sounding = this.audio.sources?.extraVehicles;
     if (sounding) { sounding.length = 0; for (const c of this.wanted.cars) sounding.push(c); }
 
@@ -1676,14 +1864,25 @@ export class Game {
       if (vehicle.moto) poseMotorbike(vehicle, dt, vehicle === car && this.state === 'driving' && this.controllers.keys.sprint);
       vehicle.mesh.updateMatrixWorld();
     }
-    // On a motorbike the protagonist stays in view, posed on the seat
+    // On two wheels the protagonist stays in view, posed on the seat
     if (person.inVehicle && car.moto) {
       person.rig.ride(car.chassisPivot, 1.1, { seat: car.seat, bars: car.bars, gripHalf: 0.33, bracket: car.pegs, crankLength: 0.02 });
       this.hero.setWeapon(null);
-      this.hero.update(true);
+      this.hero.update(true, 0, dt);
+    } else if (person.inVehicle && car.bicycle) {
+      person.rig.ride(car.leanPivot, car.pedalPhase, car.bikeFrame);
+      this.hero.setWeapon(null);
+      this.hero.update(true, 0, dt);
     }
+    if (this.state === 'falling') {
+      this.parachute.position.set(person.position.x, person.position.y + 5.2, person.position.z);
+      this.parachute.rotation.y = person.heading;
+      this.parachute.updateMatrixWorld(true);
+    }
+    this.garage.update();
+    this.arsenal.update();
     if (this.clock - this.lastSave > 5) { this.lastSave = this.clock; this.save(); }
-    const keybarKey = this.state + this.weaponId + (this.car.moto ? 'm' : '');
+    const keybarKey = this.state + this.weaponId + (this.car.moto ? 'm' : '') + (this.car.mode || '');
     if (this.keybarState !== keybarKey) { this.keybarState = keybarKey; this.updateKeybar(); }
     this.updatePrompt();
     this.updateHud(dt);
@@ -1694,7 +1893,8 @@ export class Game {
     const car = this.car;
     this.candidate = this.state === 'onFoot' && this.active ? this.findCandidate() : null;
     const prompt = this.ui['game-prompt'];
-    const showExit = this.state === 'driving' && this.active && Math.abs(car.speed) < 1.5;
+    const airborne = this.state === 'driving' && car.air && car.position.y > 3;
+    const showExit = this.state === 'driving' && this.active && (airborne || Math.abs(car.speed) < 1.5);
     prompt.classList.toggle('visible', Boolean(this.candidate || showExit));
     const span = prompt.querySelector('span');
     if (this.candidate) {
@@ -1706,8 +1906,8 @@ export class Game {
       const small = document.createElement('small'); small.textContent = `${brand} ${model}`;
       span.append(small);
     } else if (showExit) {
-      span.replaceChildren(document.createTextNode('Descendre du véhicule'));
-      const small = document.createElement('small'); small.textContent = 'VÉHICULE À L’ARRÊT';
+      span.replaceChildren(document.createTextNode(airborne ? 'Sauter en parachute' : 'Descendre du véhicule'));
+      const small = document.createElement('small'); small.textContent = airborne ? 'EN VOL' : 'VÉHICULE À L’ARRÊT';
       span.append(small);
     }
   }
@@ -1717,7 +1917,7 @@ export class Game {
     this.ui['stamina-fill'].style.transform = `scaleX(${this.stamina / 100})`;
     const speed = Math.round(Math.abs(car.speed) * 3.6);
     this.ui['drive-speed'].textContent = String(speed).padStart(3, '0');
-    this.ui['drive-gear'].textContent = car.speed < -0.2 ? 'R' : speed < 1 ? 'N' : String(Math.min(6, 1 + Math.floor(speed / 29)));
+    this.ui['drive-gear'].textContent = car.air ? `${Math.round(car.position.y)} M` : car.speed < -0.2 ? 'R' : speed < 1 ? 'N' : String(Math.min(6, 1 + Math.floor(speed / 29)));
     this.ui['drive-power'].style.transform = `scaleX(${clamp(Math.abs(car.speed) / (car.drive?.speed || 40), 0, 1)})`;
     const health = this.ui['drive-health'];
     if (health) { health.style.transform = `scaleX(${(car.hp ?? 100) / 100})`; health.classList.toggle('low', (car.hp ?? 100) < 35); }
@@ -1739,10 +1939,12 @@ export class Game {
     if (this.resetting || this.transition || this.state === 'dead' || this.state === 'busted') return;
     try {
       const p = this.person;
-      const fleet = this.fleet.filter((c) => !c.mission && !c.destroyed);
+      const fleet = this.fleet.filter((c) => !c.mission && !c.destroyed && !c.mode && !c.pooled);
+      // Rides are not saved: the next session starts on foot, under wherever they were
+      const spot = this.state === 'falling' || (this.state === 'driving' && (this.car.mode || this.car.pooled)) ? this.safeSpot(p.position.x, p.position.z, 0.5) : p.position;
       const data = {
         version: 2, state: this.state === 'driving' && fleet.includes(this.car) ? 'driving' : 'onFoot',
-        player: { x: p.position.x, y: p.position.y, z: p.position.z, heading: p.heading },
+        player: { x: spot.x, y: spot === p.position ? p.position.y : this.controllers.getGroundHeight(spot.x, spot.z, 'person'), z: spot.z, heading: p.heading },
         active: fleet.indexOf(this.car), stolen: this.stolen, distance: this.distance, firstEntry: this.firstEntry,
         money: this.money, health: this.health, armor: this.armor, weapons: this.weapons, weaponId: this.weaponId,
         missionsDone: this.missionsDone, stats: this.stats, radio: this.radio?.stationIndex ?? this.radioIndex,
