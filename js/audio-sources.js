@@ -180,6 +180,8 @@ class CityAudioSources {
       } else {
         // Inactive bicycles stop updating and are silent, even if their stored speed is left over from riding.
         if (!player && (entity.type === 'cyclist' || entity.type === 'plane')) continue;
+        // The driven car has its own, closer voice (audio-drive.js)
+        if (player && entity.body) continue;
         // A plane's engine runs at the throttle's pace, whatever the airspeed
         const plane = entity.type === 'plane';
         const kind = entity.type === 'car' ? 'sedan' : plane ? 'suv' : entity.type;

@@ -18,4 +18,20 @@ Its license is reproduced in assets/people/LICENSE-Rocketbox.md.
 
 The assault rifle is "M4A1 Assault Rifle" by nisu, public domain (CC0): https://opengameart.org/content/m4a1-assault-rifle
 
+Leaves and turf are from ambientCG (CC0): https://ambientcg.com (LeafSet010, LeafSet013, LeafSet014, LeafSet016, Grass001, Grass005).
+Bark is from Poly Haven (CC0): https://polyhaven.com (japanese_zelkova_bark and jolcham_oak_bark_01 by Charlotte Baglioni,
+bark_brown_02 by Rob Tuytel, bark_platanus by Dimitrios Savva).
+
+Building and street surfaces are from Poly Haven (CC0): white_sandstone_bricks, red_brick_03, brown_brick_02 and asphalt_02 by
+Rob Tuytel, brick_wall_09 by Rob Tuytel and Matterfield, concrete_floor_worn_001 by Dimitrios Savva and Rico Cilliers.
+Street props are from Poly Haven (CC0): fire_hydrant by Gonçalo Felício, metal_trash_can by GurJas Studios, trashbag by
+Benny Weimer, planter_box_01 and utility_box_01 by James Ray Cock, concrete_road_barrier by Amal Kumar.
+
+Cars, all CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Rescaled, split into body, glass and wheels, retextured on
+one atlas with a paint mask, simplified and renamed for the game. Per-model credits are in assets/cars/LICENSE-cars.md.
+"Generic passenger car pack" by Comrade1280: https://sketchfab.com/3d-models/20f9af9b8a404d5cb022ac6fe87f21f5
+"Fairheaven LT '80", "Shvan '92", "LCT 3000 '95" and "French delivery van" by Daniel Zhabotinsky: https://sketchfab.com/DanielZhabotinsky
+"Car Concept" by Eric Chadwick, Darmstadt Graphics Group GmbH: https://github.com/KhronosGroup/glTF-Sample-Assets (logos removed).
+Obtained through the catalogue of https://github.com/pedrosoandre/carros.
+
 Objects carried by passers-by are sculpted by `tools/build-humans.mjs`.

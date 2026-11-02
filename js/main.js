@@ -5,7 +5,7 @@ import { createPostProcessing } from './post-processing.js';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
 import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js';
 import { buildCityGrid } from './city-grid.js';
-import { buildBoroughs } from './boroughs.js';
+import { buildBoroughs, boroughLandAt } from './boroughs.js';
 import { buildLandmarks } from './landmarks.js';
 import { buildCityBlocks } from './buildings.js';
 import { buildStreetDetails } from './street-details.js';
@@ -25,6 +25,13 @@ import { loadCharacters } from './characters.js';
 import { loadCrowd } from './human-assets.js';
 import { CROWD_BODIES, CROWD_PROPS } from './human-crowd.js';
 import { loadCrowdMotion } from './crowd-motion.js';
+import { loadNature } from './nature-assets.js';
+import { loadCars } from './car-assets.js';
+import { buildRamps } from './ramps.js';
+import { loadWorld } from './world-assets.js';
+import { loadClutter } from './street-clutter.js';
+import { setTreeDetail } from './trees.js';
+import { createGrass } from './grass.js';
 import { currentLevel, FramePacer } from './quality.js';
 
 // Application setup, shader warm-up and frame loop.
@@ -122,6 +129,8 @@ async function initApp() {
 
   // 3. Build Manhattan Geography, Iconic Landmarks, Blocks, Street Details & Traffic
   await showLoadingStage('Préparation des rues et des quais…');
+  await Promise.all([loadNature(), loadWorld(), loadClutter(), loadCars()]);
+  setTreeDetail(quality.trees);
   const cityGrid = buildCityGrid(scene);
   markInit('cityGrid');
   await showLoadingStage('Préparation des ponts et des quartiers…');
@@ -143,20 +152,23 @@ async function initApp() {
   // Buildings turned along non-grid streets have oriented colliders whose world bounds reach past their lots: they stay
   // inside the property line anyway, so the road network (lanes & sidewalks) doesn't need them.
   // Elevated building sections that clear even a bus don't obstruct ground traffic.
+  const grass = quality.grass ? createGrass(scene, scene, new THREE.Vector3(0, 10, 140)) : null;
   const trafficSystem = createTrafficSystem(scene, cityGrid.sidewalks, [
     ...cityGrid.footprints,
     ...streetDetails.footprints,
     ...allColliders.filter((c) => !c.obb && (c.minY ?? 0) < 3.5)
   ], streetDetails.signalIntersections);
   markInit('traffic');
-  const highwayTraffic = createHighwayTraffic(scene, cityGrid.highwayLanes);
+  const highwayTraffic = createHighwayTraffic(scene, cityGrid.highwayLanes, trafficSystem);
   await showLoadingStage('Derniers préparatifs…');
   buildRoadPaint(scene, trafficSystem.network, cityGrid.roadPaint);
   markInit('roadPaint');
 
   // 4. Initialize Third-Person Controllers (Person, Car, Cyclist, Helicopter) & Multi-Camera System
   await showLoadingStage('Préparation de votre personnage…');
-  const controllerManager = new ThirdPersonControllerManager(scene, allColliders);
+  const jumpRamps = buildRamps(scene);
+  const controllerManager = new ThirdPersonControllerManager(scene, [...allColliders, ...streetDetails.obstacles, ...jumpRamps.colliders]);
+  controllerManager.landAt = boroughLandAt;
   function savePlayerState() { gameplay?.save(); }
 
   const cameraSystem = new CameraSystem(renderer.domElement, controllerManager);
@@ -267,7 +279,7 @@ async function initApp() {
       for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m?.mrtNode) m.mrtNode = null;
     });
   }
-  const colorGrade = createPostProcessing(renderer, scenePassColor, reflections);
+  const colorGrade = createPostProcessing(renderer, scenePassColor, reflections, scenePassColor);
   const renderPipeline = new THREE.RenderPipeline(renderer, colorGrade.outputNode);
 
   // 6. Wire UI Controls (Strictly using safe DOM APIs: textContent, classList, addEventListener)
@@ -579,7 +591,7 @@ async function initApp() {
   selectMode(controllerManager.activeMode);
   selectCamera('chase', true);
   selectTime('golden');
-  gameplay = new Playground({ controllers: controllerManager, camera: cameraSystem, traffic: trafficSystem,
+  gameplay = new Playground({ controllers: controllerManager, camera: cameraSystem, traffic: trafficSystem, highway: highwayTraffic, streets: streetDetails,
     scene, onMode: selectMode, onTime: selectTime, audio: audioSystem, map: mapSystem, touch: touchControls, gamepad: gamepadControls,
     lighting: lightingSystem, grade: colorGrade });
   cameraSystem.initialized = false;
@@ -680,7 +692,7 @@ async function initApp() {
   const pacer = new FramePacer({ renderer, level: quality, isActive: () => gameplay.active });
   let qaView = null;
   if (new URLSearchParams(location.search).has('qa')) {
-    window.__render = { renderer, scene, lightingSystem, cameraSystem, pacer, THREE,
+    window.__render = { renderer, scene, lightingSystem, cameraSystem, pacer, THREE, highwayTraffic, streetDetails,
       // Inspection: the camera goes where it is told, whatever the game does
       view(x, y, z, tx, ty, tz) { qaView = x === undefined ? null : [x, y, z, tx, ty, tz]; } };
     gameplay.renderForQA = () => {
@@ -710,14 +722,15 @@ async function initApp() {
     lastTime = now;
     const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
     elapsed += dt;
-    const simulationDt = gameplay.active ? dt : 0;
+    const simulationDt = gameplay.active ? dt * gameplay.timeScale : 0;
     const worldDt = !gameplay.playing ? dt : simulationDt;
 
     // Update 3rd-person controllers, camera, signals, traffic & vehicle collisions, building LODs, and dynamic shadow focus
     gamepadControls.update(simulationDt);
     gameplay.beforeUpdate(simulationDt);
     if (simulationDt > 0) controllerManager.update(simulationDt, elapsed, cameraSystem.initialized ? cameraSystem.currentPos : null);
-    cameraSystem.update(dt, elapsed);
+    cameraSystem.update(simulationDt > 0 ? simulationDt : dt, elapsed);
+    colorGrade.speedBlur.value = Math.max(0, cameraSystem.speedFov - 7) / 20;
     streetDetails.signalClock.value = elapsed;
     if (profile) mark('joueur');
     if (worldDt > 0) trafficSystem.update(
@@ -738,11 +751,12 @@ async function initApp() {
     }
     if (boroughs.update) boroughs.update(elapsed); // Roosevelt Island Tramway cabins
     cityBlocks.update(cameraSystem.currentPos.x, cameraSystem.currentPos.z);
+    grass?.update(cameraSystem.camera.position);
     if (cityBlocks.updateLights) cityBlocks.updateLights(cameraSystem.camera);
     if (streetDetails.update) streetDetails.update(cameraSystem.camera);
     lightingSystem.update(cameraSystem.currentPos);
     mapSystem.update();
-    audioSystem.update(dt, elapsed, cameraSystem.camera, lightingSystem.activePresetId === 'midnight');
+    audioSystem.update(dt, elapsed, cameraSystem.camera, lightingSystem.activePresetId === 'midnight', gameplay.active);
     updateSceneCulling(cameraSystem.camera.position);
     // Traffic collisions can move the player after controller updates; finalize moving hierarchies here.
     for (const root of dynamicRoots) root.updateMatrixWorld();

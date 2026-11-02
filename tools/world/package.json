@@ -1,0 +1,10 @@
+{
+  "name": "overdraft-world-tools",
+  "private": true,
+  "type": "module",
+  "description": "Offline build of the city's textures in assets/world",
+  "dependencies": {
+    "meshoptimizer": "^0.25.0",
+    "sharp": "^0.34.0"
+  }
+}

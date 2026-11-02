@@ -1,4 +1,5 @@
 import { createSynthResources, createMotorVoice, setControlRate } from './audio-synthesis.js';
+import { DriveAudio } from './audio-drive.js';
 import { createEventResources, playEvent, createWindVoice } from './audio-events.js';
 import { CityAudioSources } from './audio-sources.js';
 import { CityAcoustics } from './audio-acoustics.js';
@@ -176,6 +177,7 @@ class CityAudioSystem {
     this.sfxVoices = [];
     this.flat = context.createGain();
     this.flat.connect(this.master);
+    this.drive = new DriveAudio(context, this.resources, this.flat);
     this.music = context.createGain();
     this.music.connect(this.master);
     this.onInitialize?.(context);
@@ -420,8 +422,9 @@ class CityAudioSystem {
     const vehicle = impact.kind === 'vehicle' ? a === player ? b : b === player ? a : null : null;
     let honked = false;
     if (vehicle && separated && now - contact.horn > 1.5) {
-      honked = this.emit('horn', { id: vehicle, x: vehicle.x, y: 0.7, z: vehicle.z,
-        heading: vehicle.yaw + vehicle.yawOffset, seed: ++this.collisionSequence },
+      // Traffic keeps its position on itself, loose cars on a position vector
+      honked = this.emit('horn', { id: vehicle, x: vehicle.x ?? vehicle.position.x, y: 0.7, z: vehicle.z ?? vehicle.position.z,
+        heading: vehicle.heading ?? vehicle.yaw + vehicle.yawOffset, seed: ++this.collisionSequence },
       { intensity: 0.8, when: now + 0.12, priority: true });
       if (honked) contact.horn = this.lastHorn = now;
     }
@@ -446,8 +449,9 @@ class CityAudioSystem {
     if (this.emit('horn', { id: entity, ...entity.position, heading: entity.heading, seed: 4 }, { intensity: 0.7 })) this.lastHorn = now;
   }
 
-  update(dt, elapsed, camera, night = false) {
+  update(dt, elapsed, camera, night = false, playing = true) {
     if (!this.ready || !this.enabled || this.context?.state !== 'running' || document.hidden) return;
+    this.drive?.update(this.sources.controllers.getActiveEntity(), playing);
     this.accumulator += dt;
     if (this.accumulator < 0.1) return;
     dt = Math.min(this.accumulator, 0.25);

@@ -1,5 +1,127 @@
 # Changelog
 
+## 0.8.0 — Hostile Takeover
+
+### La police chasse
+- **Tactiques** : une voiture vise l'arrière de la vôtre pour la faire partir en tête-à-queue, les autres montent sur les flancs.
+- **Barrages** sur la route devant vous dès trois étoiles, avec agents en couverture. **Herses** dès quatre : les pneus crevés roulent sur la
+  jante dans les étincelles, jusqu'à la carrosserie.
+- **Tirs** depuis les voitures et tireur d'élite dans l'hélicoptère. Les voitures hors de vue comblent leur retard, jusqu'à six en même temps.
+- **Saccades supprimées** : l'alarme rouge et bleue de l'écran redessinait toute la page à chaque image et faisait tomber le jeu à 8 images
+  par seconde dès que la police vous voyait.
+
+### L'eau
+- **Hors-bord** en acajou verni, qui se cabre puis déjauge, gîte en virage, saute sur la houle et retombe dans une gerbe d'eau.
+- **Sillage** et embruns, quais et jetées solides, moteur et clapot.
+- **Les quais ne sont plus un mur** : une voiture peut tomber à l'eau, elle flotte un instant et coule.
+- **Nage** : on sort d'un bateau en pleine eau, on regagne la rive ou on remonte à bord.
+- **Garage** : tuile BATEAU, à la rive la plus proche.
+
+### Territoires
+- **Six quartiers, trois bandes** visibles sur la carte : les Dockers, la Meute, le Syndic.
+- **Hommes de main** aux coins de rue, voiture lancée à vos trousses après trois morts.
+- **Prises de contrôle** : vague, renforts en voiture, lieutenant. Le quartier vous rapporte ensuite de l'argent à chaque échéance.
+
+### Téléphone (P)
+- **Contacts** : Mireille répare à distance et amène le bateau, Jules efface vos étoiles, Nadia suit le casse.
+- **Messages**, **contrats** avec GPS, **banque** avec la dette de la famille Roux à rembourser, **carte des territoires**.
+
+### Acte III
+- **Offre hostile** : remontée de l'Hudson et combat contre des vedettes.
+- **Due diligence** : filature de la voiture d'Hélène Cazal.
+- **Le casse de la Liberty Trust** : salle des coffres à tenir pendant que la charge perce, billets à ramasser, fuite en hors-bord par l'East
+  River avec quatre étoiles aux trousses.
+- **Prise de contrôle** : le yacht, l'escorte, puis la poursuite de Cazal sur l'eau.
+- **Régate de la Batterie** : course chronométrée en hors-bord.
+
+### Conduite
+- **Bordures** : une voiture basse n'est plus catapultée par un trottoir à pleine vitesse. Les sauts restent intacts.
+
+
+## 0.7.0 — Bull Run
+
+La voiture n'est plus un point qui glisse sur un sol plat. Tout ce qui touche à la conduite est refait.
+
+### Conduite
+- **Vraie simulation** : quatre roues suspendues, chacune avec son ressort, son amortisseur et son pneu. Le poids se reporte
+  au freinage, à l'accélération et en virage, les voitures plongent, s'accroupissent et prennent du roulis.
+- **Moteur et boîte** : couple selon le régime, rapports réels, zone rouge, patinage au démarrage, traction avant, propulsion
+  ou intégrale.
+- **Dérapages** : frein à main, contre-braquage assisté, contrôle de traction et de stabilité propres à chaque voiture.
+- **Vol et tonneaux** : sauts, atterrissages, tonneaux, glissade sur le toit dans les étincelles, retour sur les roues.
+- **Trottoirs et pelouses** : les bordures secouent la voiture, l'herbe glisse et projette de la terre.
+- **Quinze véhicules aux comportements distincts**, de la citadine à la supercar (plus de 340 km/h, 0 à 100 sous 2 secondes).
+- **Nitro** (Maj) : flammes bleues, poussée, se recharge seul et plus vite avec les cascades.
+
+### Voitures
+- **Vrais modèles 3D** pour toute la circulation et le joueur : berlines, SUV, pick-up, taxis américains, utilitaires, camions.
+- **Peinture recolorable** avec vernis, phares et feux de stop allumés, roues indépendantes.
+- **Dégâts visibles** : tôle enfoncée, peinture arrachée, pare-brise fissuré.
+- **Garage** (G) : berline, muscle car, sportive et supercar au choix.
+
+### Caméra et sensations
+- **Caméra de poursuite** refaite : elle traîne derrière la voiture en virage, la voiture se met en travers dans l'image,
+  l'objectif s'élargit avec la vitesse, flou de vitesse sur les bords, vibrations de route.
+- **C** pour regarder derrière. **Ralenti** sur les gros crashs et au sommet des sauts.
+
+### Son
+- **Moteur synthétisé** au régime réel, avec une voix par famille : V8 irrégulier, six à plat, V12, quatre cylindres, diesel.
+- **Ratés à l'échappement**, crissement de pneus, vent, roulement, tôle qui racle, nitro, chocs de suspension.
+
+### Dans le monde
+- **Traces de pneus** qui restent sur la route, **fumée de gomme**, gerbes d'étincelles, flammes d'échappement.
+- **Voitures percutées** : au-delà de 36 km/h d'écart, elles sortent de la circulation et partent en tonneaux.
+- **Lampadaires en fonte** arrachés, qui tombent et restent sur la chaussée.
+- **Cascades récompensées** : frôlements, dérapages, sauts, avec multiplicateur. Argent et nitro à la clé.
+- **Neuf tremplins** dans Central Park, indiqués sur la carte.
+
+
+## 0.6.0 — Prime Real Estate
+
+Les façades peintes par programme disparaissent : la ville est maintenant bâtie en vrais matériaux.
+
+### Immeubles
+- **Vraie brique et vraie pierre** : briques rouge, brune et chamois, pierre de taille, photographiées et à la bonne échelle.
+  Chaque immeuble a sa teinte, avec ses taches et ses coulures de suie sous les appuis de fenêtre.
+- **Fenêtres dans l'épaisseur du mur** : la vitre recule quand on passe, le tableau de la fenêtre apparaît, et le soleil
+  projette son ombre sur le verre.
+- **Vitres** : stores et rideaux dans une fenêtre sur deux, reflets de la rue et du ciel, linteaux de pierre sur la brique.
+
+### Rues
+- **Goudron** : vrai bitume photographié, avec ses fissures, sans les grosses lignes noires d'avant.
+- **Trottoirs** : vrai béton sous les joints, chewing-gums et fissures.
+- **Commerces** : seize enseignes en plusieurs polices sur panneaux de couleur, vitrines sombres où l'on voit l'intérieur,
+  auvents de toile rayée en pente.
+- **Objets réels** : bouches d'incendie, sacs poubelle en tas, poubelles, jardinières, armoires techniques et blocs béton,
+  tous renversables en voiture.
+
+### Lumière
+- **Ombres naturelles** : dans une rue à l'ombre on voit enfin les couleurs, plus de bleu nuit presque noir.
+
+## 0.5.0 — Hard Assets
+
+La ville devient solide, et ses parcs deviennent vrais.
+
+### Collisions
+- **Voie rapide** : les voitures de l'Hudson étaient un décor qu'on traversait. Elles se percutent maintenant comme les
+  autres : le conducteur pile, sa voiture est poussée hors de sa file, puis il repart. Elles renversent aussi les piétons.
+- **Arbres** : plus de 54 000 troncs arrêtent les voitures et les passants. Le choc fait tomber les feuilles.
+- **Mobilier urbain** : lampadaires, feux et poteaux sont solides. Les chariots et barrières aussi.
+- **Bouches d'incendie et boîtes aux lettres** : elles cèdent sous la voiture, et l'eau jaillit de la bouche arrachée.
+- **Balles** : les troncs les arrêtent.
+
+### Arbres
+- **Vraies feuilles** : scannées, posées une à une le long de rameaux dans un nouvel atlas de 4096 pixels.
+- **Vraies écorces** : photographiées, avec leur relief, et racines qui s'évasent au pied du tronc.
+- **Dix fois plus de détail de près** : jusqu'à 5 000 triangles par arbre, contre 530, sur quatre niveaux de distance.
+- **Quatrième espèce** : les vieux chênes des parcs, en plus des platanes, féviers et ormes.
+- **Lumière** : le soleil traverse les feuilles, et chaque feuille a son relief.
+
+### Herbe
+- **Pelouses photographiées**, avec des zones plus sèches et plus vertes, sans répétition visible.
+- **Vrais brins** : des dizaines de milliers de touffes autour de la caméra, qui ondulent au vent.
+- Le niveau graphique FLUIDE retire les brins et réduit la portée des arbres détaillés.
+
 ## 0.4.1 — Human Capital, de vraies personnes
 
 Les corps sculptés par programme sont remplacés par de vrais modèles humains et de la vraie motion capture.

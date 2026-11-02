@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { streetZ, isTypingInField } from './city-config.js';
+import { ISLAND_BOUNDS, getIslandBoundsAtZ, streetZ, isTypingInField } from './city-config.js';
 import { angleDelta, doorPosition, smooth, clamp, canInteract, validPosition } from './interaction-state.js';
 import { CharacterModel, LOOKS } from './characters.js';
 import { EffectsSystem } from './fx.js';
@@ -22,6 +22,14 @@ import { stepPlane } from './flight.js';
 import { Garage } from './garage.js';
 import { collapse } from './ragdoll.js';
 import { Arsenal } from './arsenal.js';
+import { carSpecs } from './car-assets.js';
+import { kickBody, settleBody } from './car-physics.js';
+import { DriveEffects, FallingLamps, addDent } from './drive-fx.js';
+import { StuntScore } from './stunts.js';
+import { GangSystem } from './gangs.js';
+import { Phone } from './phone.js';
+import { ramps } from './ramps.js';
+import { WATER, createBoat, driveBoatAI } from './boat.js';
 
 // OVERDRAFT — the game layer over the city simulation: the protagonist on foot and at the wheel, weapons and
 // damage, vehicles that smoke, burn and explode, the wanted level (police), missions, money, death and arrest, and saving.
@@ -29,23 +37,17 @@ import { Arsenal } from './arsenal.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.4.1';
+const BUILD = '0.8.0';
 const CAR_NAMES = {
   sedan: ['VALMONT', 'ÉCUME', 'BERLINE / PROPULSION'], suv: ['BRISANT', 'RÉCIF', 'SUV / TRANSMISSION INTÉGRALE'],
   taxi: ['VALMONT', 'CAB 7', 'TAXI / PROPULSION'], pickup: ['GRÉVILLE', 'FALAISE', 'PICK-UP / PROPULSION'],
-  van: ['HAUTURIER', 'CARGO', 'UTILITAIRE / TRACTION'], minivan: ['GRÉVILLE', 'ESCALE', 'MONOSPACE / TRACTION'],
-  moto: ['BRISANT', 'VANDALE 650', 'MOTO / SPORTIVE'],
+  van: ['HAUTURIER', 'CARGO', 'UTILITAIRE / PROPULSION'], minivan: ['GRÉVILLE', 'ESCALE', 'MONOSPACE / TRACTION'],
+  hatch: ['VALMONT', 'RESSAC', 'COMPACTE / TRACTION'], compact: ['GRÉVILLE', 'GALET', 'CITADINE / TRACTION'], wagon: ['VALMONT', 'SILLAGE', 'BREAK / PROPULSION'],
+  offroad: ['BRISANT', 'MARAIS', '4X4 / TRANSMISSION INTÉGRALE'], muscle: ['BRISANT', 'TEMPÊTE', 'MUSCLE / V8 PROPULSION'], sport: ['CORSAIRE', 'FOUDRE', 'SPORTIVE / MOTEUR ARRIÈRE'],
+  super: ['CORSAIRE', 'ZÉNITH', 'SUPERCAR / INTÉGRALE'], truck: ['HAUTURIER', 'FRET', 'CAMION / DIESEL'], delivery: ['HAUTURIER', 'TOURNÉE', 'FOURGON / TRACTION'],
+  moto: ['BRISANT', 'VANDALE 650', 'MOTO / SPORTIVE'], boat: ['HAUTURIER', 'MOUETTE', 'HORS-BORD / BIMOTEUR'],
   bicycle: ['COURSIER', 'VÉLO', 'VÉLO / URBAIN'], helicopter: ['GRÉVILLE', 'LIBELLULE', 'HÉLICOPTÈRE / BITURBINE'],
   plane: ['HAUTURIER', 'STERNE', 'AVION / MONOMOTEUR']
-};
-const PROFILES = {
-  sedan: { speed: 47, acceleration: 7, powerSpeed: 21, grip: 10.5, cornering: 11 },
-  suv: { speed: 39, acceleration: 5.3, powerSpeed: 19, grip: 8.7, cornering: 8.8 },
-  taxi: { speed: 40, acceleration: 5.8, powerSpeed: 18, grip: 9.4, cornering: 10 },
-  pickup: { speed: 36, acceleration: 5, powerSpeed: 18, grip: 8.2, cornering: 8 },
-  van: { speed: 32, acceleration: 4, powerSpeed: 16, grip: 8, cornering: 7.5 },
-  minivan: { speed: 36, acceleration: 4.8, powerSpeed: 17, grip: 8.8, cornering: 9 },
-  moto: {} // its own profile (motorbike.js)
 };
 const FLEET_MAX = 12;
 const WHEEL_STEP = 12; // pixels of scrolling to the next weapon
@@ -62,21 +64,21 @@ function splitDoor(car) {
   const positions = original.attributes.position;
   const ids = original.index?.array || Uint32Array.from({ length: positions.count }, (_, i) => i);
   const door = [], body = [];
-  const front = car.spec.doors[0], rear = car.spec.doors[1];
+  const front = car.spec.doors[0], rear = car.spec.doors[1], hingeX = car.spec.halfW * 0.92, top = car.spec.height * 0.92;
   for (let i = 0; i < ids.length; i += 3) {
     const vertices = [ids[i], ids[i + 1], ids[i + 2]];
     const x = vertices.reduce((n, id) => n + positions.getX(id), 0) / 3;
     const y = vertices.reduce((n, id) => n + positions.getY(id), 0) / 3;
     const z = vertices.reduce((n, id) => n + positions.getZ(id), 0) / 3;
-    (x > 0.45 && z < front && z > rear && y > 0.29 && y < 1.38 ? door : body).push(...vertices);
+    (x > car.spec.halfW * 0.5 && z < front && z > rear && y > 0.29 && y < top ? door : body).push(...vertices);
   }
   const shell = original.clone(); shell.setIndex(body);
   car.bodyMesh.geometry = shell;
   const geometry = original.clone(); geometry.setIndex(door);
   const hinge = new THREE.Group();
-  hinge.position.set(0.83, 0, front);
+  hinge.position.set(hingeX, 0, front);
   const mesh = new THREE.Mesh(geometry, car.bodyMesh.material);
-  mesh.position.set(-0.83, 0, -front);
+  mesh.position.set(-hingeX, 0, -front);
   mesh.castShadow = true; mesh.receiveShadow = true;
   mesh.material.side = THREE.DoubleSide;
   hinge.add(mesh); car.chassisPivot.add(hinge);
@@ -101,8 +103,8 @@ const _camDir = new THREE.Vector3();
 const bodyA = {}, bodyB = {}, hit = {};
 
 export class Game {
-  constructor({ controllers, camera, traffic, scene, onMode, onTime, audio, map, touch, gamepad, lighting, grade }) {
-    Object.assign(this, { controllers, camera, traffic, scene, onMode, onTime, audio, map, touch, gamepad });
+  constructor({ controllers, camera, traffic, highway, streets, scene, onMode, onTime, audio, map, touch, gamepad, lighting, grade }) {
+    Object.assign(this, { controllers, camera, traffic, streets, scene, onMode, onTime, audio, map, touch, gamepad });
     this.atmosphere = new Atmosphere({ lighting, grade, scene, camera: camera.camera, controllers });
     this.state = 'onFoot'; this.playing = false; this.paused = false;
     this.transition = null; this.candidate = null; this.stamina = 100;
@@ -118,6 +120,8 @@ export class Game {
     this.spread = 0; this.lastCrimeShot = -10; this.stateT = 0; this.invulnerable = 0;
     this.allCars = [];
     this.timeScale = 1;
+    this.slowMo = 0;
+    this.slowAgain = 0;
     this.frames = 0;
     this.player = { x: 0, y: 0, z: 0, heading: 0, speed: 0, vx: 0, vz: 0, inVehicle: false, onFoot: true, alive: true, threat: false };
 
@@ -140,6 +144,20 @@ export class Game {
 
     this.nav = new RoadNavigator(traffic.network);
     this.fx = new EffectsSystem(scene, camera.camera);
+    this.driveFx = new DriveEffects(scene, this.fx);
+    this._shotFrom = new THREE.Vector3(); this._shotTo = new THREE.Vector3(); this._shotDir = new THREE.Vector3();
+    this.fallingLamps = new FallingLamps(scene, streets.lampParts);
+    this.stunts = new StuntScore(this);
+    this.gangs = new GangSystem(this);
+    this.phone = new Phone(this);
+    this.debt = 250000;
+    this.highway = highway;
+    this.boatWorld = {
+      afloat: (x, z) => controllers.afloat(x, z),
+      simulate: (c, throttle, steer, dt) => controllers.simulateCar(c, throttle, steer, false, dt),
+      shoot: (x, y, z, accuracy, damage) => this.policeShot(x, y, z, accuracy, damage)
+    };
+    traffic.setTakedownListener((v, kind, colour, body, hit) => this.takedown(v, kind, colour, body, hit));
     this.actors = new ActorSystem({ scene, controllers, fx: this.fx, audio });
     this.actors.onShot = (h, damage, shooter) => this.applyShot(h, damage, shooter);
     this.actors.onKilled = (actor, cause) => this.onActorKilled(actor, cause);
@@ -149,6 +167,8 @@ export class Game {
     this.wanted = new WantedSystem({ scene, controllers, nav: this.nav, actors: this.actors, audio, camera: camera.camera });
     this.wanted.onLevel = (level, previous) => this.onWantedLevel(level, previous);
     this.wanted.onBusted = () => this.busted();
+    this.wanted.onPoliceShot = (x, y, z, accuracy, damage) => this.policeShot(x, y, z, accuracy, damage);
+    this.wanted.onStrip = () => this.burstTyres();
     this.wanted.trafficCars = traffic.vehicles;
     this.wanted.traffic = traffic;
     this.wanted.gameCars = this.allCars;
@@ -158,6 +178,10 @@ export class Game {
     this.wrecks = Array.from({ length: WRECK_POOL }, (_, i) => {
       const car = controllers.createCarEntity({ kind: 'sedan', paint: 0x1d1a17 });
       car.wreck = true; car.destroyed = true; car.hp = 0; car.burnT = 0;
+      // What a fire leaves of a car
+      const top = car.spec.height;
+      car.body.q[1] = 0; car.body.q[3] = 1; car.body.r[0] = car.body.r[4] = car.body.r[8] = 1;
+      for (const [x, y, z, nx, nz] of [[0.2, 0.8, 2.3, 0, -1], [-0.7, 0.8, -2.2, 0.3, 1], [0.8, 0.9, 0.6, -1, 0], [0, top, 0, 0, 0.3]]) addDent(car, x, y, z, nx, nz, 24);
       car.position.set(-20 - i * 6, -40, -3000);
       car.mesh.position.copy(car.position);
       car.mesh.updateMatrixWorld();
@@ -172,7 +196,7 @@ export class Game {
       this.weaponId = 'pistol';
     }
     // The garage's own car and motorbike, built now so that summoning them never stalls a frame
-    for (const [kind, paint] of [['sedan', 0x8f1a1d], ['moto', 0xc81e2a]]) {
+    for (const [kind, paint] of [['sedan', 0x8f1a1d], ['muscle', 0x12305c], ['sport', 0xc8320e], ['super', 0x7a0f12], ['moto', 0xc81e2a], ['boat', 0x0c1f33]]) {
       const car = this.makeCar(kind, paint, new THREE.Vector3(), 0, true);
       this.fleet.pop();
       car.pooled = true;
@@ -197,6 +221,8 @@ export class Game {
     this.setupRadio();
     this.setupMap();
     this.setupCollisions();
+    this.jets = []; // broken hydrants
+    controllers.onPropHit = (prop, car) => this.knockProp(prop, car);
     if (new URLSearchParams(location.search).has('qa')) window.__playground = window.__game = this;
   }
 
@@ -206,19 +232,20 @@ export class Game {
   get weapon() { return WEAPONS[this.weaponId] || WEAPONS.fists; }
 
   // ---- Vehicles ---------------------------------------------------------------------------------------------------
-  makeCar(kind, paint, position, heading = 0, stolen = false) {
+  makeCar(kind, paint, position, heading = 0, stolen = false, lite = false) {
     if (this.fleet.length >= FLEET_MAX) {
       // recycle the oldest ordinary car far from the player
       const old = this.fleet.find((c) => !c.mission && c !== this.car && c.position.distanceTo(this.person.position) > 80);
       if (old) this.removeFleetCar(old);
     }
     const moto = kind === 'moto';
-    const car = moto ? createMotorbike(this.scene, { paint }) : this.controllers.createCarEntity({ kind, paint });
+    const boat = kind === 'boat';
+    const car = boat ? createBoat(this.scene, { paint }) : moto ? createMotorbike(this.scene, { paint }) : this.controllers.createCarEntity({ kind, paint, lite });
     car.id = this.nextId++; car.stolen = stolen;
     car.position.copy(position); car.heading = heading; car.prevX = position.x; car.prevZ = position.z;
-    if (!moto) car.drive = { reverseSpeed: 10, rolling: 0.18, drag: 0.0012, coast: 0.7, brake: 12, wheelbase: car.spec.wheelZ * 2, ...PROFILES[kind] };
+    if (!moto && !boat) car.drive = { speed: car.tune.top, reverseSpeed: 14, wheelbase: car.spec.wheelZ * 2 };
     car.hp = 100; car.burnT = 0; car.destroyed = false;
-    if (!moto) splitDoor(car);
+    if (!moto && !lite && !boat) splitDoor(car);
     car.mesh.position.copy(car.position); car.mesh.rotation.y = heading;
     this.fleet.push(car);
     return car;
@@ -248,7 +275,7 @@ export class Game {
 
   spawnFleet() {
     const z = streetZ(37) + 12;
-    this.makeCar('sedan', 0x4b1019, new THREE.Vector3(8.15, 0, z));
+    this.makeCar('muscle', 0x12305c, new THREE.Vector3(8.15, 0, z));
     this.makeCar('suv', 0x163c36, new THREE.Vector3(8.15, 0, z + 18));
     this.makeCar('taxi', 0xffbd22, new THREE.Vector3(8.15, 0, z - 18));
     this.controllers.entities.car = this.fleet[0];
@@ -272,13 +299,13 @@ export class Game {
   buildInterface() {
     document.body.insertAdjacentHTML('beforeend', `
       <div id="game-vignette" aria-hidden="true"></div>
-      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · HUMAN CAPITAL</small></span></div>
+      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · HOSTILE TAKEOVER</small></span></div>
       <div id="session-badge"><i></i><span>MANHATTAN</span><b id="session-mode">LIBRE</b><button id="pause-button" aria-label="Ouvrir le menu pause">Ⅱ</button></div>
       <div id="game-prompt" role="status" aria-live="polite"><kbd>F</kbd><span>Voler la voiture<small>VÉHICULE</small></span></div>
       <div id="game-toast" role="status" aria-live="polite"></div>
       <div id="stamina-track" aria-label="Endurance"><span id="stamina-fill"></span></div>
       <div id="vehicle-name"><span>VALMONT</span><strong>ÉCUME</strong><small>BERLINE / PROPULSION</small></div>
-      <div id="drive-gauge"><span id="drive-gear">N</span><strong id="drive-speed">000</strong><span class="gauge-unit">KM/H</span><div><i id="drive-power"></i></div><b id="drive-health"></b></div>
+      <div id="drive-gauge"><span id="drive-gear">N</span><strong id="drive-speed">000</strong><span class="gauge-unit">KM/H</span><div><i id="drive-power"></i></div><em><i id="drive-nitro"></i></em><b id="drive-health"></b></div>
       <div id="game-keybar"></div>
       <div id="game-menu" class="game-menu">
         <div class="menu-top"><span class="edition-label">EVERY DEBT GETS PAID.</span><span class="build-label">BUILD ${BUILD}</span></div>
@@ -290,10 +317,10 @@ export class Game {
         <div class="menu-bottom"><span>MANHATTAN, NY<span class="coordinates">40°45′ N — 73°59′ W</span></span><button id="credits-button">CRÉDITS ↗</button><span class="menu-description">MISSIONS · COURSES · PRIMES<br>COMBAT · POURSUITES · 5 ÉTOILES</span></div>
         <div id="menu-options"><span>HEURE &amp; MÉTÉO</span><button data-game-time="golden">Soleil bas</button><button data-game-time="midday">Midi</button><button data-game-time="twilight">Crépuscule</button><button data-game-time="midnight">Nuit</button><button id="weather-toggle">MÉTÉO : AUTO</button><button id="sound-toggle">SON ACTIVÉ</button><button id="quality-toggle">QUALITÉ : HAUTE</button></div>
       </div>
-      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Margin Call</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL).</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
+      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Hostile Takeover</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL).</p><p>Voitures : Comrade1280, Daniel Zhabotinsky (Sketchfab, CC BY 4.0), Eric Chadwick / DGG (Khronos, CC BY 4.0). Modifiées pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
       <button id="mobile-interact" class="touch-interact" hidden>F <span>VÉHICULE</span></button>
     `);
-    this.ui = Object.fromEntries(['game-menu', 'game-prompt', 'game-toast', 'stamina-fill', 'drive-speed', 'drive-gear', 'drive-power', 'drive-health', 'vehicle-name', 'game-keybar', 'play-button', 'mobile-interact', 'session-mode', 'menu-progress'].map(id => [id, document.getElementById(id)]));
+    this.ui = Object.fromEntries(['game-menu', 'game-prompt', 'game-toast', 'stamina-fill', 'drive-speed', 'drive-gear', 'drive-power', 'drive-nitro', 'drive-health', 'vehicle-name', 'game-keybar', 'play-button', 'mobile-interact', 'session-mode', 'menu-progress'].map(id => [id, document.getElementById(id)]));
     document.body.dataset.gameState = this.state;
     document.body.classList.add('in-menu');
     this.updateKeybar();
@@ -467,10 +494,12 @@ export class Game {
     const flying = this.state === 'driving' && this.car.air;
     this.ui['game-keybar'].innerHTML = flying ? [...air[this.car.mode], k(['F'], 'Sauter'), k(['T'], 'Radio'), ...end].join('')
       : this.state === 'falling' ? [k(['ZQSD'], 'Se diriger'), ...end].join('')
+      : this.state === 'swimming' ? [k(['ZQSD'], 'Nager'), k(['MAJ'], 'Crawl'), k(['F'], 'Monter à bord'), ...end].join('')
+      : this.state === 'driving' && this.car.boat ? [k(['ZQSD'], 'Piloter'), k(['F'], 'Quitter le bord'), k(['T'], 'Radio'), ...end].join('')
       : this.state === 'driving' && this.car.bicycle ? [k(['ZQSD'], 'Pédaler'), k(['F'], 'Descendre'), k(['T'], 'Radio'), ...end].join('')
-      : this.state === 'driving' ? [k(['ZQSD'], 'Conduire'), k(['ESPACE'], 'Frein à main'), this.car.moto ? k(['MAJ'], 'Wheeling') : '', armed && this.weaponId !== 'shotgun' ? k(['CLIC D.', 'CLIC'], 'Tirer par la vitre') : '', k(['B'], 'Klaxon'), k(['T'], 'Radio'), k(['F'], 'Descendre'), ...end].join('')
+      : this.state === 'driving' ? [k(['ZQSD'], 'Conduire'), k(['ESPACE'], 'Frein à main'), k(['MAJ'], this.car.moto ? 'Wheeling' : 'Nitro'), this.car.moto ? '' : k(['C'], 'Regarder derrière'), armed && this.weaponId !== 'shotgun' ? k(['CLIC D.', 'CLIC'], 'Tirer par la vitre') : '', k(['B'], 'Klaxon'), k(['T'], 'Radio'), k(['F'], 'Descendre'), ...end].join('')
       : [k(['ZQSD'], 'Se déplacer'), k(['MAJ'], 'Sprint'), k(['CLIC'], armed ? 'Tirer' : 'Frapper'), armed ? k(['CLIC D.'], 'Viser') : '', armed ? k(['R'], 'Recharger') : '',
-        k(['TAB', '1-6'], 'Armes'), k(['F'], 'Véhicule'), k(['G'], 'Garage'), k(['M'], 'Carte'), k(['ÉCHAP'], 'Menu')].join('');
+        k(['TAB', '1-6'], 'Armes'), k(['F'], 'Véhicule'), k(['G'], 'Garage'), k(['P'], 'Téléphone'), k(['M'], 'Carte'), k(['ÉCHAP'], 'Menu')].join('');
   }
 
   // ---- Radio ---------------------------------------------------------------------------------------------------------
@@ -508,7 +537,22 @@ export class Game {
     this.gpsT = 0;
   }
 
+  // The first text messages, once the player has had a moment
+  tips(dt) {
+    if ((this.tipT = (this.tipT ?? 26) - dt) > 0 || this.tipped) return;
+    this.tipped = true;
+    this.phone.text('NADIA', 'On m’a parlé de toi. J’ai du travail pour quelqu’un qui sait conduire. Regarde tes contrats (P).');
+  }
+
   drawMapOverlay(ctx, toX, toY, w, h, scale, mini) {
+    this.gangs.draw(ctx, toX, toY);
+    if (!mini || scale > 0.1) {
+      ctx.fillStyle = '#ffb347';
+      for (const r of ramps) {
+        const x = toX(r.x), y = toY(r.z);
+        ctx.beginPath(); ctx.moveTo(x, y - 4); ctx.lineTo(x + 4, y + 3); ctx.lineTo(x - 4, y + 3); ctx.fill();
+      }
+    }
     const t = performance.now() / 1000;
     const inView = (x, y, m = 0) => !mini || (Math.abs(x) < w * 0.5 + m && Math.abs(y) < h * 0.5 + m);
     // The search area: searched street segments, flashing red and blue while the player is in sight
@@ -624,6 +668,18 @@ export class Game {
   onCollision(e) {
     const { a, b, speed } = e;
     const person = this.person;
+    if (speed > 3) {
+      if (a?.body) this.driveFx.crash(a, e.x, e.y, e.z, e.nx, e.nz, speed);
+      if (b?.body) this.driveFx.crash(b, e.x, e.y, e.z, -e.nx, -e.nz, speed);
+      if ((a === this.car || b === this.car) && this.state === 'driving') {
+        this.camera.addShake(Math.min(1.5, speed * 0.05));
+        // The worst crashes are worth seeing go by
+        if (speed > 22 && !this.slowMo && this.clock > this.slowAgain) { this.slowMo = 0.8; this.slowAgain = this.clock + 7; }
+        this.stunts.crashed();
+      }
+    }
+    // A car against a trunk shakes the leaves out of the crown
+    if (b?.obstacle === 'tree' && speed > 4) this.fx.leaves(b.cx, b.minY + b.maxY * 0.55, b.cz, 3.2, Math.min(90, 18 + speed * 3));
     for (const [self, other] of [[a, b], [b, a]]) {
       if (!self) continue;
       if (self === person && other && other.edge !== undefined && speed > 3.5 && this.state === 'onFoot') {
@@ -633,17 +689,87 @@ export class Game {
         continue;
       }
       if (self.bicycle && self === this.car && this.state === 'driving' && speed > 11) { this.bail(self, speed); continue; }
+      if (self.boat) { if (self === this.car) this.camera.addShake(Math.min(1.2, speed * 0.06)); continue; }
       if ((self.type === 'car' || self.air) && self.hp !== undefined && !self.destroyed && speed > 4.5) {
-        this.damageCar(self, (speed - 4.5) * 2.6, self === this.car && this.state === 'driving' ? 'crash' : 'hit');
+        this.damageCar(self, (speed - 8) * 0.9, self === this.car && this.state === 'driving' ? 'crash' : 'hit');
         if (self === this.car && this.state === 'driving' && self.moto && speed > 8) { this.bail(self, speed); continue; }
-        if (self === this.car && this.state === 'driving' && speed > 13) this.damagePlayer((speed - 13) * 1.5, 'crash');
+        if (self === this.car && this.state === 'driving' && speed > 22) this.damagePlayer((speed - 22) * 1.2, 'crash');
         if (other && other.police && self === this.car && this.state === 'driving') this.crime('copCarHit', e.x, e.z);
       }
       if (self.edge !== undefined && self.hp !== undefined && speed > 6 && other === this.car) {
-        self.hp -= (speed - 6) * 2.2;
+        self.hp -= (speed - 6) * 1.1;
         if (self.hp <= 0) this.wreckTraffic(self);
       }
     }
+  }
+
+  // Rammed out of the traffic: from here on it is a loose car like any other, sent where the blow sends it
+  takedown(v, kind, colour, body, hit) {
+    if (!carSpecs[kind]) return;
+    const heading = Math.atan2(body.sin, body.cos);
+    const paint = new THREE.Color().setRGB(colour[0], colour[1], colour[2]).getHex();
+    if (this.fleet.length >= FLEET_MAX + 6) return;
+    const car = this.makeCar(kind, paint, new THREE.Vector3(body.x, 0, body.z), heading, false, true);
+    settleBody(car, heading);
+    car.speed = body.vx * body.sin + body.vz * body.cos;
+    car.vx = body.vx - body.sin * car.speed;
+    car.vz = body.vz - body.cos * car.speed;
+    car.angularVel = body.angularVel;
+    kickBody(car, hit.x, 0.25, hit.z, 0, Math.min(hit.impulse * 0.2, car.tune.mass * 6.5), 0);
+    if (v.lane === undefined) this.traffic.removeVehicle(v);
+    this.stats.cars++;
+  }
+
+  // A car that went off the quay: a splash, then it fills and goes down, and whoever is in it comes up without it
+  sinking(c) {
+    const y = c.position.y;
+    if (y > WATER + 0.3) { c.splashed = false; return; }
+    if (!c.splashed) {
+      c.splashed = true;
+      this.driveFx.splash(c.position.x, c.position.z, Math.min(1.6, 0.6 + Math.hypot(c.body.vx, c.body.vz) * 0.04));
+      this.audio.sfx('explosion', c.position.x, 0, c.position.z, { intensity: 0.35, rate: 0.6 });
+      if (c === this.car && this.state === 'driving') this.toast('À l’eau', 'Le véhicule coule : nagez jusqu’au quai.');
+    }
+    if (y > WATER - 2.6) return;
+    if (c === this.car && this.state === 'driving') this.enterWater(c.position.x, c.position.z);
+    if (c.police) this.wanted.retire(this.wanted.units.find((u) => u.car === c));
+    else if (this.fleet.includes(c)) this.removeFleetCar(c);
+    else c.mesh.visible = false;
+  }
+
+  // A shot from a moving cruiser or the helicopter: a tracer to wherever it went, a hit if the odds say so
+  policeShot(x, y, z, accuracy, damage) {
+    const pl = this.player, hit = Math.random() < accuracy;
+    const miss = hit ? 0 : 1.4 + Math.random() * 2.6, a = Math.random() * 6.28;
+    const to = this._shotTo.set(pl.x + Math.cos(a) * miss, pl.y + 0.9 + (hit ? 0 : Math.random() * 1.4 - 0.7), pl.z + Math.sin(a) * miss);
+    this.fx.tracer(this._shotFrom.set(x, y, z), to);
+    this.fx.muzzleFlash(this._shotFrom, this._shotDir.subVectors(to, this._shotFrom).normalize());
+    this.audio.sfx(damage > 15 ? 'rifle' : 'pistol', x, y, z);
+    if (hit) this.applyShot({ kind: 'player', target: pl, t: 1, x: to.x, y: to.y, z: to.z, nx: -this._shotDir.x, ny: -this._shotDir.y, nz: -this._shotDir.z }, damage, null);
+    else this.fx.impact(to.x, Math.max(0.05, to.y), to.z, 0, 1, 0, 'concrete');
+  }
+
+  burstTyres() {
+    const car = this.car;
+    if (this.state !== 'driving' || !car.body || car.body.wheels.every((w) => w.burst)) return;
+    for (const w of car.body.wheels) w.burst = true;
+    this.audio.sfx?.('impactMetal', car.position.x, 0.4, car.position.z);
+    this.camera.addShake(0.5);
+    this.toast('Pneus crevés', 'La herse a eu vos quatre roues : tenez la route jusqu’à une carrosserie.');
+  }
+
+  knockProp(prop, car) {
+    if (prop.lamp !== undefined) {
+      const sin = Math.sin(car.heading), cos = Math.cos(car.heading);
+      this.fallingLamps.knock(prop.cx, prop.cz, sin * car.speed + car.vx, cos * car.speed + car.vz);
+    }
+    this.streets.removeProp(prop);
+    const speed = Math.abs(car.speed);
+    const y = prop.obstacle === 'hydrant' ? 0.5 : 0.9;
+    const sin = Math.sin(car.heading), cos = Math.cos(car.heading);
+    this.fx.impact(prop.cx, y, prop.cz, sin, 0.4, cos, prop.soft ? 'concrete' : 'metal');
+    if (!prop.soft) this.audio.crash({ a: car, b: prop, kind: 'building', x: prop.cx, y, z: prop.cz, nx: sin, ny: 0, nz: cos, speed: Math.min(9, speed * 0.5) });
+    if (prop.obstacle === 'hydrant') this.jets.push({ x: prop.cx, y: 0.3, z: prop.cz, life: 40 });
   }
 
   readBody(car, body) {
@@ -652,7 +778,7 @@ export class Game {
     body.prevX = car.prevX ?? car.position.x; body.prevZ = car.prevZ ?? car.position.z;
     body.sin = sin; body.cos = cos;
     body.halfW = car.halfW ?? 0.92; body.halfL = car.halfL ?? Math.max(car.spec.zFront, -car.spec.zRear);
-    body.mass = car.moto || car.bicycle ? 260 : car.wreck ? 1300 : car.police ? 1850 : 1650;
+    body.mass = car.moto || car.bicycle ? 260 : car.tune?.mass ?? 1300;
     body.vx = sin * car.speed + (car.vx || 0);
     body.vz = cos * car.speed + (car.vz || 0);
     body.angularVel = car.angularVel || 0;
@@ -692,6 +818,10 @@ export class Game {
     Object.assign(ev, { a, b, kind: 'vehicle', x: hit.x, y: 0.6, z: hit.z, nx: hit.nx, ny: 0, nz: hit.nz, speed });
     if (speed > 0.5) this.collisionListener(ev);
     if (speed > 2.2) this.traffic.spawnSparks(hit.x, 0.56, hit.z, hit.nx, hit.nz, speed);
+    // A shunt lifts the lighter car off its springs
+    const lift = Math.min(hit.impulse * 0.05, 1800);
+    if (a.body) kickBody(a, hit.x, a.position.y + 0.3, hit.z, 0, lift, 0);
+    if (b.body) kickBody(b, hit.x, b.position.y + 0.3, hit.z, 0, lift, 0);
   }
 
   // Bodies the car layer must keep apart from the protagonist on foot
@@ -723,6 +853,7 @@ export class Game {
   updatePerson(dt) {
     if (dt <= 0 || this.transition) return;
     if (this.state === 'falling') { this.updateParachute(dt); return; }
+    if (this.state === 'swimming') { this.updateSwim(dt); return; }
     const p = this.person, keys = this.controllers.keys;
     const grounded = this.state === 'onFoot';
     const x = grounded ? Number(keys.right) - Number(keys.left) : 0;
@@ -760,6 +891,70 @@ export class Game {
     p.verticalVel -= 15 * dt;
     p.position.y += p.verticalVel * dt;
     if (p.position.y < ground) { p.position.y = ground; p.verticalVel = 0; }
+  }
+
+  // ---- In the water ---------------------------------------------------------------------------------------------------
+  // The open water nearest (x, z), a little way off the seawall
+  waterNear(x, z) {
+    const zone = Math.max(ISLAND_BOUNDS.minZ + 60, Math.min(ISLAND_BOUNDS.maxZ - 60, z));
+    const shore = getIslandBoundsAtZ(zone);
+    const west = Math.abs(x - shore.westX) < Math.abs(x - shore.eastX);
+    const open = (sx, sz) => [[0, 0], [0, -11], [0, 11], [-5, 0], [5, 0]].every(([a, b]) => this.controllers.afloat(sx + a, sz + b));
+    for (let off = 16; off < 420; off += 16) {
+      const sx = west ? shore.westX - off : shore.eastX + off;
+      if (open(sx, zone)) return { x: sx, z: zone };
+    }
+    return { x: west ? shore.westX - 40 : shore.eastX + 40, z: zone };
+  }
+
+  // Dry land nearest a point in the water, if there is any within reach
+  landNear(x, z, reach) {
+    const shore = getIslandBoundsAtZ(Math.max(ISLAND_BOUNDS.minZ + 40, Math.min(ISLAND_BOUNDS.maxZ - 40, z)));
+    const sx = x < shore.westX ? shore.westX + 3 : x > shore.eastX ? shore.eastX - 3 : x;
+    if (Math.abs(sx - x) > reach) return null;
+    return this.safeSpot(sx, z, 0.5);
+  }
+
+  enterWater(x, z) {
+    const p = this.person;
+    this.transition = null;
+    p.inVehicle = false;
+    p.position.set(x, WATER - 1.28, z);
+    p.speed = 0; p.verticalVel = 0;
+    this.controllers.swimming = true;
+    this.state = 'swimming';
+    this.onMode('person');
+    this.radio?.setPlaying(false);
+    document.body.dataset.gameState = this.state;
+    this.driveFx.splash(x, z, 0.7);
+    this.updateKeybar();
+  }
+
+  leaveWater(spot) {
+    const p = this.person;
+    this.controllers.swimming = false;
+    p.position.set(spot.x, this.controllers.getGroundHeight(spot.x, spot.z, 'person'), spot.z);
+    this.state = 'onFoot';
+    document.body.dataset.gameState = this.state;
+    this.updateKeybar();
+  }
+
+  updateSwim(dt) {
+    const p = this.person, keys = this.controllers.keys;
+    const x = Number(keys.right) - Number(keys.left), z = Number(keys.forward) - Number(keys.backward);
+    const amount = Math.min(1, Math.hypot(x, z));
+    const fast = keys.sprint && this.stamina > 1 && amount > 0;
+    this.stamina = clamp(this.stamina + (fast ? -9 : 14) * dt, 0, 100);
+    p.speed += (amount * (fast ? 4 : 2.6) - p.speed) * (1 - Math.exp(-dt * 3));
+    if (amount > 0) p.heading += angleDelta(p.heading, this.camera.footYaw + Math.atan2(-x, z)) * (1 - Math.exp(-dt * 8));
+    p.position.x += Math.sin(p.heading) * p.speed * dt;
+    p.position.z += Math.cos(p.heading) * p.speed * dt;
+    p.position.y = WATER - 1.28 + Math.sin(this.clock * 2.2) * 0.05;
+    if (Math.random() < dt * (2 + p.speed * 3)) this.fx.smokeParticle(p.position.x, WATER + 0.1, p.position.z, 0, 0.4, 0, 0.3, 0.7, 0.9 * this.driveFx.light, 0.18, { grow: 0.8 });
+    if (!this.controllers.afloat(p.position.x + Math.sin(p.heading) * 1.5, p.position.z + Math.cos(p.heading) * 1.5)) {
+      const spot = this.landNear(p.position.x, p.position.z, 30);
+      if (spot) this.leaveWater(spot);
+    }
   }
 
   updateParachute(dt) {
@@ -1193,6 +1388,7 @@ export class Game {
   }
 
   onActorKilled(actor, cause) {
+    this.gangs.onKilled(actor);
     if (actor.team !== 'police') this.stats.kills++;
     else this.stats.cops++;
     // dropped weapon & cash
@@ -1304,7 +1500,7 @@ export class Game {
       this.removeFleetCar(car);
     }
     car.mesh.visible = false;
-    if (!car.moto && !car.mode) this.placeWreck(x, z, heading);
+    if (!car.moto && !car.mode && !car.boat) this.placeWreck(x, z, heading);
     if (playerInside && !ejected) {
       // thrown clear, fatally
       this.transition = null;
@@ -1604,7 +1800,7 @@ export class Game {
       if (car.destroyed || car.wreck || car.locked || !car.mesh.visible) return;
       const door = doorPosition(car);
       const d = Math.hypot(door.x - person.position.x, door.z - person.position.z);
-      if (d < nearest && Math.abs(car.position.y - person.position.y) < 1 && Math.abs(car.speed) < 2) { best = { car, distance: d }; nearest = d; }
+      if (d < (car.boat ? 7 : nearest) && Math.abs(car.position.y - person.position.y) < (car.boat ? 3 : 1) && Math.abs(car.speed) < 2) { best = { car, distance: d }; nearest = d; }
     };
     for (const car of this.fleet) consider(car);
     for (const u of this.wanted.units) if (u.active && u.mode === 'parked') consider(u.car);
@@ -1626,6 +1822,7 @@ export class Game {
       if (this.state === 'driving') this.toast('Ralentissez', 'Arrêtez le véhicule pour descendre.');
       return;
     }
+    if (this.state === 'driving' && this.car.boat) { this.leaveBoat(); return; }
     if (this.state === 'driving') { this.beginExit(); return; }
     const candidate = this.findCandidate();
     if (!candidate) return;
@@ -1659,6 +1856,25 @@ export class Game {
   }
 
   // Out of the aircraft, under a canopy; the aircraft flies on by itself
+  // Ashore if a quay is close, over the side if not
+  leaveBoat() {
+    const boat = this.car, p = this.person;
+    boat.ridden = false;
+    const land = this.landNear(boat.position.x, boat.position.z, 22);
+    if (land) {
+      p.inVehicle = false;
+      p.position.set(land.x, this.controllers.getGroundHeight(land.x, land.z, 'person'), land.z);
+      this.state = 'onFoot';
+      this.onMode('person');
+      this.radio?.setPlaying(false);
+      document.body.dataset.gameState = this.state;
+      this.updateKeybar();
+    } else {
+      const s = Math.sin(boat.heading), c = Math.cos(boat.heading);
+      this.enterWater(boat.position.x + c * 2.4, boat.position.z - s * 2.4);
+    }
+  }
+
   bailOut() {
     const car = this.car, p = this.person;
     const h = car.heading;
@@ -1753,13 +1969,18 @@ export class Game {
 
   announce(car) {
     const [brand, model] = CAR_NAMES[car.kind] || ['', 'VÉHICULE'];
-    const hint = car.police ? 'Véhicule de police : ils ne vous lâcheront pas.' : car.mode === 'plane' ? 'Trop lent, il décroche : gardez de la vitesse.' : 'T : changer de radio';
+    const hint = car.police ? 'Véhicule de police : ils ne vous lâcheront pas.' : car.mode === 'plane' ? 'Trop lent, il décroche : gardez de la vitesse.' : car.body ? 'Maj : nitro · Espace : frein à main · T : radio' : 'T : changer de radio';
     this.toast(car.label2 || `${brand} ${model}`, hint);
   }
 
   // ---- Frame -------------------------------------------------------------------------------------------------------
   beforeUpdate(dt) {
     if (!this.active) { this.controllers.resetInput(); return; }
+    // Slow motion breathes in and out on real time, not on its own
+    if (this.slowMo > 0) {
+      this.slowMo = Math.max(0, this.slowMo - dt / Math.max(this.timeScale, 0.05));
+      this.timeScale = this.slowMo > 0.5 ? 0.3 : 1 - 0.7 * this.slowMo / 0.5;
+    } else this.timeScale = 1;
     this.clock += dt;
     this.invulnerable = Math.max(0, this.invulnerable - dt);
     // Wounds close slowly up to half health once out of harm's way
@@ -1816,6 +2037,12 @@ export class Game {
     this.hero.update(!person.inVehicle, 0, dt);
 
     if (dt > 0) {
+      for (let i = this.jets.length - 1; i >= 0; i--) {
+        const jet = this.jets[i];
+        jet.life -= dt;
+        if (jet.life <= 0) this.jets.splice(i, 1);
+        else if (Math.hypot(jet.x - pl.x, jet.z - pl.z) < 120) this.fx.jet(jet.x, jet.y, jet.z, dt);
+      }
       this.updateWeapons(dt);
       if (this.state === 'driving' && car.crashed) this.destroyCar(car);
       // Loose cars (parked, pushed, abandoned) roll to a stop under physics; then every gameplay car pair collides
@@ -1825,7 +2052,13 @@ export class Game {
         if (c.mode) continue;
         if (c.police && this.wanted.units.some((u) => u.car === c && u.active)) continue;
         if (c.ai && c !== car) continue; // mission AI drives it (mission-director.js)
-        const moving = Math.abs(c.speed) > 0.05 || Math.abs(c.vx || 0) + Math.abs(c.vz || 0) > 0.05 || Math.abs(c.angularVel || 0) > 0.02;
+        const moving = Math.abs(c.speed) > 0.05 || Math.abs(c.vx || 0) + Math.abs(c.vz || 0) > 0.05 || Math.abs(c.angularVel || 0) > 0.02
+          || (c.body && !c.wreck && (c.body.grounded < 4 || c.body.r[4] < 0.97));
+        if (c.boat) {
+          if (c.boatAI) driveBoatAI(c, dt, this.player, this.boatWorld);
+          else this.controllers.simulateCar(c, 0, 0, false, dt);
+          continue;
+        }
         if (moving && !c.wreck) this.controllers.simulateCar(c, 0, 0, true, dt);
         else if (moving) {
           c.position.x += (c.vx || 0) * dt; c.position.z += (c.vz || 0) * dt;
@@ -1848,6 +2081,21 @@ export class Game {
       this.shops.update(dt);
       this.updateGps(dt);
     }
+    if (dt > 0) {
+      this.driveFx.light = 1 - 0.7 * this.atmosphere.night;
+      this.driveFx.wet = 1 - (this.controllers.gripFactor ?? 1) * 1.2;
+      const cam = this.camera.camera.position;
+      for (const c of this.allCars) {
+        if (!c.mesh.visible) continue;
+        const near = Math.hypot(c.position.x - cam.x, c.position.z - cam.z) < 130;
+        if (c.boat) { this.driveFx.boat(c, dt, near, this.clock); continue; }
+        if (!c.body) continue;
+        this.driveFx.car(c, dt, near);
+        this.sinking(c);
+      }
+      this.driveFx.flush();
+    }
+    if (dt > 0) { this.stunts.update(dt); this.fallingLamps.update(dt); this.gangs.update(dt); this.tips(dt); }
     this.fx.update(dt, (x, z) => this.controllers.getGroundHeight(x, z, 'person'));
     this.markers.update((x, z) => this.controllers.getGroundHeight(x, z, 'person'));
 
@@ -1865,7 +2113,7 @@ export class Game {
       vehicle.mesh.updateMatrixWorld();
     }
     // On two wheels the protagonist stays in view, posed on the seat
-    if (person.inVehicle && car.moto) {
+    if (person.inVehicle && (car.moto || car.boat)) {
       person.rig.ride(car.chassisPivot, 1.1, { seat: car.seat, bars: car.bars, gripHalf: 0.33, bracket: car.pegs, crankLength: 0.02 });
       this.hero.setWeapon(null);
       this.hero.update(true, 0, dt);
@@ -1917,8 +2165,13 @@ export class Game {
     this.ui['stamina-fill'].style.transform = `scaleX(${this.stamina / 100})`;
     const speed = Math.round(Math.abs(car.speed) * 3.6);
     this.ui['drive-speed'].textContent = String(speed).padStart(3, '0');
-    this.ui['drive-gear'].textContent = car.air ? `${Math.round(car.position.y)} M` : car.speed < -0.2 ? 'R' : speed < 1 ? 'N' : String(Math.min(6, 1 + Math.floor(speed / 29)));
-    this.ui['drive-power'].style.transform = `scaleX(${clamp(Math.abs(car.speed) / (car.drive?.speed || 40), 0, 1)})`;
+    const body = car.body;
+    this.ui['drive-gear'].textContent = car.air ? `${Math.round(car.position.y)} M` : car.speed < -0.2 || body?.reversing ? 'R' : body ? String(body.gear + 1) : speed < 1 ? 'N' : String(Math.min(6, 1 + Math.floor(speed / 29)));
+    const revs = body ? body.rpm / car.tune.redline : Math.abs(car.speed) / (car.drive?.speed || 40);
+    this.ui['drive-power'].style.transform = `scaleX(${clamp(revs, 0, 1)})`;
+    this.ui['drive-power'].classList.toggle('redline', revs > 0.93);
+    this.ui['drive-nitro'].style.transform = `scaleX(${body ? car.nitro : 0})`;
+    this.ui['drive-nitro'].classList.toggle('burning', !!body?.nitro);
     const health = this.ui['drive-health'];
     if (health) { health.style.transform = `scaleX(${(car.hp ?? 100) / 100})`; health.classList.toggle('low', (car.hp ?? 100) < 35); }
     const name = this.ui['vehicle-name'];
@@ -1946,7 +2199,7 @@ export class Game {
         version: 2, state: this.state === 'driving' && fleet.includes(this.car) ? 'driving' : 'onFoot',
         player: { x: spot.x, y: spot === p.position ? p.position.y : this.controllers.getGroundHeight(spot.x, spot.z, 'person'), z: spot.z, heading: p.heading },
         active: fleet.indexOf(this.car), stolen: this.stolen, distance: this.distance, firstEntry: this.firstEntry,
-        money: this.money, health: this.health, armor: this.armor, weapons: this.weapons, weaponId: this.weaponId,
+        money: this.money, debt: this.debt, held: [...this.gangs.held], health: this.health, armor: this.armor, weapons: this.weapons, weaponId: this.weaponId,
         missionsDone: this.missionsDone, stats: this.stats, radio: this.radio?.stationIndex ?? this.radioIndex,
         atmosphere: this.atmosphere.serialize(), safehouses: this.shops?.serialize(), worldBikes: !!this.worldBikesPlaced,
         fleet: fleet.map(car => ({ kind: car.kind, paint: car.paint, position: { x: car.position.x, y: car.position.y, z: car.position.z }, heading: car.heading, stolen: car.stolen, hp: car.hp }))
@@ -1960,7 +2213,7 @@ export class Game {
       let data = JSON.parse(localStorage.getItem(SAVE_KEY));
       for (const key of LEGACY_SAVE_KEYS) data ??= JSON.parse(localStorage.getItem(key));
       if (!data || (data.version !== 1 && data.version !== 2) || !validPosition(data.player) || !Array.isArray(data.fleet) || data.fleet.length > FLEET_MAX) return;
-      if (!data.fleet.every(c => PROFILES[c.kind] && validPosition(c.position) && Number.isFinite(c.heading) && Number.isInteger(c.paint))) return;
+      if (!data.fleet.every(c => (carSpecs[c.kind] || c.kind === 'moto') && validPosition(c.position) && Number.isFinite(c.heading) && Number.isInteger(c.paint))) return;
       if (data.fleet.length) {
         for (const car of this.fleet) car.mesh.removeFromParent();
         this.fleet = [];
@@ -1980,6 +2233,8 @@ export class Game {
       this.firstEntry = data.firstEntry !== false;
       if (data.version === 2) {
         this.money = Number.isFinite(data.money) ? Math.max(0, data.money) : 0;
+        if (Number.isFinite(data.debt)) this.debt = data.debt;
+        if (Array.isArray(data.held)) this.gangs.held = new Set(data.held.filter((id) => typeof id === 'string'));
         this.health = Number.isFinite(data.health) ? clamp(data.health, 20, 100) : 100;
         this.armor = Number.isFinite(data.armor) ? clamp(data.armor, 0, 100) : 0;
         if (data.weapons && typeof data.weapons === 'object') {

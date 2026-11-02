@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>OVERDRAFT — Margin Call</title>
+  <title>OVERDRAFT — Hostile Takeover</title>
   <link rel="icon" href="data:," />
   <meta name="description" content="OVERDRAFT. Un jeu d’action en monde ouvert dans Manhattan : missions, poursuites, combats et niveau de recherche à cinq étoiles." />
   <!-- three.js dev branch pinned to a commit (builds committed to mrdoob/three.js@dev, served by jsDelivr) -->
@@ -86,6 +86,20 @@
   <link rel="modulepreload" href="./js/person-body.js" />
   <link rel="modulepreload" href="./js/person-motion.js" />
   <link rel="modulepreload" href="./js/crowd-motion.js" />
+  <link rel="modulepreload" href="./js/nature-assets.js" />
+  <link rel="modulepreload" href="./js/world-assets.js" />
+  <link rel="modulepreload" href="./js/street-clutter.js" />
+  <link rel="modulepreload" href="./js/car-assets.js" />
+  <link rel="modulepreload" href="./js/car-physics.js" />
+  <link rel="modulepreload" href="./js/drive-fx.js" />
+  <link rel="modulepreload" href="./js/stunts.js" />
+  <link rel="modulepreload" href="./js/ramps.js" />
+  <link rel="modulepreload" href="./js/boat.js" />
+  <link rel="modulepreload" href="./js/gangs.js" />
+  <link rel="modulepreload" href="./js/phone.js" />
+  <link rel="modulepreload" href="./js/missions-act3.js" />
+  <link rel="modulepreload" href="./js/audio-drive.js" />
+  <link rel="modulepreload" href="./js/grass.js" />
   <link rel="modulepreload" href="./js/ragdoll.js" />
   <link rel="modulepreload" href="./js/airplane.js" />
   <link rel="modulepreload" href="./js/flight.js" />
@@ -112,6 +126,7 @@
       <symbol id="i-car" viewBox="0 0 24 24"><path d="M9.6 4.8V3.4a.6.6 0 0 1 .6-.6h3.6a.6.6 0 0 1 .6.6v1.4"/><path d="m5.2 10.5 1.4-4.1A2.2 2.2 0 0 1 8.7 4.8h6.6a2.2 2.2 0 0 1 2.1 1.6l1.4 4.1"/><rect x="3" y="10.5" width="18" height="6.5" rx="2"/><path d="M6 17v2.6M18 17v2.6M6.6 13.8h1.6M15.8 13.8h1.6"/></symbol>
       <symbol id="i-bike" viewBox="0 0 24 24"><circle cx="5.5" cy="16.5" r="3.6"/><circle cx="18.5" cy="16.5" r="3.6"/><path d="M5.5 16.5 9.3 9.6h6.3M11.6 16.5 9.3 9.6M11.6 16.5l4-6.9M5.5 16.5h6.1M15.6 9.6l2.9 6.9M15.6 9.6 14.8 7h2.4M8 8.4h2.8"/></symbol>
       <symbol id="i-heli" viewBox="0 0 24 24"><path d="M3.5 4h15M11 4v3.2"/><path d="M6 12.2a5 5 0 0 1 5-5h1.6a4.4 4.4 0 0 1 4.4 4.4V15H8.8A2.8 2.8 0 0 1 6 12.2z"/><path d="M17 11h4.2M21.2 8.8v4.4M7 19h10.5M9.5 15v4M15 15v4"/></symbol>
+      <symbol id="i-boat" viewBox="0 0 24 24"><path d="M3 15.5h18l-2.2 4.2a1.6 1.6 0 0 1-1.4.8H6.6a1.6 1.6 0 0 1-1.4-.8L3 15.5Z"/><path d="M6 15.5 8.4 9h6.2l3.4 6.5M11.5 9V5.4M2.5 21.6c1.6 1 3.2 1 4.8 0 1.6 1 3.2 1 4.8 0 1.6 1 3.2 1 4.8 0 1.6 1 3.2 1 4.8 0"/></symbol>
       <symbol id="i-moto" viewBox="0 0 24 24"><circle cx="5.2" cy="16.8" r="3.3"/><circle cx="18.8" cy="16.8" r="3.3"/><path d="M5.2 16.8 9.6 11h5.1l3.1-3.6M18.8 16.8 15.9 8.6M15.9 8.6h2.5M9.6 11l3.2 5.8h3.4M7.6 8.6h4.2l1.6 2.4"/></symbol>
       <symbol id="i-plane" viewBox="0 0 24 24"><path d="M21 11.6c.6.2.6 1.1 0 1.3l-6 1.4-3.4 5.9h-2l1.5-5.4-4.4 1-1.5 2H3.4l.7-3.5-.7-3.5h1.8l1.5 2 4.4 1-1.5-5.4h2l3.4 5.9z"/></symbol>
       <symbol id="i-fist" viewBox="0 0 24 24"><path d="M8 11.5V7.6a1.5 1.5 0 0 1 3 0v3.4M11 10.5V6.6a1.5 1.5 0 0 1 3 0v4.4M14 10.8V8a1.5 1.5 0 0 1 3 0v6.5a6 6 0 0 1-6 6h-.8A5.2 5.2 0 0 1 5 15.3V13a1.5 1.5 0 0 1 3 0v1.2"/></symbol>

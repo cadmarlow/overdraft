@@ -6,7 +6,7 @@ import { attribute, uv, float, smoothstep, abs, mix, vec2 } from 'three/tsl';
 // Every pool keeps a degenerate instance until warmed up so its pipeline compiles behind the loading screen.
 
 const GLOW_MAX = 900;
-const SMOKE_MAX = 700;
+const SMOKE_MAX = 1100;
 const DEBRIS_MAX = 60;
 const SCORCH_MAX = 12;
 const LIGHT_POOL = 4;
@@ -194,7 +194,37 @@ class EffectsSystem {
     this.flash(x, y + 2, z, 0xff8a30, 1600 * size, 0.9, 60);
   }
 
+  // Bits of a car thrown off a hard blow
+  shards(x, y, z, nx, nz, count) {
+    for (let i = 0; i < count; i++) {
+      const v = 3 + Math.random() * 8, s = 0.06 + Math.random() * 0.2;
+      if (this.debris.length >= DEBRIS_MAX) this.debris.shift();
+      this.debris.push({ x, y, z, vx: nx * v + (Math.random() - 0.5) * 6, vy: 2 + Math.random() * 6, vz: nz * v + (Math.random() - 0.5) * 6, sx: s, sy: s * 0.3, sz: s * 1.2,
+        rx: Math.random() * 6, ry: Math.random() * 6, wx: (Math.random() - 0.5) * 18, wy: (Math.random() - 0.5) * 18, life: 7 + Math.random() * 5 });
+    }
+  }
+
   // Continuous emitters, called every frame by burning or damaged vehicles (rate in particles per second)
+  // Leaves shaken out of a crown, spinning down
+  leaves(x, y, z, radius, count = 40) {
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * 6.28, d = Math.sqrt(Math.random()) * radius;
+      const green = 0.55 + Math.random() * 0.4;
+      this.smokeParticle(x + Math.cos(a) * d, y + Math.random() * radius * 0.6, z + Math.sin(a) * d,
+        (Math.random() - 0.5) * 2.4, -0.4 - Math.random() * 0.8, (Math.random() - 0.5) * 2.4,
+        0.1 + Math.random() * 0.09, 2 + Math.random() * 2.5, 0.42, 0.95, { tint: [0.62, green, 0.2], gravity: 0.5, drag: 1.1, grow: 0 });
+    }
+  }
+
+  // A broken hydrant: a jet of water falling back as spray. Call every frame
+  jet(x, y, z, dt) {
+    for (let n = Math.ceil(dt * 70); n > 0; n--) {
+      const a = Math.random() * 6.28, s = 0.3 + Math.random() * 0.8;
+      this.smokeParticle(x, y, z, Math.cos(a) * s, 7.5 + Math.random() * 3, Math.sin(a) * s,
+        0.1 + Math.random() * 0.1, 1 + Math.random() * 0.6, 0.86, 0.5, { tint: [0.93, 0.97, 1], gravity: 9.5, drag: 0.25, grow: 0.65 });
+    }
+  }
+
   smokeTrail(x, y, z, dt, amount = 1, dark = 0.3) {
     let n = amount * 14 * dt;
     while (n > 0) {

@@ -12,6 +12,7 @@ class AIDriver {
    */
   constructor(controllers, nav, car, { maxSpeed = 30, corner = 9, traffic = null, repath = 2.2, avoid = true } = {}) {
     Object.assign(this, { controllers, nav, car, maxSpeed, corner, traffic, repathEvery: repath, avoid });
+    this.aggressive = false;
     this.path = null;
     this.seg = 0;
     this.repathT = 0;
@@ -153,7 +154,9 @@ class AIDriver {
     this.steer = steer;
     this.blocked = blocked;
     this.target = target;
-    this.controllers.simulateCar(car, throttle, steer, target <= 0.1 && Math.abs(speed) < 3, dt);
+    // A pursuer throws the car into the corner on the handbrake rather than braking for it
+    const flung = this.aggressive && Math.abs(delta) > 0.75 && speed > 12 && speed < 34;
+    this.controllers.simulateCar(car, throttle, steer, flung || (target <= 0.1 && Math.abs(speed) < 3), dt);
     car.mesh.position.copy(car.position);
     car.mesh.rotation.y = car.heading;
   }

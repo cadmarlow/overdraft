@@ -64,6 +64,17 @@ Un système à **cinq étoiles**, dans la tradition du genre, avec une police qu
 - **Armes** : fusil d’assaut *Sentinel*, grenades *Éclat*.
 - **IA de conduite** partagée : la police et les véhicules de mission suivent la ville comme des conducteurs.
 
+## Contenu de la version 0.8 « Hostile Takeover »
+
+- **Acte III** : *Offre hostile*, *Due diligence*, *Le casse de la Liberty Trust*, *Prise de contrôle*. Ces contrats se prennent à tout
+  moment, sans attendre la fin de l’acte II. Derrière Varga, Hélène Cazal, banquière, tient la dette de la famille Roux.
+- **La police chasse** : flancs et queue de poisson sur la voiture, barrages sur la route devant vous dès trois étoiles, herses dès
+  quatre, tireurs aux fenêtres, tireur d’élite dans l’hélicoptère. Les voitures hors de vue comblent leur retard.
+- **Territoires** : six quartiers tenus par trois bandes. Leurs hommes tiennent les coins de rue, envoient une voiture après trois morts.
+  Vider un repaire donne le quartier, et le quartier paie à chaque échéance.
+- **L’eau** : hors-bord à vernis et acajou, sillage, voitures qui coulent, nage. Vedettes ennemies armées.
+- **Téléphone** (P) : contacts qui rendent service, messages, contrats avec GPS, banque et dette, carte des territoires.
+
 ## Le garage rapide
 
 Le joueur doit pouvoir changer de monture sans jamais chercher un véhicule : le garage (touche G) fige le jeu et propose
@@ -99,5 +110,8 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | 0.2 | Opening Bell | Combat, niveau de recherche, Acte I, activités, radio procédurale, dégâts et explosions |
 | 0.3 | Margin Call | Acte II, planques, armurerie, carrosserie, motos, cycle jour/nuit continu, météo, IA de conduite |
 | **0.4** | **Human Capital** | Vrais personnages, motion capture, foule vivante, police tactique, chutes physiques |
-| 0.5 | Hostile Takeover | Acte III, gangs et territoires, braquages en plusieurs étapes, bateaux, téléphone et contacts |
-| 0.6 | Closing Bell | Fin de l’histoire, coopération en ligne, mode photo, optimisation mobile |
+| **0.5** | **Hard Assets** | Monde solide (trafic, troncs, mobilier), vrais arbres, vraie herbe |
+| **0.6** | **Prime Real Estate** | Façades en vraie brique et pierre, fenêtres en relief, rues et commerces refaits, objets réels |
+| **0.7** | **Bull Run** | Conduite refaite : suspension, pneus et moteur simulés, vrais modèles de voitures, son moteur, nitro, cascades |
+| **0.8** | **Hostile Takeover** | Acte III, gangs et territoires, casse en plusieurs temps, bateaux et nage, téléphone, police offensive |
+| 0.9 | Closing Bell | Fin de l’histoire, coopération en ligne, mode photo, optimisation mobile |

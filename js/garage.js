@@ -1,5 +1,8 @@
 import { doorPosition } from './interaction-state.js';
 import { QuickStrip } from './quick-strip.js';
+import { settleBody } from './car-physics.js';
+import { WATER } from './boat.js';
+import { repairBody } from './drive-fx.js';
 
 // The quick garage: a small button (G) opens a strip of tiles that freezes the game for a moment. Any tile puts the player
 // in that vehicle on the spot. From the ground a plane appears in flight, already above the rooftops; from the air, a car
@@ -7,9 +10,13 @@ import { QuickStrip } from './quick-strip.js';
 
 const CHOICES = [
   { id: 'foot', label: 'À PIED', icon: 'i-walk' },
-  { id: 'car', label: 'VOITURE', icon: 'i-car' },
+  { id: 'car', label: 'BERLINE', icon: 'i-car' },
+  { id: 'muscle', label: 'MUSCLE', icon: 'i-car' },
+  { id: 'sport', label: 'SPORT', icon: 'i-car' },
+  { id: 'super', label: 'SUPERCAR', icon: 'i-car' },
   { id: 'moto', label: 'MOTO', icon: 'i-moto' },
   { id: 'bicycle', label: 'VÉLO', icon: 'i-bike' },
+  { id: 'boat', label: 'BATEAU', icon: 'i-boat' },
   { id: 'helicopter', label: 'HÉLICO', icon: 'i-heli' },
   { id: 'plane', label: 'AVION', icon: 'i-plane' }
 ];
@@ -31,7 +38,7 @@ class Garage extends QuickStrip {
     const g = this.game;
     if (g.state !== 'driving') return 'foot';
     const car = g.car;
-    return car.moto ? 'moto' : car.bicycle ? 'bicycle' : car.mode || 'car';
+    return car.moto ? 'moto' : car.boat ? 'boat' : car.bicycle ? 'bicycle' : car.mode || (['muscle', 'sport', 'super'].includes(car.kind) ? car.kind : 'car');
   }
 
   get currentIndex() { return CHOICES.findIndex((c) => c.id === this.current); }
@@ -67,7 +74,8 @@ class Garage extends QuickStrip {
     const from = this.origin();
     if (id === 'foot') { this.dismount(from); return; }
     const left = this.release();
-    if (id === 'car' || id === 'moto' || id === 'bicycle') this.board(this.groundVehicle(id, from, left), from);
+    if (id === 'boat') this.board(this.boat(from), from);
+    else if (id === 'car' || id === 'moto' || id === 'bicycle' || id === 'muscle' || id === 'sport' || id === 'super') this.board(this.groundVehicle(id, from, left), from);
     else if (id === 'helicopter') this.board(this.helicopter(from), from);
     else this.board(this.plane(from), from);
     g.state = 'driving';
@@ -107,7 +115,8 @@ class Garage extends QuickStrip {
       bike.speed = Math.min(carry, bike.drive.speed);
       return bike;
     }
-    const car = this.prepare(g.rides.find((r) => r.pooled && (id === 'moto') === !!r.moto));
+    const kind = id === 'car' ? 'sedan' : id;
+    const car = this.prepare(g.rides.find((r) => r.pooled && r.kind === kind));
     car.summoned = true;
     car.hp = 100;
     car.fallen = false;
@@ -115,7 +124,28 @@ class Garage extends QuickStrip {
     car.prevX = spot.x; car.prevZ = spot.z;
     car.heading = from.heading;
     car.speed = Math.min(carry, car.drive.speed);
+    if (car.body) {
+      settleBody(car, from.heading);
+      car.speed = Math.min(carry, car.drive.speed);
+      car.nitro = 1;
+      repairBody(car);
+    }
     return car;
+  }
+
+  // The nearest river: the boat waits a little way off the seawall
+  boat(from) {
+    const g = this.game;
+    const boat = this.prepare(g.rides.find((r) => r.boat));
+    boat.summoned = true;
+    boat.hp = 100;
+    const spot = g.waterNear(from.x, from.z);
+    boat.position.set(spot.x, WATER, spot.z);
+    boat.prevX = spot.x; boat.prevZ = spot.z;
+    // Bow to the open river
+    boat.heading = spot.x < 0 ? -Math.PI / 2 : Math.PI / 2;
+    boat.speed = 0;
+    return boat;
   }
 
   helicopter(from) {

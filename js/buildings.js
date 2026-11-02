@@ -35,6 +35,7 @@ import {
 import { GEO } from './nyc-geodata.js';
 import { REAL_BUILDINGS } from './building-geodata.js';
 import { createBuildingFootprints } from './building-footprints.js';
+import { createAwningMaterial } from './tsl-materials.js';
 import { polygonContains, polygonBoxOverlaps } from './building-collision.js';
 import { pavedPlazaRects, parkTreeSites, sidewalkBlocks } from './city-grid.js';
 
@@ -145,6 +146,39 @@ class Quadtree {
   }
 }
 
+// A canvas awning in a unit box: sloping down and out from the wall at -x, with a valance along its front at +x. uv.x runs
+// along the wall, so the material can stripe it
+function createAwningGeometry() {
+  const wall = -0.5, front = 0.5, top = 0.5, low = -0.2, hem = -0.5, end = 0.5;
+  const pos = [], uv = [], nor = [], idx = [];
+  const quad = (a, b, c, d, n, v0 = 0, v1 = 1) => {
+    const at = pos.length / 3;
+    pos.push(...a, ...b, ...c, ...d);
+    for (let i = 0; i < 4; i++) nor.push(...n);
+    uv.push(0, v0, 1, v0, 1, v1, 0, v1);
+    idx.push(at, at + 1, at + 2, at, at + 2, at + 3);
+  };
+  const l = Math.hypot(front - wall, top - low);
+  const up = [(top - low) / l, (front - wall) / l, 0];
+  quad([front, low, end], [front, low, -end], [wall, top, -end], [wall, top, end], up, 0.25, 1);
+  quad([front, hem, end], [front, hem, -end], [front, low, -end], [front, low, end], [1, 0, 0], 0, 0.25);
+  // closed ends
+  for (const z of [end, -end]) {
+    const n = [0, 0, Math.sign(z)];
+    const at = pos.length / 3;
+    pos.push(wall, top, z, front, low, z, front, hem, z);
+    for (let i = 0; i < 3; i++) nor.push(...n);
+    uv.push(0, 0.5, 0, 0.5, 0, 0.5);
+    if (z > 0) idx.push(at, at + 2, at + 1); else idx.push(at, at + 1, at + 2);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+
 function buildCityBlocks(scene, landmarkColliders = []) {
   const group = new THREE.Group();
   group.name = 'ManhattanCityBlocks';
@@ -162,6 +196,8 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   const facades = [
     // 0: Pre-War Limestone & Buff Brick (5th Ave / Madison Ave / Upper East Side style)
     [createPreWarBuildingMaterial, {
+      surface: 'limestone',
+      tint: [1.5, 1.45, 1.32],
       stoneColor: 0xd8cdb8,
       trimColor: 0x9e937f,
       windowGlassColor: 0x1a2836,
@@ -173,6 +209,8 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     }],
     // 1: Historic Warm Red/Terracotta Brick (Garment District / Chelsea / SoHo / Upper West Side)
     [createPreWarBuildingMaterial, {
+      surface: 'redbrick',
+      tint: [1.18, 1.1, 1.06],
       stoneColor: 0xa45a45,
       trimColor: 0xcab9a0,
       windowGlassColor: 0x16222e,
@@ -214,8 +252,35 @@ function buildCityBlocks(scene, landmarkColliders = []) {
       warmth: 0.48,
       reflectivity: 0.95,
       seed: 94.3
+    }],
+    // 5: Brown brick with limestone dressings (tenements and apartment blocks all over town)
+    [createPreWarBuildingMaterial, {
+      surface: 'brownbrick',
+      tint: [0.96, 0.9, 0.84],
+      stoneColor: 0x8e6a55,
+      trimColor: 0xcfc4ae,
+      windowGlassColor: 0x18222c,
+      windowWidth: 2.5,
+      floorHeight: 3.3,
+      litProbability: 0.52,
+      warmth: 0.84,
+      seed: 38.6
+    }],
+    // 6: Buff brick (Upper West Side, the Bronx-facing avenues)
+    [createPreWarBuildingMaterial, {
+      surface: 'buffbrick',
+      tint: [0.98, 0.94, 0.86],
+      stoneColor: 0xb89a6e,
+      trimColor: 0xd6ccb8,
+      windowGlassColor: 0x1a2430,
+      windowWidth: 2.6,
+      floorHeight: 3.4,
+      litProbability: 0.5,
+      warmth: 0.8,
+      seed: 52.1
     }]
   ];
+  const MASONRY = new Set([0, 1, 5, 6]);
   const materials = facades.map(([create, opts]) => create({ ...opts, footprintLocal: true }));
   const storeys = facades.map(([, opts]) => opts.floorHeight);
 
@@ -346,8 +411,8 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     const seed = Math.round(b.cx * 31 + b.cz * 17);
     const rand = mulberry32(seed);
     const tone = rand();
-    const mat = b.year && b.year < 1945 ? (tone < 0.8 ? 0 : 1)
-      : b.year && b.year < 1980 ? (tone < 0.55 ? 0 : 3)
+    const mat = b.year && b.year < 1945 ? (tone < 0.3 ? 0 : tone < 0.58 ? 5 : tone < 0.82 ? 1 : 6)
+      : b.year && b.year < 1980 ? (tone < 0.3 ? 5 : tone < 0.55 ? 0 : 3)
         : tone < 0.6 ? 2 : 4;
     // The survey has no building-use data; choose retail independently of facade style and roof details.
     const storefronts = b.height >= 6 && mulberry32(seed ^ 0x53544f52)() < 0.55;
@@ -366,7 +431,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     }
     const neighbours = nearbyReserves(b, 6);
     addSurveyedFireEscapes(b, detail, storeys[mat], neighbours);
-    detailsToPlace.push({ b: record, detail, masonry: mat < 2, rand });
+    detailsToPlace.push({ b: record, detail, masonry: MASONRY.has(mat), rand });
     allBlocks.push(detail);
   }
   // Reserve every fire escape before placing storefronts on neighbouring buildings.
@@ -377,7 +442,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   }
   surveyedBuckets.forEach((items, i) => {
     if (!items.length) return;
-    group.add(createBuildingFootprints(materials[i], items, i < 2 ? b => nearbyReserves(b, 2) : undefined));
+    group.add(createBuildingFootprints(materials[i], items, MASONRY.has(i) ? b => nearbyReserves(b, 2) : undefined));
   });
 
   // Narrow empty lots become sitting areas with trees.
@@ -596,15 +661,15 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   const fireEscapeSystem = createFireEscapes(group);
 
   // 5. Ground-floor retail canvas awnings & illuminated storefront fascia signs
-  const awningMat = new THREE.MeshStandardNodeMaterial({ color: 0xffffff, roughness: 0.65 });
+  const awningMat = createAwningMaterial();
   const awningPalette = [
-    new THREE.Color(0x9e222e),
-    new THREE.Color(0x1f593b),
-    new THREE.Color(0x213d68),
-    new THREE.Color(0xd9912b),
-    new THREE.Color(0x2d2d32)
+    new THREE.Color(0x8c2028),
+    new THREE.Color(0x24503a),
+    new THREE.Color(0x24406a),
+    new THREE.Color(0xb98a34),
+    new THREE.Color(0x2e2e33)
   ];
-  const awningInst = new THREE.InstancedMesh(unitBox, awningMat, MAX_AWNINGS);
+  const awningInst = new THREE.InstancedMesh(createAwningGeometry(), awningMat, MAX_AWNINGS);
   awningInst.castShadow = awningInst.receiveShadow = true;
   awningInst.frustumCulled = false;
   // Pre-initialize instanceColor buffer so dynamic updates work cleanly
@@ -777,7 +842,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
         const a = blk.awnings[i];
         dummy.rotation.set(0, a.ry || 0, 0);
         dummy.position.set(a.x, a.y, a.z);
-        dummy.scale.set(a.w, 0.75, a.d);
+        dummy.scale.set(a.w, 1.05, a.d);
         dummy.updateMatrix();
         awningInst.setMatrixAt(awningCount, dummy.matrix);
         awningInst.setColorAt(awningCount, awningPalette[a.colorIdx % awningPalette.length]);

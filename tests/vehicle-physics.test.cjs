@@ -180,7 +180,7 @@ test('touching vehicles at equal velocity are never rewound', () => {
 
 const trafficSource = readFileSync(join(__dirname, '../js/traffic.js'), 'utf8');
 function trafficHarness(vehicles) {
-  const context = { ...physics, vehicles, contactA: {}, contactB: {}, vehicleHit: {}, impacted: [], collisionStep: 0,
+  const context = { ...physics, vehicles, TAKEDOWN_SPEED: 10, takedown: null, contactA: {}, contactB: {}, vehicleHit: {}, impacted: [], collisionStep: 0,
     clamp: (value, lo, hi) => Math.max(lo, Math.min(hi, value)),
     shove(v, dx, dz) { v.x += dx; v.z += dz; },
     reportCollision() {}, spawnCollisionSparks() {}, changeLanes() {},

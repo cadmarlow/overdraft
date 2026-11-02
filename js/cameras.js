@@ -59,6 +59,20 @@ class CameraSystem {
     this._aimLook = new THREE.Vector3();
     this._shakeOffset = new THREE.Vector3();
 
+    // Chasing a car: a yaw of its own that trails the car through turns, a spring on the distance that takes the
+    // acceleration, a wider lens with speed
+    this.carYaw = 0;
+    this.carPull = 0;
+    this.carPullVel = 0;
+    this.carSide = 0;
+    this.carRoll = 0;
+    this.carSpeed = 0;
+    this.carLift = 0;
+    this.carEntity = null;
+    this.speedFov = 0;
+    this.lookBack = 0;
+    this.rumble = 0;
+
     this.bindPointerControls();
   }
 
@@ -215,6 +229,8 @@ class CameraSystem {
 
     switch (this.activePresetId) {
       case 'chase': {
+        if (entity.body) { this.chaseCar(entity, dt, desiredPos, desiredLook); break; }
+        this.speedFov += ((entity.boat ? Math.abs(entity.speed) / 31 * 15 : 0) - this.speedFov) * (1 - Math.exp(-dt * 3));
         if (entity.type === 'person' && this.aimBlend > 0.001) this.aimFrame(entity);
         const dist = entity.chaseDistance * this.zoomMultiplier * (1 + Math.min(0.25, this.smoothedSpeed * 0.01));
         const height = entity.chaseHeight * this.zoomMultiplier + Math.sin(this.orbitPitchOffset) * dist * 0.85;
@@ -262,8 +278,9 @@ class CameraSystem {
         let fwdOffset = 0.35;
         let eyeY = 1.68;
         if (entity.type === 'car') {
-          fwdOffset = 0.55;
-          eyeY = 1.52;
+          // On the bonnet, behind the glass: the models have no cabin to sit in
+          fwdOffset = (entity.spec?.wheelZf ?? 1.4) * 0.42;
+          eyeY = (entity.spec?.height ?? 1.5) * 0.86;
         } else if (entity.type === 'cyclist') {
           fwdOffset = 0.35;
           eyeY = 1.55;
@@ -376,8 +393,9 @@ class CameraSystem {
         this.followLookOffset.subVectors(this.currentLookAt, entity.position);
       }
       const locked = document.pointerLockElement === this.domElement;
-      const k = 1 - Math.exp(-dt * (entity.type === 'person' && (locked || this.aimBlend > 0.5) ? 24 : 8.5));
-      this.followBaseY += (entity.position.y - this.followBaseY) * k;
+      const k = 1 - Math.exp(-dt * (entity.body ? 22 : entity.type === 'person' && (locked || this.aimBlend > 0.5) ? 24 : 8.5));
+      // Off a ramp the camera does not rise with the car at once: the car climbs out of the frame, and lands back in it
+      this.followBaseY += (entity.position.y - this.followBaseY) * (entity.body ? 1 - Math.exp(-dt * (entity.body.grounded ? 9 : 2.6)) : k);
       this.followOffset.lerp(desiredPos.sub(entity.position), k);
       this.followLookOffset.lerp(desiredLook.sub(entity.position), k);
       this.currentPos.set(entity.position.x, this.followBaseY, entity.position.z).add(this.followOffset);
@@ -412,6 +430,17 @@ class CameraSystem {
     }
     this.camera.position.copy(this.currentPos);
     this.camera.lookAt(this.currentLookAt);
+    if (this.activePresetId === 'chase' && entity.body) {
+      this.camera.rotateZ(this.carRoll);
+      // Speed through the seat: a fine shudder that grows on bad surfaces and near the top of the car's range
+      const r = this.rumble;
+      if (r > 0.0005) {
+        const t = elapsed * 41;
+        this.camera.position.x += Math.sin(t) * r * 0.6;
+        this.camera.position.y += Math.sin(t * 1.37 + 1) * r;
+        this.camera.rotateZ(Math.sin(t * 0.73) * r * 0.12);
+      }
+    }
     if (this.shake > 0.001) {
       const a = this.shake * this.shake;
       this._shakeOffset.set((Math.random() - 0.5) * a, (Math.random() - 0.5) * a, (Math.random() - 0.5) * a);
@@ -422,9 +451,63 @@ class CameraSystem {
     // Aiming narrows the view
     if (this.activePresetId === 'chase') {
       this.aimBlend += ((this.aimMode && entity.type === 'person' ? 1 : 0) - this.aimBlend) * (1 - Math.exp(-dt * 12));
-      const fov = 56 - 12 * this.aimBlend;
+      const fov = 56 - 12 * this.aimBlend + this.speedFov;
       if (Math.abs(this.camera.fov - fov) > 0.05) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
     }
+  }
+
+  // Behind a car. The camera holds its own heading, which trails the direction of travel: through a turn the car swings in
+  // the frame, and in a slide it hangs sideways across the view while the camera keeps looking where it is going.
+  chaseCar(car, dt, desiredPos, desiredLook) {
+    const b = car.body;
+    const vx = b.vx, vz = b.vz, speed = Math.hypot(vx, vz);
+    if (this.carEntity !== car) {
+      this.carEntity = car;
+      this.carYaw = car.heading;
+      this.carPull = this.carPullVel = this.carSide = this.carRoll = 0;
+      this.carSpeed = speed;
+    }
+    const delta = (a, c) => Math.atan2(Math.sin(c - a), Math.cos(c - a));
+    const reversing = car.speed < -2;
+    const travel = speed > 3 ? Math.atan2(vx, vz) + (reversing ? Math.PI : 0) : car.heading;
+    const weight = Math.min(1, speed / 16) * (b.grounded ? 0.78 : 0.95);
+    const follow = car.heading + delta(car.heading, travel) * weight;
+    const lag = 1 - Math.exp(-dt * (reversing ? 2.2 : 3.4 + Math.min(2.6, speed * 0.04)));
+    this.carYaw += delta(this.carYaw, follow) * lag;
+    const wantBack = this.controllerManager.keys.down ? 1 : 0;
+    this.lookBack += (wantBack - this.lookBack) * (1 - Math.exp(-dt * 16));
+    const yaw = this.carYaw + this.orbitYawOffset + (this.lookBack > 0.5 ? Math.PI : 0);
+
+    // The distance is a spring: it stretches as the car pulls away and closes under braking
+    const acceleration = dt > 0 ? (speed - this.carSpeed) / dt : 0;
+    this.carSpeed = speed;
+    const wanted = Math.max(-0.9, Math.min(1.5, acceleration * 0.11));
+    this.carPullVel += ((wanted - this.carPull) * 34 - this.carPullVel * 9) * dt;
+    this.carPull += this.carPullVel * dt;
+
+    const span = Math.min(1, speed / 75);
+    const distance = car.chaseDistance * this.zoomMultiplier * (1 + span * 0.2) + this.carPull;
+    const lift = car.chaseHeight * this.zoomMultiplier * (1 - span * 0.14) + Math.sin(this.orbitPitchOffset - 0.09) * distance * 0.85;
+    desiredPos.set(car.position.x - Math.sin(yaw) * distance, Math.max(0.7, car.position.y + lift), car.position.z - Math.cos(yaw) * distance);
+
+    // Ahead of the car, and leaning into the corner it is taking
+    const ahead = 6 + speed * 0.22;
+    const lateral = Math.max(-1, Math.min(1, b.wy * speed / 12));
+    this.carSide += (lateral * 1.5 - this.carSide) * (1 - Math.exp(-dt * 4));
+    const side = this.carSide * (this.lookBack > 0.5 ? -1 : 1);
+    desiredLook.set(
+      car.position.x + Math.sin(yaw) * ahead + Math.cos(yaw) * side,
+      car.position.y + car.cameraTargetOffset.y + 0.34,
+      car.position.z + Math.cos(yaw) * ahead - Math.sin(yaw) * side
+    );
+    this.carRoll += ((b.grounded ? -lateral * 0.028 : 0) - this.carRoll) * (1 - Math.exp(-dt * 5));
+
+    const top = Math.max(car.tune.top, 50);
+    const rush = Math.min(1.2, speed / top) ** 1.5;
+    const wide = rush * 25 + (b.nitro ? 9 : 0);
+    this.speedFov += (wide - this.speedFov) * (1 - Math.exp(-dt * (wide > this.speedFov ? 2.6 : 3.6)));
+    const road = b.wheels[0].rough ?? 0;
+    this.rumble = (rush * 0.016 + (speed > 4 ? road * Math.min(1, speed / 20) * 0.7 : 0)) * (b.grounded ? 1 : 0.2) * (b.nitro ? 1.8 : 1);
   }
 
   // Over-the-shoulder framing: orbit a pivot at the right shoulder, pitch from the mouse

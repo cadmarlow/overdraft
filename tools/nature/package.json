@@ -1,0 +1,9 @@
+{
+  "name": "overdraft-nature-tools",
+  "private": true,
+  "type": "module",
+  "description": "Offline build of the foliage atlas and nature textures in assets/nature",
+  "dependencies": {
+    "sharp": "^0.34.0"
+  }
+}

@@ -11,7 +11,7 @@ export function doorPosition(car, side = 1) {
   };
 }
 export function canInteract(state, speed = 0) {
-  return state === 'onFoot' || (state === 'driving' && Math.abs(speed) < 1.5);
+  return state === 'onFoot' || state === 'swimming' || (state === 'driving' && Math.abs(speed) < 1.5);
 }
 export function validPosition(position) {
   return position && ['x', 'y', 'z'].every(k => Number.isFinite(position[k])) &&

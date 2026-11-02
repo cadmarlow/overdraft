@@ -5,17 +5,9 @@ import { vehicleContact, resolveVehicleContact, sweptVehicleContact } from './ve
 import { signalPhase, walkSignal } from './city-config.js';
 import { cityUniforms, createContactShadowMaterial, createCarFlareMaterial } from './tsl-materials.js';
 import { HEADLIGHTS, createVehicleHeadlight, placeVehicleHeadlight } from './vehicle-lights.js';
-import {
-  BODY_SPECS,
-  buildCarGeometry,
-  buildCarProxyGeometry,
-  buildSteerableWheelGeo,
-  createCarWheelMaterial,
-  createLoftedCarMaterial,
-  carStyleCode,
-  buildLightbarGeometry,
-  createLightbarMaterial
-} from './cars.js';
+import { BODY_SPECS, carStyleCode, buildLightbarGeometry, createLightbarMaterial } from './cars.js';
+import { carModels, carSpecs, createWheelMaterial, trafficMaterial, withWheels } from './car-assets.js';
+import { kickBody } from './car-physics.js';
 import {
   BUS_SPEC,
   buildLoftedBusBodyGeometry,
@@ -41,6 +33,7 @@ const BUS_DRIVER = { a: 1.1, b: 2.5, T: 1.5, s0: 2.5, aLat: 2.0, bMax: 6, grip: 
 const LOOKAHEAD = 70; // metres a driver looks ahead for vehicles, stop lines and signals
 // Dodging the player (see react): seconds before the player would hit it that a driver notices, and the least it keeps
 // up its manoeuvre once it reacts
+const TAKEDOWN_SPEED = 10;
 const AVOID_NOTICE = 1.8;
 const AVOID_HOLD = 1.2;
 
@@ -52,7 +45,14 @@ const CAR_KINDS = {
   suv: { half: 2.3, halfWidth: 0.92, axle: 1.4, halfL: 2.22, mass: 2100, engine: 'suv' },
   minivan: { half: 2.6, halfWidth: 0.92, axle: 1.52, halfL: 2.52, mass: 2000, engine: 'sedan' },
   pickup: { half: 2.86, halfWidth: 0.96, axle: 1.92, halfL: 2.78, mass: 2400, engine: 'suv' },
-  van: { half: 2.96, halfWidth: 0.95, axle: 1.8, halfL: 2.88, mass: 2700, engine: 'suv' }
+  van: { half: 2.96, halfWidth: 0.95, axle: 1.8, halfL: 2.88, mass: 2700, engine: 'suv' },
+  hatch: { half: 2.15, halfWidth: 0.86, axle: 1.28, halfL: 2.1, mass: 1300, engine: 'sedan' },
+  compact: { half: 1.95, halfWidth: 0.76, axle: 1.2, halfL: 1.88, mass: 1100, engine: 'sedan' },
+  wagon: { half: 2.42, halfWidth: 0.9, axle: 1.43, halfL: 2.38, mass: 1650, engine: 'sedan' },
+  offroad: { half: 2.2, halfWidth: 0.96, axle: 1.27, halfL: 2.15, mass: 1900, engine: 'suv' },
+  muscle: { half: 2.35, halfWidth: 0.87, axle: 1.31, halfL: 2.3, mass: 1600, engine: 'sedan' },
+  delivery: { half: 2.35, halfWidth: 1.05, axle: 1.37, halfL: 2.3, mass: 2300, engine: 'suv' },
+  truck: { half: 3.35, halfWidth: 1.18, axle: 1.83, halfL: 3.3, mass: 5200, engine: 'suv' }
 };
 
 // Retire distant actors even when looking their way: keeping them indefinitely starves upcoming streets.
@@ -179,12 +179,12 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
   }
 
   // Every body kind shares one 3D wheel model, instanced separately and scaled to the kind's wheel radius
-  const carWheelLeftGeo = buildSteerableWheelGeo(BODY_SPECS.sedan, -1);
-  const carWheelRightGeo = buildSteerableWheelGeo(BODY_SPECS.sedan, 1);
+  const carWheelLeftGeo = carModels.sedan.wheels[1].clone();
+  const carWheelRightGeo = carModels.sedan.wheels[0].clone();
   const carWheelStyles = new THREE.InstancedBufferAttribute(new Float32Array(NUM_CARS * 2), 1);
   carWheelLeftGeo.setAttribute('wheelStyle', carWheelStyles);
   carWheelRightGeo.setAttribute('wheelStyle', carWheelStyles);
-  const carWheelMat = createCarWheelMaterial({ instanced: true });
+  const carWheelMat = createWheelMaterial(carModels.sedan);
 
   const taxiYellow = new THREE.Color(0xffbe14);
   const boroGreen = new THREE.Color(0x5cae3e);
@@ -260,8 +260,8 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
   };
   // Of every 20 cars: 4 yellow cabs, 5 sedans, 6 SUVs, 2 delivery vans, 2 minivans & a pickup. NYPD cruisers are sedans
   // or Interceptor SUVs, green Boro cabs sedans or SUVs.
-  const FLEET_MIX = ['taxi', 'sedan', 'van', 'sedan', 'suv', 'taxi', 'suv', 'minivan', 'suv', 'pickup',
-    'taxi', 'sedan', 'suv', 'van', 'suv', 'taxi', 'minivan', 'sedan', 'suv', 'sedan'];
+  const FLEET_MIX = ['taxi', 'sedan', 'van', 'hatch', 'suv', 'taxi', 'wagon', 'minivan', 'compact', 'pickup', 'taxi', 'sedan', 'delivery', 'suv', 'muscle',
+    'taxi', 'hatch', 'sedan', 'offroad', 'truck', 'taxi', 'sedan', 'suv', 'compact', 'wagon', 'taxi', 'van', 'sedan', 'muscle', 'hatch'];
 
   const cars = [];
   const counts = Object.fromEntries(Object.keys(CAR_KINDS).map((kind) => [kind, 0]));
@@ -287,7 +287,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
       col = boroGreen;
       style = carStyleCode({ livery: 2, metallic: 0, trim: 0, wheel: 0 });
     } else {
-      const palette = fleetStyles[bodyType];
+      const palette = fleetStyles[bodyType] ?? fleetStyles.sedan;
       ({ col, style } = palette[counts[bodyType] % palette.length]);
     }
     counts[bodyType]++;
@@ -307,19 +307,19 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
   // turn signals, livery (1 = NYPD).
   const bodies = {};
   for (const kind of Object.keys(CAR_KINDS)) {
-    const spec = BODY_SPECS[kind];
+    const spec = carSpecs[kind];
     const n = Math.max(1, counts[kind]);
-    const mat = createLoftedCarMaterial(spec);
-    const lodMesh = (g) => {
+    const mat = trafficMaterial(kind);
+    const lodMesh = (source) => {
+      const g = source.clone();
       g.setAttribute('paintColor', new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3));
       g.setAttribute('carState', new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4));
       return new THREE.InstancedMesh(g, mat, n);
     };
-    const halfWidth = Math.max(...spec.halfWidth.map((p) => p[1])) + spec.archFlare;
     bodies[kind] = {
-      near: lodMesh(buildCarGeometry(spec, false)),
-      far: lodMesh(buildCarProxyGeometry(spec)),
-      shadow: [2 * halfWidth + 0.33, spec.zFront - spec.zRear + 0.55, (spec.zFront + spec.zRear) / 2]
+      near: lodMesh(carModels[kind].shell),
+      far: lodMesh(carModels[kind].far),
+      shadow: [2 * spec.halfW + 0.33, spec.zFront - spec.zRear + 0.55, (spec.zFront + spec.zRear) / 2]
     };
   }
   const bodyMeshes = Object.values(bodies).flatMap((b) => [b.near, b.far]);
@@ -362,8 +362,8 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
   // NYPD roof light bars per police-capable body kind (sedan & Interceptor SUV have different roof heights)
   const lightbarMat = createLightbarMaterial();
   const policeLightbars = {
-    sedan: new THREE.InstancedMesh(buildLightbarGeometry(BODY_SPECS.sedan), lightbarMat, Math.max(1, policeCounts.sedan)),
-    suv: new THREE.InstancedMesh(buildLightbarGeometry(BODY_SPECS.suv), lightbarMat, Math.max(1, policeCounts.suv))
+    sedan: new THREE.InstancedMesh(buildLightbarGeometry(BODY_SPECS.sedan, carSpecs.sedan), lightbarMat, Math.max(1, policeCounts.sedan)),
+    suv: new THREE.InstancedMesh(buildLightbarGeometry(BODY_SPECS.suv, carSpecs.suv), lightbarMat, Math.max(1, policeCounts.suv))
   };
   const policeLightbarMeshes = [policeLightbars.sedan, policeLightbars.suv];
   const carShadowInst = new THREE.InstancedMesh(unitPlane, contactShadowMat, NUM_CARS);
@@ -1386,6 +1386,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     if (v.vx * v.vx + v.vz * v.vz < 1e-4) v.vx = v.vz = 0;
   }
 
+  let takedown = null;
   const contactA = {}, contactB = {}, vehicleHit = {};
   const impacted = [];
   let collisionStep = 0;
@@ -1444,7 +1445,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     a.prevX = prevX; a.prevZ = prevZ;
     a.sin = Math.sin(heading); a.cos = Math.cos(heading);
     a.halfW = halfW; a.halfL = halfL;
-    a.mass = pe.moto ? 260 : pe.type === 'car' ? 1700 : pe.type === 'cyclist' ? 95 : 80;
+    a.mass = pe.moto ? 260 : pe.type === 'car' ? pe.tune?.mass ?? 1700 : pe.type === 'cyclist' ? 95 : 80;
     a.vx = a.sin * (pe.speed || 0) + (pe.vx || 0);
     a.vz = a.cos * (pe.speed || 0) + (pe.vz || 0);
     a.angularVel = pe.type === 'car' ? pe.angularVel || 0 : 0;
@@ -1469,13 +1470,18 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
       pe.vz = a.vz - a.cos * pe.speed;
       pe.angularVel = a.angularVel;
       const kick = Math.min(12, hit.impulse / a.mass);
-      pe.pitchVel += (hit.nx * a.sin + hit.nz * a.cos) * kick * 0.16;
-      pe.rollVel -= (hit.nx * a.cos - hit.nz * a.sin) * kick * 0.2;
-      pe.heaveVel += Math.min(0.7, kick * 0.06);
+      if (pe.body) kickBody(pe, hit.x, pe.position.y + 0.3, hit.z, 0, Math.min(hit.impulse * 0.05, a.mass * 1.1), 0);
+      else {
+        pe.pitchVel += (hit.nx * a.sin + hit.nz * a.cos) * kick * 0.16;
+        pe.rollVel -= (hit.nx * a.cos - hit.nz * a.sin) * kick * 0.2;
+        pe.heaveVel += Math.min(0.7, kick * 0.06);
+      }
     }
     impactSuspension(v, -hit.nx, -hit.nz, hit.impulse / b.mass);
     reportCollision(pe, v, hit.x, 0.58, hit.z, hit.nx, hit.nz, speed);
     if (speed > 2.2) spawnCollisionSparks(hit.x, 0.58, hit.z, hit.nx, hit.nz, speed);
+    // Hit hard enough the car stops being traffic: it leaves the road model and goes wherever the blow sends it
+    if (speed > TAKEDOWN_SPEED && takedown && pe.body && !v.isPolice && !v.bus) takedown(v, v.bodyType, v.paint, b, hit);
   }
 
   // Only disturbed traffic needs pair contacts. Newly struck cars join the same
@@ -1585,7 +1591,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
   // Beyond CAR_PROXY_DISTANCE, cars use the ~250-triangle stand-in with built-in wheels instead of the full lofted
   // body + 4 separate wheel instances; vehicles outside the view frustum (with a margin for cast shadows and headlight
   // cones) are skipped altogether.
-  const CAR_PROXY_DISTANCE = 90;
+  const CAR_PROXY_DISTANCE = 64;
   const dirtyPaint = new Set();
   const dirtyState = new Set();
   let dirtyWheelStyles = false;
@@ -1605,13 +1611,13 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
 
   // 3D spinning alloy wheels & tires (left & right, front & rear), exact 1:1 ground rolling, steering front wheels.
   // The wheel geometry is modelled at baseRadius (the sedan's 0.35 m car wheel), scaled to the vehicle's radius
-  function placeWheels(v, i, rotY, roll, radius, halfTrack, halfBase, leftInst, rightInst, baseRadius = 0.35) {
+  function placeWheels(v, i, rotY, roll, radius, halfTrack, halfBase, leftInst, rightInst, baseRadius = 0.35, mid = 0) {
     const sinY = Math.sin(rotY);
     const cosY = Math.cos(rotY);
     const scale = radius / baseRadius;
     dummy.scale.set(scale, scale, scale);
     for (let w = 0; w < 2; w++) {
-      const wz = w === 0 ? halfBase : -halfBase;
+      const wz = (w === 0 ? halfBase : -halfBase) + mid;
       dummy.rotation.set(v.wheelSpin + w * 0.55, rotY + (w === 0 ? v.steer : 0), roll, 'YXZ');
       dummy.position.set(v.x - halfTrack * cosY + wz * sinY, radius, v.z + halfTrack * sinY + wz * cosY);
       dummy.updateMatrix();
@@ -1636,7 +1642,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     const rotY = c.yaw + c.yawOffset;
     const sinY = Math.sin(rotY);
     const cosY = Math.cos(rotY);
-    const spec = BODY_SPECS[c.bodyType];
+    const spec = carSpecs[c.bodyType];
     const forwardDist = (c.x - c.prevX) * sinY + (c.z - c.prevZ) * cosY;
     const rawStep = forwardDist / spec.wheelRadius;
     c.wheelSpin = (c.wheelSpin + Math.sign(rawStep) * Math.min(Math.abs(rawStep), 0.48)) % (Math.PI * 2);
@@ -1713,7 +1719,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
         ws[wi] = ws[wi + 1] = c.style;
         dirtyWheelStyles = true;
       }
-      placeWheels(c, wheelCars++, rotY, c.roll, spec.wheelRadius, spec.wheelX, spec.wheelZ, carWheelLeftInst, carWheelRightInst);
+      placeWheels(c, wheelCars++, rotY, c.roll, spec.wheelRadius, spec.wheelX, spec.wheelZ, carWheelLeftInst, carWheelRightInst, carSpecs.sedan.wheelRadius, spec.wheelMid);
     }
   }
 
@@ -1789,7 +1795,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
         const v = litVehicles[i];
         const fade = smoothDistFade(v._effDist, vehCutoff * 0.62, vehCutoff);
         if (fade <= 0.001) continue;
-        const spec = v.bus ? BUS_SPEC : BODY_SPECS[v.bodyType];
+        const spec = v.bus ? BUS_SPEC : carSpecs[v.bodyType];
         const fullReach = HEADLIGHTS.distance;
         let maxReach = fullReach;
         if (player.active && v.pAhead > 0 && v.pAhead < 30) {
@@ -2047,6 +2053,8 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
   }
 
   // Take a car off the road (stolen, wrecked): the pool re-places it out of view later
+  function setTakedownListener(fn) { takedown = fn; }
+
   function removeVehicle(v) {
     v.edge = null;
     v.conn = null;
@@ -2063,6 +2071,9 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     peds: pedestrianSystem.peds,
     pedestrians: pedestrianSystem,
     extraBodies,
+    report: reportCollision,
+    setTakedownListener,
+    get takedown() { return takedown; },
     flee,
     removeVehicle,
     spawnSparks: spawnCollisionSparks,
@@ -2089,7 +2100,7 @@ const HWY_FAR_CULL = 1600;
 const HWY_RAMP = 32; // the dip at the lane ends: 2.4 m down over this many metres
 const HWY_BOX_RUN = 16; // lane segments per bounding box of the player test
 
-function createHighwayTraffic(scene, lanes) {
+function createHighwayTraffic(scene, lanes, traffic) {
   const group = new THREE.Group();
   group.name = 'HighwayTraffic';
   scene.add(group);
@@ -2150,6 +2161,8 @@ function createHighwayTraffic(scene, lanes) {
       { hex: 0x15181c, style: carStyleCode({ livery: 0, metallic: 1, trim: 2, wheel: 3 }) }
     ]
   };
+  // The smaller and rarer kinds wear the sedans' colours
+  for (const kind of KINDS) PALETTES[kind] ??= PALETTES.sedan;
   let seed = 20240917;
   const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 
@@ -2180,11 +2193,15 @@ function createHighwayTraffic(scene, lanes) {
       const kind = h < 0.2 ? 'taxi' : h < 0.56 ? 'sedan' : h < 0.82 ? 'suv' : h < 0.89 ? 'minivan' : h < 0.95 ? 'pickup' : 'van';
       const entry = PALETTES[kind][Math.floor(rand() * PALETTES[kind].length)];
       const col = new THREE.Color(entry.hex);
-      const spec = BODY_SPECS[kind];
+      const spec = carSpecs[kind];
       // (float32 values, so update() can tell whether an instance slot's paint changes by comparing with the buffer)
       const car = {
         lane, kind, u, v: lane.speed, acc: 0, seg: 0,
-        placed: false, x: 0, y: -1000, z: 0, yaw: 0,
+        placed: false, x: 0, y: -1000, z: 0, yaw: 0, prevX: 0, prevZ: 0,
+        edge: 'highway', // what the game calls traffic when someone is run over
+        halfW: CAR_KINDS[kind].halfWidth, halfL: CAR_KINDS[kind].halfL, mass: CAR_KINDS[kind].mass,
+        // knocked out of its lane: how far, how fast, how long the driver stays stopped
+        ox: 0, oz: 0, oyaw: 0, kvx: 0, kvz: 0, spin: 0, stunned: 0,
         len: spec.zFront - spec.zRear, engine: CAR_KINDS[kind].engine,
         col: [Math.fround(col.r), Math.fround(col.g), Math.fround(col.b)],
         style: entry.style
@@ -2199,13 +2216,12 @@ function createHighwayTraffic(scene, lanes) {
   // the traffic's cached car material (per-instance paintColor & carState)
   const meshes = {};
   for (const kind of KINDS) {
-    const spec = BODY_SPECS[kind];
     const n = Math.max(1, counts[kind]);
     meshes[kind] = [0, 1, 2].map((lod) => {
-      const geo = lod === 2 ? buildCarProxyGeometry(spec) : buildCarGeometry(spec, lod === 0);
+      const geo = (lod === 2 ? carModels[kind].far : lod === 1 ? carModels[kind].shell : withWheels(carModels[kind])).clone();
       geo.setAttribute('paintColor', new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3));
       geo.setAttribute('carState', new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4));
-      const mesh = new THREE.InstancedMesh(geo, createLoftedCarMaterial(spec), n);
+      const mesh = new THREE.InstancedMesh(geo, trafficMaterial(kind), n);
       mesh.count = 0;
       mesh.frustumCulled = false;
       mesh.castShadow = lod === 0;
@@ -2311,6 +2327,84 @@ function createHighwayTraffic(scene, lanes) {
     return null;
   }
 
+  // Back into lane once it has been hit: the shove fades out, then the driver steers home and pulls away
+  function settleKnock(c, dt) {
+    if (!c.ox && !c.oz && !c.oyaw && !c.kvx && !c.kvz && !c.spin) return;
+    c.ox += c.kvx * dt;
+    c.oz += c.kvz * dt;
+    c.oyaw += c.spin * dt;
+    const drag = Math.exp(-3.2 * dt);
+    c.kvx *= drag;
+    c.kvz *= drag;
+    c.spin *= drag;
+    if (c.stunned > 0) return;
+    const home = Math.exp(-0.8 * dt);
+    c.ox *= home;
+    c.oz *= home;
+    c.oyaw *= home;
+    if (Math.hypot(c.ox, c.oz) < 0.02 && Math.abs(c.oyaw) < 0.005) c.ox = c.oz = c.oyaw = 0;
+  }
+
+  // Everything solid on the road: the same contact as the city's traffic (collideWithEntity above)
+  const bodyA = {}, bodyB = {}, hit = {};
+  function collideWith(pe, halfW, halfL) {
+    const py = pe.position.y;
+    for (const c of cars) {
+      if (c.hidden > 0) continue;
+      const reach = c.halfL + halfL + halfW + 2;
+      if (Math.abs(pe.position.x - c.x) > reach || Math.abs(pe.position.z - c.z) > reach || Math.abs(py - c.y) > 2.2) continue;
+      const a = bodyA, b = bodyB;
+      const heading = pe.heading || 0;
+      a.x = pe.position.x; a.z = pe.position.z;
+      a.prevX = pe.prevX ?? pe.position.x; a.prevZ = pe.prevZ ?? pe.position.z;
+      a.sin = Math.sin(heading); a.cos = Math.cos(heading);
+      a.halfW = halfW; a.halfL = halfL;
+      a.mass = pe.moto ? 260 : pe.type === 'car' ? pe.tune?.mass ?? 1700 : pe.type === 'cyclist' ? 95 : 80;
+      a.vx = a.sin * (pe.speed || 0) + (pe.vx || 0);
+      a.vz = a.cos * (pe.speed || 0) + (pe.vz || 0);
+      a.angularVel = pe.type === 'car' ? pe.angularVel || 0 : 0;
+      b.x = c.x; b.z = c.z; b.prevX = c.prevX; b.prevZ = c.prevZ;
+      b.sin = Math.sin(c.yaw); b.cos = Math.cos(c.yaw);
+      b.halfW = c.halfW; b.halfL = c.halfL; b.mass = c.mass;
+      b.vx = b.sin * c.v + c.kvx; b.vz = b.cos * c.v + c.kvz; b.angularVel = c.spin;
+      if (!sweptVehicleContact(a, b, hit) && !vehicleContact(a, b, hit)) continue;
+      const speed = resolveVehicleContact(a, b, hit);
+      const share = b.mass / (a.mass + b.mass);
+      pe.position.x = hit.ax + hit.nx * hit.depth * share;
+      pe.position.z = hit.az + hit.nz * hit.depth * share;
+      c.ox += hit.bx - c.x - hit.nx * hit.depth * (1 - share);
+      c.oz += hit.bz - c.z - hit.nz * hit.depth * (1 - share);
+      c.x = hit.bx - hit.nx * hit.depth * (1 - share);
+      c.z = hit.bz - hit.nz * hit.depth * (1 - share);
+      if (pe.mesh) pe.mesh.position.copy(pe.position);
+      if (speed <= 0) continue;
+      c.stunned = Math.max(c.stunned, 3 + Math.min(9, speed * 0.6));
+      c.v = Math.max(0, b.vx * b.sin + b.vz * b.cos);
+      c.kvx = b.vx - b.sin * c.v;
+      c.kvz = b.vz - b.cos * c.v;
+      c.spin = b.angularVel;
+      pe.speed = a.vx * a.sin + a.vz * a.cos;
+      if (pe.type === 'car') {
+        pe.vx = a.vx - a.sin * pe.speed;
+        pe.vz = a.vz - a.cos * pe.speed;
+        pe.angularVel = a.angularVel;
+        const kick = Math.min(12, hit.impulse / a.mass);
+        if (pe.body) kickBody(pe, hit.x, pe.position.y + 0.3, hit.z, 0, Math.min(hit.impulse * 0.05, a.mass * 1.1), 0);
+        else {
+          pe.pitchVel = (pe.pitchVel || 0) + (hit.nx * a.sin + hit.nz * a.cos) * kick * 0.16;
+          pe.rollVel = (pe.rollVel || 0) - (hit.nx * a.cos - hit.nz * a.sin) * kick * 0.2;
+          pe.heaveVel = (pe.heaveVel || 0) + Math.min(0.7, kick * 0.06);
+        }
+      }
+      traffic.report(pe, c, hit.x, 0.58, hit.z, hit.nx, hit.nz, speed);
+      if (speed > 2.2) traffic.spawnSparks(hit.x, 0.58, hit.z, hit.nx, hit.nz, speed);
+      if (speed > TAKEDOWN_SPEED && traffic.takedown && pe.body) {
+        traffic.takedown(c, c.kind, c.col, b, hit);
+        c.hidden = 40; // its lane keeps its place in line, out of sight, until it has come round again
+      }
+    }
+  }
+
   function update(dt, camera, entity, mode) {
     // 1. Car following (IDM) in every lane, the player counting as a leader
     const pl = entity && mode !== 'helicopter' && mode !== 'plane' ? {
@@ -2343,10 +2437,13 @@ function createHighwayTraffic(scene, lanes) {
         }
         const sStar = D.s0 + Math.max(0, c.v * D.T + (c.v * dv) / brakeTerm);
         c.acc = Math.max(-9, D.a * (1 - (c.v / lane.speed) ** 4 - (sStar / Math.max(gap, 0.1)) ** 2));
+        if (c.stunned > 0) c.acc = -8; // a driver who has just been hit stands on the brakes
       }
       for (const c of list) {
         c.v = Math.max(0, c.v + c.acc * dt);
         c.u += c.v * dt;
+        if (c.stunned > 0) c.stunned -= dt;
+        settleKnock(c, dt);
         if (c.u >= lane.len) {
           c.u -= lane.len;
           c.seg = 0;
@@ -2363,6 +2460,7 @@ function createHighwayTraffic(scene, lanes) {
     flareCount = 0;
     hwyLitCount = 0;
     for (const c of cars) {
+      if (c.hidden > 0) { c.hidden -= dt; continue; }
       const lane = c.lane;
       const cum = lane.cum;
       while (c.seg < cum.length - 2 && cum[c.seg + 1] < c.u) c.seg++;
@@ -2371,16 +2469,18 @@ function createHighwayTraffic(scene, lanes) {
       const t = Math.min(1, Math.max(0, (c.u - cum[i]) / segLen));
       const a = lane.pts[i];
       const b = lane.pts[i + 1];
-      const x = a.x + (b.x - a.x) * t;
-      const z = a.z + (b.z - a.z) * t;
+      const x = a.x + (b.x - a.x) * t + c.ox;
+      const z = a.z + (b.z - a.z) * t + c.oz;
       const toEnd = lane.len - c.u;
       const dip = c.u < toEnd ? c.u : toEnd;
       const y = a.y + (b.y - a.y) * t - 2.4 * (1 - ease(dip));
       let dYaw = lane.yaw[i + 1] - lane.yaw[i];
       if (dYaw > Math.PI) dYaw -= Math.PI * 2;
       else if (dYaw < -Math.PI) dYaw += Math.PI * 2;
-      const yaw = lane.yaw[i] + dYaw * t;
+      const yaw = lane.yaw[i] + dYaw * t + c.oyaw;
       // Keep the current world pose available to audio, including cars behind the camera.
+      c.prevX = c.placed ? c.x : x;
+      c.prevZ = c.placed ? c.z : z;
       c.x = x;
       c.y = y;
       c.z = z;
@@ -2441,7 +2541,7 @@ function createHighwayTraffic(scene, lanes) {
       const facing = -(dx * sy + dz * cy) / d;
       const k = (Math.min(1, (d - 40) / 80) / (1 + (d / 2000) ** 2)) * ease(dip);
       const size = Math.max(0.6, d * pxAt1m * 3);
-      const spec = BODY_SPECS[c.kind];
+      const spec = carSpecs[c.kind];
       for (let e = 0; e < 2; e++) {
         const front = e === 0;
         const w = k * (0.3 + 0.7 * flareFacing(front ? facing : -facing));
@@ -2495,7 +2595,7 @@ function createHighwayTraffic(scene, lanes) {
         const t = clamp((hwyCutoff - c._effDist) / Math.max(1, hwyCutoff * 0.38), 0, 1);
         const fade = (t * t * (3 - 2 * t)) * ease(Math.min(c.u, c.lane.len - c.u));
         if (fade <= 0.001) continue;
-        const spec = BODY_SPECS[c.kind];
+        const spec = carSpecs[c.kind];
         const baseInt = HEADLIGHTS.intensity * beamScale * fade;
         // Reuse the exact rendered transform, including the road slope and underpass dip.
         c._mesh.getMatrixAt(c._slot, m4);
@@ -2511,6 +2611,13 @@ function createHighwayTraffic(scene, lanes) {
       spot.intensity = 0;
       spot.position.set(0, -1000, 0);
     }
+
+    // 3. Contacts, now that every car has its place. Knocks show from the next frame on
+    if (pl) {
+      const small = mode === 'cyclist' ? [0.35, 0.85] : mode === 'person' ? [0.32, 0.32] : null;
+      collideWith(entity, small ? small[0] : entity.halfW ?? 0.86, small ? small[1] : entity.halfL ?? 2.18);
+    }
+    for (const body of traffic.extraBodies) if (body.mesh?.visible && body !== entity) collideWith(body, body.halfW ?? 0.86, body.halfL ?? 2.18);
   }
 
   return { group, update, cars, lanes };

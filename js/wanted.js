@@ -1,7 +1,10 @@
 import * as THREE from 'three/webgpu';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { BODY_SPECS, buildLightbarGeometry, createLightbarMaterial } from './cars.js';
+import { carSpecs } from './car-assets.js';
 import { lineOfSight } from './weapons.js';
 import { AIDriver } from './ai-driver.js';
+import { settleBody } from './car-physics.js';
 
 // WANTED LEVEL — the city's police response, one to five stars.
 // Witnessed crimes build heat (0..120) that sets the stars. Police don't simply know where the player is: they search
@@ -12,18 +15,36 @@ const LEVELS = [
   { name: '', heat: 0, units: 0, radius: 0, escape: 0 },
   { name: 'SIGNALÉ', heat: 20, units: 1, radius: 95, escape: 7 },
   { name: 'RECHERCHÉ', heat: 35, units: 2, radius: 135, escape: 10 },
-  { name: 'TRAQUÉ', heat: 55, units: 3, radius: 175, escape: 13 },
-  { name: 'ENNEMI PUBLIC', heat: 75, units: 4, radius: 220, escape: 16 },
-  { name: 'CHASSE À L’HOMME', heat: 95, units: 5, radius: 280, escape: 20 }
+  { name: 'TRAQUÉ', heat: 55, units: 4, radius: 175, escape: 13 },
+  { name: 'ENNEMI PUBLIC', heat: 75, units: 5, radius: 220, escape: 16 },
+  { name: 'CHASSE À L’HOMME', heat: 95, units: 6, radius: 280, escape: 20 }
 ];
 const CRIMES = {
   shots: 5, aim: 2, pedHit: 9, pedKilled: 14, carjack: 7, copHurt: 16, copKilled: 26, copCarHit: 6, explosion: 18, arrestResist: 10
 };
-const POOL = 5;
+const POOL = 8;
+const BLOCK_EVERY = 16; // seconds between roadblocks
+const STRIP_REACH = 5.5; // half a street
 const SIGHT_RANGE = 75;
 const levelOf = (heat) => heat <= 0 ? 0 : heat < 35 ? 1 : heat < 55 ? 2 : heat < 75 ? 3 : heat < 95 ? 4 : 5;
 const angleTo = (from, to) => Math.atan2(Math.sin(to - from), Math.cos(to - from));
 const _camDir = new THREE.Vector3();
+
+// A folding strip of steel teeth laid across the road
+function createStrips(scene) {
+  const mat = new THREE.MeshStandardNodeMaterial({ color: 0x2c2e31, roughness: 0.4, metalness: 0.8 });
+  const teeth = [];
+  for (let i = -5; i <= 5; i += 0.32) teeth.push(new THREE.ConeGeometry(0.035, 0.12, 4).translate(i, 0.09, (Math.abs(i * 7) % 2) * 0.12 - 0.12));
+  teeth.push(new THREE.BoxGeometry(10.6, 0.04, 0.3));
+  const geometry = mergeGeometries(teeth.map((g) => g.index ? g.toNonIndexed() : g));
+  return [0, 1].map(() => {
+    const mesh = new THREE.Mesh(geometry, mat);
+    mesh.visible = false;
+    mesh.castShadow = true;
+    scene.add(mesh);
+    return { mesh, life: 0, x: 0, z: 0, dx: 0, dz: 1 };
+  });
+}
 
 class WantedSystem {
   constructor({ scene, controllers, nav, actors, audio, camera }) {
@@ -44,7 +65,7 @@ class WantedSystem {
 
     // Pre-built cruiser pool (white body with the police livery, roof light bar), parked below the street until used.
     // They stay drawn for the first frames so their pipelines compile with the city's.
-    this.barGeo = { sedan: buildLightbarGeometry(BODY_SPECS.sedan), suv: buildLightbarGeometry(BODY_SPECS.suv) };
+    this.barGeo = { sedan: buildLightbarGeometry(BODY_SPECS.sedan, carSpecs.sedan), suv: buildLightbarGeometry(BODY_SPECS.suv, carSpecs.suv) };
     this.units = [];
     for (let i = 0; i < POOL; i++) this.units.push(this.makeUnit(i % 3 === 2 ? 'suv' : 'sedan', i));
     // Flashing roof lights: a small pool of point lights follows the nearest active cruisers
@@ -62,6 +83,10 @@ class WantedSystem {
     this.searchlight.position.set(0, -1000, 0);
     scene.add(this.searchlight, this.searchlight.target);
     this.warm = 0;
+    this.blockT = 8;
+    this.onPoliceShot = null; // (x, y, z, accuracy, damage)
+    this.onStrip = null; // (strip)
+    this.strips = createStrips(scene);
   }
 
   get cars() { return this.units.filter((u) => u.active).map((u) => u.car); }
@@ -132,20 +157,22 @@ class WantedSystem {
   }
 
   makeUnit(kind, i = 0) {
-    const car = this.controllers.createCarEntity({ kind, paint: 0xf4f6f8, livery: 1 });
+    const car = this.controllers.createCarEntity({ kind, paint: 0xf4f6f8, livery: 1, handling: 'cruiser' });
     const bar = new THREE.Mesh(this.barGeo[kind], createLightbarMaterial());
     bar.castShadow = true;
     car.chassisPivot.add(bar);
     car.police = true;
     car.policeLivery = true;
     car.siren = false;
-    car.drive = { speed: 43, reverseSpeed: 11, acceleration: 7.5, powerSpeed: 22, rolling: 0.18, drag: 0.0011, coast: 0.6, brake: 13,
-      wheelbase: car.spec.wheelZ * 2, grip: 11.5, cornering: 12 };
+    car.ai = true;
+    car.drive = { speed: car.tune.top * 0.92, reverseSpeed: 11 };
     car.hp = 100;
     car.burnT = 0;
     car.position.set(i * 8, -40, -3000);
     car.mesh.position.copy(car.position);
-    return { car, driver: new AIDriver(this.controllers, this.nav, car, { maxSpeed: 40, corner: 11 }), active: false, mode: 'idle', crew: [], deployed: false,
+    const driver = new AIDriver(this.controllers, this.nav, car, { maxSpeed: 40, corner: 14 });
+    driver.aggressive = true;
+    return { car, driver, active: false, mode: 'idle', crew: [], deployed: false,
       searchX: 0, searchZ: 0, losT: 0, los: false, idle: 0 };
   }
 
@@ -277,7 +304,9 @@ class WantedSystem {
       this.spawnT = 2.5;
       this.spawnUnit(target);
     }
+    this.assignTactics(active, target);
     for (const u of active) this.drive(u, dt, target);
+    this.updateRoadblocks(dt, target);
     this.updateFlooded();
     this.updateLights(target);
     this.updateHelicopter(dt, target);
@@ -290,6 +319,17 @@ class WantedSystem {
     // Arrest: an officer within reach of a player on foot, not fighting back, for long enough
     if (this.arrestT > 0) this.arrestT -= dt;
     else this.arrest = Math.max(0, this.arrest - dt * 0.8);
+  }
+
+  // A silent alarm: the city knows, at once, at this level, right here
+  alarm(level, x, z) {
+    this.heat = Math.max(this.heat, LEVELS[level].heat + 1);
+    this.zone.x = x; this.zone.z = z;
+    this.seenT = 0;
+    this.escape = 0;
+    const previous = this.level;
+    this.level = Math.max(this.level, level);
+    if (this.level !== previous) this.onLevel?.(this.level, previous);
   }
 
   // Called by officers in reach (actors.js onArrest)
@@ -324,6 +364,15 @@ class WantedSystem {
       u.mode = 'leave';
       car.siren = false;
     }
+    if (u.mode === 'block') {
+      // Waits across the road until the player has gone past or gone elsewhere
+      this.controllers.simulateCar(car, 0, 0, true, dt);
+      u.idle += dt;
+      // Seen from here the player has gone by once the way to them runs along their own heading
+      const passed = dx * Math.sin(target.heading ?? 0) + dz * Math.cos(target.heading ?? 0) > 0;
+      if (u.idle > 20 || (d > 60 && passed)) { for (const a of u.crew) if (!a.dead) a.behavior = 'combat'; u.mode = 'pursue'; u.deployed = false; }
+      return;
+    }
     if (u.mode === 'parked') {
       car.speed *= Math.exp(-dt * 3);
       this.controllers.simulateCar(car, 0, 0, true, dt);
@@ -346,6 +395,15 @@ class WantedSystem {
     } else if (this.seen || d < 30) {
       const lead = target.inVehicle ? Math.min(1.2, d / 30) : 0;
       gx = target.x + target.vx * lead; gz = target.z + target.vz * lead;
+      // Close in on the car: the first one goes for the rear quarter to spin it, the others come up its flanks
+      if (target.inVehicle && d < 70 && u.flank !== undefined) {
+        const sp = Math.hypot(target.vx, target.vz) || 1;
+        const fx = sp > 2 ? target.vx / sp : Math.sin(target.heading ?? 0), fz = sp > 2 ? target.vz / sp : Math.cos(target.heading ?? 0);
+        const along = u.flank === 0 ? -1.4 : d > 16 ? 3 : 0.5;
+        const beside = u.flank === 0 ? u.quarter * 1.1 : u.flank * (d > 12 ? 3.2 : 1.3);
+        gx += fx * along + fz * beside;
+        gz += fz * along - fx * beside;
+      }
     } else {
       if (!u.searchT || u.searchT < this.clock || Math.hypot(u.searchX - car.position.x, u.searchZ - car.position.z) < 15) {
         const nodes = this.nav.within(this.zone.x, this.zone.z, this.zone.radius);
@@ -359,7 +417,11 @@ class WantedSystem {
     const driver = u.driver;
     driver.traffic = this.trafficCars;
     driver.others = this.gameCars;
-    driver.maxSpeed = car.drive.speed * (this.level <= 1 ? 0.75 : u.mode === 'leave' ? 0.5 : 1);
+    const fleeing = Math.hypot(target.vx, target.vz);
+    driver.maxSpeed = u.mode === 'leave' ? car.drive.speed * 0.5 : this.level <= 1 ? car.drive.speed * 0.75 : Math.max(car.drive.speed, fleeing + 10);
+    // Left behind and out of view, a cruiser finds a little more than its engine has: nobody outruns the radio
+    const unseen = !this.inView(car.position) || camD > 120;
+    car.body.chase = u.mode === 'pursue' && this.level >= 2 && unseen ? Math.min(6, Math.max(0, d - 35) * 0.08 + 1) : u.mode === 'pursue' && this.level >= 3 && d > 25 ? 1.4 : 0;
     driver.setGoal(gx, gz);
     const gd = Math.hypot(gx - car.position.x, gz - car.position.z);
     const direct = gd < 40 && (u.los || gd < 16);
@@ -367,6 +429,14 @@ class WantedSystem {
     const stopping = target.onFoot && d < 24 && u.mode === 'pursue';
     driver.update(dt, { direct, stopAt: stopping ? 9 : 0 });
     if (stopping && Math.abs(car.speed) < 1.2 && !u.deployed) this.deploy(u, target);
+    // From three stars the passenger shoots out of the window
+    if (this.level >= 3 && u.los && d < 38 && target.alive) {
+      u.gunT = (u.gunT ?? 1) - dt;
+      if (u.gunT <= 0) {
+        u.gunT = 0.5 + Math.random() * (1.1 - this.level * 0.12);
+        this.onPoliceShot?.(car.position.x, car.position.y + 1.25, car.position.z, (0.2 + this.level * 0.07) * (1 - d / 60), this.level >= 4 ? 13 : 9);
+      }
+    }
 
     // No progress for a while and out of the camera's sight: put the unit back into play elsewhere
     const camSees = this.inView(car.position) && camD < 200;
@@ -389,6 +459,62 @@ class WantedSystem {
       }
     }
     u.last = { throttle: driver.throttle, steer: driver.steer, target: driver.target, blocked: driver.blocked };
+  }
+
+  // Who does what around the player's car: nearest on the rear quarter, the rest up each flank
+  assignTactics(active, target) {
+    const near = active.filter((u) => u.mode === 'pursue').sort((a, b) => a.car.position.distanceToSquared(this.controllers.entities.person.position) - b.car.position.distanceToSquared(this.controllers.entities.person.position));
+    near.forEach((u, i) => {
+      u.flank = i === 0 ? 0 : i % 2 ? 1 : -1;
+      u.quarter = u.quarter ?? (Math.random() < 0.5 ? 1 : -1);
+    });
+  }
+
+  // Ahead on the road the player is taking: cruisers across it, officers behind them, a strip of spikes in front from four stars
+  updateRoadblocks(dt, target) {
+    this.blockT -= dt;
+    for (const s of this.strips) if (s.life > 0) {
+      s.life -= dt;
+      if (s.life <= 0) { s.mesh.visible = false; continue; }
+      if (!target.inVehicle) continue;
+      const dx = target.x - s.x, dz = target.z - s.z;
+      if (Math.abs(dx * s.dx + dz * s.dz) < 1.6 && Math.abs(dx * s.dz - dz * s.dx) < STRIP_REACH) this.onStrip?.(s);
+    }
+    if (this.level < 3 || this.blockT > 0 || this.seenT > 8 || !target.inVehicle) return;
+    const speed = Math.hypot(target.vx, target.vz);
+    if (speed < 14) return;
+    const free = this.units.filter((u) => !u.active);
+    if (free.length < 2) return;
+    const dx = target.vx / speed, dz = target.vz / speed;
+    const reach = 170 + speed * 2.6;
+    const node = this.nav.nearest(target.x + dx * reach, target.z + dz * reach, 70);
+    if (node === null || node === undefined || node < 0) return;
+    const n = this.nav.nodes[node];
+    const toX = n.x - target.x, toZ = n.z - target.z;
+    if (toX * dx + toZ * dz < 110) return;
+    this.blockT = BLOCK_EVERY;
+    // Across the street, nose to tail, leaving no room but the pavement
+    const across = Math.atan2(dz, -dx);
+    [-1, 1].forEach((side, i) => {
+      const u = free[i];
+      const x = n.x + dz * side * 2.7, z = n.z - dx * side * 2.7;
+      this.activate(u, x, z, across + (side > 0 ? 0.15 : -0.15), 0);
+      settleBody(u.car, u.car.heading);
+      u.mode = 'block';
+      u.idle = 0;
+      this.deploy(u, target);
+      u.mode = 'block';
+    });
+    if (this.level >= 4) {
+      const s = this.strips.find((k) => k.life <= 0);
+      if (s) {
+        s.x = n.x - dx * 26; s.z = n.z - dz * 26; s.dx = dx; s.dz = dz; s.life = 26;
+        s.mesh.position.set(s.x, 0.04, s.z);
+        s.mesh.rotation.y = Math.atan2(dx, dz);
+        s.mesh.visible = true;
+        s.mesh.updateMatrixWorld();
+      }
+    }
   }
 
   deploy(u, target) {
@@ -464,6 +590,14 @@ class WantedSystem {
     h.mesh.position.copy(h.position);
     h.mesh.rotation.y = h.heading;
     h.tiltPivot.rotation.x = 0.12;
+    // A marksman in the door: slow, heavy, and he does not miss by much
+    if (want && this.seen && Math.hypot(h.position.x - target.x, h.position.z - target.z) < 110) {
+      this.heliGunT = (this.heliGunT ?? 2) - dt;
+      if (this.heliGunT <= 0) {
+        this.heliGunT = 1.4 + Math.random();
+        this.onPoliceShot?.(h.position.x, h.position.y - 1, h.position.z, 0.34, 18);
+      }
+    }
     this.searchlight.position.set(h.position.x, h.position.y - 1.5, h.position.z);
     const sx = this.seen ? target.x : this.zone.x + Math.sin(this.clock * 0.6) * 25, sz = this.seen ? target.z : this.zone.z + Math.cos(this.clock * 0.5) * 25;
     this.searchlight.target.position.set(sx, 0, sz);

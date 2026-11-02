@@ -3,7 +3,7 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.4.1 — Human Capital** : deux actes d'histoire (8 missions), cycle jour/nuit continu et
+Version **0.8.0 — Hostile Takeover** : trois actes d'histoire (12 missions), cycle jour/nuit continu et
 météo (pluie, orages), motos, boutiques et planques, grenades et fusil d'assaut, police à cinq
 étoiles pilotée par une IA de conduite, véhicules destructibles et radio générée en temps réel.
 
@@ -107,11 +107,15 @@ Le build statique est généré dans `dist/`. `tools/radio-preview.html` permet 
 | `js/motorbike.js` | Motos (modèle, inclinaison, wheeling) |
 | `js/quick-strip.js` | Bouton et bandeau communs au garage et au sélecteur d'armes |
 | `js/garage.js`, `js/arsenal.js` | Garage rapide, sélecteur d'armes |
+| `tools/world/` | Prépare les textures de la ville et importe les objets de rue dans `assets/world/` |
+| `tools/nature/` | Compose l'atlas de feuilles et prépare écorces et herbe dans `assets/nature/` |
 | `tools/people/` | Importe les avatars, les armes et la motion capture Rocketbox dans `assets/people/` |
 | `tools/build-humans.mjs`, `tools/humans/` | Sculpte les accessoires de la foule dans `assets/humans/` |
 | `js/characters.js`, `js/person-body.js`, `js/person-motion.js` | Personnages : squelette, motion capture, tenue des armes |
 | `js/mocap.js`, `js/crowd-motion.js` | Lecture de la motion capture, poses de la foule |
 | `js/people-assets.js`, `js/people-material.js`, `js/human-crowd.js` | Chargement des modèles, matières, rendu de la foule |
+| `js/trees.js`, `js/grass.js`, `js/nature-assets.js` | Arbres, brins d'herbe, textures de la nature |
+| `js/world-assets.js`, `js/street-clutter.js` | Surfaces de la ville, objets de rue |
 | `js/ragdoll.js` | Chutes physiques des corps |
 | `js/airplane.js`, `js/flight.js` | Avion et parachute (modèles), modèle de vol |
 | `js/quality.js` | Niveaux graphiques, rythme des images, résolution adaptative |

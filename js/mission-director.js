@@ -1,4 +1,6 @@
 import * as THREE from 'three/webgpu';
+import { ACT3, PLACES3, REGATTA } from './missions-act3.js';
+import { WATER, createYacht } from './boat.js';
 import { PLACES, STORY, ACTIVITIES } from './missions.js';
 import { RoadNavigator } from './navigation.js';
 import { WEAPONS } from './weapons.js';
@@ -20,6 +22,7 @@ class MissionContext {
     this.pickupsSpawned = [];
     this.npcCars = [];
     this.markersUsed = [];
+    this.props = [];
     this.dt = 0;
     this.clock = 0;
   }
@@ -173,6 +176,32 @@ class MissionContext {
     return null;
   }
 
+  // -- on the water --
+  spawnBoat(x, z, heading, paint) {
+    const g = this.game;
+    const boat = g.makeCar('boat', paint, { x, y: WATER, z }, heading);
+    boat.mission = true;
+    boat.hp = boat.maxHp = 160;
+    this.cars.push(boat);
+    return boat;
+  }
+  enemyBoat(x, z, paint, { hp = 120, flee = false, label = '' } = {}) {
+    const g = this.game, spot = g.controllers.afloat(x, z) ? { x, z } : g.waterNear(x, z);
+    const boat = this.spawnBoat(spot.x, spot.z, Math.random() * 6.28, paint);
+    boat.locked = true;
+    boat.hp = boat.maxHp = hp;
+    boat.boatAI = { gunT: 1.5, flee, gaveUp: false };
+    if (label) boat.label2 = label;
+    return boat;
+  }
+  spawnYacht(x, z) {
+    const yacht = createYacht(this.game.scene);
+    yacht.position.x = x; yacht.position.z = z;
+    yacht.updateMatrixWorld(true);
+    this.props.push(yacht);
+    return yacht;
+  }
+
   // -- AI-driven cars (couriers, escorts, armoured vans, fleeing targets) --
   spawnNpcCar(kind, x, z, heading, paint, { label = '', hp = 100, maxSpeed = 17, corner = 8 } = {}) {
     const g = this.game;
@@ -227,11 +256,15 @@ class MissionDirector {
   }
 
   get nextStory() { return STORY.find((m) => !this.game.missionsDone.includes(m.id)) || null; }
+  get nextContract() { return ACT3.find((m) => !this.game.missionsDone.includes(m.id)) || null; }
 
   available() {
     const list = [];
     const story = this.nextStory;
     if (story) list.push({ def: story, place: PLACES[story.contact], kind: 'contact', label: story.contactLabel, story: true });
+    const contract = this.nextContract;
+    if (contract) list.push({ def: contract, place: PLACES3[contract.place], kind: 'contact', label: contract.contactLabel, story: true });
+    list.push({ def: REGATTA, place: PLACES[REGATTA.place], kind: 'race', label: REGATTA.contactLabel, story: false }, ...this.game.gangs.takeovers());
     if (this.game.missionsDone.includes('courant')) {
       for (const a of ACTIVITIES) list.push({ def: a, place: PLACES[a.place], kind: 'race', label: a.contactLabel, story: false });
     }
@@ -274,6 +307,7 @@ class MissionDirector {
     for (const m of ctx.markersUsed) g.markers.remove(m);
     for (const a of ctx.actorsSpawned) if (!a.dead && g.actors.actors.includes(a)) g.actors.remove(a);
     for (const it of ctx.pickupsSpawned) if (g.pickups.items.includes(it)) g.pickups.remove(it);
+    for (const prop of ctx.props) prop.removeFromParent();
     for (const car of [...ctx.cars]) {
       if (g.car === car && g.state !== 'onFoot') { car.mission = false; continue; }
       if (!keepCars && !car.destroyed) g.removeFleetCar(car);
@@ -295,7 +329,7 @@ class MissionDirector {
     const def = this.current;
     if (!def) return;
     g.addMoney(reward);
-    if (STORY.includes(def) && !g.missionsDone.includes(def.id)) g.missionsDone.push(def.id);
+    if ((STORY.includes(def) || ACT3.includes(def)) && !g.missionsDone.includes(def.id)) g.missionsDone.push(def.id);
     g.hud.showBanner(subtitle && subtitle.startsWith('FIN') ? subtitle : 'MISSION RÉUSSIE', def.title, `+${reward.toLocaleString('fr-FR')} $${subtitle && !subtitle.startsWith('FIN') ? ' · ' + subtitle : ''}`, 5, 'pass');
     g.audio.ui('pass');
     this.cleanup(true);

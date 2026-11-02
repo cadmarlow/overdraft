@@ -1078,7 +1078,8 @@ function buildCarProxyGeometry(spec) {
 }
 
 // NYPD roof light bar (red on the -x half, blue on the +x half) for a body spec's roof, lit by createLightbarMaterial
-function buildLightbarGeometry(spec = BODY_SPECS.sedan) {
+// Set on the real model's roof when given one (car-assets.js carSpecs)
+function buildLightbarGeometry(spec = BODY_SPECS.sedan, roof = null) {
   const L = carLayout(spec);
   const cab = spec.cabin;
   const z = lerp(cab.roofFront, cab.roofRear, 0.32);
@@ -1089,7 +1090,8 @@ function buildLightbarGeometry(spec = BODY_SPECS.sedan) {
   for (const side of [-1, 1]) {
     parts.push(part(new THREE.BoxGeometry(0.06, 0.05, 0.16).translate(side * 0.42, y + 0.02, z), CAR_PARTS.TRIM));
   }
-  return mergeGeometries(parts);
+  const merged = mergeGeometries(parts);
+  return roof ? merged.translate(0, roof.height - y, roof.roofZ - z) : merged;
 }
 
 let _lightbarMat = null;

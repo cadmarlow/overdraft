@@ -2,21 +2,15 @@ import * as THREE from 'three/webgpu';
 import {
   ISLAND_BOUNDS,
   CENTRAL_PARK_BOUNDS,
+  WATERFRONT_PIERS,
   getIslandBoundsAtZ,
   isTypingInField,
   blockAt,
   streetZ
 } from './city-config.js';
 import { cityUniforms, createCarPaintMaterial, createContactShadowMaterial } from './tsl-materials.js';
-import {
-  BODY_SPECS,
-  buildCarGeometry,
-  buildCarSidePatch,
-  buildSteerableWheelGeo,
-  carTipZ,
-  createCarWheelMaterial,
-  createLoftedCarMaterial
-} from './cars.js';
+import { carModels, carSpecs, createBodyMaterial, createGlassMaterial, createWheelMaterial, trafficMaterial } from './car-assets.js';
+import { createBody, impactBody, makeTune, settleBody, stepCar } from './car-physics.js';
 import {
   buildHelicopterBodyGeometry,
   buildHelicopterMainRotorGeometry,
@@ -29,6 +23,8 @@ import { createPlane, posePlane } from './airplane.js';
 import { stepPlane } from './flight.js';
 import { bryantParkLawn } from './landmarks.js';
 import { polygonContact } from './building-collision.js';
+import { rampRise } from './ramps.js';
+import { WATER, stepBoat } from './boat.js';
 
 // Player models, animation and movement for walking, driving, cycling and flying.
 
@@ -36,6 +32,11 @@ import { polygonContact } from './building-collision.js';
 const SPAWN_Z = streetZ(37);
 const groundCollider = { type: 'ground' };
 
+const CAR_LABELS = {
+  sedan: 'Valmont · Écume', suv: 'Brisant · Récif', taxi: 'Valmont · Cab 7', pickup: 'Gréville · Falaise', van: 'Hauturier · Cargo', minivan: 'Gréville · Escale',
+  hatch: 'Valmont · Ressac', compact: 'Gréville · Galet', wagon: 'Valmont · Sillage', offroad: 'Brisant · Marais', muscle: 'Brisant · Tempête', sport: 'Corsaire · Foudre',
+  super: 'Corsaire · Zénith', truck: 'Hauturier · Fret', delivery: 'Hauturier · Tournée'
+};
 const CAR_DRIVE = {
   speed: 36, reverseSpeed: 10.5, acceleration: 4.5,
   powerSpeed: 14.5, // Above 52 km/h, engine power limits acceleration.
@@ -69,6 +70,29 @@ function driveSpeed(speed, throttle, dt, drive) {
 // Walking surface for the player's pedestrian (its rig samples it around its feet)
 const personGround = (controllers, x, z) => controllers.getGroundHeight(x, z, 'person');
 
+// The planar car state back on its meshes: the chassis in its full attitude under the yaw-only root, each wheel on its spring
+const FRAME_SPIN = 0.62;
+function poseCar(c, dt) {
+  const b = c.body, q = b.q, s = Math.sin(c.heading * 0.5), h = Math.cos(c.heading * 0.5);
+  c.chassisPivot.quaternion.set(h * q[0] - s * q[2], h * q[1] - s * q[3], h * q[2] + s * q[0], h * q[3] + s * q[1]);
+  for (let i = 0; i < 4; i++) {
+    const w = b.wheels[i], view = c.wheels[i];
+    view.steerPivot.position.y = view.restY + w.travel - (w.burst ? 0.1 : 0);
+    if (view.isFront) view.steerPivot.rotation.y = b.steer;
+    view.spin = (view.spin + Math.max(-FRAME_SPIN, Math.min(FRAME_SPIN, (w.spin || 0) * dt))) % (Math.PI * 2);
+    view.tire.rotation.x = view.spin;
+  }
+  if (c.shadow) {
+    const lift = c.position.y - (b.wheels[0].gy + b.wheels[3].gy) * 0.5;
+    c.shadow.visible = lift < 3.5 && b.r[4] > 0.2;
+    c.shadow.position.y = 0.02 - lift;
+  }
+  if (c.carState) {
+    c.carState.value.x = b.brake || (b.handbraking && Math.abs(c.speed) > 1) ? 1 : 0;
+    c.carState.value.w = b.reversing && b.throttle > 0.05 ? 1 : 0;
+  }
+}
+
 function collisionBody(mode, radius, heading, margin = 0, halfW = 0.86, halfL = 2.18) {
   const car = mode === 'car';
   const sin = Math.sin(heading), cos = Math.cos(heading);
@@ -82,11 +106,48 @@ function collisionBody(mode, radius, heading, margin = 0, halfW = 0.86, halfL = 
   };
 }
 
+// A trunk or a pole against a walker's circle or a car's rectangle; the normal pushes the body away from it
+function roundContact(c, x, z, body, contact) {
+  const dx = x - c.cx, dz = z - c.cz;
+  if (!body.car) {
+    const distance = Math.hypot(dx, dz), reach = c.round + body.radius;
+    if (distance >= reach) return false;
+    if (contact) {
+      contact.nx = distance > 1e-6 ? dx / distance : 1;
+      contact.nz = distance > 1e-6 ? dz / distance : 0;
+      contact.depth = reach - distance;
+    }
+    return true;
+  }
+  // The obstacle in the car's frame: across, then along it
+  const { sin, cos, hx, hz } = body;
+  const lx = -dx * cos + dz * sin, lz = -dx * sin - dz * cos;
+  const ex = lx - Math.max(-hx, Math.min(hx, lx)), ez = lz - Math.max(-hz, Math.min(hz, lz));
+  const distance = Math.hypot(ex, ez);
+  if (distance >= c.round) return false;
+  if (!contact) return true;
+  let nx = 0, nz = 0;
+  if (distance > 1e-6) {
+    nx = -ex / distance; nz = -ez / distance;
+    contact.depth = c.round - distance;
+  } else if (hx - Math.abs(lx) <= hz - Math.abs(lz)) {
+    nx = lx > 0 ? -1 : 1;
+    contact.depth = hx - Math.abs(lx) + c.round;
+  } else {
+    nz = lz > 0 ? -1 : 1;
+    contact.depth = hz - Math.abs(lz) + c.round;
+  }
+  contact.nx = nx * cos + nz * sin;
+  contact.nz = -nx * sin + nz * cos;
+  return true;
+}
+
 // Movement and teleports share exact footprint checks after rejecting distant bounds.
 // Walking/cycling/flying use circles; cars use oriented rectangles.
 function buildingContact(c, x, y, z, body, contact) {
   if (y + body.bottom >= c.maxY || y + body.top <= (c.minY ?? 0)) return false;
   if (x + body.extX <= c.minX || x - body.extX >= c.maxX || z + body.extZ <= c.minZ || z - body.extZ >= c.maxZ) return false;
+  if (c.round) return roundContact(c, x, z, body, contact);
   if (c.polygon) return polygonContact(c.polygon, x, z, body, contact);
   const o = c.obb;
   const cs = o ? o.cs : 1, sn = o ? o.sn : 0;
@@ -133,63 +194,6 @@ function buildingContact(c, x, y, z, body, contact) {
     contact.depth = depth;
   }
   return true;
-}
-
-function createTaxiDoorDecalTexture() {
-  const c = document.createElement('canvas');
-  c.width = 256;
-  c.height = 128;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#ffbe14';
-  ctx.fillRect(0, 0, 256, 128);
-  // Black T&LC circle emblem
-  ctx.fillStyle = '#111317';
-  ctx.beginPath();
-  ctx.arc(58, 64, 42, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#ffbe14';
-  ctx.font = '900 32px Inter, Arial, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('T', 58, 66);
-  // NYC TAXI typography & Fare Rate
-  ctx.fillStyle = '#111317';
-  ctx.textAlign = 'left';
-  ctx.font = '900 26px Inter, Arial, sans-serif';
-  ctx.fillText('NYC TAXI', 112, 42);
-  ctx.font = '700 15px JetBrains Mono, monospace';
-  ctx.fillText('7Y48 · MEDALLION', 112, 68);
-  ctx.font = '600 13px Inter, Arial, sans-serif';
-  ctx.fillText('$3.00 INITIAL FARE', 112, 90);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  // The decals are mostly seen at grazing angles from the chase camera
-  tex.anisotropy = 16;
-  return tex;
-}
-
-function createNYLicensePlateTexture() {
-  const c = document.createElement('canvas');
-  c.width = 256;
-  c.height = 128;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#ffb81c';
-  ctx.fillRect(0, 0, 256, 128);
-  ctx.fillStyle = '#0d2244';
-  ctx.fillRect(6, 6, 244, 24);
-  ctx.fillStyle = '#ffb81c';
-  ctx.font = '800 15px Inter, Arial, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('NEW YORK', 128, 23);
-  ctx.fillStyle = '#0d2244';
-  ctx.font = '900 48px JetBrains Mono, monospace';
-  ctx.fillText('7Y48A', 128, 82);
-  ctx.font = '700 13px Inter, Arial, sans-serif';
-  ctx.fillText('NYC T&LC', 128, 114);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 16;
-  return tex;
 }
 
 class ThirdPersonControllerManager {
@@ -378,6 +382,7 @@ class ThirdPersonControllerManager {
       ent.chassisPivot.rotation.x = ent.chassisPivot.rotation.z = 0;
       ent.chassisPivot.position.y = 0;
       ent.lastCollisionSpark = null;
+      if (ent.body) settleBody(ent, ent.heading);
       for (const wheel of ent.wheels) if (wheel.isFront) wheel.steerPivot.rotation.y = 0;
       if (ent.carState) ent.carState.value.x = ent.carState.value.w = 0;
     } else if (this.activeMode === 'cyclist') {
@@ -409,8 +414,8 @@ class ThirdPersonControllerManager {
     // Conservative body cylinders, including the taxi's corners, bicycle wheels and helicopter tail/rotor.
     const body = { person: [0.48, 1.9], car: [2.4, 1.9], cyclist: [1.0, 1.9], helicopter: [6.2, 3.2] };
     const others = Object.values(this.entities).filter(e => e !== entity).map(e => ({
-      x: e.position.x, z: e.position.z, radius: body[e.type][0],
-      bottom: e.position.y - (e.type === 'helicopter' ? 0.7 : 0), top: e.position.y + body[e.type][1]
+      x: e.position.x, z: e.position.z, radius: (body[e.type] ?? body.helicopter)[0],
+      bottom: e.position.y - (e.type === 'helicopter' ? 0.7 : 0), top: e.position.y + (body[e.type] ?? body.helicopter)[1]
     }));
     const cameraBack = Math.cos(0.09) * entity.chaseDistance;
     const cameraUp = entity.chaseHeight + Math.sin(0.09) * entity.chaseDistance * 0.85;
@@ -498,78 +503,60 @@ class ThirdPersonControllerManager {
   // =========================================================================
   // 2. CAR (3D LOFTED SCULPTED NYC MEDALLION YELLOW TAXI SEDAN)
   // =========================================================================
-  createCarEntity({ kind = 'taxi', paint = 0xffbe14, livery = 0 } = {}) {
+  // lite: a car knocked out of the traffic mid-game. It draws with the street's own materials, which are already compiled, so
+  // that a pile-up never stalls a frame; it gives up dents, lamps and a door that opens.
+  createCarEntity({ kind = 'taxi', paint = 0xffbe14, livery = 0, handling = kind, lite = false } = {}) {
     const root = new THREE.Group();
     root.name = 'PlayerTaxiCar';
 
     const chassisPivot = new THREE.Group();
     root.add(chassisPivot);
 
-    const spec = BODY_SPECS[kind] || BODY_SPECS.sedan;
-    const taxiLoftMat = createLoftedCarMaterial(spec, paint, livery);
-
-    // 1. 3D Lofted Taxi Body + Curved Windscreens + Crowned Roof + Side Mirrors + Roof Sign
-    const carBodyGeo = buildCarGeometry(spec, false);
-    const carBodyMesh = new THREE.Mesh(carBodyGeo, taxiLoftMat);
+    const id = carModels[kind] ? kind : 'sedan';
+    const model = carModels[id], spec = carSpecs[id];
+    const paintMaterial = lite ? trafficMaterial(id) : createBodyMaterial(model, { paint, livery });
+    let carBodyMesh;
+    if (lite) {
+      const shell = new THREE.BufferGeometry();
+      for (const name of ['position', 'normal', 'uv', 'flag']) shell.setAttribute(name, model.shell.attributes[name]);
+      shell.setIndex(model.shell.index);
+      const colour = new THREE.Color(paint);
+      shell.setAttribute('paintColor', new THREE.InstancedBufferAttribute(Float32Array.of(colour.r, colour.g, colour.b), 3));
+      shell.setAttribute('carState', new THREE.InstancedBufferAttribute(new Float32Array(4), 4));
+      carBodyMesh = new THREE.InstancedMesh(shell, paintMaterial, 1);
+      carBodyMesh.setMatrixAt(0, new THREE.Matrix4());
+      carBodyMesh.frustumCulled = false;
+      chassisPivot.add(carBodyMesh);
+    } else {
+      carBodyMesh = new THREE.Mesh(model.body, paintMaterial);
+      chassisPivot.add(carBodyMesh, new THREE.Mesh(model.glass, createGlassMaterial(model, paintMaterial)));
+    }
     carBodyMesh.castShadow = true;
     carBodyMesh.receiveShadow = true;
-    chassisPivot.add(carBodyMesh);
+    const carState = lite ? null : paintMaterial.userData.carState;
 
-    // 2. Authentic NYC Taxi Side Door T&LC Medallion & Fare Tariff Emblem Decals, hugging the curved front doors
-    const doorDecalTex = createTaxiDoorDecalTexture();
-    const doorDecalMat = new THREE.MeshStandardNodeMaterial({
-      map: doorDecalTex,
-      roughness: 0.24,
-      metalness: 0.34,
-      polygonOffset: true,
-      polygonOffsetFactor: -2,
-      polygonOffsetUnits: -2
-    });
-    const doorMid = (spec.doors[0] + spec.doors[1]) / 2;
-    for (const side of (kind === 'taxi' ? [-1, 1] : [])) {
-      const decal = new THREE.Mesh(buildCarSidePatch(spec, side, doorMid - 0.36, doorMid + 0.36, 0.53, 0.81, 0.003), doorDecalMat);
-      chassisPivot.add(decal);
-    }
-
-    // 3. High-Detail NY Empire Gold License Plates on the raked bumpers, tilted to follow the fascias
-    const nyPlateTex = createNYLicensePlateTexture();
-    const nyPlateMat = new THREE.MeshStandardNodeMaterial({ map: nyPlateTex, roughness: 0.28 });
-    for (const front of [true, false]) {
-      const y = spec.plates[front ? 0 : 1];
-      const plate = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.14, 0.008), nyPlateMat);
-      plate.position.set(0, y, carTipZ(spec, y, front) + (front ? 0.003 : -0.003));
-      plate.rotation.x = Math.atan((carTipZ(spec, y + 0.07, front) - carTipZ(spec, y - 0.07, front)) / 0.14);
-      chassisPivot.add(plate);
-    }
-
-    // 3b. Brake, reverse & turn lights are lit by the taxi material from its carState uniform (see updateCar)
-    const carState = taxiLoftMat.userData.carState;
-
-    // 4. Steerable & Spinning 3D LatheGeometry Tyres + Recessed 5-Spoke Alloy Wheels
-    const leftWheelGeo = buildSteerableWheelGeo(spec, -1);
-    const rightWheelGeo = buildSteerableWheelGeo(spec, 1);
-    const taxiWheelMat = createCarWheelMaterial({ wheelRadius: spec.wheelRadius });
-
+    // The wheels hang from the chassis: they lean with it and travel on their own springs
     const wheels = [];
-    const wheelCoords = [
-      { side: -1, z: spec.wheelZ, isFront: true },
-      { side: 1, z: spec.wheelZ, isFront: true },
-      { side: -1, z: -spec.wheelZ, isFront: false },
-      { side: 1, z: -spec.wheelZ, isFront: false }
-    ];
-    for (const wc of wheelCoords) {
+    const wheelModel = lite ? carModels.sedan : model;
+    const wheelMaterial = createWheelMaterial(wheelModel);
+    spec.wheels.forEach(([x, y, z], i) => {
       const steerPivot = new THREE.Group();
-      steerPivot.position.set(wc.side * spec.wheelX, spec.wheelRadius, wc.z);
-      const tire = new THREE.Mesh(wc.side < 0 ? leftWheelGeo : rightWheelGeo, taxiWheelMat);
+      steerPivot.position.set(x, y, z);
+      if (lite) steerPivot.scale.setScalar(spec.wheelRadius / carSpecs.sedan.wheelRadius);
+      const tire = new THREE.Mesh(wheelModel.wheels[i], wheelMaterial);
       tire.castShadow = true;
       tire.receiveShadow = true;
       steerPivot.add(tire);
-      root.add(steerPivot);
-      wheels.push({ steerPivot, tire, isFront: wc.isFront });
-    }
+      chassisPivot.add(steerPivot);
+      wheels.push({ steerPivot, tire, isFront: i < 2, restY: y, spin: 0 });
+    });
+    const tune = makeTune(handling, {
+      halfW: spec.halfW, halfL: Math.max(spec.zFront, -spec.zRear), height: spec.height, sill: spec.sill,
+      wheelX: (spec.wheelX + spec.wheelXr) / 2, wheelZf: spec.wheelZf, wheelZr: spec.wheelZr, wheelRadius: spec.wheelRadius
+    });
 
-    // 5. Ground contact shadow and paired headlight spotlights
-    const carShadowGeo = new THREE.PlaneGeometry(2.22, 5.05);
+    // Ground contact shadow and paired headlight spotlights
+    const carShadowGeo = new THREE.PlaneGeometry(spec.halfW * 2 + 0.38, spec.zFront - spec.zRear + 0.3);
     carShadowGeo.rotateX(-Math.PI * 0.5);
     const carShadow = new THREE.Mesh(carShadowGeo, createContactShadowMaterial());
     carShadow.position.set(0, 0.02, 0.0);
@@ -577,7 +564,7 @@ class ThirdPersonControllerManager {
     root.add(carShadow);
 
     const headLights = [];
-    for (const side of [-1, 1]) {
+    for (const side of lite ? [] : [-1, 1]) {
       const spot = createVehicleHeadlight();
       placeVehicleHeadlight(spot, spec, side);
       chassisPivot.add(spot, spot.target);
@@ -591,8 +578,14 @@ class ThirdPersonControllerManager {
       kind,
       spec,
       paint,
+      tune,
+      body: createBody(tune),
+      halfW: tune.halfW,
+      halfL: tune.halfL,
       bodyMesh: carBodyMesh,
-      label: ({ sedan: 'Valmont · Écume', suv: 'Brisant · Récif', taxi: 'Valmont · Cab 7', pickup: 'Gréville · Falaise', van: 'Hauturier · Cargo', minivan: 'Gréville · Escale' })[kind] || 'Berline',
+      paintMaterial,
+      shadow: carShadow,
+      label: CAR_LABELS[kind] || 'Berline',
       mesh: root,
       chassisPivot,
       carState,
@@ -613,9 +606,10 @@ class ThirdPersonControllerManager {
       lastCollisionSpark: null,
       steerAngle: 0,
       wheelSpin: 0,
-      cameraTargetOffset: new THREE.Vector3(0, 0.96, 0),
-      chaseDistance: 6.9,
-      chaseHeight: 2.12
+      nitro: 1,
+      cameraTargetOffset: new THREE.Vector3(0, Math.max(0.8, spec.height * 0.62), 0),
+      chaseDistance: 4.6 + (tune.halfL - 2) * 1.4 + spec.height * 0.55,
+      chaseHeight: 1.05 + spec.height * 0.62
     };
   }
 
@@ -869,7 +863,47 @@ class ThirdPersonControllerManager {
     return !!b && !(b.park > 0.6 && !b.median);
   }
 
+  // What a wheel stands on. The kerbs are real for cars, which is what makes a sidewalk a jolt, and a park's bank a ramp.
+  carGround(x, z, hit) {
+    hit.nx = 0; hit.ny = 1; hit.nz = 0; hit.grip = 1; hit.rough = 0.0035; hit.y = 0; hit.curb = false;
+    // Past the seawall there is nothing under the wheels
+    if (this.overWater(x, z)) { hit.y = -40; return; }
+    const cp = CENTRAL_PARK_BOUNDS;
+    if (x > cp.minX && x < cp.maxX && z > cp.minZ && z < cp.maxZ) {
+      const edge = Math.min(x - cp.minX, cp.maxX - x, z - cp.minZ, cp.maxZ - z);
+      hit.y = 1.24 * Math.min(1, edge / 7);
+      hit.grip = 0.62; hit.rough = 0.024;
+      const rise = rampRise(x, z, hit);
+      if (rise) { hit.y += rise; hit.grip = 1; hit.rough = 0.002; }
+      return;
+    }
+    const lawn = bryantParkLawn;
+    if (lawn && x > lawn.minX && x < lawn.maxX && z > lawn.minZ && z < lawn.maxZ) {
+      hit.y = lawn.top * Math.min(1, Math.min(x - lawn.minX, lawn.maxX - x, z - lawn.minZ, lawn.maxZ - z) / 3);
+      hit.grip = 0.62; hit.rough = 0.02;
+      return;
+    }
+    const block = blockAt(x, z);
+    if (!block) return;
+    if (block.park > 0.6 && !block.median) { hit.grip = 0.66; hit.rough = 0.018; return; }
+    hit.y = ISLAND_BOUNDS.sidewalkHeight; hit.rough = 0.006; hit.curb = true;
+  }
+
+  // Open water: off the island's shore and clear of the land the boroughs raster knows
+  afloat(x, z) {
+    if (!this.overWater(x, z) || this.landAt?.(x, z)) return false;
+    // Piers and bridge footings stand in the water
+    for (const c of this.nearColliders(x, z, 2)) if ((c.maxY ?? 0) > 0 && x > c.minX && x < c.maxX && z > c.minZ && z < c.maxZ) return false;
+    // A pier is solid across its whole width, whatever basins its outline has: its deck covers them
+    for (const p of WATERFRONT_PIERS ?? []) {
+      const dx = x - p.cx, dz = z - p.cz, ux = Math.cos(p.angle), uz = Math.sin(p.angle);
+      if (Math.abs(dx * ux + dz * uz) < p.length / 2 + 4 && Math.abs(dz * ux - dx * uz) < p.width / 2 + 4) return false;
+    }
+    return true;
+  }
+
   getGroundHeight(x, z, mode = 'person') {
+    if (this.swimming && mode === 'person') return WATER - 1.28;
     // Inside Central Park (5th Ave to Central Park West, 59th St to 110th St)
     const cp = CENTRAL_PARK_BOUNDS;
     if (x > cp.minX && x < cp.maxX && z > cp.minZ && z < cp.maxZ) {
@@ -930,16 +964,18 @@ class ThirdPersonControllerManager {
     const m = heli ? 6000 : 0;
     pos.x = Math.max(ISLAND_BOUNDS.minX - m, Math.min(ISLAND_BOUNDS.maxX + m, pos.x));
     pos.z = Math.max(ISLAND_BOUNDS.minZ + (heli ? -6000 : 30), Math.min(ISLAND_BOUNDS.maxZ + m, pos.z));
-    if (!heli && getIslandBoundsAtZ) {
+    if (!heli && !carEntity?.body && getIslandBoundsAtZ) {
       const shore = getIslandBoundsAtZ(pos.z);
       const minShoreX = shore.westX + 8.0;
       const maxShoreX = shore.eastX - 8.0;
       if (pos.x < minShoreX) {
         pos.x = minShoreX;
-        if (carEntity && carEntity.speed) carEntity.speed *= 0.4;
+        if (carEntity?.body) impactBody(carEntity, pos.x, pos.y + 0.55, pos.z, 1, 0, 0);
+        else if (carEntity && carEntity.speed) carEntity.speed *= 0.4;
       } else if (pos.x > maxShoreX) {
         pos.x = maxShoreX;
-        if (carEntity && carEntity.speed) carEntity.speed *= 0.4;
+        if (carEntity?.body) impactBody(carEntity, pos.x, pos.y + 0.55, pos.z, -1, 0, 0);
+        else if (carEntity && carEntity.speed) carEntity.speed *= 0.4;
       }
     }
 
@@ -954,11 +990,30 @@ class ThirdPersonControllerManager {
     for (let i = 0; i < near.length; i++) {
       const c = near[i];
       if (buildingContact(c, pos.x, pos.y, pos.z, body, contact)) {
+        // Hydrants and mailboxes don't stop a car, they go down under it
+        if (c.breakable && carEntity && Math.abs(carEntity.speed) > 3 && this.onPropHit) {
+          this.onPropHit(c, carEntity);
+          carEntity.speed *= c.soft ? 0.985 : 0.9;
+          continue;
+        }
         const { nx, nz, depth } = contact;
         pos.x += nx * depth;
         pos.z += nz * depth;
 
-        if (this._collisionListener && entity && entity.type !== 'person') {
+        if (carEntity?.body) {
+          // The corner or the face that hit, in the car's own frame: head-on is the middle of the bumper, a clip is its corner
+          const along = nx * sinH + nz * cosH, across = nx * cosH - nz * sinH;
+          const lx = -Math.sign(across) * body.hx * Math.min(1, Math.abs(across) * 2.2);
+          const lz = -Math.sign(along) * body.hz * Math.min(1, Math.abs(along) * 2.2);
+          const px = pos.x + cosH * lx + sinH * lz, py = pos.y + 0.55, pz = pos.z - sinH * lx + cosH * lz;
+          const closing = impactBody(carEntity, px, py, pz, nx, 0, nz);
+          if (closing > 0.4) {
+            if (this._collisionListener) this.reportCollision(entity, c, 'building', px, py, pz, nx, 0, nz, closing);
+            if (closing > 2.2) carEntity.lastCollisionSpark = { x: px, y: py, z: pz, nx, nz, speed: closing };
+          }
+          const slide = Math.hypot(carEntity.body.vx, carEntity.body.vz);
+          if (slide > 3) { carEntity.body.wall = 0.08; carEntity.body.wallX = px; carEntity.body.wallY = py; carEntity.body.wallZ = pz; carEntity.body.wallSpeed = slide; }
+        } else if (this._collisionListener && entity && entity.type !== 'person') {
           const sin = carEntity ? sinH : Math.sin(entity.heading);
           const cos = carEntity ? cosH : Math.cos(entity.heading);
           const approachSpeed = -((sin * entity.speed + (entity.vx || 0)) * nx + (cos * entity.speed + (entity.vz || 0)) * nz);
@@ -967,7 +1022,7 @@ class ThirdPersonControllerManager {
             nx, 0, nz, approachSpeed);
         }
 
-        if (carEntity) {
+        if (carEntity && !carEntity.body) {
           const totalVx = sinH * carEntity.speed + (carEntity.vx || 0);
           const totalVz = cosH * carEntity.speed + (carEntity.vz || 0);
           const vn = -(totalVx * nx + totalVz * nz);
@@ -1177,11 +1232,40 @@ class ThirdPersonControllerManager {
     let steerInput = 0;
     if (this.keys.left) steerInput = this.keys.left;
     if (this.keys.right) steerInput = -this.keys.right;
-    this.simulateCar(this.entities.car, throttle, steerInput, this.keys.handbrake || this.keys.up, dt);
+    const car = this.entities.car;
+    // Nitro drains while it burns and fills back on its own, faster when the driving earns it (gameplay.js)
+    const boosting = !!(this.keys.sprint && car.body && car.nitro > 0.02 && throttle > 0);
+    if (boosting) car.nitro = Math.max(0, car.nitro - dt / 4.5);
+    else if (car.body) car.nitro = Math.min(1, car.nitro + dt / 40);
+    this.simulateCar(car, throttle, steerInput, this.keys.handbrake || this.keys.up, dt, boosting);
   }
 
-  // One car's tire, steering, collision and suspension step; shared by the player and AI drivers (wanted.js).
-  simulateCar(c, throttle, steerInput, handbrakeInput, dt) {
+  // One car's step, for the player and the AI drivers alike (car-physics.js)
+  simulateCar(c, throttle, steerInput, handbrakeInput, dt, nitro = false) {
+    if (c.boat) {
+      const world = this._boatWorld ??= { clock: 0, afloat: (x, z) => this.afloat(x, z) };
+      world.clock = performance.now() / 1000;
+      const aground = stepBoat(c, throttle, steerInput, dt, world);
+      if (aground > 3 && this._collisionListener) this.reportCollision(c, { obstacle: 'shore' }, 'building', c.position.x, 0, c.position.z, 0, 0, 0, aground);
+      return;
+    }
+    if (!c.body) { this.simulateBike(c, throttle, steerInput, handbrakeInput, dt); return; }
+    if (dt <= 0) return;
+    c.prevX = c.position.x;
+    c.prevZ = c.position.z;
+    const input = this._carInput ??= { throttle: 0, steer: 0, handbrake: false };
+    input.throttle = throttle;
+    input.steer = steerInput;
+    input.handbrake = !!handbrakeInput;
+    c.body.nitro = nitro ? 1 : 0;
+    const world = this._carWorld ??= { grip: 1, waterLevel: WATER, ground: (x, z, hit) => this.carGround(x, z, hit), collide: (car) => this.resolveHorizontalCollision(car.position, 1.35, car) };
+    world.grip = this.gripFactor ?? 1;
+    stepCar(c, input, dt, world);
+    poseCar(c, dt);
+  }
+
+  // Motorbikes keep the planar model: lean and wheelie are posed on top of it (motorbike.js)
+  simulateBike(c, throttle, steerInput, handbrakeInput, dt) {
     if (dt <= 0) return;
     const braking = c.speed * throttle < 0;
     const prevX = c.position.x;

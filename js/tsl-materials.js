@@ -1,4 +1,6 @@
 import * as THREE from 'three/webgpu';
+import { nature } from './nature-assets.js';
+import { world } from './world-assets.js';
 import {
   Fn,
   float,
@@ -56,7 +58,10 @@ import {
   sqrt,
   specularColor,
   specularColorBlended,
-  specularF90
+  specularF90,
+  dFdx, dFdy, normalMap,
+  cross,
+  varyingProperty
 } from 'three/tsl';
 import {
   CENTRAL_PARK_BOUNDS,
@@ -102,6 +107,18 @@ const noise2D = Fn(([p]) => {
  * Mikkelsen's Surface-Gradient Hardware Derivative Bump Mapping (ported from CityGeneratorUtils.js)
  * Wrapped in Fn() so `height` is evaluated once into a scalar parameter before dFdx/dFdy!
  */
+const surfaceNormal = Fn(([map, coords, strength]) => {
+  const n = texture(map, coords).xyz.mul(2.0).sub(1.0).toVar();
+  const N = normalViewGeometry;
+  const dp1 = dFdx(positionView), dp2 = dFdy(positionView);
+  const duv1 = dFdx(coords), duv2 = dFdy(coords);
+  const p2 = cross(dp2, N), p1 = cross(N, dp1);
+  const T = p2.mul(duv1.x).add(p1.mul(duv2.x)).toVar();
+  const B = p2.mul(duv1.y).add(p1.mul(duv2.y)).toVar();
+  const scale = float(1.0).div(sqrt(max(max(dot(T, T), dot(B, B)), 1e-12)));
+  return normalize(T.mul(scale).mul(n.x.mul(strength)).add(B.mul(scale).mul(n.y.mul(strength))).add(N.mul(n.z)));
+});
+
 const bumpNormal = Fn(([height]) => {
   const h = float(height).toVar();
   const dpdx = positionView.dFdx();
@@ -196,14 +213,15 @@ const canyonSkyAONode = Fn(() => {
   const inPark = inParkX.mul(inParkZ);
 
   const heightOpenness = smoothstep(0.0, 68.0, wp.y);
-  const streetCrevice = smoothstep(0.0, 7.5, wp.y).mul(0.22).add(0.78);
-  const canyonAO = mix(float(0.44), float(1.0), heightOpenness).mul(streetCrevice);
+  const streetCrevice = smoothstep(0.0, 7.5, wp.y).mul(0.12).add(0.88);
+  const canyonAO = mix(float(0.74), float(1.0), heightOpenness).mul(streetCrevice);
   return mix(canyonAO, float(1.0), inPark);
 });
 
 // Material caches to prevent duplicate WebGPU WGSL shader compilation across blocks & landmarks
 const _curtainWallCache = new Map();
 const _preWarCache = new Map();
+const RECESS = 0.24; // metres of wall in front of a window
 
 // Camera-independent facade frame: the view/world normal round trip can change the dominant axis on 45-degree
 // walls. Resolve near-ties in the vertex shader and keep that choice flat across each face.
@@ -483,16 +501,20 @@ let _storefrontSignTexture;
 
 function getStorefrontSignTexture() {
   if (_storefrontSignTexture) return _storefrontSignTexture;
-  const labels = ['CORNER MARKET', 'COFFEE & BAKERY', 'BOOKS & RECORDS', 'NEIGHBORHOOD DELI',
-    'CLEANERS', 'FLOWERS', 'HARDWARE', 'PIZZA'];
+  const labels = ['CORNER MARKET', 'COFFEE & BAKERY', 'BOOKS & RECORDS', 'NEIGHBORHOOD DELI', 'CLEANERS', 'FLOWERS', 'HARDWARE', 'PIZZA',
+    'PHARMACY', 'BARBER SHOP', 'LIQUORS', 'LAUNDROMAT', 'NAIL SALON', 'SHOE REPAIR', 'CHECKS CASHED', 'DINER'];
   const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = 512;
+  canvas.width = 1024;
+  canvas.height = 2048;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#fff';
-  ctx.font = '600 32px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  labels.forEach((label, i) => ctx.fillText(label, 256, i * 64 + 32, 464));
+  const faces = ['800 92px Georgia, serif', '800 96px Arial Narrow, sans-serif', '700 88px Times New Roman, serif', '900 86px Arial, sans-serif'];
+  labels.forEach((label, i) => {
+    ctx.font = faces[i % faces.length];
+    ctx.fillText(label, 512, i * 128 + 64, 960);
+  });
   _storefrontSignTexture = new THREE.CanvasTexture(canvas);
   return _storefrontSignTexture;
 }
@@ -521,21 +543,25 @@ function createStorefront(facade, seed, local) {
   const kickplate = door.mul(band(y, 0.23, 0.32, fw.y));
   const metal = max(handle, kickplate);
   const glazing = glass.mul(float(1).sub(handle));
+  // Shopfront paint, and a sign board in the owner's colours
+  const hue = hash2D(id.add(vec2(71.3, 2.9)));
   const paint = mix(mix(color(0x263831), color(0x463b30), step(0.38, choice)), color(0x242a32), step(0.72, choice));
+  const board = mix(mix(mix(color(0x8c1d22), color(0x123a6b), step(0.3, hue)), color(0x1c5a3a), step(0.55, hue)), color(0xd2a32a), step(0.8, hue));
   const signWidth = min(width.mul(0.82), 5.5);
   const signUV = vec2(x.sub(width.mul(0.5)).div(signWidth).add(0.5), y.sub(2.96).div(0.6));
-  const signLod = log2(max(fw.x.mul(512).div(signWidth), fw.y.mul(64 / 0.6)));
+  const signLod = log2(max(fw.x.mul(1024).div(signWidth), fw.y.mul(128 / 0.6)));
   const signMask = band(signUV.x, 0, 1, fw.x.div(signWidth))
     .mul(band(signUV.y, 0, 1, fw.y.div(0.6))).mul(float(1).sub(smoothstep(4, 6, signLod)));
   const signInk = Fn(() => {
     const ink = float(0).toVar();
     If(mask.mul(signMask).greaterThan(0.001), () => {
-      const atlasUV = vec2(signUV.x.clamp(0, 1), float(1).sub(floor(choice.mul(8)).add(float(1).sub(signUV.y.clamp(0, 1))).div(8)));
+      const atlasUV = vec2(signUV.x.clamp(0, 1), float(1).sub(floor(choice.mul(16)).add(float(1).sub(signUV.y.clamp(0, 1))).div(16)));
       ink.assign(texture(getStorefrontSignTexture(), atlasUV).level(signLod.clamp(0, 5)).a.mul(signMask));
     });
     return ink;
   })().toVar();
-  const frame = mix(mix(paint, color(0x92958d), metal), color(0xe0d7bb), signInk);
+  const signBand = band(y, 2.9, 3.62, fw.y);
+  const frame = mix(mix(mix(paint, board, signBand), color(0x92958d), metal), mix(color(0xf2ecd8), color(0x17181b), step(0.8, hue)), signInk);
 
   const interior = Fn(() => {
     const result = vec4(0).toVar();
@@ -589,7 +615,9 @@ function createStorefront(facade, seed, local) {
       });
       const view = normalize(cameraPosition.sub(positionWorld));
       const fresnel = pow(clamp(float(1).sub(abs(dot(view, facadeWorldNormal))), 0, 1), 2);
-      const glassColor = mix(room.mul(light).mul(mix(0.35, 0.95, lit)), cityUniforms.uSkyHorizonColor, fresnel.mul(0.65).add(0.10));
+      const bounced = reflect(view.negate(), facadeWorldNormal);
+      const mirrored = mix(color(0x34353a), mix(cityUniforms.uSkyHorizonColor, cityUniforms.uSkyTopColor, clamp(bounced.y.mul(1.4), 0, 1)), smoothstep(-0.06, 0.16, bounced.y));
+      const glassColor = mix(room.mul(light).mul(mix(0.5, 1.2, lit)), mirrored, fresnel.mul(0.55).add(0.06));
       result.assign(vec4(mix(glassColor, light, fixture.mul(lit)), lit.mul(float(0.55).add(fixture.mul(2.2))).mul(float(1).sub(fresnel.mul(0.8)))));
     });
     return result;
@@ -863,10 +891,12 @@ function createPreWarBuildingMaterial(opts = {}) {
     seed = 42.0,
     boxLocal = false,
     footprintLocal = false,
-    cornerPier = 1.2 // solid masonry at both ends of every wall above the shopfronts (box-local mode)
+    cornerPier = 1.2, // solid masonry at both ends of every wall above the shopfronts (box-local mode)
+    surface = 'limestone', // the photograph on its walls (world-assets.js)
+    tint = null // over the photograph; without one, the stone colour asked for
   } = opts;
 
-  const cacheKey = `${stoneColor}_${trimColor}_${windowWidth}_${floorHeight}_${litProbability}_${warmth}_${crownGlowHeight}_${seed}_${boxLocal}_${footprintLocal}_${cornerPier}`;
+  const cacheKey = `${surface}_${stoneColor}_${trimColor}_${windowWidth}_${floorHeight}_${litProbability}_${warmth}_${crownGlowHeight}_${seed}_${boxLocal}_${footprintLocal}_${cornerPier}`;
   if (_preWarCache.has(cacheKey)) {
     return _preWarCache.get(cacheKey);
   }
@@ -877,7 +907,8 @@ function createPreWarBuildingMaterial(opts = {}) {
   });
 
   // The style's parameters are uniforms (not baked-in constants), so every masonry style compiles to one shader
-  const cStone = uniform(new THREE.Color(stoneColor));
+  const uTint = uniform(tint ? new THREE.Color(...tint) : new THREE.Color(stoneColor).multiplyScalar(2.3));
+  const uDressed = uniform(surface === 'limestone' ? 0 : 1); // stone lintels on brick
   const cTrim = uniform(new THREE.Color(trimColor));
   const cGlass = uniform(new THREE.Color(windowGlassColor));
   const cCrown = uniform(new THREE.Color(crownGlowColor));
@@ -904,15 +935,33 @@ function createPreWarBuildingMaterial(opts = {}) {
   const front = float(1.0).sub(back);
   const effHalfX = float(halfWinX);
   const effHalfY = float(halfWinY);
+
+  // The wall's own frame: T runs the way uCoord grows, up is up. Windows sit in the thickness of the wall: looking in, the
+  // glass slides across the opening by RECESS metres of depth, and the sun casts the opening's edge onto it
+  const wallN = normalWorldGeometry;
+  const wallV = normalize(cameraPosition.sub(positionWorld));
+  const wallSide = normalize(cross(vec3(0.0, 1.0, 0.0), wallN));
+  const wallT = wallSide.mul(sign(dot(wallSide, dFdx(positionWorld)).mul(dFdx(uCoord)).add(dot(wallSide, dFdy(positionWorld)).mul(dFdy(uCoord)))));
+  const cellSize = vec2(bayWidth, uFloorHeight);
+  const glassUV = cellUV.sub(vec2(dot(wallV, wallT), wallV.y).div(max(dot(wallV, wallN), 0.12)).mul(RECESS).div(cellSize));
+  const sunIn = dot(cityUniforms.uSkySunDir, wallN);
+  const sunUV = glassUV.add(vec2(dot(cityUniforms.uSkySunDir, wallT), cityUniforms.uSkySunDir.y).div(max(sunIn, 0.06)).mul(RECESS).div(cellSize));
+  const sunOnGlass = step(0.0, sunIn).mul(filteredPulse(sunUV.x, effHalfX, float(1.0).sub(effHalfX), 0.03)).mul(filteredPulse(sunUV.y, effHalfY, float(1.0).sub(effHalfY), 0.03));
+  // The pane seen through the opening: 0 where the wall's thickness hides it
+  const paneSeen = filteredPulse(glassUV.x, effHalfX, float(1.0).sub(effHalfX), fw.x).mul(filteredPulse(glassUV.y, effHalfY, float(1.0).sub(effHalfY), fw.y));
   // Glazing UV inside the apartment window opening.
   const winUV = clamp(
     vec2(
-      cellUV.x.sub(effHalfX).div(max(0.01, float(1.0).sub(effHalfX.mul(2.0)))),
-      cellUV.y.sub(effHalfY).div(max(0.01, float(1.0).sub(effHalfY.mul(2.0))))
+      glassUV.x.sub(effHalfX).div(max(0.01, float(1.0).sub(effHalfX.mul(2.0)))),
+      glassUV.y.sub(effHalfY).div(max(0.01, float(1.0).sub(effHalfY.mul(2.0))))
     ),
     vec2(0.0),
     vec2(1.0)
   );
+  // Photographs, in metres on the wall
+  const stonePhoto = world[surface];
+  const wallUV = vec2(uCoord, vCoord);
+  const photoUV = wallUV.div(stonePhoto.metres);
   const aptRoom = evaluateApartmentInterior(uCoord, vCoord, winUV, cellId, bayWidth, uFloorHeight, uSeed, uWarmth, uLitProbability.mul(0.62), fw);
   const storefront = createStorefront(facade, uSeed, boxLocal || footprintLocal);
   const entrance = createBuildingEntrance(facade, cTrim, boxLocal || footprintLocal);
@@ -936,9 +985,10 @@ function createPreWarBuildingMaterial(opts = {}) {
     );
 
     // Double-hung meeting rails.
-    const sashBarY = lineAA(cellUV.y.sub(0.52), 0.012).mul(float(1.0).sub(isGroundFloor));
-    const sashBarX = lineAA(cellUV.x.sub(0.50), 0.009).mul(float(1.0).sub(isGroundFloor)).mul(0.55);
-    const sashMask = max(sashBarY, sashBarX);
+    const sashBarY = lineAA(glassUV.y.sub(0.52), 0.012).mul(float(1.0).sub(isGroundFloor));
+    const sashBarX = lineAA(glassUV.x.sub(0.50), 0.009).mul(float(1.0).sub(isGroundFloor)).mul(0.55);
+    const sashEdge = float(1.0).sub(filteredPulse(winUV.x, 0.035, 0.965, fw.x.mul(2.0)).mul(filteredPulse(winUV.y, 0.03, 0.97, fw.y.mul(2.0))));
+    const sashMask = max(max(sashBarY, sashBarX), sashEdge.mul(float(1.0).sub(isGroundFloor)));
 
     // Protruding Window Air-Conditioner Unit, sitting on the sill (see hasAC)
     const acMinX = float(0.31);
@@ -963,44 +1013,33 @@ function createPreWarBuildingMaterial(opts = {}) {
       .mul(hasAC).mul(0.42);
 
     const isWindowOpening = inX.mul(inY).mul(float(1.0).sub(isRoof)).mul(float(1.0).sub(isCornice));
-    const isWindowGlass = isWindowOpening.mul(float(1.0).sub(sashMask)).mul(float(1.0).sub(inACBox));
+    const isWindowGlass = isWindowOpening.mul(paneSeen).mul(float(1.0).sub(sashMask)).mul(float(1.0).sub(inACBox));
+    // Where the wall's thickness hides the pane, its reveal shows: the side turned to the sun lit, the others in shade
+    const reveal = isWindowOpening.mul(float(1.0).sub(paneSeen)).mul(float(1.0).sub(inACBox));
+    const revealSide = max(max(smoothstep(effHalfX.sub(0.02), effHalfX, glassUV.x).oneMinus().mul(dot(cityUniforms.uSkySunDir, wallT)),
+      smoothstep(oneMinusEffX, oneMinusEffX.add(0.02), glassUV.x).mul(dot(cityUniforms.uSkySunDir, wallT).negate())),
+    smoothstep(effHalfY.sub(0.02), effHalfY, glassUV.y).oneMinus().mul(cityUniforms.uSkySunDir.y));
+    const revealLight = float(0.46).add(max(revealSide, 0.0).mul(step(0.0, sunIn)).mul(0.9));
 
-    // Anti-Aliased Running-Bond Brickwork & Ashlar Stone Coursing
-    const brickH = 0.24;
-    const brickL = 0.56;
-    const rowCoord = vCoord.div(brickH);
-    const courseRow = floor(rowCoord);
-    const colCoord = uCoord.div(brickL).add(mod(courseRow, 2.0).mul(0.5));
     // Courtyard and party walls use common brick, with weathered parging on some party walls.
-    const backBrick = mix(
-      mix(color(0x6c3d30), color(0x8a503e), fract(tone.mul(7.31))),
-      mix(color(0x9a8669), color(0xb09a7a), fract(tone.mul(5.17))),
-      step(0.58, tone)
-    );
+    const backBrick = texture(world.brownbrick.color, wallUV.div(world.brownbrick.metres)).rgb
+      .mul(mix(vec3(0.72, 0.66, 0.62), vec3(1.05, 0.98, 0.9), fract(tone.mul(7.31))));
     const parged = float(0.0).toVar();
     If(blank.greaterThan(0.5), () => {
       const patch = smoothstep(0.6, 0.76, noise2D(vec2(uCoord.mul(0.11), vCoord.mul(0.07)).add(tone.mul(37.0))));
       parged.assign(max(step(0.74, fract(tone.mul(3.7))), patch.mul(0.85)));
     });
     const backTint = mix(backBrick, color(0x8f8b84), parged);
-    const mortarJoint = max(
-      gridLine(colCoord.mul(brickL), brickL, 0.016),
-      gridLine(vCoord, brickH, 0.016)
-    ).mul(float(1.0).sub(isRoof)).mul(float(1.0).sub(parged)).mul(float(1.0).sub(coping));
-
-    // Per-brick tint fades out once bricks shrink to a pixel (and soot streaks once they do), so neither can shimmer
     const uFw = fwidth(uCoord);
-    const brickVar = float(1.0).sub(smoothstep(0.5, 1.0, max(uFw.div(brickL), fwidth(rowCoord))));
-    const brickCell = vec2(floor(colCoord), courseRow);
-    const brickRnd = hash2D(brickCell.add(vec2(uSeed, 5.3))).sub(0.5).mul(brickVar);
-    const brickWarmShift = hash2D(brickCell.add(vec2(17.1, uSeed))).sub(0.5).mul(0.12).mul(brickVar);
-    const brickShiftVec = vec3(float(1.0).add(brickWarmShift), float(1.0), float(1.0).sub(brickWarmShift));
-
     const streakNoise = mix(float(0.5), noise2D(vec2(uCoord.mul(1.4), vCoord.mul(0.05))), float(1.0).sub(smoothstep(0.5, 1.0, uFw.mul(1.4))));
-    const sootDirt = smoothstep(0.25, 0.78, streakNoise).mul(float(1.0).sub(smoothstep(0.0, 180.0, vCoord))).mul(0.36);
+    // Rain carries soot down from every sill, and the street throws its dirt up the first storey
+    const underSill = filteredPulse(cellUV.x, effHalfX, oneMinusEffX, fw.x).mul(open).mul(smoothstep(0.0, effHalfY, cellUV.y))
+      .mul(float(1.0).sub(step(effHalfY, cellUV.y))).mul(noise2D(vec2(uCoord.mul(3.1), vCoord.mul(0.4))).mul(0.5).add(0.5));
+    const streetDirt = smoothstep(2.4, 0.2, vCoord).mul(0.3);
+    const sootDirt = max(smoothstep(0.25, 0.78, streakNoise).mul(float(1.0).sub(smoothstep(0.0, 180.0, vCoord))).mul(0.3).add(underSill.mul(0.34)), streetDirt);
 
-    const lintelShadow = smoothstep(oneMinusEffY.sub(0.14), oneMinusEffY, cellUV.y).mul(0.58);
-    const jambShadow = float(1.0).sub(smoothstep(effHalfX, effHalfX.add(0.08), cellUV.x)).mul(0.42);
+    const lintelShadow = smoothstep(oneMinusEffY.sub(0.1), oneMinusEffY, glassUV.y).mul(0.4);
+    const jambShadow = float(1.0).sub(smoothstep(effHalfX, effHalfX.add(0.08), glassUV.x)).mul(0.3);
     // No sills in the floor the band course covers
     const sillSpan = filteredPulse(cellUV.x, effHalfX.sub(0.045), oneMinusEffX.add(0.045), fw.x).mul(open).mul(float(1.0).sub(beltFloor));
     const isSillTop = filteredPulse(cellUV.y, effHalfY.sub(0.032), effHalfY, fw.y).mul(sillSpan);
@@ -1054,14 +1093,19 @@ function createPreWarBuildingMaterial(opts = {}) {
       signPaint.assign(vec4(mix(ground, ink, max(letters, border)), cover));
     });
 
-    const wallTint = mix(mix(cStone, backTint, back), signPaint.xyz, signPaint.w);
-    // Trim stone on the band courses, the storefront fascia and the coping capping every wall
-    const trimMix = max(isCornice.mul(0.62).add(isGroundFloor.mul(0.28)), coping.mul(0.8));
-    const masonryTint = mix(wallTint, cTrim, trimMix)
-      .mul(brickRnd.mul(0.14).add(1.0))
-      .mul(brickShiftVec);
-    const masonryWithMortar = mix(masonryTint, masonryTint.mul(0.62), mortarJoint);
-    const masonryWeathered = mix(masonryWithMortar, cSoot, sootDirt)
+    // The wall's photograph, each building its own shade of it, broken into large patches so its repeats never show
+    const buildingShade = mix(vec3(0.8, 0.77, 0.74), vec3(1.16, 1.12, 1.06), fract(tone.mul(4.73)));
+    const patches = mix(float(0.84), float(1.14), noise2D(wallUV.mul(0.09).add(tone.mul(19.0))).mul(0.6).add(noise2D(wallUV.mul(0.37)).mul(0.4)));
+    const stone = texture(stonePhoto.color, photoUV).rgb.mul(uTint).mul(buildingShade).mul(patches);
+    const wallTint = mix(mix(stone, backTint, back), signPaint.xyz, signPaint.w);
+    // Trim stone on the band courses, the storefront fascia and the coping capping every wall, and over and under every
+    // window of a brick front
+    const dressed = texture(world.limestone.color, wallUV.div(world.limestone.metres).mul(1.7)).rgb.mul(cTrim).mul(2.6);
+    const lintel = filteredPulse(cellUV.y, oneMinusEffY, oneMinusEffY.add(0.05), fw.y)
+      .mul(filteredPulse(cellUV.x, effHalfX.sub(0.03), oneMinusEffX.add(0.03), fw.x)).mul(open).mul(float(1.0).sub(beltFloor)).mul(uDressed);
+    const trimMix = max(max(isCornice.mul(0.62).add(isGroundFloor.mul(0.28)), coping.mul(0.8)), lintel);
+    const masonryTint = mix(wallTint, dressed, trimMix);
+    const masonryWeathered = mix(masonryTint, cSoot, sootDirt.mul(0.8))
       .mul(float(1.0).sub(corniceShadow))
       .mul(float(1.0).sub(isSillUnderShadow.mul(0.42)))
       .mul(float(1.0).sub(acUnderShadow))
@@ -1078,14 +1122,25 @@ function createPreWarBuildingMaterial(opts = {}) {
     const recessShade = float(1.0).sub(max(lintelShadow, jambShadow));
 
     const upperGlassBase = mix(aptRoom.xyz.mul(color(0xb6c6bf)), cGlass, upperGrime);
-    const glassCol = mix(upperGlassBase, cityUniforms.uSkyHorizonColor, fresnel.mul(0.52).add(0.08)).mul(recessShade);
+    // Blinds and curtains, drawn down from the top in about half the windows
+    const blindKey = hash2D(cellId.add(vec2(uSeed, 41.3)));
+    const blindDown = step(0.48, blindKey).mul(fract(blindKey.mul(17.3)).mul(0.62).add(0.12));
+    const blind = float(1.0).sub(smoothstep(blindDown.oneMinus().sub(0.006), blindDown.oneMinus().add(0.006), winUV.y).oneMinus()).mul(step(0.01, blindDown));
+    const blindCloth = mix(color(0xcfc6b2), color(0xe8e2d4), fract(blindKey.mul(5.1))).mul(fract(winUV.y.mul(44.0)).mul(0.1).add(0.82));
+    const curtained = mix(upperGlassBase, blindCloth.mul(0.5), blind.mul(float(1.0).sub(isGroundFloor)));
+    // The street and the sky mirrored in the pane
+    const bounced = reflect(wallV.negate(), wallN);
+    const mirrored = mix(color(0x2c2d2f), mix(cityUniforms.uSkyHorizonColor, cityUniforms.uSkyTopColor, clamp(bounced.y.mul(1.4), 0.0, 1.0)), smoothstep(-0.08, 0.12, bounced.y));
+    const glassCol = mix(curtained, mirrored, fresnel.mul(0.6).add(0.1))
+      .mul(mix(float(0.62), float(1.0), sunOnGlass.add(step(sunIn, 0.0)).clamp(0.0, 1.0)));
 
-    const frameCol = masonryTint.mul(0.46).mul(recessShade);
+    const frameCol = mix(color(0x2a2b2d), color(0xcfccc2), step(0.6, fract(tone.mul(11.3)))).mul(recessShade);
+    const revealCol = masonryTint.mul(0.62).mul(revealLight);
     const roofNoise = noise2D(positionWorld.xz.mul(0.35));
     const roofCol = mix(cTrim.mul(0.42), cTrim.mul(0.62), roofNoise);
 
     const wallOrRoof = mix(masonryWeathered, roofCol, isRoof);
-    const withFrames = mix(wallOrRoof, frameCol, isWindowOpening.mul(sashMask));
+    const withFrames = mix(mix(wallOrRoof, revealCol, reveal), frameCol, isWindowOpening.mul(paneSeen).mul(sashMask));
     const withGlass = mix(withFrames, glassCol, isWindowGlass);
     const surface = mix(mix(withGlass, acColor, inACBox), storefront.color, storefront.mask);
     return mix(surface, entrance.color, entrance.mask);
@@ -1122,16 +1177,6 @@ function createPreWarBuildingMaterial(opts = {}) {
     const inY = filteredPulse(cellUV.y, effHalfY, float(1.0).sub(effHalfY), ramp.y);
     const isWindow = inX.mul(inY);
 
-    const brickH = 0.24;
-    const brickL = 0.56;
-    const rowCoord = vCoord.div(brickH);
-    const courseRow = floor(rowCoord);
-    const colCoord = uCoord.div(brickL).add(mod(courseRow, 2.0).mul(0.5));
-    const distU = float(0.5).sub(abs(fract(colCoord).sub(0.5))).mul(brickL);
-    const distV = float(0.5).sub(abs(fract(rowCoord).sub(0.5))).mul(brickH);
-    const brickDome = smoothstep(0.0, 0.018, distU).mul(smoothstep(0.0, 0.018, distV)).mul(0.0045)
-      .mul(float(1.0).sub(smoothstep(0.006, 0.012, footprint)));
-
     const sillLedge = filteredPulse(cellUV.y, effHalfY.sub(0.032), effHalfY, ramp.y).mul(inX).mul(0.016);
     const corniceLedge = belt.mul(0.022);
 
@@ -1141,11 +1186,14 @@ function createPreWarBuildingMaterial(opts = {}) {
     const acLouverHeight = fract(cellUV.y.sub(effHalfY).div(0.22).mul(6.0)).mul(0.012)
       .mul(float(1.0).sub(smoothstep(0.012, 0.025, footprint)));
 
-    const wallHeight = brickDome.mul(float(1.0).sub(coping)).add(sillLedge).add(corniceLedge).add(coping.mul(0.024));
+    const wallHeight = sillLedge.add(corniceLedge).add(coping.mul(0.024));
     const totalHeight = mix(wallHeight, acLouverHeight.mul(inACBox), isWindow);
 
     const relief = mix(totalHeight, storefront.relief, storefront.mask);
-    return bumpNormal(mix(relief, entrance.relief, entrance.mask).mul(detailFade));
+    // The masonry's own relief, off glass, shops and roofs
+    const masonry = float(1.0).sub(isWindow).mul(float(1.0).sub(storefront.mask)).mul(float(1.0).sub(entrance.mask)).mul(float(1.0).sub(isRoof));
+    const photoRelief = surfaceNormal(stonePhoto.normal, photoUV, masonry.mul(float(1.0).sub(smoothstep(30.0, 170.0, camDist))).mul(1.5));
+    return normalize(bumpNormal(mix(relief, entrance.relief, entrance.mask).mul(detailFade)).add(photoRelief).sub(normalViewGeometry));
   })();
 
   mat.emissiveNode = Fn(() => {
@@ -1154,14 +1202,14 @@ function createPreWarBuildingMaterial(opts = {}) {
     const glowHalfY = float(halfWinY + 0.015);
 
     const inX = filteredPulse(cellUV.x, glowHalfX, float(1.0).sub(glowHalfX), fw.x).mul(open);
-    const inY = filteredPulse(cellUV.y, glowHalfY, float(1.0).sub(glowHalfY), fw.y);
+    const inY = filteredPulse(cellUV.y, glowHalfY, float(1.0).sub(glowHalfY), fw.y).mul(paneSeen);
     const isCornice = max(
       filteredPulse(fract(gridV.div(6.0)), 0.86, 1.0, fw.y.div(6.0)).mul(front),
       isGroundFloor.mul(filteredPulse(cellUV.y, 0.86, 1.0, fw.y))
     );
 
-    const sashBarY = lineAA(cellUV.y.sub(0.52), 0.014).mul(float(1.0).sub(isGroundFloor));
-    const sashBarX = lineAA(cellUV.x.sub(0.50), 0.010).mul(float(1.0).sub(isGroundFloor)).mul(0.55);
+    const sashBarY = lineAA(glassUV.y.sub(0.52), 0.014).mul(float(1.0).sub(isGroundFloor));
+    const sashBarX = lineAA(glassUV.x.sub(0.50), 0.010).mul(float(1.0).sub(isGroundFloor)).mul(0.55);
     const sashMask = max(sashBarY, sashBarX);
 
     const inACBox = filteredPulse(cellUV.x, 0.31, 0.69, fw.x)
@@ -1207,6 +1255,17 @@ function createFacadeBoxes(material, boxes) {
     box.setXYZW(i, b.w, b.h, b.d, ((i * 29) % 1000) + 0.5);
   });
   return mesh;
+}
+
+// Striped canvas: the instance's colour and cream, faded and dirty towards the hem
+function createAwningMaterial() {
+  const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.82, metalness: 0 });
+  // (three multiplies this by the instance colour: the cream stripes undo it)
+  const tint = varyingProperty('vec3', 'vInstanceColor');
+  const stripes = step(0.5, fract(uv().x.mul(11.0)));
+  const canvas = noise2D(uv().mul(vec2(60.0, 14.0))).mul(0.14).add(0.86);
+  mat.colorNode = mix(vec3(0.92, 0.89, 0.8).div(max(tint, vec3(0.004))), vec3(1.0), stripes).mul(canvas).mul(uv().y.mul(0.22).add(0.78));
+  return mat;
 }
 
 /**
@@ -1355,6 +1414,8 @@ class TreeNodeMaterial extends THREE.MeshStandardNodeMaterial {
   }
 }
 
+const BARK_METRES = 1.4; // what one repeat of a bark photograph covers
+
 // Prevailing wind (xz, blowing from the west-north-west across Manhattan)
 const TREE_WIND = vec2(0.86, 0.51);
 
@@ -1375,7 +1436,7 @@ const TREE_WIND = vec2(0.86, 0.51);
  * pass (alpha-tested in the shadow maps: dappled shadows). Wind: gusts rolling across the city sway the crowns
  * (shadows follow), branches bob and leaves flutter.
  */
-function createTreeMaterial(leafAtlas) {
+function createTreeMaterial({ leaves, leavesNormal, bark, barkNormal }) {
   const mat = new TreeNodeMaterial({
     side: THREE.DoubleSide,
     alphaToCoverage: true,
@@ -1389,7 +1450,8 @@ function createTreeMaterial(leafAtlas) {
   const crownAO = aTree.y;
   const rnd = fract(aData.w);
   const species = floor(aData.w);
-  const leaf = texture(leafAtlas, uv());
+  const leaf = texture(leaves, uv());
+  const barkUv = uv().div(BARK_METRES);
 
   // Wind. positionLocal is already instanced (world space); positionGeometry is the tree's own frame (metres)
   mat.positionNode = Fn(() => {
@@ -1412,42 +1474,30 @@ function createTreeMaterial(leafAtlas) {
     return p.add(sway).add(vec3(0.0, bob, 0.0)).add(normalLocal.mul(flutter));
   })();
 
-  // Coverage: leaf cards from the atlas; bark is opaque from outside (its back faces are dropped)
-  const alpha = mix(float(frontFacing), leaf.a, isLeaf);
+  // Coverage: leaf cards from the atlas; bark is opaque from outside (its back faces are dropped). Mipmaps average leaves
+  // away with distance: raising alpha with the mip level keeps a crown as dense far off as up close
+  const texels = uv().mul(float(leaves.image.width));
+  const footprint = max(length(dFdx(texels)), length(dFdy(texels)));
+  const mip = log2(max(footprint, 1.0));
+  const alpha = mix(float(frontFacing), leaf.a.mul(mip.mul(0.34).add(1.0)), isLeaf);
   mat.alphaTest = 0.5;
 
-  mat.colorNode = Fn(() => {
-    // Leaves: per-tree tint x atlas brightness, a share of sun-yellowed and of cooler leaves, brown twigs & stalks,
-    // darker deep in the crown
-    const tint = aData.xyz;
-    const base = tint.mul(leaf.r.mul(1.4));
-    const warm = smoothstep(0.62, 1.0, leaf.g).mul(0.55);
-    const cool = smoothstep(0.38, 0.0, leaf.g).mul(0.45);
-    const leafCol = mix(mix(base, base.mul(vec3(1.25, 1.08, 0.5)), warm), base.mul(vec3(0.8, 0.92, 1.05)), cool);
-    const foliage = mix(leafCol, color(0x4a3b2c), leaf.b).mul(crownAO.mul(0.45).add(0.55));
+  // Leaves as they were scanned, under the tree's own tint; darker deep in the crown. Bark as it was photographed
+  const foliage = leaf.rgb.mul(aData.xyz).mul(crownAO.mul(0.55).add(0.45));
+  mat.colorNode = vec4(mix(texture(bark, barkUv).rgb.mul(1.35), foliage, isLeaf), alpha);
 
-    // Bark (uv in metres): furrowed grey-brown ridges, or the London plane's olive bark flaking to cream & tan
-    const bu = uv();
-    const n1 = noise2D(vec2(bu.x.mul(5.0), bu.y.mul(1.1)).add(rnd.mul(17.0)));
-    const n2 = noise2D(bu.mul(vec2(3.2, 1.9)).add(rnd.mul(31.0)));
-    const ridge = float(1.0).sub(abs(n1.sub(0.5).mul(2.0)));
-    const furrowed = mix(color(0x2e261f), color(0x5c5043), smoothstep(0.35, 0.9, ridge));
-    const planeBark = mix(mix(color(0x645e4b), color(0x948c73), smoothstep(0.56, 0.66, n2)), color(0x4a3f31), smoothstep(0.3, 0.22, n2));
-    const bark = mix(furrowed, planeBark, step(species, 0.5)).mul(crownAO.mul(0.4).add(0.6));
+  mat.roughnessNode = mix(float(0.9), float(0.62), isLeaf);
 
-    return vec4(mix(bark, foliage, isLeaf), alpha);
-  })();
-
-  mat.roughnessNode = mix(float(0.93), float(0.72).sub(leaf.r.mul(0.1)), isLeaf);
-
-  // Card normals are crown-shell normals on both faces: no back-face flip
-  mat.normalNode = normalViewGeometry;
+  // Card normals are crown-shell normals on both faces, so a crown lights as one volume; each leaf's relief comes on top
+  const leafRelief = texture(leavesNormal, uv()).xy.sub(0.5).mul(1.1);
+  const barkRelief = normalMap(texture(barkNormal, barkUv), vec2(1.3));
+  mat.normalNode = mix(barkRelief, normalize(normalViewGeometry.add(vec3(leafRelief, 0.0))), isLeaf);
 
   // Sky light: street-canyon occlusion, deep inside the crown far less
-  mat.aoNode = canyonSkyAONode().mul(crownAO.mul(0.75).add(0.25));
+  mat.aoNode = canyonSkyAONode().mul(mix(crownAO.mul(0.3).add(0.7), crownAO.mul(0.75).add(0.25), isLeaf));
 
   // Light through the leaves: yellow-green, strongest out on the thin shell
-  mat.translucencyNode = aData.xyz.mul(vec3(1.0, 1.2, 0.45)).mul(leaf.r.mul(1.5)).mul(crownAO.mul(0.8).add(0.2)).mul(isLeaf);
+  mat.translucencyNode = leaf.rgb.mul(aData.xyz).mul(vec3(1.5, 1.7, 0.6)).mul(crownAO.mul(0.8).add(0.2)).mul(isLeaf);
 
   return mat;
 }
@@ -1477,6 +1527,16 @@ const pavingJoints = Fn(([style, wx, wz]) => {
   const isGranite = step(0.5, style).mul(float(1.0).sub(step(1.5, style)));
   return mix(mix(hexJoint, granJoint, isGranite), blueJoint, step(1.5, style));
 });
+
+const LAWN_METRES = 3.1; // what one repeat of the turf photograph covers
+const lawnColorNode = (photo) => Fn(() => {
+  const wp = positionWorld.xz;
+  const near = texture(photo, wp.div(LAWN_METRES)).rgb;
+  const far = texture(photo, wp.div(LAWN_METRES * 5.3).add(0.37)).rgb;
+  const patch = noise2D(wp.mul(0.045)).mul(0.6).add(noise2D(wp.mul(0.19)).mul(0.4));
+  const tone = mix(vec3(0.9, 0.86, 0.6), vec3(1.12, 1.16, 0.9), smoothstep(0.25, 0.75, patch));
+  return near.mul(far.mul(1.1).add(0.45)).mul(tone);
+})();
 
 /**
  * NYC Parks Paths & Pedestrian Plaza Paving TSL Material: one shared material (one batched draw call) whose
@@ -1871,8 +1931,6 @@ function createRoadSurfaceMaterial() {
   });
 
   // Weathered, oxidised asphalt (fresh blacktop only in the newer patches)
-  const cAsphaltDark = color(0x3d3f43);
-  const cAsphaltLight = color(0x686a6e);
   const cManhole = color(0x4a433c);
   const cOldPatch = color(0x77787a);
 
@@ -1919,26 +1977,23 @@ function createRoadSurfaceMaterial() {
 
   mat.aoNode = canyonSkyAONode();
 
+  const asphaltUV = positionWorld.xz.div(world.asphalt.metres);
   mat.colorNode = Fn(() => {
     const wx = positionWorld.x;
     const wz = positionWorld.z;
     const camDist = length(positionWorld.sub(cameraPosition));
     const detail = smoothstep(240.0, 22.0, camDist);
 
-    // Two-scale aggregate grit, patchwork pours, oily wear stains & tar crack seams
-    const microAggregate = mix(float(0.5), noise2D(vec2(wx.mul(16.0), wz.mul(16.0))), smoothstep(0.06, 0.02, pixelSize));
-    const fineGrain = mix(float(0.5), noise2D(vec2(wx.mul(3.2), wz.mul(3.2))), smoothstep(0.4, 0.12, pixelSize));
+    // Photographed asphalt, its repeats broken by patchwork pours, oily wear stains & tar crack seams
+    const photo = texture(world.asphalt.color, asphaltUV).rgb;
+    const broad = texture(world.asphalt.color, asphaltUV.mul(0.137).add(0.31)).rgb;
     const patchNoise = noise2D(vec2(wx.mul(0.18), wz.mul(0.18)));
     const oilyStain = smoothstep(0.52, 0.84, noise2D(vec2(wx.mul(0.42), wz.mul(0.42)))).mul(detail);
     const tarSeam = float(1.0).sub(smoothstep(0.0, 0.04, abs(patchNoise.sub(0.52)))).mul(0.42).mul(detail);
     // Binder-rich (dark) & ravelled, aggregate-exposed (pale) mottling a stride or so across
     const mottle = noise2D(vec2(wx.mul(0.9), wz.mul(0.9)).add(41.0)).mul(0.65).add(noise2D(vec2(wx.mul(2.3), wz.mul(2.3)).add(7.0)).mul(0.35));
 
-    const baseAsphalt = mix(
-      cAsphaltDark,
-      cAsphaltLight,
-      fineGrain.mul(0.3).add(microAggregate.mul(0.22)).add(patchNoise.mul(0.22)).add(smoothstep(0.3, 0.7, mottle).mul(0.26)).sub(0.04)
-    )
+    const baseAsphalt = photo.mul(broad.mul(2.6).add(0.3)).mul(mix(float(0.86), float(1.2), patchNoise.mul(0.5).add(smoothstep(0.3, 0.7, mottle).mul(0.5))))
       .mul(float(1.0).sub(oilyStain.mul(0.32)))
       .mul(float(1.0).sub(tarSeam));
 
@@ -1947,7 +2002,7 @@ function createRoadSurfaceMaterial() {
     const repaired = mix(baseAsphalt, patchCol, patchCover)
       .mul(float(1.0).sub(patchSeal.mul(0.5)))
       .add(chips.mul(0.08).mul(float(1.0).sub(patchCover.mul(patchFresh))))
-      .mul(float(1.0).sub(tarSnake.mul(0.62)))
+      .mul(float(1.0).sub(tarSnake.mul(0.3)))
       .mul(float(1.0).sub(oilDrip.mul(0.45)))
       .mul(float(1.0).sub(crack.mul(0.65)))
       .mul(float(1.0).sub(pothole.mul(0.4)));
@@ -2011,7 +2066,9 @@ function createRoadSurfaceMaterial() {
 
     const height = swell.add(ripples).add(coarseGrit).add(midGrit).add(fineGrit).add(chipRelief).add(snakeBead).sub(crackGroove)
       .add(patchStep).add(sealBead).sub(bowl).add(manhole);
-    return bumpNormal(height.mul(float(1.0).sub(puddle)));
+    const dryness = float(1.0).sub(puddle);
+    const photoRelief = surfaceNormal(world.asphalt.normal, asphaltUV, dryness.mul(smoothstep(0.16, 0.03, pixelSize)).mul(1.1));
+    return normalize(bumpNormal(height.mul(dryness)).add(photoRelief).sub(normalViewGeometry));
   })();
 
   mat.emissiveNode = Fn(() => {
@@ -2188,7 +2245,8 @@ function createSidewalkMaterial() {
     const aggregate = noise2D(vec2(wx.mul(55.0), wz.mul(55.0))).sub(0.5).mul(0.08).mul(smoothstep(0.02, 0.006, pixelSize));
 
     const flagTone = flagHash.sub(0.5).mul(0.2).add(1.0).mul(mix(float(1.0), float(1.1), replaced));
-    const concrete = mix(cConcreteB, cConcreteA, tone)
+    const photo = texture(world.sidewalk.color, wxz.div(world.sidewalk.metres).add(flagHash.mul(0.37))).rgb;
+    const concrete = photo.mul(mix(cConcreteB, cConcreteA, tone)).mul(vec3(4.7, 4.55, 4.2))
       .mul(flagTone)
       .mul(float(1.0).sub(stain))
       .mul(mottle.add(1.0))
@@ -2232,7 +2290,8 @@ function createSidewalkMaterial() {
     const pores = noise2D(vec2(wx.mul(38.0), wz.mul(38.0))).sub(0.5).mul(0.0008).mul(smoothstep(0.012, 0.004, pixelSize));
     const height = grain.add(pores).add(tilt).sub(groove).sub(crack.mul(0.0015)).add(gum.mul(0.0008))
       .mul(detail).mul(float(1.0).sub(swPuddle));
-    return bumpNormal(height);
+    const photoRelief = surfaceNormal(world.sidewalk.normal, wxz.div(world.sidewalk.metres).add(flagHash.mul(0.37)), detail.mul(0.9));
+    return normalize(bumpNormal(height).add(photoRelief).sub(normalViewGeometry));
   })();
 
   return mat;
@@ -3046,35 +3105,13 @@ function createWaterMaterial() {
 function createParkLawnMaterial(isMeadow = false) {
   const mat = new THREE.MeshStandardNodeMaterial({
     metalness: 0.0,
-    roughness: 0.86
+    roughness: 0.9
   });
+  mat.userData.lawn = true;
 
-  const cGrassDeep = color(isMeadow ? 0x2c5c28 : 0x224c20);
-  const cGrassMid = color(isMeadow ? 0x457d36 : 0x36682c);
-  const cGrassSun = color(0x6b9c3e);
-
-  mat.colorNode = Fn(() => {
-    const wp = positionWorld.xz;
-    const macroPatch = noise2D(wp.mul(0.06));
-    const midClover = noise2D(wp.mul(0.35));
-    const microBlade = noise2D(wp.mul(3.8));
-    const mowStripe = sin(wp.x.mul(0.55).add(wp.y.mul(0.25))).mul(0.5).add(0.5);
-
-    const baseLawn = mix(
-      cGrassDeep,
-      cGrassMid,
-      macroPatch.mul(0.45).add(midClover.mul(0.35)).add(mowStripe.mul(0.20))
-    );
-    return mix(baseLawn, cGrassSun, microBlade.mul(0.38));
-  })();
-
-  mat.normalNode = Fn(() => {
-    const wp = positionWorld.xz;
-    const camDist = length(positionWorld.sub(cameraPosition));
-    const detail = smoothstep(85.0, 10.0, camDist);
-    const turf = noise2D(wp.mul(7.5)).sub(0.5).mul(0.008);
-    return bumpNormal(turf.mul(detail));
-  })();
+  // Photographed turf at two scales, so its repeats never line up, broken into patches of drier and lusher grass
+  mat.colorNode = lawnColorNode(nature.meadow);
+  mat.normalNode = surfaceNormal(nature.meadowNormal, positionWorld.xz.div(LAWN_METRES), 0.8);
 
   // Grass is a canopy of blades that shadow each other, not a flat dielectric: at grazing angles a plain F0 = 0.04 /
   // F90 = 1 Fresnel mirrors the sky and turns lawns teal, so weaken the specular and cap its grazing rise
@@ -3412,6 +3449,8 @@ export {
   createBillboardMaterial,
   createWaterMaterial,
   createParkLawnMaterial,
+  createAwningMaterial,
+  lawnColorNode,
   createSteamMaterial,
   createGodRayMaterial,
   createContactShadowMaterial,

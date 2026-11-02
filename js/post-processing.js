@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import {
   Fn,
+  If,
   uniform,
   float,
   vec2,
@@ -29,7 +30,9 @@ const LOOKS = {
   midnight: { exposure: 1.04, contrast: 1.08, saturation: 1.06, balance: [0.985, 1.00, 1.035], bloom: 0.30, threshold: 1.00 }
 };
 
-function createPostProcessing(renderer, sceneColor, reflections) {
+// Streaks towards the edges of the frame at speed, off the image itself; sceneTexture samples the rendered scene
+const SPEED_TAPS = 6;
+function createPostProcessing(renderer, sceneColor, reflections, sceneTexture = null) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   // Exposure is applied before bloom so its threshold follows the image's exposed brightness.
   // RenderPipeline performs ACES and the output color-space conversion exactly once, after this graph.
@@ -39,7 +42,21 @@ function createPostProcessing(renderer, sceneColor, reflections) {
   const contrast = uniform(1.0);
   const saturation = uniform(1.0);
   const balance = uniform(new THREE.Vector3(1, 1, 1));
-  const exposed = max(sceneColor.rgb.add(reflections.rgb), vec3(0)).mul(exposure).mul(balance);
+  const speedBlur = uniform(0);
+  const blurred = Fn(() => {
+    if (!sceneTexture) return sceneColor;
+    const out = vec4(sceneColor.rgb, 1).toVar();
+    If(speedBlur.greaterThan(0.01), () => {
+      const uvs = screenUV.toVar();
+      const from = uvs.sub(0.5);
+      const reach = dot(from, from).mul(speedBlur).mul(0.24);
+      const sum = sceneColor.rgb.toVar();
+      for (let i = 1; i < SPEED_TAPS; i++) sum.addAssign(sceneTexture.sample(uvs.sub(from.mul(reach.mul(i / (SPEED_TAPS - 1))))).rgb);
+      out.rgb.assign(sum.div(SPEED_TAPS));
+    });
+    return out;
+  })();
+  const exposed = max(blurred.rgb.add(reflections.rgb), vec3(0)).mul(exposure).mul(balance);
 
   // Limit only bloom's peak radiance, scaling RGB together to retain neon and lamp colors.
   // The original HDR image keeps its full range for the tone mapper's highlight shoulder.
@@ -54,7 +71,7 @@ function createPostProcessing(renderer, sceneColor, reflections) {
     const luma = dot(color, vec3(0.2126, 0.7152, 0.0722)).toVar();
 
     // Gentle cool shadow / warm highlight separation; multiply rather than lifting the black level.
-    const shadows = mix(vec3(0.965, 1.005, 1.045), vec3(1), smoothstep(0.02, 0.60, luma));
+    const shadows = mix(vec3(0.985, 1.0, 1.02), vec3(1), smoothstep(0.02, 0.60, luma));
     const highlights = mix(vec3(1), vec3(1.035, 1.005, 0.965), smoothstep(0.60, 3.0, luma));
     color.mulAssign(shadows.mul(highlights));
 
@@ -87,7 +104,7 @@ function createPostProcessing(renderer, sceneColor, reflections) {
   }
 
   applyPreset('golden');
-  return { outputNode, applyPreset, applyLook };
+  return { outputNode, applyPreset, applyLook, speedBlur };
 }
 
 export { createPostProcessing, LOOKS as GRADE_LOOKS };

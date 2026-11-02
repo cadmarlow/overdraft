@@ -1,0 +1,54 @@
+<!doctype html>
+<meta charset="utf-8"><title>Voitures</title>
+<style>html,body{margin:0;height:100%;background:#20242a}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three/build/three.webgpu.js","three/webgpu":"../vendor/three/build/three.webgpu.js","three/tsl":"../vendor/three/build/three.tsl.js","three/addons/":"../vendor/three/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three/webgpu';
+import { createBodyMaterial, createGlassMaterial, createWheelMaterial, loadCars } from '../js/car-assets.js';
+
+const q = new URLSearchParams(location.search);
+const names = (q.get('names') || 'sedan,suv,pickup,minivan,hatch,compact,wagon,offroad,muscle,sport,taxi,van,truck,delivery,super').split(',');
+const cols = +(q.get('c') || 5);
+const paints = [0x7c1420, 0x142a44, 0x1b1d20, 0xc8ccd2, 0xd8a818, 0x2a5b3a, 0x6b6f76, 0xb4221c, 0x0f3a78, 0xd03a10];
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+document.body.append(renderer.domElement);
+await renderer.init();
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xaab4c0);
+const sun = new THREE.DirectionalLight(0xfff4e6, 3.2); sun.position.set(-8, 14, 10); scene.add(sun);
+scene.add(new THREE.HemisphereLight(0xdfe8f4, 0x60564a, 2));
+// A soft studio sky for the paint to reflect
+const sky = new THREE.Scene();
+sky.background = new THREE.Color(0xb8c4d2);
+const pm = new THREE.PMREMGenerator(renderer);
+const env = await pm.fromSceneAsync?.(sky, 0.1) ?? pm.fromScene(sky, 0.1);
+scene.environment = env.texture;
+const models = await loadCars(names);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200).rotateX(-Math.PI / 2), new THREE.MeshStandardNodeMaterial({ color: 0x55585c, roughness: 0.9 }));
+scene.add(ground);
+const yaw = +(q.get('yaw') || 2.45);
+names.forEach((n, i) => {
+  const m = models[n];
+  const mat = createBodyMaterial(m, { paint: paints[i % paints.length], livery: q.get('livery') ? 1 : 0 });
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(m.body, mat), new THREE.Mesh(m.glass, createGlassMaterial(m, mat)));
+  const wm = createWheelMaterial(m);
+  m.spec.wheels.forEach((w, k) => { const t = new THREE.Mesh(m.wheels[k], wm); t.position.set(w[0], w[1], w[2]); g.add(t); });
+  g.position.set((i % cols - (cols - 1) / 2) * 7.2, 0, Math.floor(i / cols) * 7.5);
+  g.rotation.y = yaw;
+  scene.add(g);
+});
+const rows = Math.ceil(names.length / cols);
+const cam = new THREE.PerspectiveCamera(24, innerWidth / innerHeight, 0.5, 400);
+const cx = 0, cz = (rows - 1) * 3.75;
+const dist = +(q.get('d') || (Math.max(cols * 7.2 / (innerWidth / innerHeight), rows * 7.5) / (2 * Math.tan(12 * Math.PI / 180)) * 1.12));
+const elev = +(q.get('elev') || 0.5);
+cam.position.set(cx, Math.sin(elev) * dist + 0.6, cz + Math.cos(elev) * dist);
+cam.lookAt(cx, 0.7, cz);
+for (let i = 0; i < 3; i++) await renderer.renderAsync(scene, cam);
+await new Promise((r) => setTimeout(r, 300));
+await renderer.renderAsync(scene, cam);
+document.title = 'done';
+</script>

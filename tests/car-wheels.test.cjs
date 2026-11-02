@@ -284,7 +284,7 @@ test('renderCar writes per-car wheel styles to both front and rear wheel slots w
     }
   });
   const ctx = {
-    BODY_SPECS: { sedan: { wheelRadius: 0.35, wheelX: 0.8, wheelZ: 1.4 } },
+    carSpecs: { sedan: { wheelRadius: 0.35, wheelX: 0.8, wheelZ: 1.4, wheelMid: 0 } },
     CAR_PROXY_DISTANCE: 90,
     hasView: false,
     visible: () => true,

@@ -16,6 +16,7 @@ import {
 } from './city-config.js';
 import { cityUniforms, createSteamMaterial, createTreeGrateMaterial, createGodRayMaterial } from './tsl-materials.js';
 import { createTreeField } from './trees.js';
+import { createClutter, removeClutter } from './street-clutter.js';
 import { REAL_TREES } from './tree-geodata.js';
 import { placeStreetTrees } from './tree-placements.js';
 import { createSubwayEntranceParts, createFoodCartParts } from './street-props.js';
@@ -101,6 +102,11 @@ function createWalkSignalMaterial(clock) {
   return mat;
 }
 
+// A trunk or a pole, in the colliders' form (controllers.js)
+function roundObstacle(x, y, z, radius, height, kind) {
+  return { round: radius, cx: x, cz: z, minX: x - radius, maxX: x + radius, minZ: z - radius, maxZ: z + radius, minY: y, maxY: y + height, obstacle: kind };
+}
+
 function buildStreetDetails(scene, colliders = []) {
   const group = new THREE.Group();
   group.name = 'ManhattanStreetDetails';
@@ -109,6 +115,8 @@ function buildStreetDetails(scene, colliders = []) {
   const unitBox = new THREE.BoxGeometry(1, 1, 1);
   const unitCyl = new THREE.CylinderGeometry(1, 1, 1, 10);
 
+  // What cars and people run into (ThirdPersonControllerManager): trunks, poles, street furniture
+  const obstacles = [];
   // Ground footprints of street furniture that traffic and pedestrians must keep clear of
   const footprints = [];
   const addFootprint = (x, z, w, d, pedestrianOnly = false) => footprints.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, pedestrianOnly });
@@ -197,6 +205,7 @@ function buildStreetDetails(scene, colliders = []) {
     let cell = poleCells.get(key);
     if (!cell) poleCells.set(key, cell = []);
     cell.push({ x, z });
+    obstacles.push(roundObstacle(x, 0, z, Math.max(0.11, width * 0.5), 7, 'pole'));
     // Poles stand on curbs: pedestrians avoid them, but they must not narrow the inferred road gaps.
     addFootprint(x, z, width, width, true);
   }
@@ -437,6 +446,7 @@ function buildStreetDetails(scene, colliders = []) {
             continue;
           }
           addPole(px, pz, 0.4);
+          obstacles[obstacles.length - 1].lamp = pedPostMatrices.length;
 
           dummy.position.set(px, 0.18, pz);
           dummy.rotation.set(0, 0, 0);
@@ -520,7 +530,9 @@ function buildStreetDetails(scene, colliders = []) {
       new THREE.CylinderGeometry(0.072, 0.094, 2.85, 4, 1, true).translate(0, 2.275, 0)
     ]);
   }
-  addMatrixArrayInstanced(pedGlobeGeo, pedGlobeGlow, pedPostMatrices, false);
+  const pedGlobes = addMatrixArrayInstanced(pedGlobeGeo, pedGlobeGlow, pedPostMatrices, false);
+  // The cast-iron lamp posts go down under a car; the signals' masts do not
+  for (const o of obstacles) if (o.lamp !== undefined) { o.breakable = true; o.mesh = pedPosts; o.index = o.lamp; o.globe = pedGlobes; }
 
   // =========================================================================
   // 2B. VOLUMETRIC GOLDEN-HOUR CANYON SUN SHAFTS (GOD RAYS)
@@ -789,17 +801,34 @@ function buildStreetDetails(scene, colliders = []) {
     }
   }
 
-  const hydrantMat = new THREE.MeshStandardNodeMaterial({ color: 0xb8241e, roughness: 0.5, metalness: 0.4 });
-  const hydrantInst = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.22, 0.26, 0.85, 8), hydrantMat, hydrantPositions.length);
-  hydrantPositions.forEach(([hx, hz], i) => {
-    dummy.position.set(hx, 0.64, hz);
-    dummy.rotation.set(0, 0, 0);
-    dummy.scale.set(1, 1, 1);
-    dummy.updateMatrix();
-    hydrantInst.setMatrixAt(i, dummy.matrix);
-  });
-  hydrantInst.instanceMatrix.needsUpdate = true;
-  group.add(hydrantInst);
+  // Sidewalks fill up: hydrants, bags put out for collection, cans at the corners, planters, utility boxes
+  const clutterItems = hydrantPositions.map(([x, z]) => ({ name: 'hydrant', x, y: 0.22, z, ry: hashPos(x, 1.1, z) * 6.28 }));
+  const pile = (x, z, ry) => {
+    const n = 3 + Math.floor(hashPos(x, 2.2, z) * 4);
+    for (let i = 0; i < n; i++) {
+      const a = hashPos(x, i + 3.3, z) * 6.28, d = 0.2 + hashPos(z, i + 4.4, x) * 0.5;
+      clutterItems.push({ name: 'trashbag', x: x + Math.cos(a) * d, y: 0.22, z: z + Math.sin(a) * d * 1.8, ry: ry + a, scale: 0.9 + hashPos(x, i + 5.5, z) * 0.5 });
+    }
+  };
+  for (const ave of AVENUES) {
+    for (let row = 0; row < STREETS.length - 1; row++) {
+      const z0 = STREETS[row].z, z1 = STREETS[row + 1].z;
+      for (const side of [-1, 1]) {
+        const curb = ave.x + side * (ave.width * 0.5 + 0.75);
+        for (let k = 0; k < 4; k++) {
+          const t = (k + 0.2 + hashPos(curb, k + 0.3, z0) * 0.6) / 4, z = z0 + (z1 - z0) * t;
+          const roll = hashPos(curb, k + 7.7, z);
+          if (!isOnSidewalk(curb, z, 0.7) || !isClearOfPoles(curb, z, 1.6)) continue;
+          if (roll < 0.32) pile(curb, z, side);
+          else if (roll < 0.44) clutterItems.push({ name: 'trashcan', x: curb, y: 0.22, z, ry: Math.PI / 2 });
+          else if (roll < 0.5) clutterItems.push({ name: 'utilitybox', x: curb, y: 0.22, z, ry: Math.PI / 2 });
+          else if (roll < 0.56) clutterItems.push({ name: 'planter', x: curb + side * 0.1, y: 0.22, z, ry: Math.PI / 2 });
+          else if (roll < 0.59) clutterItems.push({ name: 'barrier', x: curb, y: 0.22, z, ry: Math.PI / 2 });
+        }
+      }
+    }
+  }
+  const clutter = createClutter(group, clutterItems);
 
   const uspsMat = new THREE.MeshStandardNodeMaterial({ color: 0x183c7a, roughness: 0.45, metalness: 0.35 });
   const mailboxInst = new THREE.InstancedMesh(new THREE.BoxGeometry(0.65, 1.25, 0.65), uspsMat, mailboxPositions.length);
@@ -1131,7 +1160,24 @@ function buildStreetDetails(scene, colliders = []) {
   }
 
   scene.add(group);
-  return { group, footprints, signalClock, signalIntersections, audioSignals, treeField, update };
+  for (const t of treeField.trunks) obstacles.push(roundObstacle(t.x, t.y, t.z, t.radius, t.height, 'tree'));
+  const CLUTTER_RADIUS = { hydrant: 0.24, trashcan: 0.42, trashbag: 0.26, planter: 0.3, utilitybox: 0.3, barrier: 0.5 };
+  for (const { item, mesh, index } of clutter) {
+    const c = roundObstacle(item.x, 0, item.z, CLUTTER_RADIUS[item.name], 1.1, item.name);
+    obstacles.push({ ...c, breakable: true, mesh, index, soft: item.name === 'trashbag' });
+  }
+  mailboxPositions.forEach(([x, z], i) => obstacles.push({ ...roundObstacle(x, 0, z, 0.4, 1.5, 'mailbox'), breakable: true, mesh: mailboxInst, index: i }));
+  // Knocked down: gone from the street, and from what stops a car
+  const removeProp = (c) => {
+    c.breakable = false;
+    c.maxY = -100;
+    removeClutter(c.mesh, c.index);
+    if (c.globe) removeClutter(c.globe, c.index);
+  };
+  // Carts and barricades stand in the way of cars as well as people
+  for (const f of footprints) if (!f.pedestrianOnly) obstacles.push({ ...f, maxY: 2.2, minY: 0, obstacle: 'furniture' });
+
+  return { group, footprints, obstacles, removeProp, lampParts: { post: pedLampPostGeo, globe: pedGlobeGeo, metal: poleMetalMat, glow: pedGlobeGlow }, signalClock, signalIntersections, audioSignals, treeField, update };
 }
 
 export { buildStreetDetails };

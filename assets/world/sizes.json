@@ -1,0 +1,46 @@
+{
+  "limestone": {
+    "id": "white_sandstone_bricks",
+    "metres": 2,
+    "authors": [
+      "Rob Tuytel"
+    ]
+  },
+  "redbrick": {
+    "id": "red_brick_03",
+    "metres": 1,
+    "authors": [
+      "Rob Tuytel"
+    ]
+  },
+  "brownbrick": {
+    "id": "brick_wall_09",
+    "metres": 2.009999990463257,
+    "authors": [
+      "Rob Tuytel",
+      "Matterfield"
+    ]
+  },
+  "buffbrick": {
+    "id": "brown_brick_02",
+    "metres": 1,
+    "authors": [
+      "Rob Tuytel"
+    ]
+  },
+  "asphalt": {
+    "id": "asphalt_02",
+    "metres": 3.000000238418579,
+    "authors": [
+      "Rob Tuytel"
+    ]
+  },
+  "sidewalk": {
+    "id": "concrete_floor_worn_001",
+    "metres": 3,
+    "authors": [
+      "Dimitrios Savva",
+      "Rico Cilliers"
+    ]
+  }
+}

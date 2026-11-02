@@ -23,6 +23,10 @@ const money = (n) => `${Math.round(n).toLocaleString('fr-FR').replace(/ /g, ' 
 
 class GameHud {
   constructor() {
+    this.stunts = el('div', '', document.body);
+    this.stunts.id = 'stunt-feed';
+    this.zoneBox = el('div', '', document.body);
+    this.zoneBox.id = 'zone-label';
     const root = this.root = el('div', 'gh', document.body);
     root.id = 'game-hud';
     // Top right: wanted stars, money, weapon
@@ -95,6 +99,29 @@ class GameHud {
       this.moneyDelta.classList.add('show');
       this.deltaT = 2.4;
     }
+  }
+
+  // A trick landed: floats up beside the speedometer
+  stunt(title, detail, amount, chain) {
+    const row = el('div', 'stunt-row', this.stunts);
+    el('strong', '', row, title);
+    if (detail) el('span', '', row, detail);
+    el('b', '', row, `+$${amount}`);
+    if (chain > 1) el('i', '', row, `×${Math.min(5, chain)}`);
+    while (this.stunts.children.length > 4) this.stunts.firstChild.remove();
+    setTimeout(() => row.remove(), 2400);
+  }
+
+  // Crossing into someone's neighbourhood
+  zone(name, owner, colour) {
+    const box = this.zoneBox;
+    box.replaceChildren();
+    el('strong', '', box, name);
+    const who = el('span', '', box, owner);
+    who.style.color = colour;
+    box.classList.remove('show');
+    void box.offsetWidth;
+    box.classList.add('show');
   }
 
   setClock(time, weather, night) {

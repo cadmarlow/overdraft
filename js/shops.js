@@ -1,6 +1,6 @@
 import { streetZ } from './city-config.js';
 import { WEAPONS } from './weapons.js';
-import { createLoftedCarMaterial } from './cars.js';
+import { repairBody } from './drive-fx.js';
 
 // Places to spend money: gun shops, a body shop that repairs and repaints (and loses the police if they did not see the
 // car go in), and safehouses to buy, sleep in (8 hours pass, wounds heal) and save at. Each place is a world marker; its
@@ -211,10 +211,8 @@ class ShopSystem {
     while (paint === car.paint) paint = PAINTS[Math.floor(Math.random() * PAINTS.length)];
     if (car.moto) car.paintMaterial.color.setHex(paint);
     else {
-      const material = createLoftedCarMaterial(car.spec, paint, 0);
-      car.bodyMesh.material = material;
-      if (car.door) car.door.children[0].material = material;
-      car.carState = material.userData.carState;
+      car.paintMaterial.userData.paint.value.setHex(paint);
+      repairBody(car);
     }
     car.paint = paint;
     car.hp = 100;

@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { nature } from './nature-assets.js';
 import {
   float,
   vec2,
@@ -46,6 +47,7 @@ import {
   createCurbMaterial,
   createWaterMaterial,
   createParkLawnMaterial,
+  lawnColorNode,
   cityUniforms,
   createParkPavingMaterial,
   createIronFenceMaterial,
@@ -556,7 +558,7 @@ function createWaterfrontPierMaterials() {
     const row = floor(wp.y.div(0.32));
     const boards = mix(mix(color(0x5b4533), color(0x8b6b4d), hash(vec2(row, floor(wp.x.div(3.6).add(hash(vec2(row, 7.0))))))),
       color(0x2a2119), lines(wp.y, 0.32, 0.014));
-    const lawn = mix(color(0x2b5424), color(0x507e34), vnoise(wp.mul(0.12)).mul(0.6).add(vnoise(wp.mul(0.7)).mul(0.4)));
+    const lawn = lawnColorNode(nature.meadow);
     // Sports turf with white soccer markings drawn in the field box's own 0..1 top-face uv
     const fwF = max(max(fwidth(lu.x), fwidth(lu.y)), 0.0001);
     const fieldLine = (d) => smoothstep(fwF.add(0.006), 0.006, abs(d));
@@ -569,6 +571,7 @@ function createWaterfrontPierMaterials() {
     const pavers = mix(mix(color(0x8a8176), color(0xa1998d), hash(floor(wp.div(0.9)))), color(0x5b554d),
       max(lines(wp.x, 0.9, 0.02), lines(wp.y, 0.9, 0.02)));
     const asphalt = mix(color(0x323337), color(0x45464a), grain);
+    ground.userData.lawnVariant = 4;
     ground.colorNode = P.c([concrete, parking, sand, boards, lawn, turf, golf, pavers, asphalt]);
     ground.roughnessNode = P.f([0.88, 0.8, 0.96, 0.78, 0.95, 0.85, 0.9, 0.8, 0.86]);
   }

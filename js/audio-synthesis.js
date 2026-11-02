@@ -36,7 +36,7 @@ function normalizeLoop(buffer, rms, ceiling = 0.9) {
   return buffer;
 }
 
-function combustionBuffers(context, cylinders, diesel, seed) {
+export function combustionBuffers(context, cylinders, diesel, seed, lope = 0) {
   const rate = context.sampleRate;
   const referenceRPM = 1200;
   const highReferenceRPM = diesel ? 2400 : 3600;
@@ -44,7 +44,8 @@ function combustionBuffers(context, cylinders, diesel, seed) {
   const mechanical = context.createBuffer(1, Math.round(cycles * 120 / referenceRPM * rate), rate);
   const random = randomSequence(seed);
   const cylinderStrength = Array.from({ length: cylinders }, () => 0.83 + random() * 0.34);
-  const cylinderDelay = Array.from({ length: cylinders }, () => (random() - 0.5) * 0.035);
+  // lope: firings bunched in pairs, the off-beat of a cross-plane V8
+  const cylinderDelay = Array.from({ length: cylinders }, (_, i) => (random() - 0.5) * 0.035 + lope * Math.sin(i * 2.4));
   const resonance = (diesel ? 93 : cylinders === 6 ? 118 : 145) * (0.97 + random() * 0.06);
   const duration = Math.round(rate * (diesel ? 0.062 : 0.048));
 

@@ -364,7 +364,8 @@ const { createTreeField } = loadModule(treesSource, {
   imports: {
     'three/webgpu': threeStub,
     './tsl-materials.js': { createTreeMaterial: () => ({ name: 'TreeMat' }) },
-    './building-collision.js': buildingCollision
+    './building-collision.js': buildingCollision,
+    './nature-assets.js': { nature: { bark: [], barkNormal: [] } }
   },
   globals: {
     document: makeStubDocument(),
@@ -392,8 +393,7 @@ function makeBruteForceOracle(sites) {
   };
   const MAX_DIST = [3000, 1600, 950];
   const LOW_CUTOFF = 1150;
-  const LOD_NEAR = 105;
-  const LOD_MID = 420;
+  const BANDS = [52, 130, 340];
   const LOD_HYSTERESIS = 6;
   const N = sites.length;
   const px = new Float32Array(N);
@@ -428,13 +428,13 @@ function makeBruteForceOracle(sites) {
       const dx = px[i] - cam.x, dy = py[i] - cam.y, dz = pz[i] - cam.z;
       const d = realSqrt(dx * dx + dy * dy + dz * dz);
       const maxD = low ? Math.min(MAX_DIST[tier[i]], LOW_CUTOFF) : MAX_DIST[tier[i]];
-      const curL = lod[i] === 255 ? 3 : lod[i];
-      let nextL = d < LOD_NEAR ? 0 : d < LOD_MID ? 1 : d < maxD ? 2 : 3;
+      const curL = lod[i] === 255 ? 4 : lod[i];
+      let nextL = d < BANDS[0] ? 0 : d < BANDS[1] ? 1 : d < BANDS[2] ? 2 : d < maxD ? 3 : 4;
       if (Math.abs(nextL - curL) === 1) {
-        const edge = [LOD_NEAR, LOD_MID, maxD][Math.min(nextL, curL)];
+        const edge = [...BANDS, maxD][Math.min(nextL, curL)];
         if (Math.abs(d - edge) < LOD_HYSTERESIS) nextL = curL;
       }
-      const next = nextL === 3 ? 255 : nextL;
+      const next = nextL === 4 ? 255 : nextL;
       if (next !== lod[i]) {
         lod[i] = next;
         changed = true;
@@ -444,7 +444,7 @@ function makeBruteForceOracle(sites) {
   }
 
   function totalsByLod() {
-    const out = [0, 0, 0];
+    const out = [0, 0, 0, 0];
     for (let i = 0; i < N; i++) if (lod[i] !== 255) out[lod[i]]++;
     return out;
   }
@@ -484,13 +484,13 @@ test('createTreeField leaves scene.onBeforeRender untouched and matches per-tree
   }
 
   const fieldTotalsByLod = () => {
-    const out = [0, 0, 0];
+    const out = [0, 0, 0, 0];
     for (const m of field.meshes) {
       if (!m.visible) {
         assert.equal(m.count, 0);
         continue;
       }
-      const match = /_lod([012])_/.exec(m.name);
+      const match = /_lod([0123])_/.exec(m.name);
       out[Number(match[1])] += m.count;
     }
     return out;
