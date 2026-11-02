@@ -115,6 +115,9 @@ npm run build
 
 Le build statique est généré dans `dist/`. `tools/radio-preview.html` permet d'écouter les stations.
 
+Pour jouer en ligne, importer le dépôt dans Vercel : `vercel.json` fixe le build (`npm run build`, sortie `dist/`, pas
+d'installation) et les en-têtes de sécurité. Chaque push sur `main` redéploie la production.
+
 ## Architecture
 
 | Module | Rôle |
