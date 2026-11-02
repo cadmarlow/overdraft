@@ -1,5 +1,116 @@
 # Changelog
 
+## 0.9.1 — Leverage, le ciel
+
+Le vol refait de bout en bout : la wingsuit et le parachute ne donnaient aucune sensation, et on avait du mal à se mettre
+en l'air.
+
+### Entrer dans les airs
+- **Sauter d'un toit en courant ouvre la wingsuit tout seul.** Une chute sans élan passe en chute libre : Espace ou Maj
+  ouvrent la wingsuit, F le parapente. Une consigne s'affiche au milieu de l'écran.
+- La wingsuit « mord » l'air dès l'ouverture : on vole après une vingtaine de mètres au lieu de tomber comme une pierre.
+
+### La wingsuit
+- **Vrai modèle de vol** : portance et traînée selon l'angle d'attaque, virage par l'inclinaison, décrochage, énergie.
+  Plané à trois pour un vers 180 km/h, piqué au-delà de 260 km/h, ressource qui remonte, virages serrés.
+- **On vole là où l'on regarde** : la souris (ou le stick droit) donne la direction, le corps s'incline et y va. Q/D
+  inclinent.
+- **Cabrer est simple** : S tire tout le corps vers le haut sur-le-champ, sans jamais décrocher. Après un piqué, une
+  ressource remonte à plus de 20 m/s en échangeant la vitesse contre la hauteur. Z pique. Relâchées, les deux touches
+  laissent la combinaison revenir d'elle-même au plané, et un piqué oublié se redresse seul.
+- **Nouvelle combinaison** : ailes de bras et aile de queue tendues sur le squelette, gonflées par l'air, bords de fuite qui
+  battent à grande vitesse, couleurs citron et blanc qui se lisent sur les toits sombres. Tête relevée, corps posé sur sa
+  trajectoire et incliné dans les virages.
+- **Fumigènes** aux chevilles, comme les vrais pilotes, au-delà de 110 km/h.
+- **Sécurité** : au-dessus de la rue, à moins de deux secondes du sol, le parapente s'ouvre seul.
+
+### Les sensations
+- **Caméra de vol** : derrière le regard, qui recule et s'élargit avec la vitesse (jusqu'à +28° de champ, avec le flou de
+  vitesse), roule dans les virages, tremble avec l'air, plus fort au ras des façades. Elle ne fixe jamais le sol à la
+  verticale.
+- **Filets d'air** qui défilent autour de la caméra, plus longs avec la vitesse.
+- **Rugissement du vent** qui monte avec la vitesse, et un souffle à chaque façade frôlée.
+- **La glisse** : dans les virages la caméra s'écarte vers l'extérieur et l'horizon penche avec la combinaison ; au-delà de
+  140 km/h, des tourbillons blancs filent des poignets.
+
+### Le parapente (remplace le parachute)
+- **Une vraie voile** : onze caissons sur un arc, profil d'aile, bouches d'entrée d'air, coutures, couleurs nettes par
+  caisson, suspentes jusqu'aux élévateurs et freins jusqu'aux mains. Elle s'ouvre d'un paquet froissé avec un claquement,
+  se creuse du côté du frein, et retombe devant le pilote à l'atterrissage.
+- **Pilotage** : la souris dirige ; Q/D tirent un frein (virage, spirale si on insiste), S les deux (ralentir, et arrondir
+  juste avant le sol pour se poser en douceur), Z l'accélérateur. F largue la voile pour retomber en chute libre.
+- **Pilote en sellette**, assis, mains sur les commandes, balancé dans les virages.
+- Atterrissage doux, roulé-boulé ou chute selon la vitesse ; on se pose aussi sur les toits.
+
+### Le vent
+- Un vent qui suit la météo (de 13 km/h par beau temps à 43 km/h dans l'orage), plus fort en altitude, en rafales.
+- **Ascendances** : le vent qui rencontre une façade monte le long de celle-ci ; sous le vent d'une tour, l'air descend.
+  Un parapente peut tenir, voire monter, devant un gratte-ciel.
+- Altimètre, vitesse, **variomètre** et **vent** (flèche, force, ascendance) en bas à droite.
+
+### Corrections
+- Le corps qui tombe à la verticale n'avait aucune direction de portance : la wingsuit partait au hasard.
+- **Le carré noir sous le héros** (là depuis le début) : son ombre de contact restait collée aux pieds en l'air. Elle reste
+  maintenant au sol, rétrécit quand on s'élève et disparaît au-dessus de 2,5 m.
+
+## 0.9.0 — Leverage
+
+Manhattan est vertical ; le jeu ne l'était pas. Les immeubles avaient leur vraie hauteur, mais le sol était plat partout.
+
+### Les toits
+- **117 000 toits jouables** à leur hauteur réelle : on y marche, on passe d'un immeuble à l'immeuble voisin, on tombe
+  de leur bord. Espace face à un rebord à portée (jusqu'à 2,7 m) l'escalade.
+- **Chutes** : se réceptionner trop vite fait mal, et au-delà d'un étage on se retrouve au sol.
+- **Hélicoptère** : il se pose sur n'importe quel toit, et F en sort à pied au lieu de sauter en parachute.
+- **Parachute** : il se pose aussi sur les toits.
+
+### Le grappin « Levier »
+- C'est une **arme** à part entière, la septième du sélecteur (7, Tab ou la molette ; E le sort et le range). Clic droit
+  pour viser, clic pour tirer ; en l'air ou suspendu, le clic suffit. Le crochet attend au bout du lanceur, et le viseur
+  vire au citron quand il mordrait, au rouge quand c'est hors de portée.
+- Visée sur une **façade** : il hisse jusqu'au rebord du toit si celui-ci est à portée (95 m), et l'on passe par-dessus.
+  Sinon il monte aussi haut que la corde le permet, on reste suspendu, et un nouveau tir repart plus haut. Une tour de
+  280 m se gravit en trois coups.
+- Sur une **voiture** : on se pose sur son toit et on la surfe, accroupi, arme en main. F entre par la vitre et prend le
+  volant sans qu'elle s'arrête.
+- Sur **quelqu'un** : on l'arrache du sol.
+- En chute libre ou en wingsuit, il rattrape une façade. Maj lâche la corde en gardant l'élan.
+
+### La chute libre et la wingsuit
+- Une chute de plus de 24 m devient une **chute libre**, bras en arc. On s'y dirige, et le parachute s'ouvre seul au
+  dernier moment si on l'a oublié.
+- **Wingsuit** (Espace en chute libre) : elle plane à trois pour un vers 160 km/h, pique au-delà de 250 km/h et cabre
+  pour remonter avant de décrocher. La toile est tendue sur le squelette, des poignets aux chevilles.
+- **Frôlements** : passer près d'une façade ou d'un toit remplit une jauge qui paie à la fin du passage.
+- **Altimètre** : hauteur au-dessus du sol et vitesse, avec la jauge de frôlement. Le vent rugit avec la vitesse.
+- Percuter un mur en altitude fait partir en vrille : quelques secondes pour ouvrir le parachute.
+- Sauter d'un hélicoptère ou d'un avion en altitude donne une chute libre, donc une wingsuit.
+
+### La police monte aussi
+- Des agents prennent l'**escalier** et sortent par la porte du toit.
+- À quatre étoiles, une **équipe descend en rappel** de l'hélicoptère sur votre toit.
+- À trois étoiles, des **tireurs d'élite** se postent sur les toits voisins, chacun signalé par un **laser rouge**.
+- L'hélicoptère vole au-dessus des tours et éclaire le joueur où qu'il soit.
+- Personne ne marche dans le vide : agents et gardes restent sur leur toit.
+
+### Contenu
+- **Course des toits** (5e Avenue & 39e Rue) : six toits enchaînés, tirés des vrais immeubles, contre la montre.
+- **Descente** (5e Avenue & 42e Rue) : le toit d'une tour de 280 m, des anneaux le long de la descente la plus dégagée,
+  une zone d'arrivée.
+- **Effet de levier** (contrat de Jules, 6e Avenue & 44e Rue) : les registres de Cazal au dernier étage d'une tour gardée.
+  On entre par le toit, on en repart en wingsuit, quatre étoiles aux trousses.
+
+### Touches à pied
+- **Espace fait courir** (maintenu), **Maj fait sauter** (et escalader un rebord). À la nage, Espace pour le crawl. En
+  voiture rien ne change : Espace frein à main, Maj nitro. Manette : A saute, le clic du stick gauche fait courir.
+
+### Pour s'amuser
+- **Toutes les armes dès le départ**, chargées, avec dix chargeurs d'avance. Une sauvegarde existante est complétée.
+
+### Corrections
+- Un hélicoptère posé, la descente maintenue, se percutait au sol à chaque image jusqu'à exploser.
+- La touche E ne sert plus de second saut : elle sort le grappin.
+
 ## 0.8.0 — Hostile Takeover
 
 ### La police chasse

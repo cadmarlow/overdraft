@@ -75,7 +75,7 @@ class QuickStrip {
 
   key(e) {
     if (!this.open) return;
-    const digit = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].indexOf(e.code);
+    const digit = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7', 'Digit8', 'Digit9'].indexOf(e.code);
     const handled = digit >= 0 || ['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD', 'Enter', 'NumpadEnter', 'Space', 'Escape', this.closeCode].includes(e.code);
     if (!handled) return;
     e.preventDefault();

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { RoadNavigator } from '../js/navigation.js';
-import { WEAPONS, WEAPON_ORDER, castShot, raycastBuildings, lineOfSight, spreadDirection, rayCylinder, rayBox } from '../js/weapons.js';
+import { WEAPONS, WEAPON_ORDER, stockArsenal, castShot, raycastBuildings, lineOfSight, spreadDirection, rayCylinder, rayBox } from '../js/weapons.js';
 
 // A 4 x 4 street grid, 100 m apart, with one missing link (a closed block side)
 function grid() {
@@ -104,15 +104,31 @@ test('spread directions stay unit length inside the cone', () => {
 });
 
 test('the weapon catalogue is complete and ordered for selection', () => {
-  assert.deepEqual(WEAPON_ORDER, ['fists', 'pistol', 'smg', 'shotgun', 'rifle', 'grenade']);
+  assert.deepEqual(WEAPON_ORDER, ['fists', 'pistol', 'smg', 'shotgun', 'rifle', 'grenade', 'grapple']);
   for (const id of WEAPON_ORDER) {
     const w = WEAPONS[id];
     assert.equal(w.id, id);
     assert.ok(w.interval > 0 && w.name);
+    if (w.gadget) { assert.ok(w.range > 0 && !w.mag && !w.damage); continue; }
     if (w.throwable) assert.ok(w.mag > 0 && w.range > 0);
     else assert.ok(w.damage > 0);
     if (!w.melee && !w.throwable) assert.ok(w.mag > 0 && w.reload > 0 && w.range > 0 && w.sound);
   }
+});
+
+test('the whole arsenal is stocked from the start and a save is only ever topped up', () => {
+  const fresh = stockArsenal({ fists: { mag: 0, ammo: 0 } });
+  assert.deepEqual(Object.keys(fresh), WEAPON_ORDER);
+  for (const id of WEAPON_ORDER) {
+    const w = WEAPONS[id];
+    if (w.melee || w.gadget) continue;
+    assert.equal(fresh[id].mag, w.mag);
+    assert.equal(fresh[id].ammo, w.throwable ? 0 : w.mag * 10);
+  }
+  const saved = stockArsenal({ fists: { mag: 0, ammo: 0 }, rifle: { mag: 4, ammo: 2000 } });
+  assert.equal(saved.rifle.mag, WEAPONS.rifle.mag);
+  assert.equal(saved.rifle.ammo, 2000);
+  assert.equal(saved.grenade.mag, WEAPONS.grenade.mag);
 });
 
 function close(actual, expected, epsilon = 1e-6) {

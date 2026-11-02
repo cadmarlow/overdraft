@@ -118,7 +118,7 @@ class GamepadControls {
     // Capture edges before callbacks: changing mode or opening the map may synchronously call reset().
     const toggleMap = edge(9), closeMap = edge(1);
     const cycleMode = Number(Boolean(edge(5))) - Number(Boolean(edge(4)));
-    const cycleCamera = edge(3), recenter = edge(11);
+    const cycleCamera = edge(3), recenter = edge(11), grapple = edge(2);
     this.previousButtons = pressed;
 
     const target = document.activeElement;
@@ -146,6 +146,9 @@ class GamepadControls {
     if (cycleCamera) this.callbacks.onCycleCamera?.(1);
     if (revision !== this.revision) return;
     if (recenter) this.camera.resetOrbit();
+    // X / Square: the grapple (vertical.js)
+    if (grapple) this.callbacks.onGrapple?.();
+    if (revision !== this.revision) return;
 
     const mode = this.controller.activeMode;
     const driving = mode === 'car' || mode === 'cyclist';
@@ -163,6 +166,9 @@ class GamepadControls {
     this.controller.setGamepadInput('left', Math.max(0, -movement.x));
     this.controller.setGamepadInput('right', Math.max(0, movement.x));
     this.controller.setGamepadInput('up', mode === 'person' ? Number(Boolean(held(0))) : Math.max(0, vertical));
+    // on foot: A jumps (and opens the wingsuit, through 'up'), the left stick's click runs
+    this.controller.setGamepadInput('jump', mode === 'person' ? Number(Boolean(held(0))) : 0);
+    this.controller.setGamepadInput('run', mode === 'person' ? Number(Boolean(held(10))) : 0);
     this.controller.setGamepadInput('down', Math.max(0, -vertical));
     const zoom = Number(Boolean(held(13))) - Number(Boolean(held(12)));
     this.camera.applyGamepadInput(look.x, look.y, zoom, Number.isFinite(dt) ? Math.max(0, Math.min(0.1, dt)) : 0);

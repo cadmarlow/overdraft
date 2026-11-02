@@ -22,7 +22,7 @@ import { HEADLIGHTS, createVehicleHeadlight, placeVehicleHeadlight } from './veh
 import { createPlane, posePlane } from './airplane.js';
 import { stepPlane } from './flight.js';
 import { bryantParkLawn } from './landmarks.js';
-import { polygonContact } from './building-collision.js';
+import { polygonContact, roofAt, roofColliderAt } from './building-collision.js';
 import { rampRise } from './ramps.js';
 import { WATER, stepBoat } from './boat.js';
 
@@ -68,7 +68,11 @@ function driveSpeed(speed, throttle, dt, drive) {
 }
 
 // Walking surface for the player's pedestrian (its rig samples it around its feet)
-const personGround = (controllers, x, z) => controllers.getGroundHeight(x, z, 'person');
+const personGround = (controllers, x, z) => controllers.personGroundAt(x, z);
+
+// Static colliders are indexed into square cells of this size (nearColliders, roofHeight)
+const COLLIDER_CELL = 48;
+const cellKey = (ix, iz) => (ix + 4096) * 8192 + (iz + 4096);
 
 // The planar car state back on its meshes: the chassis in its full attitude under the yaw-only root, each wheel on its spring
 const FRAME_SPIN = 0.62;
@@ -211,7 +215,10 @@ class ThirdPersonControllerManager {
       up: false,
       down: false,
       sprint: false,
-      handbrake: false
+      handbrake: false,
+      // on foot (gameplay.js): Space runs, Shift jumps; in vehicles Space and Shift keep up/sprint
+      run: false,
+      jump: false
     };
 
     this.entities = {
@@ -262,25 +269,31 @@ class ThirdPersonControllerManager {
       backward: ['KeyS', 'ArrowDown'],
       left: ['KeyA', 'ArrowLeft'],
       right: ['KeyD', 'ArrowRight'],
-      up: ['Space', 'KeyE'],
+      up: ['Space'],
       down: ['KeyQ', 'KeyC'],
       sprint: ['ShiftLeft', 'ShiftRight'],
-      handbrake: ['ControlLeft', 'ControlRight']
+      handbrake: ['ControlLeft', 'ControlRight'],
+      run: ['Space'],
+      jump: ['ShiftLeft', 'ShiftRight']
     };
-    const actionsByCode = new Map(Object.entries(bindings).flatMap(([action, codes]) => codes.map((code) => [code, action])));
+    // a key may drive several actions (Space: up in the air and at the wheel, run on foot)
+    const actionsByCode = new Map();
+    for (const [action, codes] of Object.entries(bindings)) for (const code of codes) actionsByCode.set(code, [...(actionsByCode.get(code) ?? []), action]);
     this._pressedCodes = new Set();
     this._keyboardKeys = {};
     this._touchKeys = {};
     this._gamepadKeys = {};
 
     const onKey = (e, isDown) => {
-      const action = actionsByCode.get(e.code);
-      if (!action || (isDown && isTypingInField(e))) return;
+      const actions = actionsByCode.get(e.code);
+      if (!actions || (isDown && isTypingInField(e))) return;
       if (isDown) this._pressedCodes.add(e.code);
       else this._pressedCodes.delete(e.code);
-      // Releasing one binding must not cancel another key held for the same action.
-      this._keyboardKeys[action] = bindings[action].some((code) => this._pressedCodes.has(code));
-      this._blendInput(action);
+      for (const action of actions) {
+        // Releasing one binding must not cancel another key held for the same action.
+        this._keyboardKeys[action] = bindings[action].some((code) => this._pressedCodes.has(code));
+        this._blendInput(action);
+      }
     };
 
     window.addEventListener('keydown', (e) => onKey(e, true));
@@ -488,6 +501,7 @@ class ThirdPersonControllerManager {
       type: 'person',
       label: 'À pied',
       mesh: root,
+      shadow: pedShadow,
       crowd,
       rig,
       position: new THREE.Vector3(12.2, ISLAND_BOUNDS.sidewalkHeight, SPAWN_Z + 12),
@@ -902,7 +916,41 @@ class ThirdPersonControllerManager {
     return true;
   }
 
-  getGroundHeight(x, z, mode = 'person') {
+  /**
+   * Height of the surface under (x, z). Given `y`, the height a walker's feet or a helicopter's skids are at, the roofs
+   * at or just above it count too: a body on a roof stands on it, one below a roof stays in the street.
+   */
+  getGroundHeight(x, z, mode = 'person', y = 0) {
+    const street = this.streetHeight(x, z, mode);
+    if (y < 2 || (mode !== 'person' && mode !== 'helicopter')) return street;
+    return Math.max(street, this.roofHeight(x, z, y));
+  }
+
+  // The highest building roof under (x, z) that something at height y stands on, stepping up at most `step` (0: none).
+  // It reads the one collider cell that holds the point, so it never disturbs a nearColliders() list in use.
+  roofHeight(x, z, y, step = 0.6) {
+    if (!this._colliderCells) this.nearColliders(x, z, 0);
+    const list = this._colliderCells.get(cellKey(Math.floor(x / COLLIDER_CELL), Math.floor(z / COLLIDER_CELL)));
+    return list ? roofAt(list, x, z, y, step) : 0;
+  }
+
+  // The building whose roof (x, z) is on at height y, or null
+  roofCollider(x, z, y, step = 0.6) {
+    if (!this._colliderCells) this.nearColliders(x, z, 0);
+    const list = this._colliderCells.get(cellKey(Math.floor(x / COLLIDER_CELL), Math.floor(z / COLLIDER_CELL)));
+    return list ? roofColliderAt(list, x, z, y, step) : null;
+  }
+
+  // Under the protagonist and around their feet. Roofs count from the height the body is at; a foot over a roof's edge
+  // stays level with the roof; a body hanging from a rope or flying a wingsuit stands on its own height.
+  personGroundAt(x, z) {
+    const p = this.entities.person;
+    if (p.suspended) return p.position.y;
+    const g = this.getGroundHeight(x, z, 'person', p.position.y + 0.05);
+    return p.footing > 2 ? Math.max(g, p.footing - 0.4) : g;
+  }
+
+  streetHeight(x, z, mode = 'person') {
     if (this.swimming && mode === 'person') return WATER - 1.28;
     // Inside Central Park (5th Ave to Central Park West, 59th St to 110th St)
     const cp = CENTRAL_PARK_BOUNDS;
@@ -922,11 +970,11 @@ class ThirdPersonControllerManager {
 
   // Static colliders within `r` of (x, z), kept in their original order and indexed once into 48 m cells.
   nearColliders(x, z, r) {
-    const CELL = 48;
-    const key = (ix, iz) => (ix + 4096) * 8192 + (iz + 4096);
+    const CELL = COLLIDER_CELL;
+    const key = cellKey;
     if (!this._colliderCells) {
       this._colliderCells = new Map();
-      this.colliders.forEach((c, i) => {
+      (this.colliders ?? []).forEach((c, i) => {
         c._order = i;
         for (let ix = Math.floor(c.minX / CELL); ix <= Math.floor(c.maxX / CELL); ix++) {
           for (let iz = Math.floor(c.minZ / CELL); iz <= Math.floor(c.maxZ / CELL); iz++) {
@@ -1081,9 +1129,11 @@ class ThirdPersonControllerManager {
       if (!p.inVehicle && (this.activeMode === 'person' || dx * dx + dz * dz <= maxDistSq)) {
         p._charHidden = false;
         if (p.mesh) p.mesh.visible = true;
-        const air = p.position.y - this.getGroundHeight(p.position.x, p.position.z, 'person');
-        // diveTime (gameplay.js): knocked down or fallen, the evasive-dive pose instead of walking
-        p.rig.update(dt, p.position.x, p.position.z, p.heading, personGround, this, air > 0.02 ? air : 0, true, p.diveTime ?? -1);
+        const air = p.position.y - this.personGroundAt(p.position.x, p.position.z);
+        // diveTime (gameplay.js): knocked down or fallen, the evasive-dive pose instead of walking. Held up by a rope, a
+        // wingsuit or a car's roof, the body stands still where it is and vertical.js poses it over that
+        if (p.suspended) p.rig.reset(p.position.x, p.position.z, p.heading, personGround, this);
+        else p.rig.update(dt, p.position.x, p.position.z, p.heading, personGround, this, air > 0.02 ? air : 0, true, p.diveTime ?? -1);
         p.crowd.begin();
         p.crowd.add(p.rig, 0);
         p.crowd.end();
@@ -1171,6 +1221,17 @@ class ThirdPersonControllerManager {
       const e = this.entities[key];
       e.mesh.position.copy(e.position);
       e.mesh.rotation.y = e.heading;
+    }
+    // The walker's contact shadow lies on the surface under them, shrinking as they rise, gone from a few metres up
+    // (it used to ride under the feet into the air: a dark square under a jump, a parachute, a wingsuit)
+    const walker = this.entities.person;
+    if (walker.shadow) {
+      const lift = walker.position.y - this.personGroundAt(walker.position.x, walker.position.z);
+      const ground = walker.suspended ? this.getGroundHeight(walker.position.x, walker.position.z, 'person', walker.position.y + 0.3) : null;
+      const height = ground === null ? lift : walker.position.y - ground;
+      walker.shadow.visible = height < 2.5;
+      walker.shadow.position.y = 0.02 - Math.max(0, height);
+      walker.shadow.scale.setScalar(1 - Math.min(1, Math.max(0, height) / 2.5) * 0.6);
     }
 
     // Modulate clustered vehicle & bike lights by time of day (off during Midday & Golden Hour; fade in at Dusk & Night)
@@ -1452,12 +1513,16 @@ class ThirdPersonControllerManager {
 
     h.position.x += Math.sin(h.heading) * h.speed * dt;
     h.position.z += Math.cos(h.heading) * h.speed * dt;
+    // Skids on the street or on whatever roof it comes down onto (judged from before this step, so a fast descent lands)
+    const floor = this.roofHeight(h.position.x, h.position.z, h.position.y - 0.25, 0.3) + 0.25;
     h.position.y += h.verticalSpeed * dt;
 
-    if (h.position.y < 0.25) {
-      this.reportCollision(h, groundCollider, 'ground', h.position.x, 0.25, h.position.z, 0, 1, 0, -h.verticalSpeed);
+    if (h.position.y < floor) {
+      this.reportCollision(h, groundCollider, 'ground', h.position.x, floor, h.position.z, 0, 1, 0, -h.verticalSpeed);
+      // set down: the skids stop the descent (held down, it used to hit the ground again every frame)
+      h.verticalSpeed = Math.max(0, h.verticalSpeed);
     }
-    h.position.y = Math.max(0.25, Math.min(380, h.position.y));
+    h.position.y = Math.max(floor, Math.min(380, h.position.y));
     this.resolveHorizontalCollision(h.position, 4.5, null, h);
 
     const targetPitch = (h.speed / maxHorizSpeed) * 0.24;

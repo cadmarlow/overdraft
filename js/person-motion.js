@@ -401,6 +401,81 @@ class BodyDriver {
     else { this.hasGun = false; this.ready = this.aimW = 0; }
     if (free > 0) this.lookAround(dt, rig);
     this.eyes(dt);
+    if (rig.overlay) this.overlay(rig.overlay);
+  }
+
+  /**
+   * Postures the capture does not have, laid over it (vertical.js): hands on a rope or a ledge, arms spread in a wingsuit
+   * or bent in a skydiver's arch, legs apart, then the whole body pitched and rolled about its hips.
+   * o = { arms: 'spread'|'arch'|'up'|'rope'|'ledge'|'balance'|'toggles', toward: Vector3 (rope), brakeL / brakeR: 0..1
+   * (toggles), legs: rad apart, sit: rad (thighs raised, knees bent: a harness), head: rad (chin up), pitch: rad (+ head
+   * forward and down), roll: rad (about the spine), w: 0..1 }
+   */
+  overlay(o) {
+    const { body, skeleton: sk } = this, { wp, wq } = body, { bone } = sk;
+    const w = clamp(o.w ?? 1, 0, 1);
+    if (w <= 0.001) return;
+    const fwd = _fwd.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
+    const left = _right.crossVectors(UP, fwd); // the body's left
+    if (o.arms) {
+      const rope = o.arms === 'rope' && o.toward;
+      for (let i = 0; i < 2; i++) {
+        const sgn = i === 0 ? 1 : -1;
+        const S = vset(_restP, wp, bone.upper[i]);
+        const T = _target.copy(S), pole = _pole.set(0, -1, 0);
+        switch (o.arms) {
+          case 'spread': T.addScaledVector(left, sgn).addScaledVector(fwd, 0.12).y += 0.04; break;
+          case 'arch': T.addScaledVector(left, sgn * 0.42).addScaledVector(fwd, 0.08).y += 0.42; pole.copy(left).multiplyScalar(sgn).y = -0.4; break;
+          case 'up': T.addScaledVector(left, sgn * 0.07).addScaledVector(fwd, 0.16).y += 1; pole.copy(fwd).negate().addScaledVector(left, sgn * 0.6); break;
+          case 'ledge': T.addScaledVector(left, sgn * 0.14).addScaledVector(fwd, 0.42).y += 0.3; pole.set(0, -1, 0).addScaledVector(fwd, -0.5); break;
+          case 'balance': T.addScaledVector(left, sgn * 0.85).addScaledVector(fwd, 0.1).y -= 0.18; break;
+          case 'toggles': {
+            // hands up on the risers, pulled down to the hips with the brake on that side
+            const b = clamp(i === 0 ? o.brakeL ?? 0 : o.brakeR ?? 0, 0, 1);
+            T.addScaledVector(left, sgn * (0.2 + b * 0.06)).addScaledVector(fwd, 0.08 + b * 0.1).y += 0.55 - b * 0.95;
+            pole.copy(left).multiplyScalar(sgn).y = -0.6;
+            break;
+          }
+          case 'rope': {
+            const R = vset(_aimP, wp, bone.upper[1]);
+            _line.subVectors(rope, R).normalize();
+            T.copy(R).addScaledVector(_line, i === 1 ? 0.58 : 0.34);
+            if (i === 0) T.addScaledVector(left, 0.04);
+            break;
+          }
+        }
+        this.reach(i, T, pole, null, w);
+      }
+    }
+    // Legs apart: each thigh swung out about the body's forward axis; seated: thighs raised, shins hanging back
+    if (o.legs || o.sit) {
+      const below = this.kit.belowThigh ??= bone.thigh.map((t) => sk.below(t));
+      const belowCalf = this.kit.belowCalf ??= bone.calf.map((t) => sk.below(t));
+      for (let i = 0; i < 2; i++) {
+        if (o.legs) this.turn(bone.thigh[i], _q.setFromAxisAngle(fwd, (i === 0 ? 1 : -1) * o.legs * w));
+        if (o.sit) this.turn(bone.thigh[i], _q.setFromAxisAngle(left, -o.sit * w));
+        body.settle(bone.thigh[i], below[i]);
+        if (o.sit) { this.turn(bone.calf[i], _q.setFromAxisAngle(left, o.sit * 1.1 * w)); body.settle(bone.calf[i], belowCalf[i]); }
+      }
+    }
+    // Chin up: a body flying face down still looks where it goes
+    if (o.head) {
+      this.turn(bone.neck, _q.setFromAxisAngle(left, -o.head * 0.55 * w));
+      body.settle(bone.neck, this.kit.belowNeck ??= sk.below(bone.neck));
+      this.turn(bone.head, _q.setFromAxisAngle(left, -o.head * 0.45 * w));
+      body.settle(bone.head, sk.belowHead);
+    }
+    // The whole body about the hips: leaned sideways (a harness swinging into a turn), pitched about its left axis, rolled
+    // about its own spine
+    if (o.pitch || o.roll || o.lean) {
+      _q.setFromAxisAngle(fwd, (o.lean || 0) * w).multiply(_q2.setFromAxisAngle(left, (o.pitch || 0) * w)).multiply(_q3.setFromAxisAngle(UP, (o.roll || 0) * w));
+      const P = vset(_top, wp, bone.pelvis);
+      for (let i = 0; i < sk.count; i++) {
+        vset(_p, wp, i).sub(P).applyQuaternion(_q).add(P);
+        vput(wp, i, _p);
+        qput(wq, i, qset(_q3, wq, i).premultiply(_q));
+      }
+    }
   }
 
   // A blow the chest gives way to

@@ -75,6 +75,39 @@ Un système à **cinq étoiles**, dans la tradition du genre, avec une police qu
 - **L’eau** : hors-bord à vernis et acajou, sillage, voitures qui coulent, nage. Vedettes ennemies armées.
 - **Téléphone** (P) : contacts qui rendent service, messages, contrats avec GPS, banque et dette, carte des territoires.
 
+## Contenu de la version 0.9 « Leverage »
+
+Manhattan est vertical ; le jeu ne l'était pas. Les immeubles avaient leur vraie hauteur, mais le sol était plat partout.
+
+- **Les toits** : les 117 000 bâtiments se parcourent à leur hauteur réelle. On y marche, on saute d'un toit à l'autre,
+  on escalade un rebord à portée, on y pose l'hélicoptère et le parachute.
+- **Le grappin « Levier »** (arme n° 7, E pour le sortir ; clic droit pour viser, clic pour tirer) : visée sur une façade, il hisse jusqu'au rebord du toit s'il est à portée (95 m), sinon
+  aussi haut que la corde le permet, et l'on recommence. Sur une voiture : on la surfe, puis on prend le volant par la
+  vitre sans qu'elle s'arrête. Sur quelqu'un : on l'arrache du sol. En plein vol, il rattrape une façade.
+- **La chute libre et la wingsuit** : une chute de plus de 24 m devient une chute libre ; Espace ouvre la wingsuit, qui
+  plane à trois pour un vers 160 km/h, pique au-delà de 250 km/h, cabre pour remonter. Frôler les façades et les toits
+  paie comme une cascade. Le parachute (F) s'ouvre à la main, ou tout seul en dernier recours.
+- **La police monte** : des agents sortent par la porte du toit, à quatre étoiles une équipe descend en rappel de
+  l'hélicoptère, à trois étoiles des tireurs d'élite prennent les toits voisins, chacun signalé par un laser rouge.
+  L'hélicoptère vole au-dessus des tours.
+- **Contenu** : *Course des toits*, *Descente* (anneaux depuis le toit d'une tour de 280 m), contrat *Effet de levier*.
+- **Pour s'amuser** : toutes les armes sont dans les poches dès le départ.
+
+## Contenu de la version 0.9.1 « Leverage », le ciel
+
+Le vol refait de bout en bout, jugé à côté d'un AAA :
+
+- **Un vrai modèle de vol** : la wingsuit est un petit planeur traîné (portance et traînée selon l'incidence, virage par
+  l'inclinaison, décrochage), la voile un parapente de vitesse (freins, accélérateur, arrondi, spirale). Les deux volent
+  dans un vent qui souffle plus fort en altitude, en rafales, et qui monte le long des façades qu'il rencontre.
+- **On vole là où l'on regarde** : la souris (ou le stick droit) donne la direction, le corps s'incline et y va. Les
+  touches restent pour piquer, cabrer, freiner.
+- **Entrer dans les airs sans y penser** : sauter d'un toit en courant ouvre la wingsuit tout seul ; sinon Espace ou Maj.
+- **Des sensations** : caméra de vol qui recule et s'élargit avec la vitesse, flou de vitesse, roulis dans les virages,
+  tremblement de l'air, filets d'air qui défilent, fumigènes aux chevilles, rugissement du vent.
+- **Le parapente** : une voile en caissons, à profil d'aile, avec bouches d'entrée d'air et suspentes, qui s'ouvre d'un
+  paquet froissé, se creuse sous les freins, et retombe devant le pilote à l'atterrissage.
+
 ## Le garage rapide
 
 Le joueur doit pouvoir changer de monture sans jamais chercher un véhicule : le garage (touche G) fige le jeu et propose
@@ -114,4 +147,6 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.6** | **Prime Real Estate** | Façades en vraie brique et pierre, fenêtres en relief, rues et commerces refaits, objets réels |
 | **0.7** | **Bull Run** | Conduite refaite : suspension, pneus et moteur simulés, vrais modèles de voitures, son moteur, nitro, cascades |
 | **0.8** | **Hostile Takeover** | Acte III, gangs et territoires, casse en plusieurs temps, bateaux et nage, téléphone, police offensive |
-| 0.9 | Closing Bell | Fin de l’histoire, coopération en ligne, mode photo, optimisation mobile |
+| **0.9** | **Leverage** | Toits jouables, grappin, wingsuit, surf sur les voitures, police verticale, toutes les armes au départ |
+| **0.9.1** | **Leverage** | Le ciel refait : vrai modèle de vol, vol au regard, sensations, parapente en caissons |
+| 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |

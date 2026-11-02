@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>OVERDRAFT — Hostile Takeover</title>
+  <title>OVERDRAFT — Leverage</title>
   <link rel="icon" href="data:," />
   <meta name="description" content="OVERDRAFT. Un jeu d’action en monde ouvert dans Manhattan : missions, poursuites, combats et niveau de recherche à cinq étoiles." />
   <!-- three.js dev branch pinned to a commit (builds committed to mrdoob/three.js@dev, served by jsDelivr) -->
@@ -93,6 +93,13 @@
   <link rel="modulepreload" href="./js/car-physics.js" />
   <link rel="modulepreload" href="./js/drive-fx.js" />
   <link rel="modulepreload" href="./js/stunts.js" />
+  <link rel="modulepreload" href="./js/vertical.js" />
+  <link rel="modulepreload" href="./js/wingsuit.js" />
+  <link rel="modulepreload" href="./js/air-physics.js" />
+  <link rel="modulepreload" href="./js/canopy.js" />
+  <link rel="modulepreload" href="./js/air-fx.js" />
+  <link rel="modulepreload" href="./js/roof-police.js" />
+  <link rel="modulepreload" href="./js/missions-sky.js" />
   <link rel="modulepreload" href="./js/ramps.js" />
   <link rel="modulepreload" href="./js/boat.js" />
   <link rel="modulepreload" href="./js/gangs.js" />
@@ -134,6 +141,7 @@
       <symbol id="i-smg" viewBox="0 0 24 24"><path d="M2.5 8.5H19V12h-7l-.7 2.4H9.2l-.5 2 1 3.1H6.5L5.3 14 3 12zM19 9.6h2.5M13.2 12v5.2h2.4V12"/></symbol>
       <symbol id="i-shotgun" viewBox="0 0 24 24"><path d="M1.8 9.5h15v1.8H9.6L7 15.2H3.2l1.5-3.9H1.8zM16.8 9.8h5.4v1.2h-5.4zM10.5 11.3h4.4v1.7h-4.4z"/></symbol>
       <symbol id="i-rifle" viewBox="0 0 24 24"><path d="M1.5 10.2h5.4l1-1.1h7v2.1h6.6v1.1h-6.6v1.6h-2l-.9 4.4h-2.2l.7-4.4H8.6l-2.5 1.2H2.4l1.1-2.6h-2z"/></symbol>
+      <symbol id="i-grapple" viewBox="0 0 24 24"><path d="M12 21.5V8.5M9.5 21.5h5M12 8.5c0-2.8-2.2-4.2-5-3.6M12 8.5c0-2.8 2.2-4.2 5-3.6M12 13c-2.6 0-4.3-1.4-4.8-3.4M12 13c2.6 0 4.3-1.4 4.8-3.4M12 8.5V2.5"/></symbol>
       <symbol id="i-grenade" viewBox="0 0 24 24"><circle cx="12" cy="14.8" r="5.6"/><path d="M10 9.6V6.8h4v2.8M14 7.2l3.2-2.1M9.2 14.8h5.6M12 12v5.6"/></symbol>
       <symbol id="i-golden" viewBox="0 0 24 24"><path d="M3 17.5h18M7 17.5a5 5 0 0 1 10 0M12 5v3M5.6 9.6l2 1.6M18.4 9.6l-2 1.6M7.5 21h9"/></symbol>
       <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.8v2.1M12 19.1v2.1M2.8 12h2.1M19.1 12h2.1M5.5 5.5 7 7M17 17l1.5 1.5M5.5 18.5 7 17M17 7l1.5-1.5"/></symbol>

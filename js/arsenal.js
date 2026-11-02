@@ -5,7 +5,7 @@ import { QuickStrip } from './quick-strip.js';
 // The weapon selector: every weapon in the game, what is in reserve, and for the ones not owned yet, what they cost and the
 // way to the nearest gun shop.
 
-const ICONS = { fists: 'i-fist', pistol: 'i-pistol', smg: 'i-smg', shotgun: 'i-shotgun', rifle: 'i-rifle', grenade: 'i-grenade' };
+const ICONS = { fists: 'i-fist', pistol: 'i-pistol', smg: 'i-smg', shotgun: 'i-shotgun', rifle: 'i-rifle', grenade: 'i-grenade', grapple: 'i-grapple' };
 const money = (n) => `${n.toLocaleString('fr-FR')} $`;
 
 class Arsenal extends QuickStrip {
@@ -29,6 +29,7 @@ class Arsenal extends QuickStrip {
     const w = WEAPONS[id], slot = this.game.weapons[id];
     if (!slot) return money(GUN_ITEMS.find((it) => it.id === id).price);
     if (w.melee) return '';
+    if (w.gadget) return `${w.range} M`;
     return w.throwable ? `× ${slot.mag}` : `${slot.mag} / ${slot.ammo}`;
   }
 

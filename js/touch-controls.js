@@ -95,6 +95,7 @@ class TouchControls {
 
   setMode(mode) {
     if (!['person', 'car', 'cyclist', 'helicopter', 'plane'].includes(mode)) return;
+    this.mode = mode;
     this.reset();
     if (!this.root) return;
     const flying = mode === 'helicopter' || mode === 'plane';
@@ -143,7 +144,10 @@ class TouchControls {
     const pressed = held.some((pointer) => pointer.button === button);
     button.classList.toggle('is-pressed', pressed);
     button.setAttribute('aria-pressed', String(pressed));
-    this.controller.setTouchInput(action, held.some((pointer) => pointer.action === action) ? 1 : 0);
+    const value = held.some((pointer) => pointer.action === action) ? 1 : 0;
+    this.controller.setTouchInput(action, value);
+    // on foot the Jump button is the jump action (the keyboard's Shift)
+    if (action === 'up') this.controller.setTouchInput('jump', this.mode === 'person' ? value : 0);
   }
 
   releaseButton(pointerId) {

@@ -70,10 +70,11 @@ class MarkerSystem {
     this.frames = 0;
   }
 
-  add(x, z, { kind = 'objective', radius = 2.2, height = 3.2, follow = null, label = '', blip = true } = {}) {
+  // `y`: stands at that height (a roof) instead of on the street
+  add(x, z, { kind = 'objective', radius = 2.2, height = 3.2, follow = null, label = '', blip = true, y = null } = {}) {
     const m = this.markers.find((k) => !k.used);
     if (!m) return null;
-    Object.assign(m, { used: true, x, z, radius, height, follow, kind, label, blip });
+    Object.assign(m, { used: true, x, z, y, radius, height, follow, kind, label, blip });
     const color = new THREE.Color(MARKER_COLORS[kind] ?? MARKER_COLORS.objective);
     m.colMat.color.copy(color);
     m.ringMat.color.copy(color);
@@ -95,7 +96,7 @@ class MarkerSystem {
     for (const m of this.markers) {
       if (!m.used) { if (this.frames > 4) m.group.visible = false; continue; }
       if (m.follow) { m.x = m.follow.position ? m.follow.position.x : m.follow.x; m.z = m.follow.position ? m.follow.position.z : m.follow.z; }
-      const y = ground(m.x, m.z);
+      const y = m.y ?? ground(m.x, m.z);
       m.group.position.set(m.x, y + 0.04, m.z);
       const followed = !!m.follow;
       m.col.scale.set(followed ? 0.5 : m.radius * 0.55, followed ? 2.2 : m.height, followed ? 0.5 : m.radius * 0.55);

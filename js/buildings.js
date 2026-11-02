@@ -426,7 +426,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     for (const polygon of b.polygons) {
       const xs = polygon.outer.map((p) => p.x), zs = polygon.outer.map((p) => p.z);
       const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
-      colliders.push({ minX, maxX, minZ, maxZ, minY: 0, maxY: top, polygon });
+      colliders.push({ minX, maxX, minZ, maxZ, minY: 0, maxY: top, polygon, roof: true });
       detail.footprints.push({ h: top, pts: polygon.outer, holes: polygon.holes });
     }
     const neighbours = nearbyReserves(b, 6);

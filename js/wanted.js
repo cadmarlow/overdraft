@@ -583,7 +583,9 @@ class WantedSystem {
       const k = Math.min(1, dt * 0.8);
       h.position.x += (tx - h.position.x) * k;
       h.position.z += (tz - h.position.z) * k;
-      h.position.y += (62 - h.position.y) * k;
+      // above the player and above whatever towers it flies over
+      const alt = Math.max(62, (target.y || 0) + 32, this.controllers.roofHeight(h.position.x, h.position.z, 1e4, 0) + 22);
+      h.position.y += (alt - h.position.y) * Math.min(1, dt * 1.5);
       h.heading += angleTo(h.heading, this.heliAngle + Math.PI / 2) * Math.min(1, dt * 2);
       h.speed = 20;
     }
@@ -600,7 +602,7 @@ class WantedSystem {
     }
     this.searchlight.position.set(h.position.x, h.position.y - 1.5, h.position.z);
     const sx = this.seen ? target.x : this.zone.x + Math.sin(this.clock * 0.6) * 25, sz = this.seen ? target.z : this.zone.z + Math.cos(this.clock * 0.5) * 25;
-    this.searchlight.target.position.set(sx, 0, sz);
+    this.searchlight.target.position.set(sx, this.seen ? target.y || 0 : 0, sz);
     this.searchlight.target.updateMatrixWorld();
     this.searchlight.intensity = want ? 2600 : 0;
   }

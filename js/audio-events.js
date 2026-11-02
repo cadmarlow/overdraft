@@ -462,7 +462,7 @@ export function createWindVoice(ctx, resources, output) {
     gust.start(ctx.currentTime, i * resources.gusts.duration * 0.37);
   }
   return {
-    update({ speed = 0, altitude = 0, night = 0, traffic = 0, enclosure = 0 } = {}, now = ctx.currentTime) {
+    update({ speed = 0, rush = 0, altitude = 0, night = 0, traffic = 0, enclosure = 0 } = {}, now = ctx.currentTime) {
       if (disposed) return;
       now = Math.max(ctx.currentTime, finite(now, ctx.currentTime));
       const motion = clamp(Math.abs(finite(speed)) / 55);
@@ -471,8 +471,10 @@ export function createWindVoice(ctx, resources, output) {
       const shelter = 1 - clamp(enclosure) * 0.65;
       for (const channel of channels) {
         // Walls shelter ambient wind; the rush from riding or flying still follows the player's motion.
-        channel.air((0.010 * shelter + motion * 0.012 + exposure * 0.015) * quiet, now);
-        channel.cutoff(1550 + motion * 700 + exposure * 850, now);
+        // a body flying on its own (wingsuit, free fall) is in the full roar of the air
+        const roar = clamp(Number(rush) || 0);
+        channel.air((0.010 * shelter + motion * 0.012 + exposure * 0.015) * quiet + roar * roar * 0.07, now);
+        channel.cutoff(1550 + motion * 700 + exposure * 850 + roar * 2200, now);
         channel.rumble((0.003 + clamp(traffic) * 0.020) * quiet * (1 - exposure * 0.5), now);
       }
     },

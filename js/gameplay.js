@@ -3,7 +3,10 @@ import { ISLAND_BOUNDS, getIslandBoundsAtZ, streetZ, isTypingInField } from './c
 import { angleDelta, doorPosition, smooth, clamp, canInteract, validPosition } from './interaction-state.js';
 import { CharacterModel, LOOKS } from './characters.js';
 import { EffectsSystem } from './fx.js';
-import { WEAPONS, WEAPON_ORDER, castShot, spreadDirection } from './weapons.js';
+import { WEAPONS, WEAPON_ORDER, stockArsenal, castShot, spreadDirection } from './weapons.js';
+import { Vertical } from './vertical.js';
+import { RoofPolice } from './roof-police.js';
+import { SkyRings } from './missions-sky.js';
 import { ActorSystem } from './actors.js';
 import { WantedSystem, WANTED_LEVELS } from './wanted.js';
 import { RoadNavigator } from './navigation.js';
@@ -17,7 +20,6 @@ import { Atmosphere } from './atmosphere.js';
 import { ShopSystem } from './shops.js';
 import { createMotorbike, poseMotorbike } from './motorbike.js';
 import { currentLevel, cycleLevel } from './quality.js';
-import { createParachute } from './airplane.js';
 import { stepPlane } from './flight.js';
 import { Garage } from './garage.js';
 import { collapse } from './ragdoll.js';
@@ -37,7 +39,7 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.8.0';
+const BUILD = '0.9.1';
 const CAR_NAMES = {
   sedan: ['VALMONT', 'ÉCUME', 'BERLINE / PROPULSION'], suv: ['BRISANT', 'RÉCIF', 'SUV / TRANSMISSION INTÉGRALE'],
   taxi: ['VALMONT', 'CAB 7', 'TAXI / PROPULSION'], pickup: ['GRÉVILLE', 'FALAISE', 'PICK-UP / PROPULSION'],
@@ -52,8 +54,6 @@ const CAR_NAMES = {
 const FLEET_MAX = 12;
 const WHEEL_STEP = 12; // pixels of scrolling to the next weapon
 const WHEEL_GESTURE_GAP = 160; // ms without a scroll event that ends a gesture
-const PARACHUTE_SPEED = 6.5; // m/s, falling
-const PARACHUTE_DRIFT = 8; // m/s, steering
 const EJECT_ALTITUDE = 20; // a crash above this throws the pilot clear, under a canopy
 const IDLE_STICK = { pitch: 0, roll: 0, throttle: 0 };
 const WRECK_POOL = 4;
@@ -138,7 +138,6 @@ export class Game {
     ];
     for (const ride of this.rides) this.park(ride);
     controllers.entities.cyclist.helmet.visible = false;
-    this.parachute = createParachute(scene);
     this.footCameraY = controllers.entities.person.cameraTargetOffset.y;
     controllers.entities.car.mesh.removeFromParent();
 
@@ -191,10 +190,9 @@ export class Game {
 
     this.spawnFleet();
     this.restore();
-    if (Object.keys(this.weapons).length === 1) {
-      this.weapons.pistol = { mag: WEAPONS.pistol.mag, ammo: WEAPONS.pistol.mag * 3 };
-      this.weaponId = 'pistol';
-    }
+    const unarmed = Object.keys(this.weapons).length === 1;
+    stockArsenal(this.weapons);
+    if (unarmed) this.weaponId = 'pistol';
     // The garage's own car and motorbike, built now so that summoning them never stalls a frame
     for (const [kind, paint] of [['sedan', 0x8f1a1d], ['muscle', 0x12305c], ['sport', 0xc8320e], ['super', 0x7a0f12], ['moto', 0xc81e2a], ['boat', 0x0c1f33]]) {
       const car = this.makeCar(kind, paint, new THREE.Vector3(), 0, true);
@@ -210,6 +208,9 @@ export class Game {
     this.hud.setMoney(this.money, true);
     this.bind();
     this.hero = new CharacterModel(scene, controllers.entities.person.rig, LOOKS.hero, 'Protagonist');
+    this.vertical = new Vertical(this);
+    this.roofPolice = new RoofPolice(this);
+    this.skyRings = new SkyRings(scene);
     this.director = new MissionDirector(this);
     this.shops = new ShopSystem(this);
     this.arsenal = new Arsenal(this);
@@ -299,7 +300,7 @@ export class Game {
   buildInterface() {
     document.body.insertAdjacentHTML('beforeend', `
       <div id="game-vignette" aria-hidden="true"></div>
-      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · HOSTILE TAKEOVER</small></span></div>
+      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · LEVERAGE</small></span></div>
       <div id="session-badge"><i></i><span>MANHATTAN</span><b id="session-mode">LIBRE</b><button id="pause-button" aria-label="Ouvrir le menu pause">Ⅱ</button></div>
       <div id="game-prompt" role="status" aria-live="polite"><kbd>F</kbd><span>Voler la voiture<small>VÉHICULE</small></span></div>
       <div id="game-toast" role="status" aria-live="polite"></div>
@@ -317,7 +318,7 @@ export class Game {
         <div class="menu-bottom"><span>MANHATTAN, NY<span class="coordinates">40°45′ N — 73°59′ W</span></span><button id="credits-button">CRÉDITS ↗</button><span class="menu-description">MISSIONS · COURSES · PRIMES<br>COMBAT · POURSUITES · 5 ÉTOILES</span></div>
         <div id="menu-options"><span>HEURE &amp; MÉTÉO</span><button data-game-time="golden">Soleil bas</button><button data-game-time="midday">Midi</button><button data-game-time="twilight">Crépuscule</button><button data-game-time="midnight">Nuit</button><button id="weather-toggle">MÉTÉO : AUTO</button><button id="sound-toggle">SON ACTIVÉ</button><button id="quality-toggle">QUALITÉ : HAUTE</button></div>
       </div>
-      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Hostile Takeover</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL).</p><p>Voitures : Comrade1280, Daniel Zhabotinsky (Sketchfab, CC BY 4.0), Eric Chadwick / DGG (Khronos, CC BY 4.0). Modifiées pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
+      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Leverage</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL).</p><p>Voitures : Comrade1280, Daniel Zhabotinsky (Sketchfab, CC BY 4.0), Eric Chadwick / DGG (Khronos, CC BY 4.0). Modifiées pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
       <button id="mobile-interact" class="touch-interact" hidden>F <span>VÉHICULE</span></button>
     `);
     this.ui = Object.fromEntries(['game-menu', 'game-prompt', 'game-toast', 'stamina-fill', 'drive-speed', 'drive-gear', 'drive-power', 'drive-nitro', 'drive-health', 'vehicle-name', 'game-keybar', 'play-button', 'mobile-interact', 'session-mode', 'menu-progress'].map(id => [id, document.getElementById(id)]));
@@ -376,6 +377,7 @@ export class Game {
       }
       if (!this.active) return;
       if (e.code === 'KeyG') this.garage.toggle();
+      if (e.code === 'KeyE') this.vertical.toggleGrapple();
       if (e.code === 'Tab') { e.preventDefault(); this.arsenal.toggle(); }
       if (e.code === 'KeyR') {
         if (this.state === 'driving' && Math.abs(this.car.speed) < 1.5) {
@@ -388,8 +390,9 @@ export class Game {
         if (e.shiftKey) this.radio.prev(); else this.radio.next();
         this.showRadio();
       }
-      const digit = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6'].indexOf(e.code);
-      if (digit >= 0 && (this.state === 'onFoot' || this.state === 'driving')) {
+      const digit = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7'].indexOf(e.code);
+      if (digit >= 0 && (this.state === 'onFoot' || this.state === 'driving' || this.vertical.owns(this.state) || this.state === 'falling')) {
+        if (this.state !== 'onFoot' && this.state !== 'driving' && WEAPON_ORDER[digit] !== 'grapple') return; // in the air, only the grapple comes out
         const id = WEAPON_ORDER[digit];
         if (this.weapons[id]) this.selectWeapon(id);
         else this.arsenal.missing(id);
@@ -403,22 +406,30 @@ export class Game {
     // Mouse: pointer lock look, right button aims, left button fires; the wheel cycles weapons on foot
     const canvas = this.camera.domElement;
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-    window.addEventListener('mousedown', (e) => {
-      if (!this.active) return;
+    // Buttons are read from the pointer events' button mask: the camera's drag cancels a lone left pointerdown, and a
+    // cancelled pointerdown swallows the matching mousedown, so a plain left click never reached a mousedown listener
+    // (only a click made while aiming did). The mask sees every press and release, chorded or not.
+    let mask = 0;
+    const buttons = (e) => {
+      if (e.pointerType && e.pointerType !== 'mouse') return;
+      const now = e.buttons ?? 0;
+      if (now === mask) return;
+      const pressed = now & ~mask, released = mask & ~now;
+      mask = now;
+      if (released & 1) this.fireHeld = false;
+      if (released & 2) this.aimHeld = false;
+      if (!pressed || !this.active) return;
       const onCanvas = e.target === canvas || document.pointerLockElement === canvas;
       if (!onCanvas) return;
-      if (document.pointerLockElement !== canvas && e.button === 0 && !this.locking) {
+      if (document.pointerLockElement !== canvas && (pressed & 1) && !this.locking) {
         this.locking = true;
         Promise.resolve(canvas.requestPointerLock?.()).catch(() => {}).finally(() => { this.locking = false; });
       }
-      if (e.button === 0) { this.fireHeld = true; this.firePressed = true; }
-      if (e.button === 2) this.aimHeld = true;
-    });
-    window.addEventListener('mouseup', (e) => {
-      if (e.button === 0) this.fireHeld = false;
-      if (e.button === 2) this.aimHeld = false;
-    });
-    window.addEventListener('blur', () => { this.fireHeld = this.aimHeld = false; });
+      if (pressed & 1) { this.fireHeld = true; this.firePressed = true; }
+      if (pressed & 2) this.aimHeld = true;
+    };
+    for (const type of ['pointerdown', 'pointermove', 'pointerup']) window.addEventListener(type, buttons, true);
+    window.addEventListener('blur', () => { mask = 0; this.fireHeld = this.aimHeld = false; });
     document.addEventListener('pointerlockchange', () => {
       if (!document.pointerLockElement && this.active && !this.expectUnlock) { this.lockPauseAt = performance.now(); this.setPaused(true); }
       this.expectUnlock = false;
@@ -493,13 +504,14 @@ export class Game {
       plane: [k(['Z', 'S'], 'Piquer / Cabrer'), k(['Q', 'D'], 'Virer'), k(['ESPACE'], 'Gaz +'), k(['C'], 'Gaz −')] };
     const flying = this.state === 'driving' && this.car.air;
     this.ui['game-keybar'].innerHTML = flying ? [...air[this.car.mode], k(['F'], 'Sauter'), k(['T'], 'Radio'), ...end].join('')
-      : this.state === 'falling' ? [k(['ZQSD'], 'Se diriger'), ...end].join('')
-      : this.state === 'swimming' ? [k(['ZQSD'], 'Nager'), k(['MAJ'], 'Crawl'), k(['F'], 'Monter à bord'), ...end].join('')
+      : this.vertical?.owns(this.state) ? this.vertical.keybar(k, end).join('')
+      : this.state === 'falling' ? [k(['ZQSD'], 'Se diriger'), this.weaponId === 'grapple' ? k(['CLIC'], 'Grappin') : k(['E'], 'Grappin'), ...end].join('')
+      : this.state === 'swimming' ? [k(['ZQSD'], 'Nager'), k(['ESPACE'], 'Crawl'), k(['F'], 'Monter à bord'), ...end].join('')
       : this.state === 'driving' && this.car.boat ? [k(['ZQSD'], 'Piloter'), k(['F'], 'Quitter le bord'), k(['T'], 'Radio'), ...end].join('')
       : this.state === 'driving' && this.car.bicycle ? [k(['ZQSD'], 'Pédaler'), k(['F'], 'Descendre'), k(['T'], 'Radio'), ...end].join('')
       : this.state === 'driving' ? [k(['ZQSD'], 'Conduire'), k(['ESPACE'], 'Frein à main'), k(['MAJ'], this.car.moto ? 'Wheeling' : 'Nitro'), this.car.moto ? '' : k(['C'], 'Regarder derrière'), armed && this.weaponId !== 'shotgun' ? k(['CLIC D.', 'CLIC'], 'Tirer par la vitre') : '', k(['B'], 'Klaxon'), k(['T'], 'Radio'), k(['F'], 'Descendre'), ...end].join('')
-      : [k(['ZQSD'], 'Se déplacer'), k(['MAJ'], 'Sprint'), k(['CLIC'], armed ? 'Tirer' : 'Frapper'), armed ? k(['CLIC D.'], 'Viser') : '', armed ? k(['R'], 'Recharger') : '',
-        k(['TAB', '1-6'], 'Armes'), k(['F'], 'Véhicule'), k(['G'], 'Garage'), k(['P'], 'Téléphone'), k(['M'], 'Carte'), k(['ÉCHAP'], 'Menu')].join('');
+      : [k(['ZQSD'], 'Se déplacer'), k(['ESPACE'], 'Courir'), k(['MAJ'], 'Sauter'), k(['CLIC'], this.weaponId === 'grapple' ? 'Grappin' : armed ? 'Tirer' : 'Frapper'), armed ? k(['CLIC D.'], 'Viser') : '',
+        armed && this.weaponId !== 'grapple' ? k(['R'], 'Recharger') : '', k(['E'], this.weaponId === 'grapple' ? 'Ranger le grappin' : 'Grappin'), k(['TAB', '1-7'], 'Armes'), k(['F'], 'Véhicule'), k(['G'], 'Garage'), k(['P'], 'Téléphone'), k(['M'], 'Carte'), k(['ÉCHAP'], 'Menu')].join('');
   }
 
   // ---- Radio ---------------------------------------------------------------------------------------------------------
@@ -539,6 +551,13 @@ export class Game {
 
   // The first text messages, once the player has had a moment
   tips(dt) {
+    // 0.9: the way up, once per browser
+    if ((this.skyTipT = (this.skyTipT ?? 7) - dt) <= 0 && !this.skyTipped) {
+      this.skyTipped = true;
+      let seen = false;
+      try { seen = localStorage.getItem('overdraft:tip:grapple') === '1'; localStorage.setItem('overdraft:tip:grapple', '1'); } catch { /* storage optional */ }
+      if (!seen && this.state === 'onFoot' && !this.director.current) this.toast('Nouveau : le grappin LEVIER (7 ou E)', 'Clic droit pour viser une façade, clic pour tirer : il vous hisse jusqu’au toit. En l’air, Espace : wingsuit.');
+    }
     if ((this.tipT = (this.tipT ?? 26) - dt) > 0 || this.tipped) return;
     this.tipped = true;
     this.phone.text('NADIA', 'On m’a parlé de toi. J’ai du travail pour quelqu’un qui sait conduire. Regarde tes contrats (P).');
@@ -852,15 +871,16 @@ export class Game {
   // ---- Protagonist on foot ------------------------------------------------------------------------------------------
   updatePerson(dt) {
     if (dt <= 0 || this.transition) return;
-    if (this.state === 'falling') { this.updateParachute(dt); return; }
     if (this.state === 'swimming') { this.updateSwim(dt); return; }
-    const p = this.person, keys = this.controllers.keys;
+    if (this.vertical.owns(this.state)) { this.vertical.updatePerson(dt); return; }
+    const p = this.person, keys = this.controllers.keys, c = this.controllers;
     const grounded = this.state === 'onFoot';
+    const standing = p.position.y <= c.getGroundHeight(p.position.x, p.position.z, 'person', p.position.y + 0.05) + 0.04;
     const x = grounded ? Number(keys.right) - Number(keys.left) : 0;
     const z = grounded ? Number(keys.forward) - Number(keys.backward) : 0;
     const amount = Math.min(1, Math.hypot(x, z));
     const aiming = this.isAiming();
-    const sprint = keys.sprint && this.stamina > 1 && amount > 0 && !aiming;
+    const sprint = keys.run && this.stamina > 1 && amount > 0 && !aiming;
     this.stamina = clamp(this.stamina + (sprint ? -13 : 20) * dt, 0, 100);
     const speed = aiming ? 2.6 : sprint ? 7.8 : 3.9;
     p.speed += (amount * speed - p.speed) * (1 - Math.exp(-dt * (amount ? 9 : 14)));
@@ -871,11 +891,14 @@ export class Game {
       const desired = yaw + Math.atan2(-x, z);
       p.heading += angleDelta(p.heading, desired) * (1 - Math.exp(-dt * 14));
     }
+    let mx = 0, mz = 0;
     if (amount > 0) {
       const magnitude = Math.hypot(x, z);
       const localX = -x / magnitude, localZ = z / magnitude;
-      p.position.x += (Math.cos(yaw) * localX + Math.sin(yaw) * localZ) * p.speed * dt;
-      p.position.z += (-Math.sin(yaw) * localX + Math.cos(yaw) * localZ) * p.speed * dt;
+      mx = Math.cos(yaw) * localX + Math.sin(yaw) * localZ;
+      mz = -Math.sin(yaw) * localX + Math.cos(yaw) * localZ;
+      p.position.x += mx * p.speed * dt;
+      p.position.z += mz * p.speed * dt;
     }
     if (this.knock) {
       p.position.x += this.knock.vx * dt;
@@ -883,14 +906,37 @@ export class Game {
       const damp = Math.exp(-5 * dt);
       this.knock.vx *= damp; this.knock.vz *= damp;
     }
-    this.controllers.resolveHorizontalCollision(p.position, 0.34, null, null, 'person');
+    // Momentum from a rope, a car's roof, a wingsuit landing: carried through the air, scrubbed off by the ground
+    if (p.airVX || p.airVZ) {
+      p.position.x += p.airVX * dt;
+      p.position.z += p.airVZ * dt;
+      const damp = Math.exp(-(standing ? 7 : 0.15) * dt);
+      p.airVX *= damp; p.airVZ *= damp;
+      if (Math.abs(p.airVX) + Math.abs(p.airVZ) < 0.05) p.airVX = p.airVZ = 0;
+    }
+    // Onto a roof a step higher, before its wall gets a say
+    if (standing && amount > 0) {
+      const step = c.roofHeight(p.position.x + mx * 0.5, p.position.z + mz * 0.5, p.position.y, 0.62);
+      if (step > p.position.y + 0.02 && Math.abs(c.roofHeight(p.position.x, p.position.z, step + 0.05, 0.1) - step) < 0.05) p.position.y = step;
+    }
+    c.resolveHorizontalCollision(p.position, 0.34, null, null, 'person');
     for (const car of this.allCars) if (car.mesh.visible) this.resolveParkedCollision(p, car);
-    const ground = this.controllers.getGroundHeight(p.position.x, p.position.z, 'person');
-    if (grounded && keys.up && !this.jumpHeld && p.position.y <= ground + 0.04) p.verticalVel = 5.3;
-    this.jumpHeld = Boolean(keys.up);
+    const ground = c.getGroundHeight(p.position.x, p.position.z, 'person', p.position.y + 0.05);
+    if (grounded && keys.jump && !this.jumpHeld && p.position.y <= ground + 0.04) {
+      // A ledge within reach is climbed, anything else is jumped at
+      const ledge = this.vertical.ledgeAhead();
+      if (ledge) { this.jumpHeld = true; this.vertical.startClimb(ledge, 0.62); return; }
+      p.verticalVel = 5.3;
+    }
+    this.jumpHeld = Boolean(keys.jump);
     p.verticalVel -= 15 * dt;
     p.position.y += p.verticalVel * dt;
-    if (p.position.y < ground) { p.position.y = ground; p.verticalVel = 0; }
+    if (p.position.y < ground) {
+      const impact = -p.verticalVel;
+      p.position.y = ground; p.verticalVel = 0;
+      if (this.state === 'onFoot' || this.state === 'down') this.vertical.landed(impact);
+    } else if (this.state === 'onFoot') this.vertical.checkFall(ground);
+    p.footing = ground;
   }
 
   // ---- In the water ---------------------------------------------------------------------------------------------------
@@ -943,7 +989,7 @@ export class Game {
     const p = this.person, keys = this.controllers.keys;
     const x = Number(keys.right) - Number(keys.left), z = Number(keys.forward) - Number(keys.backward);
     const amount = Math.min(1, Math.hypot(x, z));
-    const fast = keys.sprint && this.stamina > 1 && amount > 0;
+    const fast = keys.run && this.stamina > 1 && amount > 0;
     this.stamina = clamp(this.stamina + (fast ? -9 : 14) * dt, 0, 100);
     p.speed += (amount * (fast ? 4 : 2.6) - p.speed) * (1 - Math.exp(-dt * 3));
     if (amount > 0) p.heading += angleDelta(p.heading, this.camera.footYaw + Math.atan2(-x, z)) * (1 - Math.exp(-dt * 8));
@@ -957,42 +1003,21 @@ export class Game {
     }
   }
 
-  updateParachute(dt) {
-    const p = this.person, keys = this.controllers.keys;
-    const x = Number(keys.right) - Number(keys.left), z = Number(keys.forward) - Number(keys.backward);
-    const magnitude = Math.hypot(x, z);
-    if (magnitude > 0) {
-      const yaw = this.camera.footYaw;
-      const localX = -x / magnitude, localZ = z / magnitude;
-      p.position.x += (Math.cos(yaw) * localX + Math.sin(yaw) * localZ) * PARACHUTE_DRIFT * dt;
-      p.position.z += (-Math.sin(yaw) * localX + Math.cos(yaw) * localZ) * PARACHUTE_DRIFT * dt;
-      p.heading += angleDelta(p.heading, yaw + Math.atan2(-x, z)) * (1 - Math.exp(-dt * 5));
-    }
-    p.verticalVel += (-PARACHUTE_SPEED - p.verticalVel) * (1 - Math.exp(-dt * 2));
-    p.position.y += p.verticalVel * dt;
-    this.controllers.resolveHorizontalCollision(p.position, 0.34, null, null, 'person');
-    const ground = this.controllers.getGroundHeight(p.position.x, p.position.z, 'person');
-    if (p.position.y > ground) return;
-    p.position.y = ground;
-    p.verticalVel = 0;
-    this.state = 'onFoot';
-    document.body.dataset.gameState = this.state;
-    this.updateKeybar();
-    this.save();
-  }
-
   // Left alone, a plane glides on until it falls or lands; a helicopter drops
   flyAbandoned(c, dt) {
     if (c.mode === 'plane') {
       if (!c.onGround || c.speed > 0.01) stepPlane(c, IDLE_STICK, dt, this.controllers.planeEnvironment);
-    } else if (c.position.y > 0.25) {
+    } else {
+      // a helicopter left on a roof stays there
+      const floor = this.controllers.roofHeight(c.position.x, c.position.z, c.position.y - 0.25, 0.3) + 0.25;
+      if (c.position.y <= floor + 0.001) return;
       c.verticalSpeed -= 9.81 * dt;
       c.position.x += Math.sin(c.heading) * c.speed * dt;
       c.position.z += Math.cos(c.heading) * c.speed * dt;
       c.position.y += c.verticalSpeed * dt;
       c.speed *= Math.exp(-dt * 0.5);
-      if (c.position.y <= 0.25) {
-        c.position.y = 0.25;
+      if (c.position.y <= floor) {
+        c.position.y = floor;
         c.crashed = c.verticalSpeed < -9;
         c.verticalSpeed = c.speed = 0;
       }
@@ -1038,7 +1063,7 @@ export class Game {
   }
 
   isAiming() {
-    return this.state === 'onFoot' && this.aimHeld && this.weaponId !== 'fists';
+    return (this.state === 'onFoot' || this.state === 'surfing') && this.aimHeld && this.weaponId !== 'fists';
   }
 
   knockDown(heading) {
@@ -1073,14 +1098,14 @@ export class Game {
     this.weaponId = id;
     this.reloadT = 0;
     this.cooldown = 0.25;
-    this.hero?.setWeapon(WEAPONS[id].melee ? null : id);
+    this.hero?.setWeapon(WEAPONS[id].melee ? null : WEAPONS[id].gadget ? 'pistol' : id);
     this.audio.sfx('reload', this.player.x, this.player.y + 1.2, this.player.z, { intensity: 0.4, rate: 1.4 });
     this.updateKeybar();
   }
 
   reload() {
     const w = this.weapon, slot = this.weapons[this.weaponId];
-    if (w.melee || !slot || this.reloadT > 0 || slot.mag >= w.mag || slot.ammo <= 0) return;
+    if (w.melee || w.gadget || !slot || this.reloadT > 0 || slot.mag >= w.mag || slot.ammo <= 0) return;
     this.reloadT = w.reload;
     this.audio.sfx('reload', this.player.x, this.player.y + 1.2, this.player.z);
   }
@@ -1090,7 +1115,7 @@ export class Game {
     this.cooldown = Math.max(0, this.cooldown - dt);
     const person = this.person;
     const rig = person.rig;
-    const onFoot = this.state === 'onFoot';
+    const onFoot = this.state === 'onFoot' || this.state === 'surfing';
     const aiming = this.isAiming();
     this.camera.aimMode = aiming;
     if (this.reloadT > 0) {
@@ -1109,7 +1134,7 @@ export class Game {
 
     const shooting = onFoot && (w.auto ? this.fireHeld : this.firePressed);
     // Drive-by: aim out of the driver's window with a one-handed or compact weapon
-    const driveBy = this.state === 'driving' && !this.car.bicycle && !this.car.air && this.aimHeld && !w.melee && !w.throwable && w.id !== 'shotgun' && w.id !== 'rifle' && !!slot;
+    const driveBy = this.state === 'driving' && !this.car.bicycle && !this.car.air && this.aimHeld && !w.melee && !w.throwable && !w.gadget && w.id !== 'shotgun' && w.id !== 'rifle' && !!slot;
     this.world.ignoreCar = this.state === 'driving' ? this.car : null;
     if (driveBy) {
       this.hud.setCrosshair(true, w.spread + 0.02);
@@ -1123,7 +1148,7 @@ export class Game {
     rig.reloading = this.reloadT > 0 ? 1 - this.reloadT / w.reload : -1;
     // Sacha looks where the player looks
     if (onFoot) rig.lookTarget = clamp(angleDelta(rig.yaw, this.camera.footYaw), -1.1, 1.1);
-    if (raised && !w.melee) {
+    if (raised && !w.melee && !w.gadget) {
       this.holdUpT = (this.holdUpT ?? 0) - dt;
       if (this.holdUpT <= 0) {
         this.holdUpT = 0.25;
@@ -1134,12 +1159,14 @@ export class Game {
       this.aimPoint();
       rig.aim = { x: _aim.x, y: _aim.y, z: _aim.z, twoHanded: true, stance: w.hands === 2 ? 'rifle' : 'pistol' };
     } else rig.aim = null;
-    this.player.threat = raised || this.cooldown > 0;
+    this.player.threat = !w.gadget && (raised || this.cooldown > 0);
 
     this.spread += ((aiming ? 0 : 0.6) + Math.min(1, person.speed / 4) * 0.6 - this.spread) * Math.min(1, dt * 6);
-    if (!driveBy) this.hud.setCrosshair(onFoot && !w.melee && (aiming || this.fireHeld), w.spread + this.spread * (w.moveSpread || 0.02) * 2);
+    // the grapple's sight shows while aiming, and all the time in the air where it is the only thing in hand
+    const hookSight = w.gadget && (aiming || this.state === 'falling' || (this.vertical.owns(this.state) && this.state !== 'climbing' && this.state !== 'surfing'));
+    if (!driveBy) this.hud.setCrosshair(hookSight || (onFoot && !w.melee && !w.gadget && (aiming || this.fireHeld)), w.gadget ? 0.01 : w.spread + this.spread * (w.moveSpread || 0.02) * 2);
 
-    if (shooting && this.cooldown <= 0 && this.state === 'onFoot') {
+    if (shooting && this.cooldown <= 0 && (this.state === 'onFoot' || this.state === 'surfing')) {
       if (w.melee) {
         this.cooldown = w.interval;
         this.punchT = 0.38;
@@ -1148,14 +1175,21 @@ export class Game {
         rig.punchSide = 1 - rig.punchSide; // one hand, then the other
       } else if (w.throwable) {
         if (slot.mag > 0) this.throwGrenade(w, slot);
+      } else if (w.gadget) {
+        if (this.firePressed) { this.cooldown = w.interval; person.heading = this.camera.footYaw; this.vertical.fire(); }
       } else if (this.reloadT <= 0) {
         if (slot.mag > 0) this.fire(w, slot);
         else if (slot.ammo > 0) this.reload();
         else if (this.firePressed) { this.audio.sfx('dry', this.player.x, this.player.y + 1.2, this.player.z); this.cooldown = 0.3; }
       }
     }
+    // In the air or on a rope the grapple fires along the view, no aiming needed
+    if (w.gadget && this.firePressed && this.cooldown <= 0 && (this.state === 'falling' || (this.vertical.owns(this.state) && this.state !== 'surfing'))) {
+      this.cooldown = w.interval;
+      this.vertical.fire();
+    }
     this.firePressed = false;
-    this.hud.setWeapon(w.name, w.melee ? w.sub.toUpperCase() : w.throwable ? `× ${slot.mag}` : `${slot.mag} / ${slot.ammo}${this.reloadT > 0 ? ' · RECHARGE' : ''}`);
+    this.hud.setWeapon(w.name, w.melee || w.gadget ? w.sub.toUpperCase() : w.throwable ? `× ${slot.mag}` : `${slot.mag} / ${slot.ammo}${this.reloadT > 0 ? ' · RECHARGE' : ''}`);
     this.updateGrenades(dt);
   }
 
@@ -1184,7 +1218,7 @@ export class Game {
     this.grenades.push({ pos: start, vel, fuse: 2.3, mesh });
     this.audio.sfx('throw', start.x, start.y, start.z);
     if (slot.mag === 0) {
-      const next = WEAPON_ORDER.filter((id) => this.weapons[id] && id !== 'grenade').pop();
+      const next = WEAPON_ORDER.filter((id) => this.weapons[id] && id !== 'grenade' && !WEAPONS[id].gadget).pop();
       setTimeout(() => this.selectWeapon(next || 'fists'), 500);
     }
   }
@@ -1618,6 +1652,8 @@ export class Game {
     this.health = 0;
     this.stats.deaths++;
     const p = this.person;
+    this.vertical.reset();
+    const floorY = p.position.y + 0.3; // a body on a roof falls on the roof (or off its edge)
     if (this.state === 'driving') {
       const car = this.car;
       p.inVehicle = false;
@@ -1626,7 +1662,7 @@ export class Game {
       p.rig.reset(p.position.x, p.position.z, p.heading, (c, x, z) => c.getGroundHeight(x, z, 'person'), this.controllers);
     }
     if (!p.rig.limp) {
-      collapse(p.rig, { ground: (x, z) => this.controllers.getGroundHeight(x, z, 'person'), vx: p.rig.vx, vz: p.rig.vz,
+      collapse(p.rig, { ground: (x, z) => this.controllers.getGroundHeight(x, z, 'person', floorY), vx: p.rig.vx, vz: p.rig.vz,
         dirX: Math.sin(this.lastHitHeading ?? p.heading + Math.PI), dirZ: Math.cos(this.lastHitHeading ?? p.heading + Math.PI), cause: cause === 'explosion' ? 'explosion' : 'shot' });
     }
     this.transition = null;
@@ -1643,6 +1679,7 @@ export class Game {
 
   busted() {
     if (this.state === 'dead' || this.state === 'busted') return;
+    this.vertical.reset();
     this.state = 'busted';
     this.stateT = 0;
     this.stats.busted++;
@@ -1670,6 +1707,7 @@ export class Game {
     this.rearm();
     this.wanted.reset();
     this.actors.clear((a) => a.dead || a.team === 'police');
+    this.roofPolice.reset();
     this.health = 100;
     if (dead) this.armor = 0;
     this.state = 'onFoot';
@@ -1690,7 +1728,7 @@ export class Game {
   rearm() {
     for (const [id, slot] of Object.entries(this.weapons)) {
       const w = WEAPONS[id];
-      if (w.melee || w.throwable) continue;
+      if (w.melee || w.throwable || w.gadget) continue;
       if (slot.mag + slot.ammo === 0) slot.mag = w.mag;
       else { const take = Math.min(w.mag - slot.mag, slot.ammo); slot.mag += take; slot.ammo -= take; }
     }
@@ -1704,10 +1742,13 @@ export class Game {
       this.state = 'onFoot';
       this.onMode('person');
     }
+    if (this.vertical.owns(this.state)) this.state = 'onFoot';
+    this.vertical.reset();
     const p = this.person;
     p.position.set(x, this.controllers.getGroundHeight(x, z, 'person'), z);
     p.verticalVel = 0;
-    p.rig.reset(x, z, p.heading, (c, px, pz) => c.getGroundHeight(px, pz, 'person'), this.controllers);
+    p.footing = p.position.y;
+    p.rig.reset(x, z, p.heading, (c, px, pz) => c.personGroundAt(px, pz), this.controllers);
     this.camera.resetForTeleport();
     this.camera.initialized = false;
     document.body.dataset.gameState = this.state;
@@ -1817,7 +1858,10 @@ export class Game {
   }
 
   interact() {
-    if (this.active && this.state === 'driving' && this.car.air && this.car.position.y > 3) { this.bailOut(); return; }
+    // a jump only when there is air under the aircraft: set down on a roof, it is an ordinary exit
+    const air = this.car.position;
+    if (this.active && this.state === 'driving' && this.car.air && air.y - this.controllers.getGroundHeight(air.x, air.z, 'helicopter', air.y) > 3) { this.bailOut(); return; }
+    if (this.active && this.vertical.interact()) return;
     if (!this.active || !canInteract(this.state, this.car.speed)) {
       if (this.state === 'driving') this.toast('Ralentissez', 'Arrêtez le véhicule pour descendre.');
       return;
@@ -1887,12 +1931,17 @@ export class Game {
     p.speed = 0;
     p.verticalVel = -2;
     this.camera.footYaw = h;
-    this.state = 'falling';
     this.onMode('person');
     this.radio?.setPlaying(false);
-    document.body.dataset.gameState = this.state;
     this.audio.ui('pass');
-    this.updateKeybar();
+    // High enough, the jump is a free fall (and the wingsuit is a key away); low, the canopy opens at once
+    const height = p.position.y - this.controllers.getGroundHeight(p.position.x, p.position.z, 'person', p.position.y);
+    const speed = car.mode === 'plane' ? car.speed ?? 0 : (car.speed ?? 0) * 0.6;
+    if (height > 60) {
+      this.vertical.startFreefall(Math.sin(h) * speed, Math.min(0, car.verticalSpeed ?? 0) - 2, Math.cos(h) * speed);
+      return;
+    }
+    this.vertical.startCanopy(Math.sin(h) * speed, Math.min(0, car.verticalSpeed ?? 0) - 2, Math.cos(h) * speed);
   }
 
   beginExit() {
@@ -1937,7 +1986,7 @@ export class Game {
       const b = smooth((u - 0.32) / 0.48);
       p.position.x = THREE.MathUtils.lerp(car.position.x + Math.cos(car.heading) * 0.8, t.exit.x, b);
       p.position.z = THREE.MathUtils.lerp(car.position.z, t.exit.z, b);
-      p.position.y = this.controllers.getGroundHeight(p.position.x, p.position.z, 'person');
+      p.position.y = this.controllers.getGroundHeight(p.position.x, p.position.z, 'person', car.position.y + 0.5);
       p.heading = car.heading;
     }
     if (u >= 1) {
@@ -1956,7 +2005,8 @@ export class Game {
       } else {
         p.inVehicle = false; p.position.copy(t.exit);
         car.ridden = false;
-        p.position.y = this.controllers.getGroundHeight(p.position.x, p.position.z, 'person');
+        p.position.y = this.controllers.getGroundHeight(p.position.x, p.position.z, 'person', car.position.y + 0.5);
+        p.footing = p.position.y;
         this.state = 'onFoot'; this.camera.footYaw = car.heading;
         this.onMode('person');
       }
@@ -1975,7 +2025,11 @@ export class Game {
 
   // ---- Frame -------------------------------------------------------------------------------------------------------
   beforeUpdate(dt) {
-    if (!this.active) { this.controllers.resetInput(); return; }
+    // the camera's look motion this frame, for flight (vertical.js), which also sets its own camera when flying
+    this.lookDX = this.camera.lookDX; this.lookDY = this.camera.lookDY;
+    this.camera.lookDX = this.camera.lookDY = 0;
+    this.camera.flightView = null;
+    if (!this.active) { this.controllers.resetInput(); this.lookDX = this.lookDY = 0; return; }
     // Slow motion breathes in and out on real time, not on its own
     if (this.slowMo > 0) {
       this.slowMo = Math.max(0, this.slowMo - dt / Math.max(this.timeScale, 0.05));
@@ -2012,11 +2066,11 @@ export class Game {
       for (const ride of this.rides) if (!this.fleet.includes(ride)) ride.mesh.visible = false;
     }
     const falling = this.state === 'falling';
-    if (this.frames >= 5) this.parachute.visible = falling;
     const walker = this.person;
     walker.chaseDistance = falling ? 13 : 4.3;
     walker.chaseHeight = falling ? 1.4 : 1.95;
     walker.cameraTargetOffset.y = falling ? 3.4 : this.footCameraY;
+    this.vertical.frame(walker);
     this.collectCars();
     const person = this.person, car = this.car;
     const inVehicle = this.state === 'driving' || this.state === 'exiting' || (this.state === 'entering' && person.inVehicle);
@@ -2029,10 +2083,11 @@ export class Game {
     pl.speed = Math.abs(inVehicle ? car.speed : person.speed);
     pl.vx = inVehicle ? Math.sin(car.heading) * car.speed + (car.vx || 0) : 0;
     pl.vz = inVehicle ? Math.cos(car.heading) * car.speed + (car.vz || 0) : 0;
-    pl.onFoot = this.state === 'onFoot' || this.state === 'down';
+    pl.onFoot = this.state === 'onFoot' || this.state === 'down' || this.state === 'surfing';
     pl.alive = this.state !== 'dead' && this.state !== 'busted';
 
-    this.hero.setWeapon(this.weapon.melee || !pl.onFoot ? null : this.weaponId);
+    // the grapple's launcher is held like the pistol
+    this.hero.setWeapon(this.weapon.melee || !pl.onFoot ? null : this.weapon.gadget ? 'pistol' : this.weaponId);
     for (const m of person.crowd.meshes) m.visible = false;
     this.hero.update(!person.inVehicle, 0, dt);
 
@@ -2075,6 +2130,7 @@ export class Game {
       this.runOver();
       this.actors.update(dt, { target: pl, world: this.world, camera: this.camera.camera });
       this.wanted.update(dt, pl);
+      this.roofPolice.update(dt);
       this.updateCarDamage(dt);
       this.pickups.update(dt, (x, z) => this.controllers.getGroundHeight(x, z, 'person'), person.position.x, person.position.y, person.position.z, (it) => this.collect(it));
       this.director.update(dt);
@@ -2096,7 +2152,7 @@ export class Game {
       this.driveFx.flush();
     }
     if (dt > 0) { this.stunts.update(dt); this.fallingLamps.update(dt); this.gangs.update(dt); this.tips(dt); }
-    this.fx.update(dt, (x, z) => this.controllers.getGroundHeight(x, z, 'person'));
+    this.fx.update(dt, (x, z) => this.controllers.getGroundHeight(x, z, 'person', this.person.position.y + 0.5));
     this.markers.update((x, z) => this.controllers.getGroundHeight(x, z, 'person'));
 
     // Traffic and audio see the cruisers and the parked fleet as solid, sounding cars
@@ -2122,11 +2178,8 @@ export class Game {
       this.hero.setWeapon(null);
       this.hero.update(true, 0, dt);
     }
-    if (this.state === 'falling') {
-      this.parachute.position.set(person.position.x, person.position.y + 5.2, person.position.z);
-      this.parachute.rotation.y = person.heading;
-      this.parachute.updateMatrixWorld(true);
-    }
+    this.vertical.draw(dt);
+    this.skyRings.update();
     this.garage.update();
     this.arsenal.update();
     if (this.clock - this.lastSave > 5) { this.lastSave = this.clock; this.save(); }
@@ -2194,7 +2247,8 @@ export class Game {
       const p = this.person;
       const fleet = this.fleet.filter((c) => !c.mission && !c.destroyed && !c.mode && !c.pooled);
       // Rides are not saved: the next session starts on foot, under wherever they were
-      const spot = this.state === 'falling' || (this.state === 'driving' && (this.car.mode || this.car.pooled)) ? this.safeSpot(p.position.x, p.position.z, 0.5) : p.position;
+      const aloft = this.state === 'falling' || (this.vertical.owns(this.state) && this.state !== 'surfing' && this.state !== 'climbing');
+      const spot = aloft || this.state === 'surfing' || (this.state === 'driving' && (this.car.mode || this.car.pooled)) ? this.safeSpot(p.position.x, p.position.z, 0.5) : p.position;
       const data = {
         version: 2, state: this.state === 'driving' && fleet.includes(this.car) ? 'driving' : 'onFoot',
         player: { x: spot.x, y: spot === p.position ? p.position.y : this.controllers.getGroundHeight(spot.x, spot.z, 'person'), z: spot.z, heading: p.heading },

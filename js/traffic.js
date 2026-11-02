@@ -1904,7 +1904,8 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     refreshNear();
     updateView(camera);
 
-    player.active = Boolean(playerEntity && activeMode !== 'helicopter' && playerEntity.position.y < 2.6);
+    // a body held up by a rope or riding a roof (vertical.js) is above the traffic, not in its way
+    player.active = Boolean(playerEntity && activeMode !== 'helicopter' && playerEntity.position.y < 2.6 && !playerEntity.suspended);
     if (playerEntity) {
       const heading = playerEntity.heading || 0;
       const speed = playerEntity.speed || 0;

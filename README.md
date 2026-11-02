@@ -3,9 +3,11 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.8.0 — Hostile Takeover** : trois actes d'histoire (12 missions), cycle jour/nuit continu et
-météo (pluie, orages), motos, boutiques et planques, grenades et fusil d'assaut, police à cinq
-étoiles pilotée par une IA de conduite, véhicules destructibles et radio générée en temps réel.
+Version **0.9.1 — Leverage** : Manhattan à la verticale, et un ciel qui se vole pour de vrai. Les 117 000 toits se parcourent, le grappin *Levier*
+hisse jusqu'au rebord d'un immeuble ou accroche une voiture lancée, la wingsuit descend les avenues entre les
+tours, et la police monte aussi (escaliers, équipes en rappel, tireurs d'élite). Toutes les armes dès le départ.
+Avec trois actes d'histoire, un contrat sur les toits, cycle jour/nuit, météo, police à cinq étoiles, bateaux,
+territoires et radio générée en temps réel.
 
 Vision, niveau de recherche et feuille de route : [GAME_DESIGN.md](GAME_DESIGN.md).
 Nouveautés : [CHANGELOG.md](CHANGELOG.md).
@@ -21,16 +23,31 @@ Cliquez dans la vue pour verrouiller la souris ; Échap la libère et ouvre le m
 |---|---|
 | ZQSD / WASD / flèches | Se déplacer |
 | Tab | Sélecteur d'armes (souris, pavé tactile ou clavier) |
-| 1 à 6 | Choisir une arme directement |
+| 1 à 7 | Choisir une arme directement (7 : le grappin) |
 | G | Garage rapide : à pied, voiture, moto, vélo, hélicoptère, avion |
 | Souris | Regarder |
-| Maj | Sprint |
-| Espace | Sauter |
+| Espace (maintenu) | Courir |
+| Maj | Sauter ; face à un rebord à portée, l'escalader |
+| E | Sortir le grappin *Levier* (ou le ranger) |
+| Grappin en main | Clic droit pour viser, clic pour tirer : sur une façade (il hisse vers le toit), une voiture (pour la surfer), quelqu'un (pour l'arracher). Le viseur vire au citron quand le crochet mordrait |
 | Clic gauche | Frapper / tirer |
 | Clic droit (maintenu) | Viser à l'épaule |
 | R | Recharger |
-| 1 à 6, molette | Choisir une arme (6 : grenades, clic pour lancer) |
+| 1 à 7, molette | Choisir une arme (6 : grenades, clic pour lancer ; 7 : grappin) |
 | F | Voler / monter dans un véhicule |
+
+### Dans les airs et sur les toits
+
+| Situation | Touches |
+|---|---|
+| Chute libre | Espace ou Maj : wingsuit (elle s'ouvre seule si l'on saute en courant), F parapente, ZQSD se déplacer |
+| Wingsuit | La souris dirige : le corps vole là où l'on regarde. Z piquer, S cabrer, Q/D virer, F parapente. Frôler les façades rapporte |
+| Parapente | La souris dirige aussi. Q/D frein gauche/droit, S les deux (ralentir, arrondir à l'atterrissage), Z accélérateur, F larguer la voile |
+| Pendu à une façade | Clic : grappin plus haut, Maj sauter, Z grimper (sous le rebord), S lâcher |
+| Sur le toit d'une voiture | F prendre le volant, Maj sauter, clic droit + clic tirer |
+| Au bout du grappin | Maj lâcher avec l'élan |
+
+Un hélicoptère se pose sur n'importe quel toit ; F en sort sans sauter.
 
 ### En voiture
 
@@ -52,11 +69,14 @@ Cliquez dans la vue pour verrouiller la souris ; Échap la libère et ouvre le m
 M : carte (un clic place un point de passage) · V : caméra · Entrée : passer un dialogue ·
 H : masquer l'interface · N : couper le son · Échap : pause.
 
-Manette standard prise en charge (sticks, gâchettes, A pour sauter, épaule pour interagir, Y pour la caméra).
+Manette standard prise en charge (sticks, gâchettes, A pour sauter, clic du stick gauche pour courir, X pour tirer le
+grappin, épaule pour interagir, Y pour la caméra).
 
 ## Dans la ville
 
 - **Marqueurs verts** : missions d'histoire. **Orange** : courses, convoyages, primes.
+- Près du départ, sur la 5e Avenue : la **Course des toits** (39e Rue), la **Descente** en wingsuit (42e Rue) et,
+  sur la 6e Avenue, le contrat **Effet de levier** de Jules.
 - **Violet** : armurerie *Calibre* (armes, munitions, gilets, grenades) et carrosserie *Éclair*
   (réparation et peinture ; une nouvelle couleur fait perdre la police si elle ne vous voit pas entrer).
 - **Vert** : planques. Achetez-les, dormez-y (8 heures passent, santé complète) et sauvegardez.
@@ -101,6 +121,10 @@ Le build statique est généré dans `dist/`. `tools/radio-preview.html` permet 
 |---|---|
 | `js/gameplay.js` | Couche de jeu : joueur, armes, dégâts, véhicules, mort, arrestation, sauvegarde |
 | `js/wanted.js` | Niveau de recherche : étoiles, zone de recherche, poursuites, agents, hélicoptère |
+| `js/vertical.js` | Grappin, rebords, surf sur les voitures, chute libre et wingsuit, frôlements |
+| `js/wingsuit.js` | Modèle de vol de la wingsuit et toile tendue sur le squelette |
+| `js/roof-police.js` | Police sur les toits : escaliers, rappel depuis l'hélicoptère, tireurs d'élite |
+| `js/missions-sky.js` | Course des toits, Descente, contrat Effet de levier, anneaux |
 | `js/ai-driver.js` | Pilote IA (itinéraire, poursuite pure, virages, évitement) pour la police et les missions |
 | `js/atmosphere.js` | Heure du jour, météo, pluie, éclairs et tonnerre |
 | `js/shops.js` | Armureries, carrosseries, planques |

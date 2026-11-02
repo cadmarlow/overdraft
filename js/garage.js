@@ -84,7 +84,7 @@ class Garage extends QuickStrip {
   // Leaves what the player is in: what came from the garage goes back, anything else stays where it stands
   release() {
     const g = this.game;
-    if (g.state === 'falling') { g.state = 'onFoot'; return { gone: true }; }
+    if (g.state === 'falling') { g.vertical.reset(); g.state = 'onFoot'; return { gone: true }; }
     if (g.state !== 'driving') return { gone: false, inStreet: false };
     const old = g.car;
     old.ridden = false;

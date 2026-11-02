@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { ACT3, PLACES3, REGATTA } from './missions-act3.js';
 import { WATER, createYacht } from './boat.js';
 import { PLACES, STORY, ACTIVITIES } from './missions.js';
+import { SKY_PLACES, SKY_ACTIVITIES, SKY_STORY } from './missions-sky.js';
 import { RoadNavigator } from './navigation.js';
 import { WEAPONS } from './weapons.js';
 import { AIDriver } from './ai-driver.js';
@@ -77,6 +78,20 @@ class MissionContext {
     return m;
   }
   unmark(m) { if (m) this.game.markers.remove(m); }
+  // On a roof: a marker at that height, and nearness that counts height too
+  markAt(x, y, z, kind = 'objective', opts = {}) { return this.mark(x, z, kind, { ...opts, y }); }
+  nearAt(x, y, z, r, dy = 3) { const p = this.game.person.position; return Math.hypot(p.x - x, p.z - z) < r && Math.abs(p.y - y) < dy; }
+  // Straight onto a roof (a ride up a service lift between two scenes)
+  toRoof(x, y, z, heading = 0) {
+    const g = this.game;
+    g.teleportPlayer(x, z);
+    const p = g.person;
+    p.position.y = y;
+    p.footing = y;
+    p.heading = heading;
+    g.camera.footYaw = heading;
+    p.rig.reset(x, z, heading, (c, px, pz) => c.personGroundAt(px, pz), g.controllers);
+  }
 
   spawnCar(kind, x, z, heading, paint, { label = '' } = {}) {
     const car = this.game.makeCar(kind, paint, new THREE.Vector3(x, 0, z), heading);
@@ -265,6 +280,9 @@ class MissionDirector {
     const contract = this.nextContract;
     if (contract) list.push({ def: contract, place: PLACES3[contract.place], kind: 'contact', label: contract.contactLabel, story: true });
     list.push({ def: REGATTA, place: PLACES[REGATTA.place], kind: 'race', label: REGATTA.contactLabel, story: false }, ...this.game.gangs.takeovers());
+    // Manhattan from above (0.9): open from the start
+    for (const s of SKY_STORY) if (!this.game.missionsDone.includes(s.id)) list.push({ def: s, place: SKY_PLACES[s.place], kind: 'contact', label: s.contactLabel, story: true });
+    for (const a of SKY_ACTIVITIES) list.push({ def: a, place: SKY_PLACES[a.place], kind: 'race', label: a.contactLabel, story: false });
     if (this.game.missionsDone.includes('courant')) {
       for (const a of ACTIVITIES) list.push({ def: a, place: PLACES[a.place], kind: 'race', label: a.contactLabel, story: false });
     }
@@ -329,7 +347,7 @@ class MissionDirector {
     const def = this.current;
     if (!def) return;
     g.addMoney(reward);
-    if ((STORY.includes(def) || ACT3.includes(def)) && !g.missionsDone.includes(def.id)) g.missionsDone.push(def.id);
+    if ((STORY.includes(def) || ACT3.includes(def) || SKY_STORY.includes(def)) && !g.missionsDone.includes(def.id)) g.missionsDone.push(def.id);
     g.hud.showBanner(subtitle && subtitle.startsWith('FIN') ? subtitle : 'MISSION RÉUSSIE', def.title, `+${reward.toLocaleString('fr-FR')} $${subtitle && !subtitle.startsWith('FIN') ? ' · ' + subtitle : ''}`, 5, 'pass');
     g.audio.ui('pass');
     this.cleanup(true);

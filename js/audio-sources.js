@@ -97,7 +97,7 @@ class CityAudioSources {
     this.signals = new NearestSources(2);
     this.snapshot = {
       motors: this.motors.items, sirens: this.sirens.items,
-      people: this.people.items, signals: this.signals.items, traffic: 0, motion: 0
+      people: this.people.items, signals: this.signals.items, traffic: 0, motion: 0, rush: 0
     };
   }
 
@@ -165,8 +165,10 @@ class CityAudioSources {
     this.snapshot.traffic = 0;
     const active = this.controllers.getActiveEntity();
     const keys = this.controllers.keys;
-    this.snapshot.motion = active.type === 'person' ? active.rig.speed
+    this.snapshot.motion = active.type === 'person' ? (active.suspended ? active.speed || 0 : active.rig.speed)
       : Math.hypot(active.speed, active.type === 'helicopter' ? helicopterVerticalSpeed(active) : 0);
+    // the roar of the air past a body flying on its own (vertical.js)
+    this.snapshot.rush = active.type === 'person' ? active.rush || 0 : 0;
 
     for (let i = 0; i < this.players.length; i++) {
       const entity = this.players[i];

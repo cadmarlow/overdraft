@@ -14,9 +14,25 @@ const WEAPONS = {
   rifle: { id: 'rifle', name: 'SENTINEL', sub: 'Fusil d’assaut', damage: 29, interval: 0.11, mag: 30, reload: 2.1, spread: 0.006,
     moveSpread: 0.035, range: 280, sound: 'rifle', auto: true, hands: 2, recoil: 0.013, shake: 0.1, heat: 8 },
   // Thrown: the magazine is the number carried; no reload
-  grenade: { id: 'grenade', name: 'ÉCLAT', sub: 'Grenade', throwable: true, damage: 0, interval: 0.9, mag: 10, reload: 0, range: 40, hands: 1, heat: 12 }
+  grenade: { id: 'grenade', name: 'ÉCLAT', sub: 'Grenade', throwable: true, damage: 0, interval: 0.9, mag: 10, reload: 0, range: 40, hands: 1, heat: 12 },
+  // A gadget, not a gun: the « Levier » grapple (vertical.js fires it). No ammunition, no damage
+  grapple: { id: 'grapple', name: 'LEVIER', sub: 'Grappin', gadget: true, damage: 0, interval: 0.35, range: 95, hands: 1 }
 };
-const WEAPON_ORDER = ['fists', 'pistol', 'smg', 'shotgun', 'rifle', 'grenade'];
+const WEAPON_ORDER = ['fists', 'pistol', 'smg', 'shotgun', 'rifle', 'grenade', 'grapple'];
+const STARTER_MAGS = 10;
+
+// The whole arsenal from the first second: every gun loaded with ten magazines in reserve, a full belt of grenades.
+// Tops up what a save already holds, never takes anything away.
+function stockArsenal(weapons) {
+  for (const id of WEAPON_ORDER) {
+    const w = WEAPONS[id];
+    const slot = weapons[id] ??= { mag: 0, ammo: 0 };
+    if (w.melee || w.gadget) continue;
+    slot.mag = Math.max(slot.mag, w.mag);
+    if (!w.throwable) slot.ammo = Math.max(slot.ammo, w.mag * STARTER_MAGS);
+  }
+  return weapons;
+}
 
 const CELL = 24;
 const _seen = new Set();
@@ -209,4 +225,4 @@ function spreadDirection(dx, dy, dz, spread, out) {
   return out;
 }
 
-export { WEAPONS, WEAPON_ORDER, castShot, raycastBuildings, lineOfSight, spreadDirection, rayCylinder, rayBox };
+export { WEAPONS, WEAPON_ORDER, stockArsenal, castShot, raycastBuildings, lineOfSight, spreadDirection, rayCylinder, rayBox };

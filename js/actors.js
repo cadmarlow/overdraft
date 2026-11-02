@@ -11,6 +11,8 @@ import { collapse } from './ragdoll.js';
 const MAX_ACTORS = 16;
 const DRAW_DISTANCE = 170;
 const ground = (controllers, x, z) => controllers.getGroundHeight(x, z, 'person');
+// Under one actor's feet: the street, or the roof they stand on (vertical play puts officers on roofs)
+const groundOf = (a) => (a.groundFn ??= (controllers, x, z) => controllers.getGroundHeight(x, z, 'person', a.y + 0.5));
 const angleTo = (from, to) => Math.atan2(Math.sin(to - from), Math.cos(to - from));
 const ARREST_BARKS = ['Police ! Ne bougez plus !', 'Les mains sur la tête !', 'À genoux, tout de suite !'];
 const COMBAT_BARKS = ['Il est armé !', 'Lâchez votre arme !', 'Contact, tirez !', 'Encerclez-le !'];
@@ -43,7 +45,7 @@ class ActorSystem {
 
   get count() { return this.actors.length; }
 
-  spawn({ x, z, heading = 0, look = 'cop', team = 'police', weapon = 'pistol', hp = 100, behavior = 'combat', hostile = true,
+  spawn({ x, z, y = null, heading = 0, look = 'cop', team = 'police', weapon = 'pistol', hp = 100, behavior = 'combat', hostile = true,
     accuracy = 0.5, alert = true, name = '', tag = '', female = false, armor = 0, cover = null }) {
     if (this.actors.length >= MAX_ACTORS) {
       // recycle the farthest corpse, else refuse
@@ -55,14 +57,14 @@ class ActorSystem {
     const rig = new PersonRig({ seed, female, scale: (female ? 0.91 : 0.95) + Math.random() * 0.05, girth: 0.95 + Math.random() * 0.15,
       hair: female ? 0.7 : Math.random() * 0.25, armSwing: 0.9 });
     const model = new CharacterModel(this.scene, rig, LOOKS[look] || LOOKS.cop, `Actor_${look}`);
-    const y = ground(this.controllers, x, z);
+    y ??= ground(this.controllers, x, z);
     const actor = {
       id: serial, x, y, z, heading, rig, model, look, team, weapon, hp, maxHp: hp, armor, behavior, hostile, accuracy, alert,
       name, tag, dead: false, deadAt: 0, deadHeading: 0, kvx: 0, kvz: 0, vx: 0, vz: 0, speed: 0,
       mag: WEAPONS[weapon]?.mag ?? 0, cooldown: 0.6 + Math.random(), reloadT: 0, flinch: 0, sightT: 0, los: false,
       cover, lastX: x, lastZ: z, strafe: Math.random() < 0.5 ? 1 : -1, strafeT: 0, punchT: 0, born: performance.now()
     };
-    rig.reset(x, z, heading, ground, this.controllers);
+    rig.reset(x, z, heading, groundOf(actor), this.controllers);
     model.setWeapon(WEAPONS[weapon]?.melee ? null : weapon);
     this.actors.push(actor);
     return actor;
@@ -94,7 +96,8 @@ class ActorSystem {
       actor.dead = true;
       actor.deadAt = this.clock || 0;
       actor.deadHeading = Math.atan2(dirX, dirZ) || actor.heading;
-      collapse(actor.rig, { ground: (x, z) => ground(this.controllers, x, z), push: (x, y, z) => this.wallPush(x, y, z), vx: actor.vx, vz: actor.vz, dirX, dirZ, cause });
+      const floor = groundOf(actor);
+      collapse(actor.rig, { ground: (x, z) => floor(this.controllers, x, z), push: (x, y, z) => this.wallPush(x, y, z), vx: actor.vx, vz: actor.vz, dirX, dirZ, cause });
       actor.model.setWeapon(null);
       this.onKilled?.(actor, cause);
     }
@@ -133,13 +136,14 @@ class ActorSystem {
       if (a.dead) {
         const t = this.clock - a.deadAt;
         if ((t > 50 && !visible) || t > 120) { this.remove(a); continue; }
-        a.rig.update(dt, a.x, a.z, a.deadHeading, ground, this.controllers, 0, visible);
+        a.rig.update(dt, a.x, a.z, a.deadHeading, groundOf(a), this.controllers, 0, visible);
         a.x = a.rig.limp.p[0]; a.z = a.rig.limp.p[2];
         a.model.update(visible, camD, dt);
         continue;
       }
-      this.think(a, dt, target, ctx);
-      a.rig.update(dt, a.x, a.z, a.heading, ground, this.controllers, 0, visible);
+      if (a.rappel) this.rappel(a, dt, target);
+      else this.think(a, dt, target, ctx);
+      a.rig.update(dt, a.x, a.z, a.heading, groundOf(a), this.controllers, a.rappel ? a.rappel.air : 0, visible);
       a.model.update(visible, camD, dt);
     }
   }
@@ -216,6 +220,11 @@ class ActorSystem {
       }
     } else if (behavior === 'guard') {
       face = a.heading;
+    } else if (behavior === 'sniper' && a.alert) {
+      // a marksman on a roof: holds the spot, turns to the target, fires when the line is clear
+      face = Math.atan2(dx, dz);
+      aiming = a.los && d < weapon.range;
+      a.rig.crouchTarget = 0.35;
     }
 
     // Shooting
@@ -225,7 +234,7 @@ class ActorSystem {
     if (a.reloadT > 0) {
       a.reloadT -= dt;
       if (a.reloadT <= 0) a.mag = weapon.mag;
-    } else if (aiming && behavior === 'combat' && a.cooldown <= 0 && a.flinch <= 0) {
+    } else if (aiming && (behavior === 'combat' || behavior === 'sniper') && a.cooldown <= 0 && a.flinch <= 0) {
       if (a.mag <= 0) {
         a.reloadT = weapon.reload * 1.3;
         this.audio?.sfx('reload', a.x, a.y + 1.2, a.z);
@@ -243,9 +252,23 @@ class ActorSystem {
     if (a.speed > 0.01) {
       this.pos.x = a.x + a.vx * dt; this.pos.y = a.y; this.pos.z = a.z + a.vz * dt;
       this.controllers.resolveHorizontalCollision(this.pos, 0.32, null, null, 'person');
-      a.x = this.pos.x; a.z = this.pos.z;
+      // nobody walks off a roof's edge
+      if (this.controllers.getGroundHeight(this.pos.x, this.pos.z, 'person', a.y + 0.5) > a.y - 1.2) { a.x = this.pos.x; a.z = this.pos.z; }
+      else { a.vx = a.vz = 0; }
     }
-    a.y = ground(this.controllers, a.x, a.z);
+    a.y = this.controllers.getGroundHeight(a.x, a.z, 'person', a.y + 0.5);
+  }
+
+  // Down a rope from the helicopter: { y: current, floor: the roof, speed }; they open fire once their boots touch
+  rappel(a, dt, target) {
+    const r = a.rappel;
+    r.y = Math.max(r.floor, r.y - r.speed * dt);
+    r.air = r.y - r.floor;
+    a.y = r.y;
+    a.heading += angleTo(a.heading, Math.atan2(target.x - a.x, target.z - a.z)) * Math.min(1, dt * 4);
+    a.rig.aim = null;
+    a.height = 1.85;
+    if (r.air <= 0.01) { a.rappel = null; a.y = r.floor; a.alert = true; this.bark(a, ['Au sol, sur le toit !', 'Contact, on le tient !']); }
   }
 
   // Behind their car: run to the side away from the target, crouch, come up to fire, duck to reload. Returns false when

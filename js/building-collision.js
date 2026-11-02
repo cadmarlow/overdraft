@@ -211,4 +211,22 @@ function polygonSegmentFraction(polygon, ax, az, dx, dz, enter, exit) {
   return fraction;
 }
 
-export { polygonContains, polygonBoxOverlaps, polygonContact, polygonSegmentFraction };
+// The highest roof under (x, z) that feet at height `y` can stand on, stepping up at most `step`; 0 when there is none.
+// Only building footprints (colliders flagged `roof`) have a walkable top.
+function roofAt(colliders, x, z, y, step = 0.6) {
+  return roofColliderAt(colliders, x, z, y, step)?.maxY ?? 0;
+}
+
+// The building whose roof that is, or null
+function roofColliderAt(colliders, x, z, y, step = 0.6) {
+  let best = null;
+  for (const c of colliders) {
+    if (!c.roof || c.maxY > y + step || (best && c.maxY <= best.maxY)) continue;
+    if (x < c.minX || x > c.maxX || z < c.minZ || z > c.maxZ) continue;
+    if (c.polygon && !polygonContains(c.polygon, x, z)) continue;
+    best = c;
+  }
+  return best;
+}
+
+export { polygonContains, polygonBoxOverlaps, polygonContact, polygonSegmentFraction, roofAt, roofColliderAt };

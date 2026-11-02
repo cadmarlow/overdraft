@@ -79,14 +79,21 @@ test('releasing one movement binding preserves another held binding', () => {
   assert.equal(controller.keys.forward, false);
 });
 
-test('either jump binding stays active until both are released', () => {
+test('either descend binding stays active until both are released', () => {
   const { controller, key } = keyboardHarness();
-  key('keydown', 'Space');
+  key('keydown', 'KeyQ');
+  key('keydown', 'KeyC');
+  key('keyup', 'KeyQ');
+  assert.equal(controller.keys.down, true);
+  key('keyup', 'KeyC');
+  assert.equal(controller.keys.down, false);
+});
+
+test('E is the grapple, not a second jump key', () => {
+  const { controller, key } = keyboardHarness();
   key('keydown', 'KeyE');
-  key('keyup', 'Space');
-  assert.equal(controller.keys.up, true);
-  key('keyup', 'KeyE');
   assert.equal(controller.keys.up, false);
+  key('keyup', 'KeyE');
 });
 
 test('keyboard and touch input remain active independently', () => {

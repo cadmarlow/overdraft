@@ -1,6 +1,8 @@
 import * as THREE from 'three/webgpu';
 import { bryantParkLawn } from './landmarks.js';
 
+let _flyDir, _flyHit, _flyBox, _flyRay; // made on the first flight
+
 // Chase, action, cockpit, fixed-location and aerial cameras, with mouse/touch orbit and zoom.
 
 const CAMERA_PRESETS = [
@@ -55,6 +57,11 @@ class CameraSystem {
     this.aimBlend = 0;
     this.shake = 0;
     this.mouseSensitivity = 0.0022;
+    // In flight (vertical.js) the body follows the view: raw look motion piles up here for it, in pixels, and the camera
+    // is placed by `flightView` = { pos, look, roll, fov, stiff } instead of the chase framing
+    this.lookDX = 0;
+    this.lookDY = 0;
+    this.flightView = null;
     this._aimPos = new THREE.Vector3();
     this._aimLook = new THREE.Vector3();
     this._shakeOffset = new THREE.Vector3();
@@ -82,12 +89,14 @@ class CameraSystem {
     canvas.style.touchAction = 'none';
 
     canvas.addEventListener('pointerdown', (e) => {
-      if (e.button !== 0 || pointers.size >= 2) return;
+      // a locked pointer looks with its own motion: no drag (and pointer capture would throw)
+      if (e.button !== 0 || pointers.size >= 2 || document.pointerLockElement === canvas) return;
       // Only two touch pointers may share a gesture; mouse and pen drags stay independent.
       if (pointers.size && (e.pointerType !== 'touch' || pointers.values().next().value.type !== 'touch')) return;
       e.preventDefault();
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, type: e.pointerType });
-      canvas.setPointerCapture(e.pointerId);
+      // the same click may just have asked for the pointer lock, which refuses a capture
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* locking: the lock takes over the look */ }
       this.isDragging = true;
       this.userOrbitTimer = 4.0;
     });
@@ -111,6 +120,7 @@ class CameraSystem {
       } else {
         if (this.controllerManager.activeMode === 'person') this.footYaw -= dx * 0.0065;
         else this.orbitYawOffset -= dx * 0.0065;
+        this.lookDX += dx * 3; this.lookDY += dy * 3;
         this.orbitPitchOffset = Math.max(-0.32, Math.min(0.68, this.orbitPitchOffset + dy * 0.005));
       }
       this.userOrbitTimer = 4.0;
@@ -141,6 +151,7 @@ class CameraSystem {
       const dy = Math.max(-200, Math.min(200, e.movementY || 0));
       if (this.controllerManager.activeMode === 'person') this.footYaw -= dx * k;
       else this.orbitYawOffset -= dx * k;
+      this.lookDX += dx; this.lookDY += dy;
       const [lo, hi] = this.aimMode ? [-0.95, 1.05] : [-0.32, 0.68];
       this.orbitPitchOffset = Math.max(lo, Math.min(hi, this.orbitPitchOffset + dy * k));
       this.userOrbitTimer = 2.5;
@@ -171,6 +182,7 @@ class CameraSystem {
     if (!lookX && !lookY && !zoom) return;
     if (this.controllerManager.activeMode === 'person') this.footYaw -= lookX * 2.0 * dt;
     else this.orbitYawOffset -= lookX * 2.0 * dt;
+    this.lookDX += lookX * 900 * dt; this.lookDY += lookY * 560 * dt;
     this.orbitPitchOffset = Math.max(-0.32, Math.min(0.68, this.orbitPitchOffset + lookY * 1.25 * dt));
     this.zoomMultiplier = Math.max(0.45, Math.min(2.4, this.zoomMultiplier + zoom * 0.9 * dt));
     this.userOrbitTimer = 4.0;
@@ -207,6 +219,8 @@ class CameraSystem {
 
   update(dt, elapsed) {
     const entity = this.controllerManager.getActiveEntity();
+    if (this.flightView && (this.activePresetId === 'chase' || this.activePresetId === 'action')) { this.updateFlight(dt, entity); return; }
+    this.flying = false;
     const desiredPos = this._desiredPos;
     const desiredLook = this._desiredLook;
 
@@ -230,7 +244,7 @@ class CameraSystem {
     switch (this.activePresetId) {
       case 'chase': {
         if (entity.body) { this.chaseCar(entity, dt, desiredPos, desiredLook); break; }
-        this.speedFov += ((entity.boat ? Math.abs(entity.speed) / 31 * 15 : 0) - this.speedFov) * (1 - Math.exp(-dt * 3));
+        this.speedFov += ((entity.boat ? Math.abs(entity.speed) / 31 * 15 : entity.fovBoost || 0) - this.speedFov) * (1 - Math.exp(-dt * 3));
         if (entity.type === 'person' && this.aimBlend > 0.001) this.aimFrame(entity);
         const dist = entity.chaseDistance * this.zoomMultiplier * (1 + Math.min(0.25, this.smoothedSpeed * 0.01));
         const height = entity.chaseHeight * this.zoomMultiplier + Math.sin(this.orbitPitchOffset) * dist * 0.85;
@@ -454,6 +468,50 @@ class CameraSystem {
       const fov = 56 - 12 * this.aimBlend + this.speedFov;
       if (Math.abs(this.camera.fov - fov) > 0.05) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
     }
+  }
+
+  // A body flying on its own (vertical.js): the camera goes where flightView puts it, eased, kept on the body's side of
+  // the buildings, rolled with the turn; the view widens with the speed (and blurs with it, main.js)
+  updateFlight(dt, entity) {
+    const f = this.flightView;
+    if (!_flyRay) { _flyDir = new THREE.Vector3(); _flyHit = new THREE.Vector3(); _flyBox = new THREE.Box3(); _flyRay = new THREE.Ray(); }
+    const k = 1 - Math.exp(-dt * (f.stiff ?? 10));
+    if (!this.initialized) { this.currentPos.copy(f.pos); this.currentLookAt.copy(f.look); this.initialized = true; }
+    this.flying = true;
+    this.currentPos.lerp(f.pos, k);
+    this.currentLookAt.lerp(f.look, Math.min(1, k * 1.6));
+    // nothing solid between the body and the camera
+    const anchor = f.anchor ?? entity.position;
+    _flyDir.subVectors(this.currentPos, anchor);
+    const length = _flyDir.length();
+    if (length > 0.05) {
+      _flyDir.divideScalar(length);
+      _flyRay.origin.copy(anchor);
+      _flyRay.direction.copy(_flyDir);
+      let distance = length;
+      for (const c of this.controllerManager.nearColliders(anchor.x, anchor.z, length + 3)) {
+        _flyBox.min.set(c.minX - 0.2, (c.minY ?? 0) - 0.1, c.minZ - 0.2);
+        _flyBox.max.set(c.maxX + 0.2, c.maxY + 0.15, c.maxZ + 0.2);
+        if (_flyBox.containsPoint(anchor)) continue;
+        if (_flyRay.intersectBox(_flyBox, _flyHit)) distance = Math.min(distance, Math.max(0.8, anchor.distanceTo(_flyHit) - 0.25));
+      }
+      if (distance < length) this.currentPos.copy(anchor).addScaledVector(_flyDir, distance);
+    }
+    this.camera.position.copy(this.currentPos);
+    if (f.offset) this.camera.position.add(f.offset);
+    this.camera.lookAt(this.currentLookAt);
+    if (f.roll) this.camera.rotateZ(f.roll);
+    if (this.shake > 0.001) {
+      const a = this.shake * this.shake;
+      this._shakeOffset.set((Math.random() - 0.5) * a, (Math.random() - 0.5) * a, (Math.random() - 0.5) * a);
+      this.camera.position.add(this._shakeOffset);
+      this.shake *= Math.exp(-dt * 6);
+    }
+    this.speedFov += ((f.fov ?? 0) - this.speedFov) * (1 - Math.exp(-dt * 4));
+    const fov = 56 + this.speedFov;
+    if (Math.abs(this.camera.fov - fov) > 0.05) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
+    this.followEntity = null; // the chase framing picks up from here once the flight is over
+    this.aimBlend = 0;
   }
 
   // Behind a car. The camera holds its own heading, which trails the direction of travel: through a turn the car swings in
