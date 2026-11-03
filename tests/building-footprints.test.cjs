@@ -28,6 +28,8 @@ const THREE = {
   },
   Group: class { constructor() { this.children = []; } add(child) { this.children.push(child); } },
   BufferGeometry: Geometry, Float32BufferAttribute: Attribute, Mesh,
+  InterleavedBuffer: class { constructor(array, stride) { Object.assign(this, { array, stride }); } },
+  InterleavedBufferAttribute: class { constructor(data, itemSize, offset) { Object.assign(this, { data, itemSize, offset }); } },
   ShapeUtils: {
     isClockWise: points => signedArea(points) < 0,
     triangulateShape(outer, holes) {
@@ -193,4 +195,31 @@ test('party-wall sign clearance uses the tallest neighbor and leaves courtyard w
   }
   assert.equal(blankVertices, 4);
   for (let i = 16; i < 32; i++) assert.equal(attrs.facadeWall.array[i * 3 + 2], 2);
+});
+
+test('a stepped tower rises in tiers from its podium, every roof edge capped by a parapet facing in and up', () => {
+  const tier = [p(2, 2), p(8, 2), p(8, 8), p(2, 8)];
+  const b = record(square(), { height: 30, parapet: 1, shopWalls: null, tiers: [{ ring: tier, base: 30, top: 90 }],
+    styleAttr: new Array(16).fill(1), roofAttr: new Array(16).fill(2) });
+  const { attributes: attrs, index } = build([b]).children[0].geometry;
+  const ys = [];
+  for (let i = 1; i < attrs.position.array.length; i += 3) ys.push(attrs.position.array[i]);
+  close(Math.max(...ys), 91.22);
+  const has = (y) => ys.some((v) => Math.abs(v - y) < 1e-4);
+  assert.ok(has(30.22) && has(31.22), 'the podium wall ends in its parapet above its roof');
+  // Outward walls, inward parapet faces and copings looking up: every triangle faces its normal
+  let inward = 0;
+  for (let t = 0; t < index.length; t += 3) {
+    const [a, b2, c] = [index[t], index[t + 1], index[t + 2]].map((i) => [0, 1, 2].map((k) => attrs.position.array[i * 3 + k]));
+    const u = [b2[0] - a[0], b2[1] - a[1], b2[2] - a[2]], w = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]];
+    const v = index[t] * 3, normal = [0, 1, 2].map((k) => attrs.normal.array[v + k]);
+    assert.ok(n[0] * normal[0] + n[1] * normal[1] + n[2] * normal[2] > 0, `triangle ${t / 3} faces away from its normal`);
+    const cx = (a[0] + b2[0] + c[0]) / 3 - 5, cz = (a[2] + b2[2] + c[2]) / 3 - 5;
+    if (normal[1] === 0 && normal[0] * cx + normal[2] * cz < 0) inward++;
+  }
+  assert.equal(inward, 16, 'eight walls carry an inner parapet face of two triangles');
+  // Walls carry the building's dress, roofs and copings their covering
+  const styles = attrs.facadeStyle0.data.array;
+  for (let i = 0; i < attrs.normal.array.length / 3; i++) assert.equal(styles[i * 16], attrs.normal.array[i * 3 + 1] === 1 ? 2 : 1);
 });

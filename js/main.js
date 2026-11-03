@@ -30,6 +30,7 @@ import { loadCars } from './car-assets.js';
 import { buildRamps } from './ramps.js';
 import { loadWorld } from './world-assets.js';
 import { loadStorefronts, createStorefronts } from './storefronts.js';
+import { createFacadeKit } from './facade-kit.js';
 import { loadClutter } from './street-clutter.js';
 import { setTreeDetail } from './trees.js';
 import { createGrass } from './grass.js';
@@ -146,6 +147,8 @@ async function initApp() {
   // Ground-floor shops, built in 3D around the camera (the facades paint them further out)
   const storefronts = createStorefronts(scene, cityBlocks.shops, { radius: { high: 300, balanced: 250, fluid: 170 }[quality.id] ?? 250 });
   markInit('storefronts');
+  // Window sills, hoods and air conditioners in 3D around the camera (the facades paint them further out)
+  const facadeKit = createFacadeKit(scene, cityBlocks.records, { radius: { high: 200, balanced: 160, fluid: 0 }[quality.id] ?? 160 });
   const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...storefronts.colliders, ...boroughs.colliders, ...(cityGrid.colliders || [])];
 
   await showLoadingStage('Préparation des rues…');
@@ -708,7 +711,7 @@ async function initApp() {
   const pacer = new FramePacer({ renderer, level: quality, isActive: () => gameplay.active });
   let qaView = null;
   if (new URLSearchParams(location.search).has('qa')) {
-    window.__render = { renderer, scene, lightingSystem, cameraSystem, pacer, THREE, highwayTraffic, streetDetails, storefronts,
+    window.__render = { renderer, scene, lightingSystem, cameraSystem, pacer, THREE, highwayTraffic, streetDetails, storefronts, facadeKit, cityBlocks,
       // Inspection: the camera goes where it is told, whatever the game does
       view(x, y, z, tx, ty, tz) { qaView = x === undefined ? null : [x, y, z, tx, ty, tz]; } };
     gameplay.renderForQA = () => {
@@ -769,6 +772,7 @@ async function initApp() {
     cityBlocks.update(cameraSystem.currentPos.x, cameraSystem.currentPos.z);
     grass?.update(cameraSystem.camera.position);
     storefronts.update(cameraSystem.camera, gameplay.atmosphere.hour, dt);
+    facadeKit.update(cameraSystem.camera);
     if (streetDetails.update) streetDetails.update(cameraSystem.camera);
     lightingSystem.update(cameraSystem.currentPos);
     mapSystem.update();

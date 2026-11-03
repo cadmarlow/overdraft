@@ -4,12 +4,18 @@ import { createFireEscapes } from './fire-escapes.js';
 import { addBuildingDetails } from './building-details.js';
 import {
   Fn,
+  float,
   vec2,
+  vec3,
+  positionWorld,
+  positionGeometry,
   color,
   uv,
   normalWorldGeometry,
   abs,
   fract,
+  floor,
+  mod,
   step,
   smoothstep,
   fwidth,
@@ -34,6 +40,9 @@ import {
 } from './tsl-materials.js';
 import { GEO } from './nyc-geodata.js';
 import { REAL_BUILDINGS } from './building-geodata.js';
+import { BUILDING_FACTS } from './building-styles.js';
+import { dressBuilding, styleAttributes, linear, SURFACES } from './building-types.js';
+import { zoningSetbacks, parapetHeight } from './building-massing.js';
 import { createBuildingFootprints } from './building-footprints.js';
 import { STOREFRONTS } from './storefront-geodata.js';
 import { SHOP_TYPES } from './storefront-types.js';
@@ -162,96 +171,14 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   }, 6, 9);
   const allBlocks = [];
 
-  const facades = [
-    // 0: Pre-War Limestone & Buff Brick (5th Ave / Madison Ave / Upper East Side style)
-    [createPreWarBuildingMaterial, {
-      surface: 'limestone',
-      tint: [1.5, 1.45, 1.32],
-      stoneColor: 0xd8cdb8,
-      trimColor: 0x9e937f,
-      windowGlassColor: 0x1a2836,
-      windowWidth: 2.6,
-      floorHeight: 3.7,
-      litProbability: 0.54,
-      warmth: 0.80,
-      seed: 12.4
-    }],
-    // 1: Historic Warm Red/Terracotta Brick (Garment District / Chelsea / SoHo / Upper West Side)
-    [createPreWarBuildingMaterial, {
-      surface: 'redbrick',
-      tint: [1.18, 1.1, 1.06],
-      stoneColor: 0xa45a45,
-      trimColor: 0xcab9a0,
-      windowGlassColor: 0x16222e,
-      windowWidth: 2.4,
-      floorHeight: 3.5,
-      litProbability: 0.56,
-      warmth: 0.86,
-      seed: 27.8
-    }],
-    // 2: Blue-Teal Curtain-Wall Glass (Park Ave / 6th Ave / Financial District modernism)
-    [createCurtainWallMaterial, {
-      glassTint: 0x1a3a52,
-      frameTint: 0x3b4c5b,
-      windowWidth: 2.7,
-      floorHeight: 3.9,
-      litProbability: 0.60,
-      warmth: 0.52,
-      reflectivity: 0.92,
-      seed: 63.5
-    }],
-    // 3: Dark Bronze / Charcoal Miesian Glass (Avenue of the Americas / Midtown West)
-    [createCurtainWallMaterial, {
-      glassTint: 0x242220,
-      frameTint: 0x3c3631,
-      windowWidth: 2.5,
-      floorHeight: 3.8,
-      litProbability: 0.64,
-      warmth: 0.72,
-      reflectivity: 0.88,
-      seed: 81.9
-    }],
-    // 4: Silver / Ice-Blue Contemporary Supertall Glass (Billionaires' Row / Hudson Yards / WTC)
-    [createCurtainWallMaterial, {
-      glassTint: 0x264664,
-      frameTint: 0xb0bcc8,
-      windowWidth: 2.9,
-      floorHeight: 4.1,
-      litProbability: 0.58,
-      warmth: 0.48,
-      reflectivity: 0.95,
-      seed: 94.3
-    }],
-    // 5: Brown brick with limestone dressings (tenements and apartment blocks all over town)
-    [createPreWarBuildingMaterial, {
-      surface: 'brownbrick',
-      tint: [0.96, 0.9, 0.84],
-      stoneColor: 0x8e6a55,
-      trimColor: 0xcfc4ae,
-      windowGlassColor: 0x18222c,
-      windowWidth: 2.5,
-      floorHeight: 3.3,
-      litProbability: 0.52,
-      warmth: 0.84,
-      seed: 38.6
-    }],
-    // 6: Buff brick (Upper West Side, the Bronx-facing avenues)
-    [createPreWarBuildingMaterial, {
-      surface: 'buffbrick',
-      tint: [0.98, 0.94, 0.86],
-      stoneColor: 0xb89a6e,
-      trimColor: 0xd6ccb8,
-      windowGlassColor: 0x1a2430,
-      windowWidth: 2.6,
-      floorHeight: 3.4,
-      litProbability: 0.5,
-      warmth: 0.8,
-      seed: 52.1
-    }]
+  // One facade material per wall photograph, and one for curtain walls: each building brings its own dress (its kind,
+  // colours, windows; js/building-types.js) as vertex attributes, so these few materials draw every building in town
+  const GLASS_BUCKET = SURFACES.length;
+  const materials = [
+    ...SURFACES.map((surface) => createPreWarBuildingMaterial({ surface, windowGlassColor: 0x18222c, footprintLocal: true, styled: true })),
+    createCurtainWallMaterial({ footprintLocal: true, styled: true })
   ];
-  const MASONRY = new Set([0, 1, 5, 6]);
-  const materials = facades.map(([create, opts]) => create({ ...opts, footprintLocal: true }));
-  const storeys = facades.map(([, opts]) => opts.floorHeight);
+  const MASONRY = new Set(SURFACES.map((_, i) => i));
 
   const broadwayBillboards = [];
 
@@ -305,9 +232,34 @@ function buildCityBlocks(scene, landmarkColliders = []) {
       }
     }
   }
-  for (const b of surveyedBuildings) addReserve({
-    x0: b.minX, x1: b.maxX, z0: b.minZ, z1: b.maxZ, height: b.height + 0.22, polygons: b.polygons
-  });
+  // Each building's kind and dress (js/building-types.js), and the tiers of a stepped tower: its footprint rises to
+  // the lowest part standing on the ground, and the parts above rise from there, their setbacks left as terraces
+  const factIndex = new Map(REAL_BUILDINGS.map((b, i) => [b, i]));
+  const dress = new Map();
+  for (const b of surveyedBuildings) {
+    const facts = BUILDING_FACTS[factIndex.get(b)];
+    const style = dressBuilding(b, facts);
+    let podium = b.height, tiers = [];
+    const ground = facts.parts.filter((p) => p.base < 1);
+    if (ground.length) {
+      podium = Math.min(b.height, Math.max(3, Math.min(...ground.map((p) => p.top))));
+      tiers = facts.parts.filter((p) => p.top > podium + 0.5).map((p) => ({ ring: p.ring, base: Math.max(p.base, podium), top: p.top }));
+    } else {
+      // No surveyed tiers: a tall building of the 1916 zoning era steps back as the law made it
+      const zoned = zoningSetbacks(b, style, facts.year || b.year);
+      if (zoned) ({ podium, tiers } = zoned);
+    }
+    dress.set(b, { style, podium, tiers });
+  }
+  for (const b of surveyedBuildings) {
+    const { podium, tiers } = dress.get(b);
+    addReserve({ x0: b.minX, x1: b.maxX, z0: b.minZ, z1: b.maxZ, height: podium + 0.22, polygons: b.polygons });
+    for (const t of tiers) {
+      const xs = t.ring.map((q) => q.x), zs = t.ring.map((q) => q.z);
+      addReserve({ x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs), height: t.top + 0.22,
+        polygons: [{ outer: t.ring, holes: [] }] });
+    }
+  }
   function nearbyReserves(b, padding = 0) {
     const minX = b.minX - padding, maxX = b.maxX + padding;
     const minZ = b.minZ - padding, maxZ = b.maxZ + padding;
@@ -344,7 +296,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   }
 
   function addSurveyedFireEscapes(b, detail, storey, neighbours) {
-    if (!b.year || b.year >= 1945 || b.height > 30) return;
+    if (!b.style?.fireEscape || b.height > 30) return;
     const floors = Math.floor((b.height + 0.22) / storey);
     if (floors < 3) return;
     const landings = Math.min(floors - 1, 7), h = (landings - 1) * storey + 1;
@@ -381,27 +333,39 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     const seed = Math.round(b.cx * 31 + b.cz * 17);
     const rand = mulberry32(seed);
     const tone = rand();
-    const mat = b.year && b.year < 1945 ? (tone < 0.3 ? 0 : tone < 0.58 ? 5 : tone < 0.82 ? 1 : 6)
-      : b.year && b.year < 1980 ? (tone < 0.3 ? 5 : tone < 0.55 ? 0 : 3)
-        : tone < 0.6 ? 2 : 4;
+    const { style, podium, tiers } = dress.get(b);
+    const mat = style.glass ? GLASS_BUCKET : SURFACES.indexOf(style.surface);
+    // The roof's vertices carry its covering's colour where the walls carry their tint
+    const styleAttr = styleAttributes(style), roofAttr = styleAttr.slice();
+    roofAttr.splice(4, 3, ...linear(style.roof));
     // Shops come from the city's storefront registry (planned below); storefronts.js builds them
-    const record = { ...b, tone, storefronts: false, mat, floorHeight: storeys[mat] };
+    const record = { ...b, height: podium, tone, storefronts: false, mat, floorHeight: style.floor, style, styleAttr, roofAttr, tiers,
+      parapet: parapetHeight(style) };
     surveyedBuckets[mat].push(record);
     records.push(record);
     const detail = {
       cx: b.cx, cz: b.cz, minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ,
-      cornices: [], waterTowers: [], hvacUnits: [], fireEscapes: [], awnings: [], scaffoldSheds: [], footprints: []
+      cornices: [], waterTowers: [], hvacUnits: [], fireEscapes: [], awnings: [], scaffoldSheds: [], footprints: [],
+      bulkheads: [], chimneys: [], skylights: [], vents: [], dishes: []
     };
-    const top = b.height + 0.22;
+    const top = podium + 0.22;
     for (const polygon of b.polygons) {
       const xs = polygon.outer.map((p) => p.x), zs = polygon.outer.map((p) => p.z);
       const minX = Math.min(...xs), maxX = Math.max(...xs), minZ = Math.min(...zs), maxZ = Math.max(...zs);
       colliders.push({ minX, maxX, minZ, maxZ, minY: 0, maxY: top, polygon, roof: true });
       detail.footprints.push({ h: top, pts: polygon.outer, holes: polygon.holes });
     }
+    // Every tier is solid and its roof walkable
+    for (const t of tiers) {
+      const xs = t.ring.map((p) => p.x), zs = t.ring.map((p) => p.z);
+      const polygon = { outer: t.ring, holes: [] };
+      colliders.push({ minX: Math.min(...xs), maxX: Math.max(...xs), minZ: Math.min(...zs), maxZ: Math.max(...zs),
+        minY: t.base + 0.22, maxY: t.top + 0.22, polygon, roof: true });
+      detail.footprints.push({ h: t.top + 0.22, pts: t.ring, holes: [] });
+    }
     const neighbours = nearbyReserves(b, 6);
-    addSurveyedFireEscapes(b, detail, storeys[mat], neighbours);
-    detailsToPlace.push({ b: record, detail, masonry: MASONRY.has(mat), rand });
+    addSurveyedFireEscapes(record, detail, style.floor, neighbours);
+    detailsToPlace.push({ b: record, detail, masonry: !style.glass, rand });
     allBlocks.push(detail);
   }
   // Every registered storefront on the wall of its building that faces its street
@@ -410,13 +374,20 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   // Reserve every fire escape before placing scaffolding on neighbouring buildings.
   for (const { b, detail, masonry, rand } of detailsToPlace) {
     const neighbours = nearbyReserves(b, 6);
-    for (const reserve of addBuildingDetails(b, detail, { masonry, rand, neighbours })) addReserve(reserve);
+    for (const reserve of addBuildingDetails(b, detail, { masonry, rand, neighbours, cornice: b.style.cornice,
+      corniceColour: linear(b.style.corniceColour), waterTower: b.style.waterTower, type: b.style.type,
+      wallColour: linear(b.style.wall ?? 0x7a5a48) })) {
+      addReserve(reserve);
+    }
     quadtree.insert(detail);
   }
+  // The street walls each building's windows open in, for the window dressings of facade-kit.js
+  const streetWalls = new Map();
   surveyedBuckets.forEach((items, i) => {
     if (!items.length) return;
-    group.add(createBuildingFootprints(materials[i], items, MASONRY.has(i) ? b => nearbyReserves(b, 2) : undefined));
+    group.add(createBuildingFootprints(materials[i], items, MASONRY.has(i) ? b => nearbyReserves(b, 2) : undefined, streetWalls));
   });
+  for (const [record, walls] of streetWalls) record.kitWalls = walls;
 
   // Narrow empty lots become sitting areas with trees.
   {
@@ -505,6 +476,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   // ============================================================================
   const unitBox = new THREE.BoxGeometry(1, 1, 1);
   const dummy = new THREE.Object3D();
+  const corniceColour = new THREE.Color();
 
   // Billboards: one merged mesh per poster theme
   {
@@ -534,9 +506,37 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   const MAX_HVAC = 1600;
   const MAX_SHEDS = 300;
 
-  // 1. Projecting horizontal stone cornices & parapet ledges
-  const corniceMat = new THREE.MeshStandardNodeMaterial({ color: 0xc8bca6, roughness: 0.78, metalness: 0.08 });
-  const corniceInst = new THREE.InstancedMesh(unitBox, corniceMat, MAX_CORNICES);
+  // 1. Projecting cornices: a moulded profile (frieze, bed moulding, corona, crown) run along the roof line, in each
+  //    building's stone or paint, with consoles shaded into its bed moulding
+  const corniceMat = new THREE.MeshStandardNodeMaterial({ color: 0xffffff, roughness: 0.74, metalness: 0.06 });
+  corniceMat.colorNode = Fn(() => {
+    // Along the wall, whatever face this is: the horizontal at right angles to the face's normal
+    const n = normalWorldGeometry;
+    const along = positionWorld.x.mul(n.z.negate()).add(positionWorld.z.mul(n.x)).div(max(length(n.xz), 0.2));
+    const local = positionGeometry.y;
+    // Consoles every 0.7 m under the corona: a dark gap between each pair
+    const inBed = smoothstep(-0.4, -0.36, local).mul(float(1.0).sub(smoothstep(-0.08, -0.04, local)));
+    const coord = along.div(0.7);
+    const gap = filteredPulse(fract(coord), 0.62, 1.0, fwidth(coord)).mul(inBed).mul(step(abs(n.y), 0.7));
+    // Dentils along the frieze's top
+    const dentCoord = along.div(0.18);
+    const dentil = filteredPulse(fract(dentCoord), 0.5, 1.0, fwidth(dentCoord))
+      .mul(smoothstep(-0.27, -0.25, local)).mul(float(1.0).sub(smoothstep(-0.18, -0.16, local))).mul(step(abs(n.y), 0.7));
+    return vec3(1.0).mul(float(1.0).sub(gap.mul(0.62)).sub(dentil.mul(0.35)));
+  })();
+  const corniceGeo = (() => {
+    // Profile (out from the wall is -z, up is y) in the unit box the instances scale; it is extruded along x
+    const profile = [[0.1, -0.5], [-0.12, -0.5], [-0.12, -0.26], [-0.2, -0.26], [-0.2, -0.38], [-0.46, -0.08], [-0.5, -0.08],
+      [-0.5, 0.28], [-0.44, 0.34], [-0.44, 0.42], [-0.5, 0.46], [-0.5, 0.5], [0.5, 0.5], [0.5, -0.5]];
+    const shape = new THREE.Shape(profile.map(([z, y]) => new THREE.Vector2(-z, y)));
+    const g = new THREE.ExtrudeGeometry(shape, { depth: 1, bevelEnabled: false });
+    g.translate(0, 0, -0.5);
+    g.rotateY(Math.PI / 2);
+    g.computeVertexNormals();
+    return g;
+  })();
+  const corniceInst = new THREE.InstancedMesh(corniceGeo, corniceMat, MAX_CORNICES);
+  corniceInst.setColorAt(0, new THREE.Color(1, 1, 1));
   corniceInst.castShadow = true;
   corniceInst.receiveShadow = true;
   corniceInst.frustumCulled = false;
@@ -624,6 +624,52 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     const sideCol = mix(color(0x7c848c), color(0x282e36), max(louverSlat.mul(0.72), panelSeam.mul(0.35)));
     return mix(sideCol, topCol, isTop);
   })();
+  // 3b. Roof clutter: brick bulkheads and chimney stacks in their building's brick, hipped skylights, vent pipes, dishes
+  const MAX_BRICK = 7000, MAX_SKYLIGHTS = 2400, MAX_VENTS = 9000, MAX_DISHES = 1200;
+  const brickMat = new THREE.MeshStandardNodeMaterial({ color: 0xffffff, roughness: 0.88 });
+  brickMat.colorNode = Fn(() => {
+    const p = positionWorld, n = normalWorldGeometry;
+    const along = p.x.mul(n.z.negate()).add(p.z.mul(n.x));
+    const course = p.y.div(0.076);
+    const brick = along.div(0.205).add(mod(floor(course), 2.0).mul(0.5));
+    const mortar = max(filteredPulse(fract(course), 0.0, 0.16, fwidth(course)), filteredPulse(fract(brick), 0.0, 0.07, fwidth(brick)));
+    const shade = fract(floor(brick).mul(0.37).add(floor(course).mul(0.71))).mul(0.16).add(0.92);
+    // The cap: tar paper, dark whatever the brick
+    return mix(mix(vec3(shade), vec3(1.45), mortar.mul(0.55)), vec3(0.32), step(0.7, n.y));
+  })();
+  const brickInst = new THREE.InstancedMesh(unitBox, brickMat, MAX_BRICK);
+  brickInst.setColorAt(0, new THREE.Color(1, 1, 1));
+  const skylightMat = new THREE.MeshStandardNodeMaterial({ color: 0xffffff, roughness: 0.3, metalness: 0.5 });
+  skylightMat.colorNode = Fn(() => {
+    // Wired glass panes between aluminium glazing bars
+    const p = positionGeometry;
+    const bar = filteredPulse(fract(p.x.add(p.z).mul(3.0)), 0.0, 0.12, fwidth(p.x.add(p.z).mul(3.0)));
+    return mix(vec3(0.16, 0.2, 0.24), vec3(0.62, 0.64, 0.66), max(bar, step(p.y, -0.42)));
+  })();
+  const skylightGeo = new THREE.CylinderGeometry(0.42, 0.7, 1, 4, 1);
+  skylightGeo.rotateY(Math.PI / 4);
+  const skylightInst = new THREE.InstancedMesh(skylightGeo, skylightMat, MAX_SKYLIGHTS);
+  const ventMat = new THREE.MeshStandardNodeMaterial({ color: 0x6e7176, roughness: 0.45, metalness: 0.7 });
+  const ventInst = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 8, 1), ventMat, MAX_VENTS);
+  const dishMat = new THREE.MeshStandardNodeMaterial({ color: 0xd8d8d4, roughness: 0.5, metalness: 0.2 });
+  const dishGeo = (() => {
+    const post = new THREE.CylinderGeometry(0.035, 0.035, 0.9, 6);
+    post.translate(0, 0.45, 0);
+    const dish = new THREE.CylinderGeometry(0.4, 0.3, 0.07, 14);
+    dish.rotateX(-0.9);
+    dish.translate(0, 0.95, 0.04);
+    const arm = new THREE.CylinderGeometry(0.015, 0.015, 0.5, 4);
+    arm.rotateX(0.7);
+    arm.translate(0, 1.05, 0.25);
+    return mergeGeometries([post, dish, arm], false);
+  })();
+  const dishInst = new THREE.InstancedMesh(dishGeo, dishMat, MAX_DISHES);
+  for (const inst of [brickInst, skylightInst, ventInst, dishInst]) {
+    inst.castShadow = inst.receiveShadow = true;
+    inst.frustumCulled = false;
+    inst.count = 0;
+    group.add(inst);
+  }
   const hvacInst = new THREE.InstancedMesh(unitBox, hvacMat, MAX_HVAC);
   hvacInst.castShadow = hvacInst.receiveShadow = true;
   hvacInst.frustumCulled = false;
@@ -675,6 +721,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     let corniceCount = 0;
     let wtCount = 0;
     let hvacCount = 0;
+    let brickCount = 0, skylightCount = 0, ventCount = 0, dishCount = 0;
     fireEscapeSystem.begin(focusX, focusZ);
     let shedCount = 0;
 
@@ -687,6 +734,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
         dummy.position.set(c.x, c.y - c.h * 0.6, c.z);
         dummy.scale.set(c.w, c.h, c.d);
         dummy.updateMatrix();
+        corniceInst.setColorAt(corniceCount, corniceColour.setRGB(...(c.colour || [0.6, 0.55, 0.46])));
         corniceInst.setMatrixAt(corniceCount++, dummy.matrix);
       }
 
@@ -720,6 +768,42 @@ function buildCityBlocks(scene, landmarkColliders = []) {
         hvacInst.setMatrixAt(hvacCount++, dummy.matrix);
       }
 
+      // 3b. Roof clutter
+      const tint = (c) => corniceColour.setRGB(c[0], c[1], c[2]);
+      for (const u of [...blk.bulkheads, ...blk.chimneys]) {
+        if (brickCount >= MAX_BRICK) break;
+        dummy.rotation.set(0, u.ry || 0, 0);
+        dummy.position.set(u.x, u.y + u.h * 0.5, u.z);
+        dummy.scale.set(u.w, u.h, u.d);
+        dummy.updateMatrix();
+        brickInst.setColorAt(brickCount, tint(u.colour));
+        brickInst.setMatrixAt(brickCount++, dummy.matrix);
+      }
+      for (const u of blk.skylights) {
+        if (skylightCount >= MAX_SKYLIGHTS) break;
+        dummy.rotation.set(0, u.ry || 0, 0);
+        dummy.position.set(u.x, u.y + u.h * 0.5, u.z);
+        dummy.scale.set(u.w, u.h, u.d);
+        dummy.updateMatrix();
+        skylightInst.setMatrixAt(skylightCount++, dummy.matrix);
+      }
+      for (const u of blk.vents) {
+        if (ventCount >= MAX_VENTS) break;
+        dummy.rotation.set(0, 0, 0);
+        dummy.position.set(u.x, u.y + u.h * 0.5, u.z);
+        dummy.scale.set(u.r, u.h, u.r);
+        dummy.updateMatrix();
+        ventInst.setMatrixAt(ventCount++, dummy.matrix);
+      }
+      for (const u of blk.dishes) {
+        if (dishCount >= MAX_DISHES) break;
+        dummy.rotation.set(0, u.ry || 0, 0);
+        dummy.position.set(u.x, u.y, u.z);
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        dishInst.setMatrixAt(dishCount++, dummy.matrix);
+      }
+
       // 4. Wrought-iron fire escapes
       for (const fe of blk.fireEscapes) fireEscapeSystem.add(fe);
 
@@ -737,6 +821,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
 
     corniceInst.count = corniceCount;
     flagRange(corniceInst.instanceMatrix, corniceCount);
+    flagRange(corniceInst.instanceColor, corniceCount);
 
     legsInst.count = wtCount;
     barrelInst.count = wtCount;
@@ -744,6 +829,16 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     flagRange(legsInst.instanceMatrix, wtCount);
     flagRange(barrelInst.instanceMatrix, wtCount);
     flagRange(coneInst.instanceMatrix, wtCount);
+
+    brickInst.count = brickCount;
+    flagRange(brickInst.instanceMatrix, brickCount);
+    flagRange(brickInst.instanceColor, brickCount);
+    skylightInst.count = skylightCount;
+    flagRange(skylightInst.instanceMatrix, skylightCount);
+    ventInst.count = ventCount;
+    flagRange(ventInst.instanceMatrix, ventCount);
+    dishInst.count = dishCount;
+    flagRange(dishInst.instanceMatrix, dishCount);
 
     hvacInst.count = hvacCount;
     flagRange(hvacInst.instanceMatrix, hvacCount);
@@ -763,7 +858,8 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     colliders,
     allBlocks,
     update,
-    shops: plan.shops
+    shops: plan.shops,
+    records
   };
 }
 

@@ -24,15 +24,18 @@ import { cityUniforms } from './tsl-materials.js';
 
 // Atmospheric sky, environment lighting, sunlight and time-of-day presets.
 
+// Smallest turn of the sun the shadows follow (radians, 0.1°): the day's 0.19° a second becomes a step every half second
+const SUN_STEP = 0.1 * Math.PI / 180;
+
 const TIME_PRESETS = {
   golden: {
     id: 'golden',
     sunDir: new THREE.Vector3(-0.44, 0.58, -0.68).normalize(),
     sunColor: 0xffca92,
-    sunIntensity: 5.2,
+    sunIntensity: 5.8,
     hemiSky: 0xd2d6de,
     hemiGround: 0xd29a72, // Warm terracotta / limestone upward canyon bounce
-    hemiIntensity: 2.7,
+    hemiIntensity: 2.3,
     skyTop: 0x2c568c,
     skyHorizon: 0xebd1b5,
     fogColor: 0xdcc5ae,
@@ -53,18 +56,18 @@ const TIME_PRESETS = {
   midday: {
     id: 'midday',
     sunDir: new THREE.Vector3(-0.34, 0.82, -0.46).normalize(),
-    sunColor: 0xfff1de,
-    sunIntensity: 5.6,
-    hemiSky: 0xdadfe6,
+    sunColor: 0xffead0,
+    sunIntensity: 6.4,
+    hemiSky: 0xcbd8ec,
     hemiGround: 0xc4a488, // Warm sunlit masonry & pavement bounce
-    hemiIntensity: 3.0,
+    hemiIntensity: 2.5,
     skyTop: 0x225ea8,
     skyHorizon: 0xc8dff5,
     fogColor: 0xc6dcf2,
     fogDensity: 0.00018,
     interiorGlow: 0.24,
     roadWetness: 0.08,
-    envIntensity: 0.48,
+    envIntensity: 0.42,
     canyonBounce: 0.58,
     turbidity: 6.5,
     rayleigh: 2.4,
@@ -269,8 +272,13 @@ class LightingSystem {
 
     this.sunLight.color.setHex(hex(p.sunColor));
     this.sunLight.intensity = p.sunIntensity;
-    this.sunLight.position.copy(p.sunDir);
-    this.sunLight.updateMatrixWorld();
+    // The sun moves in steps a hair apart: a shadow map turned a little every frame makes every shadow finer than its
+    // texels (fire escapes, railings, curb edges) crawl and sparkle. A step moves a long shadow a few centimetres.
+    if (!this.sunApplied || this.sunApplied.angleTo(p.sunDir) > SUN_STEP) {
+      (this.sunApplied ??= new THREE.Vector3()).copy(p.sunDir);
+      this.sunLight.position.copy(p.sunDir);
+      this.sunLight.updateMatrixWorld();
+    }
 
     this.hemiLight.color.setHex(hex(p.hemiSky));
     this.hemiLight.groundColor.setHex(hex(p.hemiGround));

@@ -49,6 +49,12 @@ Rico Cilliers and Charlotte Baglioni, brushed_concrete by Dario Barresi and Dimi
 The rooms behind the shop windows were modelled for the game and path traced offline with three-gpu-pathtracer by Garrett
 Johnson (MIT): https://github.com/gkjohnson/three-gpu-pathtracer; it is not part of the published game.
 
+Buildings: what each building is (building class, floors, year built, historic district, landmark status) comes from
+NYC Department of City Planning, PLUTO (NYC Open Data, https://data.cityofnewyork.us/d/64uk-42ks); the tiers of stepped
+towers and the colours, materials and roof shapes mappers recorded come from © OpenStreetMap contributors (ODbL,
+https://www.openstreetmap.org/copyright). Only the facts js/building-styles.bin.gz holds are kept; how each building is
+dressed is invented by the game.
+
 ## Outil de développement local
 
 Le serveur de l'Architecte utilise le SDK TypeScript Anthropic (`@anthropic-ai/sdk`), sous licence Apache-2.0 :

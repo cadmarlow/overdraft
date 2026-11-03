@@ -219,11 +219,35 @@ function planStorefronts(records, storefronts, types) {
         filler: !!s.filler
       });
     });
-    let set = wallsByRecord.get(w.rec);
-    if (!set) wallsByRecord.set(w.rec, (set = new Set()));
-    set.add(w.key);
   }
-  return { shops, wallsByRecord, unplaced, dropped };
+  // Two surveyed footprints can share a street wall (a building over a duplicate of its outline): the second one's
+  // shops would stand in the first one's, gate on gate, fighting over every pixel they share. The first keeps them.
+  const kept = [], frontCells = new Map();
+  for (const s of shops) {
+    const cx = Math.floor(s.x / 20), cz = Math.floor(s.z / 20);
+    let clash = false;
+    for (let dx = -1; dx <= 1 && !clash; dx++) {
+      for (let dz = -1; dz <= 1 && !clash; dz++) {
+        for (const o of frontCells.get((cx + dx) + ',' + (cz + dz)) || []) {
+          if (o.wall === s.wall || s.nx * o.nx + s.nz * o.nz < 0.98) continue;
+          if (Math.abs((o.x - s.x) * s.nx + (o.z - s.z) * s.nz) > 0.3) continue;
+          const u0 = (o.x - s.x) * s.ux + (o.z - s.z) * s.uz, u1 = u0 + o.width * (o.ux * s.ux + o.uz * s.uz);
+          if (Math.min(s.width, Math.max(u0, u1)) - Math.max(0, Math.min(u0, u1)) > 0.3) { clash = true; break; }
+        }
+      }
+    }
+    if (clash) { dropped++; continue; }
+    kept.push(s);
+    const key = cx + ',' + cz;
+    if (!frontCells.has(key)) frontCells.set(key, []);
+    frontCells.get(key).push(s);
+  }
+  for (const s of kept) {
+    let set = wallsByRecord.get(s.record);
+    if (!set) wallsByRecord.set(s.record, (set = new Set()));
+    set.add(s.wall);
+  }
+  return { shops: kept, wallsByRecord, unplaced, dropped };
 }
 
 // The proportions that decide how far a front stands out from its wall, drawn from their own random sequence so the
