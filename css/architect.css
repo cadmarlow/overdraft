@@ -1,0 +1,52 @@
+/* L'Architecte (architect.js), local development only: loaded by architect.js, left out of the production build.
+   The label over his head, the banner while he holds the camera, the QA test panel. */
+:root{--architect:#b48cff}
+.architect-tag{position:fixed;left:0;top:0;z-index:6;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:2px;font-family:Arial,Helvetica,sans-serif;text-shadow:0 1px 5px #000c;will-change:transform;white-space:nowrap}
+.architect-tag b{font-size:10px;letter-spacing:.18em;color:var(--architect);font-weight:900}
+.architect-tag span{font-size:11px;color:var(--paper);opacity:.85}
+.architect-watch{position:fixed;left:50%;top:18px;transform:translateX(-50%);z-index:8;display:flex;align-items:center;gap:14px;padding:9px 16px;background:#0c1410cc;border-left:3px solid var(--architect);font-family:Arial,Helvetica,sans-serif;color:var(--paper);pointer-events:none;white-space:nowrap}
+.architect-watch b{font-size:11px;letter-spacing:.16em;color:var(--architect)}
+.architect-watch span{font-size:12px;opacity:.9}
+.architect-watch em{font-style:normal;font-size:11px;color:var(--muted)}
+.architect-watch kbd{font:700 10px Arial,Helvetica,sans-serif;padding:1px 5px;border:1px solid #ffffff55;border-radius:2px;margin-right:4px;color:var(--paper)}
+body.in-menu .architect-tag,body.in-menu .architect-watch{opacity:0}
+.architect-panel{position:fixed;left:14px;top:120px;z-index:25;width:330px;background:#0d140fe8;border:1px solid #ffffff1f;border-left:3px solid var(--architect);border-radius:3px;font:12px/1.4 Arial,Helvetica,sans-serif;color:var(--paper);box-shadow:0 10px 40px #0008}
+.architect-panel header{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid #ffffff14}
+.architect-panel header b{font-size:11px;letter-spacing:.16em;color:var(--architect)}
+.architect-panel header span{flex:1;font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+.architect-panel.folded .ap-body{display:none}
+.architect-panel .ap-body{padding:8px 10px 10px;display:flex;flex-direction:column;gap:7px}
+.architect-panel .ap-state{margin:0;white-space:pre-line;color:#d9dfd2;min-height:32px}
+.architect-panel .ap-row{display:flex;gap:6px}
+.architect-panel button,.architect-panel select{font:inherit;font-size:11px;color:var(--paper);background:#ffffff10;border:1px solid #ffffff22;border-radius:2px;padding:5px 8px;cursor:pointer}
+.architect-panel button:hover{background:#ffffff1c}
+.architect-panel select{flex:1;min-width:0}
+.architect-panel kbd{font:700 9px Arial,Helvetica,sans-serif;opacity:.7}
+.architect-panel h3{margin:4px 0 0;font-size:10px;letter-spacing:.16em;color:var(--muted);font-weight:700;text-transform:uppercase}
+.architect-panel .ap-events{list-style:none;margin:0;padding:0;max-height:230px;overflow:auto;display:flex;flex-direction:column;gap:5px}
+.architect-panel .ap-events li{display:grid;grid-template-columns:1fr auto;gap:1px 8px;padding:6px 7px;background:#ffffff08;border-radius:2px}
+.architect-panel .ap-events li b{font-size:11px;color:#ffd0a0}
+.architect-panel .ap-events li span{grid-column:1;font-size:10px;color:var(--muted)}
+.architect-panel .ap-events li small{grid-column:1;font-size:10px;color:#c9cfc3}
+.architect-panel .ap-events li button{grid-column:2;grid-row:1/4;align-self:center;padding:3px 7px;font-size:10px}
+.architect-panel .ap-events .ap-empty{display:block;color:var(--muted);font-style:italic}
+.architect-tag[hidden],.architect-watch[hidden]{display:none}
+#menu-options #architect-room{color:var(--architect);font-size:9px;letter-spacing:.1em;text-decoration:none;text-shadow:0 1px 5px #0005;padding:2px 0}
+#menu-options #architect-room:hover{color:#d6c4ff}
+.architect-chat{position:fixed;left:50%;bottom:120px;transform:translateX(-50%);z-index:26;display:flex;align-items:center;gap:12px;width:min(620px,92vw);padding:10px 14px;background:#0c1410ee;border-left:3px solid var(--architect);border-radius:3px;box-shadow:0 10px 40px #0008;font-family:Arial,Helvetica,sans-serif}
+.architect-chat[hidden]{display:none}
+.architect-chat b{font-size:10px;letter-spacing:.16em;color:var(--architect);white-space:nowrap}
+.architect-chat input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--paper);font:14px Arial,Helvetica,sans-serif}
+.architect-chat input::placeholder{color:#ffffff55}
+/* His quick strip (J), beside the arsenal, the garage and the phone */
+#architect-strip-button{left:416px;border-color:#b48cff66;color:#d9ccff}
+#architect-strip-button:hover{border-color:var(--architect);color:var(--architect)}
+#architect-strip-button kbd{background:var(--architect);color:#1b1230}
+#architect-strip-panel{border-left-color:var(--architect)}
+#architect-strip-panel button{width:88px;height:74px;gap:5px}
+#architect-strip-panel button.sel{color:#1b1230;background:var(--architect)}
+#architect-strip-panel button.active:not(.sel){color:var(--architect);border-color:#b48cff55}
+#architect-strip-panel small{font:700 8px/1 Arial,Helvetica,sans-serif;letter-spacing:.02em;opacity:.75;min-height:8px;text-transform:none}
+#architect-strip-panel button.locked{color:#7d877a}
+#architect-strip-panel button.locked.sel{color:#1b1230;background:#a9a0c4}
+@media(max-width:760px){#architect-strip-button{left:112px}#architect-strip-panel button{width:76px}}

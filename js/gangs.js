@@ -185,7 +185,8 @@ class GangSystem {
         g.hud.zone?.(zone.name, held ? 'Votre territoire' : GANGS[zone.gang].name, held ? '#e1f3a0' : GANGS[zone.gang].colour);
       }
     }
-    this.updateCorners(dt, zone);
+    // no lookouts round a player left waiting while the Architect holds the camera
+    if (!g.architect?.spectating) this.updateCorners(dt, zone);
     this.updateHit(dt);
     if (this.held.size && (this.payT -= dt) <= 0) {
       this.payT = PAY_EVERY;

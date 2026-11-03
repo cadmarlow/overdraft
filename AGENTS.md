@@ -62,6 +62,13 @@ Une nouvelle version met à jour, ensemble :
   `tsl-materials.js` (ville), `audio-*.js` (tout le son est synthétisé).
 - `assets/` : modèles et textures préparés hors ligne par `tools/*` (voitures, nature, ville, personnages). Chaque outil a
   son `README.md` qui dit comment tout régénérer.
+- **L'Architecte** (`js/architect*.js`) : un personnage piloté par Claude qui parcourt la ville pour trouver et prouver
+  les problèmes du jeu. Tout ce qui le concerne est décidé dans `ARCHITECTE.md` : le lire avant d'y toucher.
+  **Outil de développement local, jamais en ligne** : le jeu publié sur Vercel ne doit pas le contenir. Ses modules ne
+  sont jamais importés statiquement ni préchargés (exception à la règle des `modulepreload`), `main.js` ne les charge
+  qu'en local, et `scripts/build.mjs` les laisse hors de `dist/`.
+  Son cerveau tourne dans `tools/architecte/` (`npm run architecte`, clé API dans `.env.local`, jamais lue ni affichée).
+  Ses tickets vivent dans `chantier/` (ignoré par git).
 
 ```sh
 npm run dev     # http://localhost:5173

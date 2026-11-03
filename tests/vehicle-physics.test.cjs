@@ -7,6 +7,7 @@ const { loadModule } = require('./helpers/module.cjs');
 
 const physics = loadModule(readFileSync(join(__dirname, '../js/vehicle-physics.js'), 'utf8'));
 const { vehicleContact, resolveVehicleContact, sweptVehicleContact } = physics;
+const carPhysics = loadModule(readFileSync(join(__dirname, '../js/car-physics.js'), 'utf8'));
 
 function body(options = {}) {
   const result = { x: 0, z: 0, sin: 0, cos: 1, halfW: 0.86, halfL: 2.18,
@@ -213,6 +214,45 @@ test('player collision impulses persist in both driving speeds and preserve mome
   close(car.vz, 0);
   close(traffic.vz, 0);
   close(car.angularVel, 0);
+});
+
+// A driven car with the full rigid body (car-physics.js), settled on flat ground, as the player's or the Architect's
+function drivenCar(speed) {
+  const tune = carPhysics.makeTune('sedan', { halfW: 0.86, halfL: 2.18, height: 1.42, wheelX: 0.78, wheelZf: 1.42, wheelZr: -1.42, wheelRadius: 0.34 });
+  const car = { type: 'car', tune, body: carPhysics.createBody(tune), position: { x: 0, y: 0, z: 0 }, heading: 0, speed: 0,
+    prevX: 0, prevZ: 0, vx: 0, vz: 0, angularVel: 0 };
+  const world = { grip: 1, ground(x, z, hit) { Object.assign(hit, { y: 0, nx: 0, ny: 1, nz: 0, grip: 1, rough: 0, curb: false }); } };
+  for (let i = 0; i < 90; i++) carPhysics.stepCar(car, { throttle: 0, steer: 0, handbrake: false }, 1 / 60, world);
+  car.position.x = car.position.z = 0;
+  car.speed = speed;
+  carPhysics.stepCar(car, { throttle: 0, steer: 0, handbrake: false }, 1 / 600, world);
+  car.position.x = car.position.z = car.prevX = car.prevZ = 0;
+  return car;
+}
+
+test('a driven car that shunts traffic keeps the change of speed the contact gave it (ticket #0001)', () => {
+  const traffic = trafficCar(4.2);
+  const h = trafficHarness([traffic]);
+  h.shuntBody = carPhysics.shuntBody;
+  const car = drivenCar(10);
+  h.collideWithEntity(traffic, car, 0.86, 2.18);
+  // the jolt that follows the contact once put the car's old speed back: it drove on through, kicked up every frame
+  assert.ok(car.speed > 4 && car.speed < 5.5, `kept ${car.speed}`);
+  assert.ok(traffic.speed > 4.5 && traffic.speed < 6, `traffic ${traffic.speed}`);
+  assert.ok(car.body.vy > 0 && car.body.vy < 0.6, `jolt ${car.body.vy}`);
+  assert.ok(Math.abs(car.body.wx) < 0.3 && Math.abs(car.body.wz) < 0.3, 'hardly tipped');
+});
+
+test('a driven car in the air passes over the traffic', () => {
+  const traffic = trafficCar(4.2);
+  const h = trafficHarness([traffic]);
+  h.shuntBody = carPhysics.shuntBody;
+  const car = drivenCar(10);
+  car.position.y = 1.6;
+  const speed = car.speed;
+  h.collideWithEntity(traffic, car, 0.86, 2.18);
+  close(car.speed, speed);
+  close(traffic.speed, 0);
 });
 
 test('a route-constrained vehicle leaves the player fully outside its body', () => {

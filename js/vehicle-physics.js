@@ -1,5 +1,10 @@
 // Planar rigid-body contacts. Bodies use world velocity and a heading basis (sin, cos);
 // contact normals point from b to a. Callers reuse bodies and the contact record.
+
+// Being planar, a contact knows nothing of height: two cars further apart than this vertically (one flying over the
+// other, its sills above the other's roof) are not in contact, and callers skip them.
+const STACKED = 1.3;
+
 function vehicleContact(a, b, contact) {
   const dx = a.x - b.x, dz = a.z - b.z;
   let depth = Infinity, nx = 0, nz = 0, reference = a, side = 0;
@@ -159,4 +164,4 @@ function sweptVehicleContact(a, b, contact) {
   return false;
 }
 
-export { vehicleContact, resolveVehicleContact, sweptVehicleContact };
+export { STACKED, vehicleContact, resolveVehicleContact, sweptVehicleContact };

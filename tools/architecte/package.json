@@ -1,0 +1,9 @@
+{
+  "name": "overdraft-architecte",
+  "private": true,
+  "description": "Le serveur de l'Architecte : son cerveau (Claude), ses tickets, sa salle de contrôle. Outil local, jamais en ligne.",
+  "type": "module",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.4.0"
+  }
+}

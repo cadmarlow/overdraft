@@ -3,11 +3,14 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.1 — Leverage** : Manhattan à la verticale, et un ciel qui se vole pour de vrai. Les 117 000 toits se parcourent, le grappin *Levier*
+Version **0.9.2 — Leverage** : Manhattan à la verticale, et un ciel qui se vole pour de vrai. Les 117 000 toits se parcourent, le grappin *Levier*
 hisse jusqu'au rebord d'un immeuble ou accroche une voiture lancée, la wingsuit descend les avenues entre les
 tours, et la police monte aussi (escaliers, équipes en rappel, tireurs d'élite). Toutes les armes dès le départ.
 Avec trois actes d'histoire, un contrat sur les toits, cycle jour/nuit, météo, police à cinq étoiles, bateaux,
 territoires et radio générée en temps réel.
+
+Ce correctif stabilise les chocs entre voitures et la sortie des véhicules du trafic après une percussion. Il ajoute
+aussi l'Architecte, un outil expérimental de test et de correction réservé au développement local, exclu du jeu publié.
 
 Vision, niveau de recherche et feuille de route : [GAME_DESIGN.md](GAME_DESIGN.md).
 Nouveautés : [CHANGELOG.md](CHANGELOG.md).
@@ -94,7 +97,7 @@ munitions confisquées.
 
 ## Développer
 
-Node.js 22 ou plus récent. Aucune installation de dépendances : Three.js est inclus dans `vendor/`.
+Node.js 22 ou plus récent. Aucune installation de dépendances pour le jeu : Three.js est inclus dans `vendor/`.
 
 ```sh
 npm run dev
@@ -117,6 +120,18 @@ Le build statique est généré dans `dist/`. `tools/radio-preview.html` permet 
 
 Pour jouer en ligne, importer le dépôt dans Vercel : `vercel.json` fixe le build (`npm run build`, sortie `dist/`, pas
 d'installation) et les en-têtes de sécurité. Chaque push sur `main` redéploie la production.
+
+### L'Architecte, en local
+
+L'Architecte parcourt la même partie que le joueur, prend des captures et propose des tickets à valider. Son serveur et
+sa salle de contrôle se lancent avec `npm run architecte` ; sa dépendance est installée au premier lancement. Les consignes,
+les réglages et le lancement sont décrits dans [ARCHITECTE.md](ARCHITECTE.md) et [le guide du serveur](tools/architecte/README.md).
+
+Ses modules ne sont chargés qu'en local et ne sont pas copiés dans `dist/`. `?architecte=0` permet de jouer en local sans
+lui. La clé API reste dans `.env.local` et ses données dans `chantier/`, tous deux ignorés par Git.
+
+L'outil reste expérimental : la pause et le plafond de dépense ne coupent pas les appels restants d'une pensée déjà en
+cours. Le cerveau et l'atelier n'ont pas été validés de bout en bout lors de la revue de publication de la 0.9.2.
 
 ## Architecture
 
@@ -147,6 +162,7 @@ d'installation) et les en-têtes de sécurité. Chaque push sur `main` redéploi
 | `js/airplane.js`, `js/flight.js` | Avion et parachute (modèles), modèle de vol |
 | `js/quality.js` | Niveaux graphiques, rythme des images, résolution adaptative |
 | `js/actors.js` | Personnages armés (police, équipages, cibles) |
+| `js/architect*.js`, `js/repro-link.js`, `tools/architecte/` | Testeur, capteurs, tickets et atelier ; développement local uniquement |
 | `js/weapons.js` | Catalogue d'armes et balistique (lancer de rayons sur la ville) |
 | `js/navigation.js` | A* sur le réseau routier (GPS, IA) |
 | `js/missions.js`, `js/mission-director.js` | Scripts de missions (générateurs), marqueurs, objets |

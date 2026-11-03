@@ -108,6 +108,17 @@ Le vol refait de bout en bout, jugé à côté d'un AAA :
 - **Le parapente** : une voile en caissons, à profil d'aile, avec bouches d'entrée d'air et suspentes, qui s'ouvre d'un
   paquet froissé, se creuse sous les freins, et retombe devant le pilote à l'atterrissage.
 
+## Correctif 0.9.2 « Leverage » — collisions et Architecte local
+
+- **Conduite** : les impulsions de collision sont conservées, les secousses de suspension sont limitées et les voitures
+  expulsées du trafic quittent leur ancienne voie. Les contacts entre voitures tiennent compte de leur séparation en
+  hauteur, en ville et entre véhicules de jeu.
+- **Outil de développement** : l'Architecte partage la partie locale pour repérer des problèmes, les photographier et
+  proposer des tickets au Créateur. Un serveur relie son cerveau Claude, sa salle de contrôle et l'atelier de correction.
+  Son fonctionnement reste expérimental ; les décisions sont consignées dans [ARCHITECTE.md](ARCHITECTE.md).
+- **Essais en ligne** : l'Architecte, son serveur et ses styles restent hors du build publié. Ce correctif poursuit la
+  phase de test ; les objectifs de la 1.0 restent à réaliser.
+
 ## Le garage rapide
 
 Le joueur doit pouvoir changer de monture sans jamais chercher un véhicule : le garage (touche G) fige le jeu et propose
@@ -149,4 +160,5 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.8** | **Hostile Takeover** | Acte III, gangs et territoires, casse en plusieurs temps, bateaux et nage, téléphone, police offensive |
 | **0.9** | **Leverage** | Toits jouables, grappin, wingsuit, surf sur les voitures, police verticale, toutes les armes au départ |
 | **0.9.1** | **Leverage** | Le ciel refait : vrai modèle de vol, vol au regard, sensations, parapente en caissons |
+| **0.9.2** | **Leverage** | Correctif des collisions automobiles ; Architecte expérimental réservé au développement local |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |

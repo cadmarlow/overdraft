@@ -88,6 +88,7 @@ class ActorSystem {
       amount -= absorbed;
     }
     actor.hp -= amount;
+    actor.onHurt?.(amount, cause);
     actor.flinch = 0.25;
     if (actor.hp > 0) actor.rig.flinch(dirX, dirZ);
     actor.alert = true;
@@ -142,7 +143,8 @@ class ActorSystem {
         continue;
       }
       if (a.rappel) this.rappel(a, dt, target);
-      else this.think(a, dt, target, ctx);
+      // a body with a pilot of its own (the Architect) is moved by it, unless the pilot hands back to the fight
+      else if (!a.pilot?.(a, dt, target, ctx)) this.think(a, dt, target, ctx);
       a.rig.update(dt, a.x, a.z, a.heading, groundOf(a), this.controllers, a.rappel ? a.rappel.air : 0, visible);
       a.model.update(visible, camD, dt);
     }
@@ -243,7 +245,11 @@ class ActorSystem {
       }
     }
 
-    // Movement with building collision
+    this.step(a, dt, mx, mz, speed, face);
+  }
+
+  // Turn towards `face` and move along (mx, mz) at `speed`, sliding along buildings, never off a roof's edge
+  step(a, dt, mx, mz, speed, face) {
     a.heading += angleTo(a.heading, face) * Math.min(1, dt * (speed > 3 ? 8 : 10));
     const accel = Math.min(1, dt * 7);
     a.vx += (mx * speed - a.vx) * accel;

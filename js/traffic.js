@@ -1,13 +1,13 @@
 import * as THREE from 'three/webgpu';
 import { buildRoadNetwork } from './road-network.js';
 import { createPedestrianSystem } from './pedestrian-system.js';
-import { vehicleContact, resolveVehicleContact, sweptVehicleContact } from './vehicle-physics.js';
+import { STACKED, vehicleContact, resolveVehicleContact, sweptVehicleContact } from './vehicle-physics.js';
 import { signalPhase, walkSignal } from './city-config.js';
 import { cityUniforms, createContactShadowMaterial, createCarFlareMaterial } from './tsl-materials.js';
 import { HEADLIGHTS, createVehicleHeadlight, placeVehicleHeadlight } from './vehicle-lights.js';
 import { BODY_SPECS, carStyleCode, buildLightbarGeometry, createLightbarMaterial } from './cars.js';
 import { carModels, carSpecs, createWheelMaterial, trafficMaterial, withWheels } from './car-assets.js';
-import { kickBody } from './car-physics.js';
+import { shuntBody } from './car-physics.js';
 import {
   BUS_SPEC,
   buildLoftedBusBodyGeometry,
@@ -1439,6 +1439,8 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     const dz = pe.position.z - prevZ - v.z + v.prevZ;
     if (Math.abs(pe.position.x - v.x) > reach + Math.abs(dx)
       || Math.abs(pe.position.z - v.z) > reach + Math.abs(dz)) return;
+    // A car in the air above the traffic passes over it: the contact is planar and would shove it from below
+    if (pe.body && pe.position.y > STACKED) return;
     const a = contactA, b = contactB, hit = vehicleHit;
     const heading = pe.heading || 0;
     a.x = pe.position.x; a.z = pe.position.z;
@@ -1470,7 +1472,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
       pe.vz = a.vz - a.cos * pe.speed;
       pe.angularVel = a.angularVel;
       const kick = Math.min(12, hit.impulse / a.mass);
-      if (pe.body) kickBody(pe, hit.x, pe.position.y + 0.3, hit.z, 0, Math.min(hit.impulse * 0.05, a.mass * 1.1), 0);
+      if (pe.body) shuntBody(pe, hit.x, hit.z, hit.impulse);
       else {
         pe.pitchVel += (hit.nx * a.sin + hit.nz * a.cos) * kick * 0.16;
         pe.rollVel -= (hit.nx * a.cos - hit.nz * a.sin) * kick * 0.2;
@@ -2390,7 +2392,7 @@ function createHighwayTraffic(scene, lanes, traffic) {
         pe.vz = a.vz - a.cos * pe.speed;
         pe.angularVel = a.angularVel;
         const kick = Math.min(12, hit.impulse / a.mass);
-        if (pe.body) kickBody(pe, hit.x, pe.position.y + 0.3, hit.z, 0, Math.min(hit.impulse * 0.05, a.mass * 1.1), 0);
+        if (pe.body) shuntBody(pe, hit.x, hit.z, hit.impulse);
         else {
           pe.pitchVel = (pe.pitchVel || 0) + (hit.nx * a.sin + hit.nz * a.cos) * kick * 0.16;
           pe.rollVel = (pe.rollVel || 0) - (hit.nx * a.cos - hit.nz * a.sin) * kick * 0.2;

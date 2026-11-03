@@ -4,8 +4,10 @@ import { execFileSync } from 'node:child_process';
 const root = resolve(import.meta.dirname, '..');
 await rm(resolve(root, 'dist'), { recursive: true, force: true });
 await mkdir(resolve(root, 'dist'), { recursive: true });
+// The Architect (ARCHITECTE.md) is a local development tool: his files never ship
+const DEV_ONLY = /[\\/](js[\\/](architect[\w-]*|repro-link)\.js|css[\\/]architect\.css)$/;
 for (const name of ['index.html', 'js', 'css', 'vendor', 'assets', 'LICENSE', 'CREDITS.md']) {
-  await cp(resolve(root, name), resolve(root, 'dist', name), { recursive: true });
+  await cp(resolve(root, name), resolve(root, 'dist', name), { recursive: true, filter: (source) => !DEV_ONLY.test(source) });
 }
 await writeFile(resolve(root, 'dist/_headers'), '/*\n  X-Content-Type-Options: nosniff\n  Referrer-Policy: strict-origin-when-cross-origin\n  Permissions-Policy: camera=(), microphone=(), geolocation=()\n/vendor/*\n  Cache-Control: public, max-age=31536000, immutable\n');
 if (process.argv.includes('--with-source')) {

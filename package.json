@@ -1,11 +1,12 @@
 {
   "name": "overdraft",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "node scripts/build.mjs",
-    "test": "node --test tests/*.test.cjs tests/*.test.mjs"
+    "test": "node --test tests/*.test.cjs tests/*.test.mjs",
+    "architecte": "node tools/architecte/server.mjs"
   }
 }

@@ -35,3 +35,9 @@ one atlas with a paint mask, simplified and renamed for the game. Per-model cred
 Obtained through the catalogue of https://github.com/pedrosoandre/carros.
 
 Objects carried by passers-by are sculpted by `tools/build-humans.mjs`.
+
+## Outil de développement local
+
+Le serveur de l'Architecte utilise le SDK TypeScript Anthropic (`@anthropic-ai/sdk`), sous licence Apache-2.0 :
+https://github.com/anthropics/anthropic-sdk-typescript. Sa licence est fournie avec le paquet installé dans
+`tools/architecte/node_modules/@anthropic-ai/sdk/LICENSE`. Le SDK et le serveur sont exclus du build du jeu publié.

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBody, makeTune, settleBody, stepCar, impactBody } from '../js/car-physics.js';
+import { createBody, makeTune, settleBody, stepCar, impactBody, popBody, refreshAxes, shuntBody } from '../js/car-physics.js';
+import { resolveVehicleContact, sweptVehicleContact, vehicleContact } from '../js/vehicle-physics.js';
 
 const SHAPE = { halfW: 0.92, halfL: 2.3, height: 1.42, wheelX: 0.8, wheelZf: 1.42, wheelZr: -1.42, wheelRadius: 0.34 };
 function makeCar(kind = 'sedan', over = {}) {
@@ -196,4 +197,84 @@ test('a teleport in the middle of a slide leaves a car standing level', () => {
   run(c, STILL, 1);
   assert.ok(roadSpeed(c) < 0.1);
   assert.ok(Math.abs(c.heading - 1) < 1e-3);
+});
+
+const tilt = (c) => { refreshAxes(c.body); return Math.asin(Math.min(1, Math.abs(c.body.r[7]))) * 180 / Math.PI; };
+
+test('a shunt adds to the change of speed the contact before it made, it never undoes it', () => {
+  const c = run(makeCar(), { ...STILL, throttle: 1 }, 2);
+  const before = c.speed;
+  // vehicle-physics.js leaves its answer on the planar fields, then the shunt follows (traffic.js, gameplay.js)
+  c.speed = before * 0.4; c.vx = 0.8; c.angularVel = 0.5;
+  assert.ok(shuntBody(c, c.position.x, c.position.z + 2.3, 6000) > 0);
+  assert.ok(Math.abs(c.speed - before * 0.4) < 0.05, `speed ${c.speed} of ${before}`);
+  assert.ok(Math.abs(c.vx - 0.8) < 0.05, `side ${c.vx}`);
+  assert.ok(Math.abs(c.angularVel - 0.5) < 0.05, `spin ${c.angularVel}`);
+  assert.ok(c.body.vy > 0.1, 'it jolts up');
+  stepCar(c, STILL, 1 / 60, flat());
+  assert.ok(c.speed < before * 0.45, `carried on at ${c.speed}`);
+});
+
+test('a shunt jolts a car on its wheels without tipping it, and leaves a car in the air alone', () => {
+  const c = run(makeCar(), STILL, 1);
+  shuntBody(c, c.position.x, c.position.z + 2.3, 30000);
+  let most = 0, top = 0;
+  run(c, STILL, 2, flat(), (car) => { most = Math.max(most, tilt(car)); top = Math.max(top, car.position.y); });
+  assert.ok(most < 4, `tipped ${most}°`);
+  assert.ok(top > 0.02 && top < 0.3, `rose ${top} m`);
+  const air = makeCar();
+  air.position.y = 4;
+  stepCar(air, STILL, 1 / 60, flat());
+  const vy = air.body.vy;
+  assert.equal(shuntBody(air, 0, 2.3, 30000), 0);
+  assert.equal(air.body.vy, vy);
+});
+
+test('driven into a car that will not give, frame after frame, a car stays on its wheels', () => {
+  // Ticket #0001, a jam in Times Square: a car at full throttle against one that keeps stopping dead (a wreck, a car
+  // wedged in the queue), resolved every frame as gameplay.js collideCars does. The shunt once undid the contact's
+  // change of speed and lifted the bumper, so each frame hit as hard as the first: the car stood on its tail and flew.
+  const c = makeCar();
+  c.speed = 12;
+  const other = { x: 0, z: 9, sin: 0, cos: 1, halfW: 0.92, halfL: 2.3, mass: 1600 };
+  const a = { halfW: 0.92, halfL: 2.3, mass: c.tune.mass }, hit = {};
+  let most = 0, top = 0, contacts = 0;
+  for (let frame = 0; frame < 240; frame++) {
+    c.prevX = c.position.x; c.prevZ = c.position.z;
+    stepCar(c, { ...STILL, throttle: 1 }, 1 / 60, flat());
+    Object.assign(other, { prevX: other.x, prevZ: other.z, vx: 0, vz: 0, angularVel: 0 });
+    const sin = Math.sin(c.heading), cos = Math.cos(c.heading);
+    Object.assign(a, { x: c.position.x, z: c.position.z, prevX: c.prevX, prevZ: c.prevZ, sin, cos,
+      vx: sin * c.speed + c.vx, vz: cos * c.speed + c.vz, angularVel: c.angularVel });
+    if (sweptVehicleContact(a, other, hit) || vehicleContact(a, other, hit)) {
+      contacts++;
+      resolveVehicleContact(a, other, hit);
+      c.position.x = hit.ax + hit.nx * hit.depth; c.position.z = hit.az + hit.nz * hit.depth;
+      c.speed = a.vx * sin + a.vz * cos; c.vx = a.vx - sin * c.speed; c.vz = a.vz - cos * c.speed; c.angularVel = a.angularVel;
+      shuntBody(c, hit.x, hit.z, hit.impulse);
+    }
+    most = Math.max(most, tilt(c));
+    top = Math.max(top, c.position.y);
+  }
+  assert.ok(contacts > 100, `contacts ${contacts}`);
+  assert.ok(most < 8, `reared ${most}°`);
+  assert.ok(top < 0.3, `rose ${top} m`);
+  assert.ok(c.body.r[4] > 0.98);
+});
+
+test('a car rammed out of the traffic bucks and comes down on its wheels', () => {
+  for (const kind of ['compact', 'taxi', 'suv']) {
+    for (const closing of [10, 20, 30, 45]) {
+      const c = run(makeCar(kind), STILL, 1);
+      settleBody(c, 0);
+      const impulse = 1.08 * closing / (1 / 1500 + 1 / c.tune.mass);
+      c.speed = impulse / c.tune.mass;
+      popBody(c, 0, -2.3, impulse); // struck from behind
+      let most = 0;
+      run(c, { ...STILL, handbrake: true }, 5, flat(), (car) => { most = Math.max(most, tilt(car)); });
+      assert.ok(most < 40, `${kind} hit at ${closing} m/s reared ${most}°`);
+      if (closing === 20) assert.ok(most > 2, `${kind} hit at 20 m/s hardly bucked (${most}°)`);
+      assert.ok(c.body.r[4] > 0.95, `${kind} hit at ${closing} m/s did not land on its wheels`);
+    }
+  }
 });

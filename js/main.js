@@ -595,6 +595,17 @@ async function initApp() {
   gameplay = new Playground({ controllers: controllerManager, camera: cameraSystem, traffic: trafficSystem, highway: highwayTraffic, streets: streetDetails,
     scene, onMode: selectMode, onTime: selectTime, audio: audioSystem, map: mapSystem, touch: touchControls, gamepad: gamepadControls,
     lighting: lightingSystem, grade: colorGrade });
+  // The Architect (ARCHITECTE.md) is a local development tool: on this machine or its network only, never online, where
+  // the production build does not even ship his files (scripts/build.mjs). Built here, before the shaders compile, so his
+  // car and helicopter compile behind the loading screen. ?architecte=0 plays without him, as online.
+  if (architectAllowed()) {
+    try {
+      const { ArchitectSystem } = await import('./architect.js');
+      gameplay.architect = new ArchitectSystem(gameplay);
+    } catch (error) {
+      console.warn('[architecte] indisponible', error);
+    }
+  }
   cameraSystem.initialized = false;
   controllerManager.update(0.016, 0, controllerManager.getActiveEntity().position);
   cameraSystem.update(0.016, 0);
@@ -715,7 +726,7 @@ async function initApp() {
   };
   if (profile) window.__profile = profile;
 
-  renderer.setAnimationLoop((now) => {
+  const frame = (now) => {
     if (gameplay.qaFrozen) { lastTime = now; return; }
     if (pacer.skip(now)) return;
     if (profile) profile.last = performance.now();
@@ -787,6 +798,8 @@ async function initApp() {
       markInit('warmup');
     }
     renderPipeline.render();
+    // the Architect's photos read the frame back here, while it is still on the canvas (local development only)
+    gameplay.architect?.afterRender(renderer.domElement);
     pacer.submitted(now);
     if (profile) {
       mark('rendu');
@@ -847,10 +860,21 @@ async function initApp() {
       if (elSpeedMeter) elSpeedMeter.style.transform = `scaleX(${Math.min(1, mph / (topSpeedMph[mode] || 80))})`;
       if (elAltitude) elAltitude.textContent = altFt.toLocaleString('en-US');
       // The street corner of the player on the follow cameras, of the camera itself on the scenic ones
-      const where = cameraSystem.getActivePreset().category === 'follow' ? activeEnt.position : cameraSystem.currentPos;
+      const where = gameplay.architect?.viewFocus() ?? (cameraSystem.getActivePreset().category === 'follow' ? activeEnt.position : cameraSystem.currentPos);
       renderLocation(getLocationLabel(where.x, where.z));
     }
-  });
+  };
+  renderer.setAnimationLoop(frame);
+  // the Architect keeps the game going while its tab is hidden (local development only)
+  gameplay.architect?.keepAlive(frame);
+}
+
+// This machine or its local network (an iPhone on the same Wi-Fi), never a public host
+function architectAllowed() {
+  if (new URLSearchParams(location.search).get('architecte') === '0') return false;
+  const host = location.hostname;
+  return host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.endsWith('.local')
+    || /^(10\.\d+|192\.168|172\.(1[6-9]|2\d|3[01]))\.\d+\.\d+$/.test(host);
 }
 
 initApp().catch(error => {

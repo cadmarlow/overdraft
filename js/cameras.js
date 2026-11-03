@@ -45,6 +45,7 @@ class CameraSystem {
 
     // Follow cameras (chase / action) are smoothed relative to the followed entity, see update()
     this.followEntity = null;
+    this.spectate = null; // () => the entity to follow instead of the player's (architect.js)
     this.followOffset = new THREE.Vector3();
     this.followLookOffset = new THREE.Vector3();
     this.followBaseY = 0;
@@ -218,7 +219,8 @@ class CameraSystem {
   }
 
   update(dt, elapsed) {
-    const entity = this.controllerManager.getActiveEntity();
+    // Someone else's body when the Architect holds the camera (architect.js), else the player's
+    const entity = this.spectate?.() || this.controllerManager.getActiveEntity();
     if (this.flightView && (this.activePresetId === 'chase' || this.activePresetId === 'action')) { this.updateFlight(dt, entity); return; }
     this.flying = false;
     const desiredPos = this._desiredPos;

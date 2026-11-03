@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.9.2 — Leverage, collisions et Architecte local — 3 novembre 2026
+
+Correctif pour les essais en ligne : les chocs entre voitures sont stabilisés. L'Architecte arrive comme outil de
+développement local expérimental ; il est exclu du jeu publié.
+
+### Collisions automobiles
+- Une secousse de suspension conserve la vitesse et la rotation calculées par la collision, au lieu de rétablir leur
+  valeur d'avant le choc.
+- Les secousses sont limitées et réservées aux voitures sur leurs roues : pousser contre un véhicule bloqué ne doit
+  plus faire cabrer puis décoller la voiture à chaque image.
+- Les voitures suffisamment séparées en hauteur ne se heurtent plus dans la couche de collisions planes, en ville et
+  entre véhicules de jeu.
+- Un véhicule expulsé du trafic apparaît à la position corrigée après le contact, quitte son ancienne voie et reçoit
+  une impulsion verticale réduite. Sa copie dans le trafic ne continue plus à le pousser.
+- Tests de régression sur les contacts prolongés, les vitesses après choc, les passages au-dessus du trafic et la
+  réception des voitures percutées.
+
+### L'Architecte — développement local
+- Personnage à pied, en voiture ou en hélicoptère, avec commandes, défense et passage de caméra par L.
+- Capteurs, captures, liens de reproduction, journal et tickets avec validation du Créateur.
+- Serveur local, cerveau Claude, salle de contrôle et atelier de correction des tickets validés.
+- Les modules et styles de l'Architecte sont exclus de `dist/`, sans import statique ni préchargement. Le chargement
+  dynamique est réservé aux hôtes locaux ; `?architecte=0` permet un essai local sans lui.
+- `.env.local` et `chantier/` sont ignorés par Git ; la clé API est utilisée côté serveur.
+
+### Validation et limites
+- Revue locale : 397 tests réussis sur 398 ; seul l'échec connu de `tree-geodata` subsiste, lié à la licence Xcode.
+- Build statique vérifié dans un Chrome séparé en WebGPU : marche, entrée en voiture, conduite, collisions et soins
+  après une mort ordinaire. Aucun chargement de l'Architecte sous un nom d'hôte public simulé.
+- Campagne complète et longues sessions non rejouées ; cerveau et atelier non validés avec de vrais appels lors de
+  cette revue. Dans l'outil local, la pause et le plafond de dépense ne coupent pas les appels restants d'une pensée
+  déjà en cours.
+
 ## 0.9.1 — Leverage, le ciel
 
 Le vol refait de bout en bout : la wingsuit et le parachute ne donnaient aucune sensation, et on avait du mal à se mettre

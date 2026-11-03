@@ -459,7 +459,6 @@ const axleSpeed = [0, 0], axleLimit = [0, 0];
 // Legacy planar state in: the rest of the game edits speed/vx/vz/angularVel directly
 function syncIn(c) {
   const b = c.body;
-  const sin = Math.sin(c.heading), cos = Math.cos(c.heading);
   if (Math.abs(c.heading - b.heading) > 1e-9) {
     // Teleported or spawned to a new heading: stands level on it
     const yaw = c.heading * 0.5;
@@ -467,11 +466,20 @@ function syncIn(c) {
     b.vy = b.wx = b.wz = 0;
     for (const w of b.wheels) w.ready = false;
   }
+  takePlanar(c);
+}
+
+// What gameplay did to the planar velocity since the body last wrote it (a contact just resolved, a blast) goes into the
+// body, once
+function takePlanar(c) {
+  const b = c.body;
   if (c.speed !== b.speed || c.vx !== b.svx || c.vz !== b.svz) {
+    const sin = Math.sin(c.heading), cos = Math.cos(c.heading);
     b.vx = sin * c.speed + (c.vx || 0);
     b.vz = cos * c.speed + (c.vz || 0);
   }
   b.wy += (c.angularVel || 0) - b.syaw;
+  b.speed = c.speed; b.svx = c.vx; b.svz = c.vz; b.syaw = c.angularVel || 0;
 }
 
 function syncOut(c) {
@@ -541,10 +549,12 @@ function impactBody(c, px, py, pz, nx, ny, nz, restitution = 0.14, friction = 0.
   return -vn;
 }
 
-// A kick from outside (another car, a blast): impulse (N·s) at a world point
+// A kick from outside (another car, a blast): impulse (N·s) at a world point. It adds to whatever the planar velocity was
+// just given: a contact resolved on speed/vx/vz a moment before must not be undone by the kick that follows it.
 function kickBody(c, px, py, pz, jx, jy, jz) {
   const b = c.body, t = c.tune, p = c.position;
   if (!b) return;
+  takePlanar(c);
   refreshAxes(b);
   const r = b.r;
   const rx = px - p.x - (r[3] * t.cg + r[6] * b.cgZ), ry = py - p.y - (r[4] * t.cg + r[7] * b.cgZ), rz = pz - p.z - (r[5] * t.cg + r[8] * b.cgZ);
@@ -554,6 +564,33 @@ function kickBody(c, px, py, pz, jx, jy, jz) {
   c.vx = b.vx - Math.sin(c.heading) * c.speed; c.vz = b.vz - Math.cos(c.heading) * c.speed;
   c.angularVel = b.wy;
   b.speed = c.speed; b.svx = c.vx; b.svz = c.vz; b.syaw = c.angularVel;
+}
+
+// A shunt from another car (impulse in N·s, at the contact point x, z): the body jolts up on its springs, leaning a
+// little towards the side that was hit. The push goes up near the centre of mass and only into a car standing on its
+// wheels: pushed up at the bumper itself, a car tips over, and kicked again on every frame of a long contact one stood
+// on its tail in a Times Square jam and took off over the traffic.
+const SHUNT = { lift: 0.05, most: 1, lean: 0.3 };
+function shuntBody(c, x, z, impulse) {
+  const b = c.body, t = c.tune, p = c.position;
+  if (!b || !(impulse > 0)) return 0;
+  refreshAxes(b);
+  const r = b.r;
+  if (b.grounded < 2 || r[4] < 0.9) return 0;
+  const lift = Math.min(impulse * SHUNT.lift, t.mass * SHUNT.most);
+  const cx = p.x + r[3] * t.cg + r[6] * b.cgZ, cy = p.y + r[4] * t.cg + r[7] * b.cgZ, cz = p.z + r[5] * t.cg + r[8] * b.cgZ;
+  kickBody(c, cx + (x - cx) * SHUNT.lean, cy, cz + (z - cz) * SHUNT.lean, 0, lift, 0);
+  return lift;
+}
+
+// A car rammed out of the traffic (gameplay.js takedown) by a blow of `impulse` N·s at (x, z): its struck end pops up
+// off its springs and it comes back down on its wheels. Pushed up at the bumper with a fifth of the blow, up to 6.5 m/s,
+// cars stood on their nose and flipped at city speeds.
+const POP = { lift: 0.1, most: 2.5, lean: 0.6 };
+function popBody(c, x, z, impulse) {
+  const p = c.position;
+  if (!c.body || !(impulse > 0)) return;
+  kickBody(c, p.x + (x - p.x) * POP.lean, p.y + 0.25, p.z + (z - p.z) * POP.lean, 0, Math.min(impulse * POP.lift, c.tune.mass * POP.most), 0);
 }
 
 // Puts a car down at rest on the spot (teleports, respawns, a car summoned from the garage)
@@ -570,4 +607,4 @@ function settleBody(c, heading = c.heading) {
   refreshAxes(b);
 }
 
-export { CLASSES, createBody, impactBody, kickBody, makeTune, refreshAxes, settleBody, stepCar, torqueAt };
+export { CLASSES, createBody, impactBody, kickBody, makeTune, popBody, refreshAxes, settleBody, shuntBody, stepCar, torqueAt };

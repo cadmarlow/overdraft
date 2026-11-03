@@ -13,7 +13,7 @@ import { RoadNavigator } from './navigation.js';
 import { HOSPITALS, PRECINCTS, MarkerSystem, PickupSystem, PICKUP_STYLE } from './missions.js';
 import { MissionDirector } from './mission-director.js';
 import { GameHud } from './hud.js';
-import { vehicleContact, resolveVehicleContact, sweptVehicleContact } from './vehicle-physics.js';
+import { STACKED, vehicleContact, resolveVehicleContact, sweptVehicleContact } from './vehicle-physics.js';
 import { polygonContains } from './building-collision.js';
 import { RadioSystem, STATIONS } from './radio.js';
 import { Atmosphere } from './atmosphere.js';
@@ -25,7 +25,7 @@ import { Garage } from './garage.js';
 import { collapse } from './ragdoll.js';
 import { Arsenal } from './arsenal.js';
 import { carSpecs } from './car-assets.js';
-import { kickBody, settleBody } from './car-physics.js';
+import { popBody, settleBody, shuntBody } from './car-physics.js';
 import { DriveEffects, FallingLamps, addDent } from './drive-fx.js';
 import { StuntScore } from './stunts.js';
 import { GangSystem } from './gangs.js';
@@ -39,7 +39,7 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.1';
+const BUILD = '0.9.2';
 const CAR_NAMES = {
   sedan: ['VALMONT', 'ÉCUME', 'BERLINE / PROPULSION'], suv: ['BRISANT', 'RÉCIF', 'SUV / TRANSMISSION INTÉGRALE'],
   taxi: ['VALMONT', 'CAB 7', 'TAXI / PROPULSION'], pickup: ['GRÉVILLE', 'FALAISE', 'PICK-UP / PROPULSION'],
@@ -215,6 +215,7 @@ export class Game {
     this.shops = new ShopSystem(this);
     this.arsenal = new Arsenal(this);
     this.garage = new Garage(this);
+    this.architect = null; // local development only, attached by main.js (ARCHITECTE.md)
     this.shops.restore(this.savedShops);
     this.shops.place();
     this.placeWorldPickups();
@@ -565,6 +566,7 @@ export class Game {
 
   drawMapOverlay(ctx, toX, toY, w, h, scale, mini) {
     this.gangs.draw(ctx, toX, toY);
+    this.architect?.drawMap(ctx, toX, toY);
     if (!mini || scale > 0.1) {
       ctx.fillStyle = '#ffb347';
       for (const r of ramps) {
@@ -628,7 +630,7 @@ export class Game {
       ctx.fillRect(x - 3.5, y - 3.5, 7, 7);
     }
     for (const a of this.actors.actors) {
-      if (a.dead) continue;
+      if (a.dead || a.architect) continue;
       const x = toX(a.x), y = toY(a.z);
       if (!inView(x, y)) continue;
       ctx.fillStyle = a.team === 'police' ? '#7fb2ff' : a.hostile ? '#ff5a5a' : '#ffd54a';
@@ -728,14 +730,19 @@ export class Game {
     const heading = Math.atan2(body.sin, body.cos);
     const paint = new THREE.Color().setRGB(colour[0], colour[1], colour[2]).getHex();
     if (this.fleet.length >= FLEET_MAX + 6) return;
-    const car = this.makeCar(kind, paint, new THREE.Vector3(body.x, 0, body.z), heading, false, true);
+    // Where the contact left it, clear of the car that hit it (body is where the two met, earlier in the frame)
+    const x = v.x ?? body.x, z = v.z ?? body.z;
+    const car = this.makeCar(kind, paint, new THREE.Vector3(x, 0, z), heading, false, true);
     settleBody(car, heading);
     car.speed = body.vx * body.sin + body.vz * body.cos;
     car.vx = body.vx - body.sin * car.speed;
     car.vz = body.vz - body.cos * car.speed;
     car.angularVel = body.angularVel;
-    kickBody(car, hit.x, 0.25, hit.z, 0, Math.min(hit.impulse * 0.2, car.tune.mass * 6.5), 0);
-    if (v.lane === undefined) this.traffic.removeVehicle(v);
+    // The blow pops its struck end up: it bucks and comes down on its wheels
+    popBody(car, hit.x, hit.z, hit.impulse);
+    // It leaves the road model, or the street would keep a copy of it in its lane, overlapping the loose car and shoving
+    // it on every frame (the parkway hides its own car until it comes round again, traffic.js)
+    if (v.edge !== 'highway') this.traffic.removeVehicle(v);
     this.stats.cars++;
   }
 
@@ -815,6 +822,7 @@ export class Game {
     if (a.air || b.air) return;
     const reach = 6;
     if (Math.abs(a.position.x - b.position.x) > reach + 3 || Math.abs(a.position.z - b.position.z) > reach + 3) return;
+    if (Math.abs(a.position.y - b.position.y) > STACKED) return; // one passing over the other
     this.readBody(a, bodyA);
     this.readBody(b, bodyB);
     if (!sweptVehicleContact(bodyA, bodyB, hit) && !vehicleContact(bodyA, bodyB, hit)) return;
@@ -837,10 +845,9 @@ export class Game {
     Object.assign(ev, { a, b, kind: 'vehicle', x: hit.x, y: 0.6, z: hit.z, nx: hit.nx, ny: 0, nz: hit.nz, speed });
     if (speed > 0.5) this.collisionListener(ev);
     if (speed > 2.2) this.traffic.spawnSparks(hit.x, 0.56, hit.z, hit.nx, hit.nz, speed);
-    // A shunt lifts the lighter car off its springs
-    const lift = Math.min(hit.impulse * 0.05, 1800);
-    if (a.body) kickBody(a, hit.x, a.position.y + 0.3, hit.z, 0, lift, 0);
-    if (b.body) kickBody(b, hit.x, b.position.y + 0.3, hit.z, 0, lift, 0);
+    // A shunt jolts both off their springs, the lighter one more
+    if (a.body) shuntBody(a, hit.x, hit.z, hit.impulse);
+    if (b.body) shuntBody(b, hit.x, hit.z, hit.impulse);
   }
 
   // Bodies the car layer must keep apart from the protagonist on foot
@@ -1393,6 +1400,7 @@ export class Game {
         return { hit: true, kill: false };
       }
       case 'player': {
+        if (shooter) { this.lastHitBy = shooter; this.lastHitAt = this.clock; }
         if (h.melee) this.audio.sfx('punch', h.x, h.y, h.z);
         else this.fx.impact(h.x, h.y, h.z, h.nx, h.ny, h.nz, this.player.inVehicle ? 'metal' : 'flesh');
         if (this.player.inVehicle && !this.car.moto) {
@@ -1651,6 +1659,8 @@ export class Game {
     if (this.state === 'dead') return;
     this.health = 0;
     this.stats.deaths++;
+    // a death the Architect dealt costs nothing at the hospital (ARCHITECTE.md)
+    this.spared = !!this.lastHitBy?.architect && this.clock - (this.lastHitAt ?? -9) < 2;
     const p = this.person;
     this.vertical.reset();
     const floorY = p.position.y + 0.3; // a body on a roof falls on the roof (or off its edge)
@@ -1701,7 +1711,9 @@ export class Game {
       const d = Math.hypot(h.x - this.player.x, h.z - this.player.z);
       if (d < bd) { bd = d; best = h; }
     }
-    const fee = Math.min(Math.round(this.money * 0.08), dead ? 1500 : 2500);
+    // Killed by the Architect: it costs nothing (ARCHITECTE.md)
+    const spared = dead && this.spared;
+    const fee = spared ? 0 : Math.min(Math.round(this.money * 0.08), dead ? 1500 : 2500);
     this.money = Math.max(0, this.money - fee);
     this.hud.setMoney(this.money);
     this.rearm();
@@ -1709,7 +1721,7 @@ export class Game {
     this.actors.clear((a) => a.dead || a.team === 'police');
     this.roofPolice.reset();
     this.health = 100;
-    if (dead) this.armor = 0;
+    if (dead && !spared) this.armor = 0;
     this.state = 'onFoot';
     this.stateT = 0;
     this.person.diveTime = -1;
@@ -1720,7 +1732,7 @@ export class Game {
     document.body.dataset.gameState = this.state;
     const spot = this.safeSpot(best.x, best.z, 0.5);
     this.teleportPlayer(spot.x, spot.z);
-    this.toast(best.name, `${dead ? 'Soins' : 'Caution'} : ${fee.toLocaleString('fr-FR')} $ · armes conservées`);
+    this.toast(best.name, spared ? 'Soins offerts : l’Architecte ne fait pas payer ses leçons' : `${dead ? 'Soins' : 'Caution'} : ${fee.toLocaleString('fr-FR')} $ · armes conservées`);
     this.save();
   }
 
@@ -2152,6 +2164,7 @@ export class Game {
       this.driveFx.flush();
     }
     if (dt > 0) { this.stunts.update(dt); this.fallingLamps.update(dt); this.gangs.update(dt); this.tips(dt); }
+    this.architect?.update(dt);
     this.fx.update(dt, (x, z) => this.controllers.getGroundHeight(x, z, 'person', this.person.position.y + 0.5));
     this.markers.update((x, z) => this.controllers.getGroundHeight(x, z, 'person'));
 
