@@ -3,9 +3,12 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.3 — Main Street** : les rez-de-chaussée refaits. 25 000 boutiques en relief, chacune là où New York en
-recense une vraie, avec son enseigne (nom inventé, lettres nettes à toute distance), sa vraie pièce derrière la vitre,
-ses auvents, ses étals et son rideau de fer qui descend la nuit.
+Version **0.9.4 — Momentum** : la conduite refaite pour le clavier (volant progressif, contrôle de stabilité, freiner en
+tournant, vrai demi-tour au frein à main) et des voitures qu'on regarde : la rue se reflète dans la peinture, le héros est
+assis au volant dans un habitacle, la caisse penche sur ses ressorts, vue intérieure à la place du conducteur.
+
+La 0.9.3 a refait les rez-de-chaussée : 25 000 boutiques en relief, chacune là où New York en recense une vraie, avec son
+enseigne, sa vraie pièce derrière la vitre, ses auvents, ses étals et son rideau de fer qui descend la nuit.
 
 Depuis la 0.9 : Manhattan à la verticale, et un ciel qui se vole pour de vrai. Les 117 000 toits se parcourent, le grappin *Levier*
 hisse jusqu'au rebord d'un immeuble ou accroche une voiture lancée, la wingsuit descend les avenues entre les

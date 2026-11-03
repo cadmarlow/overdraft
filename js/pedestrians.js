@@ -2047,6 +2047,53 @@ class PersonRig {
     }
     this.finishBones();
   }
+
+  // At the wheel of a car (car-cabin.js lays the cabin out): back in the seat, hands on the rim at ten to two going
+  // round with it, feet on the pedals, head up and turned a little into the corner. In the car's frame, like ride().
+  drive(root, { seat, wheel, radius, tilt, turn, pedals, recline, look }) {
+    const s = this.s;
+    this.riding = true;
+    this.gait = 0;
+    this.run = 0;
+    root.updateWorldMatrix(true, false);
+    root.matrixWorld.decompose(_rootPos, _qRoot, _v);
+    const toWorld = (local) => local.applyQuaternion(_qRoot).add(_rootPos);
+
+    qX(_qPelvis, -recline).premultiply(_qRoot);
+    toWorld(_pelvis.set(seat.x, seat.y + 0.06 * s, seat.z + 0.02));
+    this.writeBone(BONE.PELVIS, _qPelvis, _pelvis);
+    _qChest.copy(_qPelvis).multiply(qX(_q, 0.1));
+    this.writeBone(BONE.CHEST, _qChest, this.jointFrom(BONE.PELVIS, BONE.CHEST, _qPelvis, _pelvis, _chest));
+    _qa.copy(_qRoot).multiply(_q2.setFromAxisAngle(_yAxis, look)).multiply(qX(_q, 0.05));
+    this.jointFrom(BONE.CHEST, BONE.HEAD, _qChest, _chest, _v);
+    this.writeBone(BONE.HEAD, _qa, _v);
+    this.headPosition = (this.headPosition || new THREE.Vector3()).copy(_v);
+    this.headQuaternion = (this.headQuaternion || new THREE.Quaternion()).copy(_qa);
+
+    _fwd.set(0, 0, 1).applyQuaternion(_qRoot);
+    this.yaw = Math.atan2(_fwd.x, _fwd.z);
+    // The rim leans back with the column: its top is the far side of the wheel
+    const ct = Math.cos(tilt), st = Math.sin(tilt);
+    for (let i = 0; i < 2; i++) {
+      const side = SIDES[i];
+      this.jointFrom(BONE.CHEST, LIMB.upperArm[i], _qChest, _chest, _shoulder);
+      const a = side * 1.05 + turn, up = Math.cos(a) * radius;
+      toWorld(_target.set(wheel.x + Math.sin(a) * radius, wheel.y + up * ct, wheel.z + up * st - 0.02));
+      _pole.set(side * 0.8, -1, -0.3).applyQuaternion(_qRoot);
+      this.limb(LIMB.upperArm[i], LIMB.forearm[i], _shoulder, _target, UPPER_ARM * s, (FOREARM + 0.07) * s, _pole, _fwd, side * ARM_BIND_ABDUCTION);
+
+      // the ball of each foot on its pedal, toes up
+      const footPitch = -0.3;
+      qX(_q2, footPitch);
+      _v2.set(0, TOE_JOINT.y * s - 0.012, TOE_JOINT.z * s * 0.85).applyQuaternion(_q2);
+      _target.set(pedals.x + side * 0.12, pedals.y, pedals.z).sub(_v2);
+      toWorld(_target);
+      this.jointFrom(BONE.PELVIS, LIMB.thigh[i], _qPelvis, _pelvis, _hip);
+      const ankle = this.solveLeg(i, _hip, _target, this.yaw);
+      this.writeFoot(i, ankle, _qa.copy(_qRoot).multiply(qX(_q, footPitch)), 0);
+    }
+    this.finishBones();
+  }
 }
 
 

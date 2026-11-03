@@ -8,15 +8,24 @@ import {
   dFdy,
   dot,
   float,
+  floor,
+  fract,
   length,
+  max,
+  min,
   mix,
   normalize,
   normalLocal,
   normalView,
+  normalWorld,
+  pmremTexture,
+  frontFacing,
   positionLocal,
   positionView,
   positionViewDirection,
+  positionWorld,
   pow,
+  select,
   sin,
   smoothstep,
   step,
@@ -29,6 +38,7 @@ import {
   vec4
 } from 'three/tsl';
 import { cityUniforms } from './tsl-materials.js';
+import { cabinLayout } from './car-cabin.js';
 
 // The real cars (tools/cars/import-cars.mjs): one atlas per model holding every part, the paint as a mask so the same model
 // takes any colour, wheels apart around their axles, and a coarse shell for far away. Bodies are deformed in the vertex
@@ -100,7 +110,8 @@ function describe(model, position) {
     roofZ: n ? roofZ / n : 0,
     doors: [s.wheelZf - s.wheelRadius * 1.3, s.wheelZf - s.wheelRadius * 1.3 - Math.min(1.25, (s.wheelZf - s.wheelZr) * 0.42)],
     headlight: [Math.abs(front[0]), front[1]], taillight: [Math.abs(rear[0]), rear[1]],
-    lamps: [front[1], rear[1]], lampX: [Math.abs(front[0]), Math.abs(rear[0])]
+    lamps: [front[1], rear[1]], lampX: [Math.abs(front[0]), Math.abs(rear[0])],
+    cabin: cabinLayout(s, model.glass, position)
   };
 }
 
@@ -140,6 +151,74 @@ async function loadCars(ids) {
   return models;
 }
 
+// The street a car stands in, mirrored in its paint and glass: the scene's sky over the rooftops, facades with their
+// windows up to them (lit at night), the road below the horizon. A street is four walls round the car, given as the world
+// x+, x-, z+, z- planes and their heights (set for the player's car from the buildings around it, gameplay.js), or, while
+// `absolute` is 0, a canyon of typical size round wherever the surface is (traffic). Rough surfaces see the facades blur
+// into their average, far ones fade into the sky.
+const STREET = { width: 13, depth: 11, height: 36 };
+const createStreet = () => ({
+  walls: uniform(new THREE.Vector4(STREET.width, -STREET.width, STREET.depth, -STREET.depth)),
+  heights: uniform(new THREE.Vector4(STREET.height, STREET.height, STREET.height, STREET.height)),
+  absolute: uniform(0)
+});
+const BRICK = vec3(0.36, 0.2, 0.15), STONE = vec3(0.56, 0.5, 0.42), CONCRETE = vec3(0.42, 0.42, 0.42), TOWER = vec3(0.12, 0.16, 0.2);
+
+function streetRadiance(dir, level, env, street) {
+  const d = normalize(dir), p = positionWorld, rel = street.absolute.oneMinus();
+  const sky = (v, l) => (env ? pmremTexture(env, v, l) : mix(vec3(0.42, 0.45, 0.48), vec3(0.45, 0.62, 0.9), v.y.max(0)));
+  const w = street.walls, ht = street.heights;
+  const xp = mix(w.x, p.x.add(w.x), rel), xn = mix(w.y, p.x.add(w.y), rel);
+  const zp = mix(w.z, p.z.add(w.z), rel), zn = mix(w.w, p.z.add(w.w), rel);
+  // Along the ray to the wall it heads for, on each axis, and how high it meets that wall
+  const tx = select(d.x.greaterThan(0), xp.sub(p.x), p.x.sub(xn)).div(d.x.abs().max(1e-4));
+  const tz = select(d.z.greaterThan(0), zp.sub(p.z), p.z.sub(zn)).div(d.z.abs().max(1e-4));
+  const yx = p.y.add(d.y.mul(tx)), yz = p.y.add(d.y.mul(tz));
+  const okX = step(0, tx).mul(step(yx, select(d.x.greaterThan(0), ht.x, ht.y))).mul(step(0, yx));
+  const okZ = step(0, tz).mul(step(yz, select(d.z.greaterThan(0), ht.z, ht.w))).mul(step(0, yz));
+  const useX = okX.mul(max(step(tx, tz), okZ.oneMinus()));
+  const wall = max(useX, okZ.mul(useX.oneMinus()));
+  const t = mix(tz, tx, useX), y = mix(yz, yx, useX);
+  const along = mix(p.x.add(d.x.mul(t)), p.z.add(d.z.mul(t)), useX);
+  // A facade: one building every 24 m of its own stone, bays of windows over a ground floor of shops
+  const lot = floor(along.div(24)).add(useX.mul(31));
+  const pick = fract(sin(lot.mul(12.9898)).mul(43758.5453));
+  const albedo = mix(mix(BRICK, STONE, step(0.4, pick)), mix(CONCRETE, TOWER, step(0.86, pick)), step(0.66, pick));
+  const bay = along.div(1.9), storey = y.div(3.3);
+  const pane = step(0.2, fract(bay)).mul(step(fract(bay), 0.8)).mul(step(0.3, fract(storey))).mul(step(fract(storey), 0.85)).mul(step(4.2, y));
+  // As bright as the city looks next to its sky: a facade in shade a third of the sky at the horizon, one the sun faces
+  // nearly as bright as it (albedos are relative to an average facade's)
+  const horizon = sky(normalize(vec3(d.x, 0.08, d.z)), float(1));
+  const facing = mix(vec3(0, 0, d.z.sign().negate()), vec3(d.x.sign().negate(), 0, 0), useX);
+  const sunlit = dot(facing, cityUniforms.uSkySunDir).max(0).mul(cityUniforms.uSkySunDir.y.max(0).mul(4).min(1));
+  const stone = albedo.div(0.38).mul(horizon).mul(sunlit.mul(0.6).add(0.34));
+  const glass = sky(vec3(d.x.negate(), d.y, d.z.negate()), level.add(0.06)).mul(0.55);
+  const room = fract(sin(floor(bay).mul(7.13).add(floor(storey).mul(19.7)).add(lot)).mul(9187.31));
+  const lit = vec3(1, 0.72, 0.42).mul(step(0.58, room)).mul(smoothstep(0.55, 1.1, cityUniforms.uInteriorGlow)).mul(0.9);
+  const facade = mix(mix(stone, glass.add(lit), pane), mix(stone, glass, 0.3), smoothstep(0.08, 0.42, level));
+  const road = horizon.mul(0.3);
+  const open = mix(sky(d, level), road, smoothstep(-0.005, -0.06, d.y));
+  return mix(open, mix(facade, sky(d, level), smoothstep(70, 240, t)), wall);
+}
+
+class StreetReflectionNode extends THREE.Node {
+  constructor(street) {
+    super('vec3');
+    this.street = street;
+  }
+
+  setup(builder) {
+    const context = builder.context;
+    const dir = context.getUV ? context.getUV(this, builder) : normalWorld;
+    const level = context.getTextureLevel ? context.getTextureLevel(this) : float(1);
+    const env = builder.scene?.environment ?? null;
+    // The diffuse light (a constant level) stays the sky's: the street only shows in what the surface mirrors, or the
+    // lower panels, facing the road, went black
+    if (env && dir === normalWorld) return pmremTexture(env, dir, level);
+    return streetRadiance(dir, level, env, this.street);
+  }
+}
+
 // The bodywork: paint where the mask says, the model's own texture elsewhere, lamps lit by state
 function createBodyMaterial(model, { paint = null, instanced = false, livery = 0, physical = !instanced } = {}) {
   const mat = physical ? new THREE.MeshPhysicalNodeMaterial() : new THREE.MeshStandardNodeMaterial();
@@ -158,7 +237,10 @@ function createBodyMaterial(model, { paint = null, instanced = false, livery = 0
 
   const surface = texture(model.surface, uv());
   const base = texture(model.map, uv());
-  const mask = surface.r;
+  // A driven car is drawn from both sides: its inside closes the cabin, the street does not show through the doors
+  const inside = instanced ? float(0) : float(frontFacing).oneMinus();
+  if (!instanced) mat.side = THREE.DoubleSide;
+  const mask = surface.r.mul(inside.oneMinus());
   let dentNode = float(0);
 
   if (dents) {
@@ -196,16 +278,21 @@ function createBodyMaterial(model, { paint = null, instanced = false, livery = 0
     // Paint gone from what scraped the road: bare grey metal with a rust edge
     c.assign(mix(c, vec3(0.2, 0.19, 0.18), dentNode.mul(mask).mul(0.7)));
     c.assign(mix(c, vec3(0.01, 0.012, 0.015), glassMask));
+    // The panels' inside faces are the cabin's trim, seen through the glass
+    if (!instanced) c.assign(mix(c, vec3(0.085, 0.08, 0.075), inside));
     return c;
   })();
   const gloss = mix(float(0.2), float(0.34), mask.oneMinus());
-  mat.roughnessNode = mix(mix(surface.g.max(0.24), gloss, mask).add(dentNode.mul(0.4)), float(0.07), glassMask);
-  mat.metalnessNode = mix(mix(surface.b, float(0.42), mask), float(0.1), glassMask);
+  mat.roughnessNode = mix(mix(mix(surface.g.max(0.24), gloss, mask).add(dentNode.mul(0.4)), float(0.07), glassMask), float(0.9), inside);
+  // Car paint is coloured underneath and mirrors through its clear coat: a little metal for the flake, the coat does the rest
+  mat.metalnessNode = mix(mix(surface.b, float(instanced ? 0.42 : 0.18), mask), float(0.1), glassMask).mul(inside.oneMinus());
   if (physical) {
     mat.clearcoatNode = mask.mul(dentNode.oneMinus());
     mat.clearcoatRoughnessNode = float(0.04);
   }
   mat.envMapIntensity = 1.5;
+  const street = createStreet();
+  mat.envNode = new StreetReflectionNode(street);
 
   const glow = cityUniforms.uInteriorGlow;
   const night = smoothstep(0.6, 1.15, glow);
@@ -216,12 +303,14 @@ function createBodyMaterial(model, { paint = null, instanced = false, livery = 0
     e.addAssign(vec3(1, 0.03, 0.05).mul(brake).mul(state.x.mul(5).add(night.mul(1.1)).add(0.08)));
     e.addAssign(vec3(1, 0.5, 0.08).mul(blinker).mul(blink.mul(4)));
     if (!instanced) e.addAssign(vec3(0.9, 0.95, 1).mul(reverse).mul(state.w.mul(3)));
-    return e;
+    return e.mul(inside.oneMinus());
   })();
   mat.userData.carState = stateUniform;
   mat.userData.paint = paintUniform;
   mat.userData.dents = dents;
   mat.userData.dentDirs = dentDirs;
+  mat.userData.street = street;
+  mat.userData.shared = instanced; // one material for every car of the model in the traffic
   return mat;
 }
 
@@ -241,11 +330,17 @@ function createGlassMaterial(model, carMaterial) {
   const web = sin(positionLocal.x.mul(47).add(positionLocal.y.mul(61))).mul(sin(positionLocal.z.mul(53).sub(positionLocal.y.mul(37)))).abs();
   const lines = smoothstep(0.02, 0.0, web).mul(varying(cracked));
   mat.colorNode = mix(tint.rgb.mul(0.2), vec3(0.78), lines);
-  mat.opacityNode = mix(float(Math.min(0.86, model.glassAlpha + 0.1)), float(0.95), lines);
+  // With someone at the wheel the glass clears to show them: tinted but see-through face on, a mirror at a glance
+  const clear = uniform(0);
+  const glance = float(1).sub(dot(normalView, positionViewDirection).abs()).pow(3);
+  const tinted = float(Math.min(0.86, model.glassAlpha + 0.1));
+  mat.opacityNode = mix(mix(tinted, mix(float(0.3), float(0.88), glance), clear), float(0.95), lines);
   mat.roughnessNode = mix(float(0.03), float(0.5), lines);
   mat.metalnessNode = float(0.05);
   mat.specularIntensityNode = float(1);
   mat.envMapIntensity = 2.2;
+  mat.envNode = new StreetReflectionNode(carMaterial.userData.street);
+  mat.userData.clear = clear;
   return mat;
 }
 

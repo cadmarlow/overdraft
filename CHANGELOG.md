@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.9.4 — Momentum — 4 novembre 2026
+
+La conduite refaite pour le clavier, et des voitures qu'on a envie de regarder. Avant, les voitures étaient dures à
+tenir : volant tout ou rien, tête-à-queue au moindre coup de gaz, frein qui empêchait de tourner, explosions au bout de
+quelques chocs. Chaque réglage a été mesuré sur un banc d'essai (accélération, freinage, virage, frein à main) puis en
+ville, avec un pilote automatique qui conduit au clavier, en comparant avec la 0.9.3.
+
+### Une conduite qui se tient au clavier
+- **Volant progressif** : une touche tourne le volant en un dixième de seconde à l'arrêt, en un tiers de seconde à
+  pleine vitesse, et le ramène deux fois plus vite. Un appui bref corrige la trajectoire, un appui long braque à fond.
+- **Braquage adapté à la vitesse** : à fond, les roues vont jusqu'à la limite d'adhérence des pneus, jamais au-delà.
+- **Contrôle de stabilité** : la voiture tourne à la vitesse que demande le volant, autant que ses pneus le
+  permettent. Plus aucun tête-à-queue au volant seul, quelle que soit la voiture ou la vitesse. La muscle garde son
+  caractère : elle glisse jusqu'à une trentaine de degrés, mais ne part plus en toupie.
+- **Freiner en tournant** : l'ABS laisse aux pneus de quoi tourner. En freinant à fond depuis 100 km/h, la voiture tourne
+  de 50 à 90° au lieu de 13.
+- **Frein à main** : un vrai demi-tour contrôlé. La voiture pivote, puis au relâchement elle garde son nouveau cap et
+  repart dans cette direction (avant, le nez revenait vers l'ancienne trajectoire et la voiture tournait sur elle-même).
+- **Corrigé** : dans certains cas (après un tête-à-queue, au démarrage d'une petite voiture), la transmission pouvait
+  cesser de propulser la voiture, pied au plancher.
+- Les utilitaires, SUV et camions ne se retournent plus en braquant à fond sur du plat.
+
+### Des voitures solides
+- Un choc ne compte qu'une fois (il comptait à chaque étape de calcul du contact). Les dégâts suivent la violence du
+  choc : quelques points à 50 km/h, un dixième de la santé à 90, un quart à 130, la moitié à 200.
+- Le trafic qu'on percute est cabossé mais n'explose plus : le feu vient des balles et des explosions.
+- Une explosion voisine ne compte plus deux fois contre la voiture du joueur. Les tirs abîment deux fois moins la
+  voiture du joueur.
+- Un moteur à bout de souffle tousse à mi-puissance avant de prendre feu, et le joueur a neuf secondes pour sortir.
+
+### Des voitures qu'on regarde
+- **La rue dans la peinture** : la carrosserie et les vitres reflètent les façades autour de la voiture (leurs fenêtres
+  glissent sur le capot en roulant, éclairées la nuit), le ciel au-dessus des toits et la route en dessous. Le reflet est
+  calculé à partir des immeubles réels autour de la voiture du joueur. Peinture vernie : la couleur dessous, le reflet
+  dans le vernis.
+- **Le conducteur au volant** : le héros est assis dans la voiture, mains sur le volant qui tourne avec les roues,
+  pieds sur les pédales, la tête tournée vers le virage. Les vitres s'éclaircissent pour le montrer.
+- **Un habitacle** : sièges, banquette, tableau de bord, colonne et volant, placés pour chaque modèle d'après ses vitres.
+  L'intérieur des portières et du pavillon ferme l'habitacle : on ne voit plus la rue à travers la carrosserie.
+- **Vue intérieure** : la caméra à la première personne s'assoit à la place du conducteur, derrière le volant et le
+  tableau de bord.
+- **Le poids** : la caisse penche en virage, plonge au freinage et s'assied à l'accélération sur ses ressorts, plus
+  dans un SUV que dans une supercar. Les roues restent posées.
+
 ## 0.9.3 — Main Street — 3 novembre 2026
 
 Les rez-de-chaussée de Manhattan refaits de bout en bout. Les boutiques étaient peintes à plat sur les façades, toutes de

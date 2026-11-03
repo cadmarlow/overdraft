@@ -112,6 +112,69 @@ test('a slide can be held: full throttle and opposite lock keep it pointing near
   assert.ok(c.speed > 5, `speed ${c.speed}`);
 });
 
+// The keyboard: keys are all or nothing, the aids make them enough
+const slipOf = (c) => Math.atan2(Math.hypot(c.vx, c.vz), Math.abs(c.speed));
+const cruise = (c, speed) => { while (roadSpeed(c) < speed) stepCar(c, { ...STILL, throttle: 1 }, 1 / 60, flat()); return c; };
+
+test('a key winds the wheel on: a tap is a small correction, a held key a full turn, quicker to come back', () => {
+  const c = cruise(makeCar(), 90 / 3.6);
+  run(c, { ...STILL, throttle: 0.3, steer: 1 }, 0.06);
+  const tapped = c.body.steerIn;
+  run(c, { ...STILL, throttle: 0.3, steer: 1 }, 0.5);
+  assert.ok(tapped > 0.1 && tapped < 0.4, `tap ${tapped}`);
+  assert.equal(c.body.steerIn, 1);
+  run(c, { ...STILL, throttle: 0.3 }, 0.12);
+  assert.ok(c.body.steerIn < 0.3, `unwound to ${c.body.steerIn}`);
+});
+
+test('full lock held at any speed turns hard and never spins the car, whatever the class', () => {
+  for (const kind of ['sedan', 'taxi', 'van', 'muscle', 'sport', 'super']) {
+    for (const kmhAt of [50, 90, 130]) {
+      for (const throttle of [0, 0.5, 1]) {
+        const c = cruise(makeCar(kind), kmhAt / 3.6);
+        let worst = 0, turned = 0;
+        run(c, { ...STILL, throttle, steer: 1 }, 4, flat(), (car) => { worst = Math.max(worst, slipOf(car)); turned += car.angularVel / 60; });
+        assert.ok(worst < (kind === 'muscle' ? 0.75 : 0.5), `${kind} at ${kmhAt} throttle ${throttle}: slip ${worst}`);
+        // three quarters of a g held for the 4 s, or a good turn round at the slower speeds
+        assert.ok(turned > Math.min(1.2, 0.75 * 9.81 / (kmhAt / 3.6) * 4), `${kind} at ${kmhAt} throttle ${throttle}: turned only ${turned}`);
+        assert.ok(c.body.r[4] > 0.9, `${kind} at ${kmhAt} throttle ${throttle}: rolled`);
+      }
+    }
+  }
+});
+
+test('braking with the wheel turned still turns the car', () => {
+  for (const kind of ['sedan', 'muscle', 'super']) {
+    const c = cruise(makeCar(kind), 100 / 3.6);
+    const from = c.heading;
+    let worst = 0;
+    run(c, { ...STILL, throttle: -1, steer: 1 }, 3, flat(), (car) => { if (roadSpeed(car) > 3) worst = Math.max(worst, slipOf(car)); });
+    assert.ok(c.heading - from > 0.7, `${kind} turned ${c.heading - from}`);
+    assert.ok(worst < 0.85, `${kind} slip ${worst}`);
+  }
+});
+
+test('let go of the handbrake with the car swung round: it drives off the way it points', () => {
+  for (const kind of ['sedan', 'taxi', 'sport', 'super']) {
+    const c = cruise(makeCar(kind), 60 / 3.6);
+    const from = c.heading;
+    run(c, { throttle: 0, steer: 1, handbrake: true }, 0.7);
+    run(c, { ...STILL, throttle: 1 }, 1.5);
+    const turned = c.heading - from;
+    assert.ok(turned > 0.8 && turned < 2.9, `${kind} turned ${turned}`);
+    assert.ok(slipOf(c) < 0.25, `${kind} still sliding ${slipOf(c)}`);
+    assert.ok(roadSpeed(c) > 6, `${kind} crawling at ${roadSpeed(c)}`);
+  }
+});
+
+test('after a spin, the engine still drives the car away', () => {
+  // An axle settled on no slip at all once held a car still for good, foot down
+  const c = cruise(makeCar('super'), 60 / 3.6);
+  run(c, { throttle: 0, steer: 1, handbrake: true }, 1.4);
+  run(c, { ...STILL, throttle: 1 }, 4);
+  assert.ok(roadSpeed(c) > 8, `stuck at ${roadSpeed(c)}`);
+});
+
 test('too much throttle from rest spins up the muscle car\'s rear wheels', () => {
   const c = makeCar('muscle');
   let spin = 0;

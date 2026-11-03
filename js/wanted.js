@@ -160,7 +160,7 @@ class WantedSystem {
     const car = this.controllers.createCarEntity({ kind, paint: 0xf4f6f8, livery: 1, handling: 'cruiser' });
     const bar = new THREE.Mesh(this.barGeo[kind], createLightbarMaterial());
     bar.castShadow = true;
-    car.chassisPivot.add(bar);
+    car.bodyPivot.add(bar);
     car.police = true;
     car.policeLivery = true;
     car.siren = false;
