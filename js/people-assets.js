@@ -61,10 +61,12 @@ async function loadPerson(id) {
   const person = parsePerson(await fetchBuffer(`${id}.bin`));
   person.id = id;
   person.maps = await Promise.all(person.parts.map(async ({ name }) => {
+    // The importer skips missing source maps: these two avatars' hair cards only ship colour and alpha.
+    const colorOnly = name === 'opacity' && (id === 'hero' || id === 'suit');
     const [color, normal, specular] = await Promise.all([
       loadTexture(`${id}_${name}_c.webp`, THREE.SRGBColorSpace),
-      loadTexture(`${id}_${name}_n.webp`, THREE.NoColorSpace),
-      loadTexture(`${id}_${name}_s.webp`, THREE.NoColorSpace)
+      colorOnly ? null : loadTexture(`${id}_${name}_n.webp`, THREE.NoColorSpace),
+      colorOnly ? null : loadTexture(`${id}_${name}_s.webp`, THREE.NoColorSpace)
     ]);
     return { name, color, normal, specular };
   }));

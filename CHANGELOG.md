@@ -1,12 +1,78 @@
 # Changelog
 
-## 0.9.4 — Bricks & Mortar — 3 novembre 2026
+## 0.9.4 — Momentum — 4 novembre 2026
+
+Cette version réunit les refontes « Bricks & Mortar » (immeubles) et « Momentum » (conduite), développées en parallèle.
+Elle reste destinée aux essais en ligne ; les objectifs de la 1.0 restent à réaliser.
+
+### Intégration et vérification
+- Les deux refontes partagent le même numéro, le titre **0.9.4 — Momentum** et une documentation réunie.
+- Corrigé avant publication : certaines cabines plaçaient le conducteur près de l'essieu arrière en prenant la lunette
+  arrière comme repère ; le siège suit maintenant le pare-brise avant. Test sur les géométries réelles des modèles.
+- Un rappel au garage efface aussi le braquage et les aides résiduelles d'un dérapage. La vitre vue depuis l'habitacle
+  laisse passer la lumière de la rue. Quatre requêtes vers des textures de cheveux absentes ont été supprimées.
+- **423 tests réussis sur 424** : seul l'échec connu `tree-geodata` reste lié à la licence Xcode. Build statique vérifié,
+  nouveaux modules préchargés ; aucun fichier de l'Architecte, outil ou secret dans les 406 fichiers publiés (59,2 Mo).
+- Build publié essayé dans un Chrome séparé, WebGPU : marche AZERTY, entrée/sortie, conduite, virage, frein à main,
+  caméras externe et intérieure, trois lieux de jour et une vue de nuit. Première mission « Clé de contact » terminée
+  dans la page en rejoignant ses marqueurs, avec entrée réelle au clavier et livraison de la Valmont.
+- Aucun échec réseau ni erreur JavaScript pendant cet essai. Les mesures à 1440 × 900, en qualité ÉQUILIBRÉE et à une
+  échelle fixe de 0,8, vont d'environ 50 à 66 images/s selon le lieu ; les 60 images/s constants restent à atteindre.
+- Limites relevées : rebords de toit traversables ; certaines fenêtres au pied des gradins peuvent être coupées ou
+  décalées par rapport au kit en relief. Les autres missions, tous les modèles en vue intérieure et les mobiles n'ont
+  pas été rejoués pendant cette intégration.
+
+### Momentum — la conduite
+
+La conduite refaite pour le clavier, et des voitures qu'on a envie de regarder. Avant, les voitures étaient dures à
+tenir : volant tout ou rien, tête-à-queue au moindre coup de gaz, frein qui empêchait de tourner, explosions au bout de
+quelques chocs. Chaque réglage a été mesuré sur un banc d'essai (accélération, freinage, virage, frein à main) puis en
+ville, avec un pilote automatique qui conduit au clavier, en comparant avec la 0.9.3.
+
+#### Une conduite qui se tient au clavier
+- **Volant progressif** : une touche tourne le volant en un dixième de seconde à l'arrêt, en un tiers de seconde à
+  pleine vitesse, et le ramène deux fois plus vite. Un appui bref corrige la trajectoire, un appui long braque à fond.
+- **Braquage adapté à la vitesse** : à fond, les roues vont jusqu'à la limite d'adhérence des pneus, jamais au-delà.
+- **Contrôle de stabilité** : la voiture tourne à la vitesse que demande le volant, autant que ses pneus le
+  permettent. Plus aucun tête-à-queue au volant seul, quelle que soit la voiture ou la vitesse. La muscle garde son
+  caractère : elle glisse jusqu'à une trentaine de degrés, mais ne part plus en toupie.
+- **Freiner en tournant** : l'ABS laisse aux pneus de quoi tourner. En freinant à fond depuis 100 km/h, la voiture tourne
+  de 50 à 90° au lieu de 13.
+- **Frein à main** : un vrai demi-tour contrôlé. La voiture pivote, puis au relâchement elle garde son nouveau cap et
+  repart dans cette direction (avant, le nez revenait vers l'ancienne trajectoire et la voiture tournait sur elle-même).
+- **Corrigé** : dans certains cas (après un tête-à-queue, au démarrage d'une petite voiture), la transmission pouvait
+  cesser de propulser la voiture, pied au plancher.
+- Les utilitaires, SUV et camions ne se retournent plus en braquant à fond sur du plat.
+
+#### Des voitures solides
+- Un choc ne compte qu'une fois (il comptait à chaque étape de calcul du contact). Les dégâts suivent la violence du
+  choc : quelques points à 50 km/h, un dixième de la santé à 90, un quart à 130, la moitié à 200.
+- Le trafic qu'on percute est cabossé mais n'explose plus : le feu vient des balles et des explosions.
+- Une explosion voisine ne compte plus deux fois contre la voiture du joueur. Les tirs abîment deux fois moins la
+  voiture du joueur.
+- Un moteur à bout de souffle tousse à mi-puissance avant de prendre feu, et le joueur a neuf secondes pour sortir.
+
+#### Des voitures qu'on regarde
+- **La rue dans la peinture** : la carrosserie et les vitres reflètent les façades autour de la voiture (leurs fenêtres
+  glissent sur le capot en roulant, éclairées la nuit), le ciel au-dessus des toits et la route en dessous. Le reflet est
+  calculé à partir des immeubles réels autour de la voiture du joueur. Peinture vernie : la couleur dessous, le reflet
+  dans le vernis.
+- **Le conducteur au volant** : le héros est assis dans la voiture, mains sur le volant qui tourne avec les roues,
+  pieds sur les pédales, la tête tournée vers le virage. Les vitres s'éclaircissent pour le montrer.
+- **Un habitacle** : sièges, banquette, tableau de bord, colonne et volant, placés pour chaque modèle d'après ses vitres.
+  L'intérieur des portières et du pavillon ferme l'habitacle : on ne voit plus la rue à travers la carrosserie.
+- **Vue intérieure** : la caméra à la première personne s'assoit à la place du conducteur, derrière le volant et le
+  tableau de bord.
+- **Le poids** : la caisse penche en virage, plonge au freinage et s'assied à l'accélération sur ses ressorts, plus
+  dans un SUV que dans une supercar. Les roues restent posées.
+
+### Bricks & Mortar — les immeubles
 
 Les immeubles refaits. Les 37 353 immeubles de Manhattan étaient des boîtes, l'empreinte au sol montée d'un bloc jusqu'au
 toit, dessinées par sept façades tirées au hasard : la même grille de fenêtres partout, du beige partout. Chacun sait
 maintenant ce qu'il est, et s'habille en conséquence.
 
-### Chaque immeuble sait ce qu'il est
+#### Chaque immeuble sait ce qu'il est
 - Le registre foncier de la ville (PLUTO) donne à chaque immeuble sa catégorie, son nombre d'étages, son année de
   construction et son quartier historique. 93 % des immeubles ont la leur ; les autres prennent celle de leur voisin.
 - Douze types : maison de ville, immeuble ouvrier, immeuble d'avant-guerre, loft à façade de fonte, immeuble de bureaux
@@ -16,7 +82,7 @@ maintenant ce qu'il est, et s'habille en conséquence.
 - Les quartiers comptent : grès brun à Harlem et dans l'Upper West Side, brique Federal à Greenwich Village, fonte peinte
   à SoHo et Tribeca.
 
-### Des façades qui ne se ressemblent plus
+#### Des façades qui ne se ressemblent plus
 - Chaque immeuble a sa couleur, tirée des vraies teintes de New York (brique rouge, brune, chamois, blanche, grise,
   calcaire, grès brun, fonte peinte) ou de celle que les cartographes ont relevée.
 - Son rythme de fenêtres, leurs proportions et leurs petits-bois : guillotines simples ou à six carreaux, fenêtres
@@ -26,7 +92,7 @@ maintenant ce qu'il est, et s'habille en conséquence.
   sombres des tours Art déco, climatiseurs surtout dans les immeubles ouvriers.
 - Tours de verre : couleur du verre et du métal, allèges, fenêtres en bandeau des années 1960, ailettes verticales.
 
-### Des silhouettes
+#### Des silhouettes
 - 1 650 tours montent en gradins d'après leurs volumes relevés dans OpenStreetMap ; les grands immeubles de la loi de 1916
   qui n'en ont pas montent en retraits successifs, et les tours Art déco finissent en couronne. Les terrasses des retraits
   se parcourent comme les toits.
@@ -34,7 +100,7 @@ maintenant ce qu'il est, et s'habille en conséquence.
   corniche, toits en goudron, revêtement argenté, gravier ou membrane.
 - Châteaux d'eau et escaliers de secours là où ils vont : immeubles ouvriers, avant-guerre, lofts.
 
-### Du relief et de l'usure
+#### Du relief et de l'usure
 - Autour du joueur (160 m, 200 m en HAUTE), les fenêtres ont leurs appuis en pierre en saillie, leurs linteaux, les
   frontons en tôle ou en grès brun des immeubles ouvriers et des maisons de ville, des clés au-dessus des arcs, et de
   vrais climatiseurs en 3D qui prennent le soleil et portent leur ombre. Au-delà, la façade les peint comme avant.
@@ -44,11 +110,11 @@ maintenant ce qu'il est, et s'habille en conséquence.
 - Les toits se peuplent : cabanons d'escalier et cheminées dans la brique de l'immeuble, verrières, tuyaux de
   ventilation, paraboles.
 
-### La lumière
+#### La lumière
 - Soleil plus fort et plus chaud, ombres plus bleues, plus de contraste le jour.
 - Le terre-plein de Park Avenue devient une haie taillée au lieu d'un bloc vert lisse.
 
-### Ombres qui ne tremblent plus
+#### Ombres qui ne tremblent plus
 - Le soleil avance par pas de 0,1° au lieu de tourner un peu à chaque image : la carte d'ombre tournait avec lui, et
   toutes les ombres plus fines que ses texels (escaliers de secours, bordures de trottoir, pied des murs) rampaient et
   scintillaient en permanence pendant que l'heure passait.
@@ -64,7 +130,7 @@ maintenant ce qu'il est, et s'habille en conséquence.
 - Deux empreintes du relevé qui partagent un mur sur rue (un immeuble et un doublon de son contour) y plaçaient chacune
   leurs boutiques, rideau sur rideau : la première les garde.
 
-### Validation et limites
+#### Validation et limites
 - 411 tests réussis (10 nouveaux sur les immeubles) ; seul l'échec connu de `tree-geodata` subsiste, lié à la licence
   Xcode. Build statique vérifié.
 - Joué dans un Chrome séparé en WebGPU, de jour et de nuit, dans six quartiers, au-dessus de Midtown et dans une rue

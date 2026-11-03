@@ -11,6 +11,7 @@ import {
 import { cityUniforms, createCarPaintMaterial, createContactShadowMaterial, createPersonContactShadowMaterial } from './tsl-materials.js';
 import { carModels, carSpecs, createBodyMaterial, createGlassMaterial, createWheelMaterial, trafficMaterial } from './car-assets.js';
 import { createBody, impactBody, makeTune, settleBody, stepCar } from './car-physics.js';
+import { buildCabin, poseCabin } from './car-cabin.js';
 import {
   buildHelicopterBodyGeometry,
   buildHelicopterMainRotorGeometry,
@@ -74,11 +75,36 @@ const personGround = (controllers, x, z) => controllers.personGroundAt(x, z);
 const COLLIDER_CELL = 48;
 const cellKey = (ix, iz) => (ix + 4096) * 8192 + (iz + 4096);
 
+// What the eye expects of a car's weight, on top of the physics' own (stiffened) roll: the body leans out of a corner,
+// dives under the brakes and squats on the power, on a spring of its own that overshoots a touch and settles. The wheels
+// stay where the physics put them.
+const LEAN = { hz: 1.5, damping: 0.42 };
+function leanBody(c, dt) {
+  const b = c.body, t = c.tune, lean = c.lean ??= { roll: 0, rollV: 0, pitch: 0, pitchV: 0, speed: c.speed, accel: 0 };
+  if (!(dt > 0)) return;
+  const step = Math.min(dt, 0.05);
+  const grounded = b.grounded >= 3;
+  // Longitudinal acceleration, smoothed: the speed alone is noisy step to step
+  lean.accel += ((c.speed - lean.speed) / step - lean.accel) * Math.min(1, step * 12);
+  lean.speed = c.speed;
+  const g = 9.81, k = (Math.PI * 2 * LEAN.hz) ** 2, d = 2 * LEAN.damping * Math.PI * 2 * LEAN.hz;
+  const roll = grounded ? Math.max(-1.3, Math.min(1.3, b.wy * c.speed / g)) * t.leanRoll : 0;
+  const pitch = grounded ? Math.max(-1.2, Math.min(1.2, -lean.accel / g * Math.sign(c.speed || 1))) * t.leanPitch : 0;
+  for (let i = 0, n = Math.ceil(dt / 0.017); i < n; i++) {
+    const h = step / n;
+    lean.rollV += ((roll - lean.roll) * k - lean.rollV * d) * h; lean.roll += lean.rollV * h;
+    lean.pitchV += ((pitch - lean.pitch) * k - lean.pitchV * d) * h; lean.pitch += lean.pitchV * h;
+  }
+  c.bodyPivot.rotation.set(lean.pitch, 0, lean.roll);
+}
+
 // The planar car state back on its meshes: the chassis in its full attitude under the yaw-only root, each wheel on its spring
 const FRAME_SPIN = 0.62;
 function poseCar(c, dt) {
   const b = c.body, q = b.q, s = Math.sin(c.heading * 0.5), h = Math.cos(c.heading * 0.5);
   c.chassisPivot.quaternion.set(h * q[0] - s * q[2], h * q[1] - s * q[3], h * q[2] + s * q[0], h * q[3] + s * q[1]);
+  if (c.bodyPivot) leanBody(c, dt);
+  if (c.cabin) poseCabin(c.cabin, b.steer);
   for (let i = 0; i < 4; i++) {
     const w = b.wheels[i], view = c.wheels[i];
     view.steerPivot.position.y = view.restY + w.travel - (w.burst ? 0.1 : 0);
@@ -525,11 +551,14 @@ class ThirdPersonControllerManager {
 
     const chassisPivot = new THREE.Group();
     root.add(chassisPivot);
+    // The bodywork leans on its springs over the wheels (poseCar): everything but the wheels hangs from here
+    const bodyPivot = new THREE.Group();
+    chassisPivot.add(bodyPivot);
 
     const id = carModels[kind] ? kind : 'sedan';
     const model = carModels[id], spec = carSpecs[id];
     const paintMaterial = lite ? trafficMaterial(id) : createBodyMaterial(model, { paint, livery });
-    let carBodyMesh;
+    let carBodyMesh, glassMaterial = null, cabin = null;
     if (lite) {
       const shell = new THREE.BufferGeometry();
       for (const name of ['position', 'normal', 'uv', 'flag']) shell.setAttribute(name, model.shell.attributes[name]);
@@ -540,10 +569,12 @@ class ThirdPersonControllerManager {
       carBodyMesh = new THREE.InstancedMesh(shell, paintMaterial, 1);
       carBodyMesh.setMatrixAt(0, new THREE.Matrix4());
       carBodyMesh.frustumCulled = false;
-      chassisPivot.add(carBodyMesh);
+      bodyPivot.add(carBodyMesh);
     } else {
       carBodyMesh = new THREE.Mesh(model.body, paintMaterial);
-      chassisPivot.add(carBodyMesh, new THREE.Mesh(model.glass, createGlassMaterial(model, paintMaterial)));
+      glassMaterial = createGlassMaterial(model, paintMaterial);
+      bodyPivot.add(carBodyMesh, new THREE.Mesh(model.glass, glassMaterial));
+      if (spec.cabin) cabin = buildCabin(spec.cabin, bodyPivot);
     }
     carBodyMesh.castShadow = true;
     carBodyMesh.receiveShadow = true;
@@ -581,7 +612,7 @@ class ThirdPersonControllerManager {
     for (const side of lite ? [] : [-1, 1]) {
       const spot = createVehicleHeadlight();
       placeVehicleHeadlight(spot, spec, side);
-      chassisPivot.add(spot, spot.target);
+      bodyPivot.add(spot, spot.target);
       headLights.push(spot);
     }
 
@@ -602,6 +633,9 @@ class ThirdPersonControllerManager {
       label: CAR_LABELS[kind] || 'Berline',
       mesh: root,
       chassisPivot,
+      bodyPivot,
+      cabin,
+      glassMaterial,
       carState,
       headLights,
       wheels,
@@ -875,6 +909,26 @@ class ThirdPersonControllerManager {
   isPointOnSidewalk(x, z) {
     const b = blockAt(x, z);
     return !!b && !(b.park > 0.6 && !b.median);
+  }
+
+  // The building faces nearest (x, z) along the four axes, and how tall they are: the street a car's paint mirrors
+  // (car-assets.js). Nothing within reach on a side leaves it open to the sky: a crossing looks down the cross street.
+  streetWalls(x, z, street, reach = 90, margin = 3) {
+    let xp = x + reach * 3, xn = x - reach * 3, zp = z + reach * 3, zn = z - reach * 3, hxp = 0, hxn = 0, hzp = 0, hzn = 0;
+    for (const c of this.nearColliders(x, z, reach)) {
+      if (c.round || !(c.maxY > 7) || c.breakable) continue;
+      if (z > c.minZ - margin && z < c.maxZ + margin) {
+        if (c.minX >= x && c.minX < xp) { xp = c.minX; hxp = c.maxY; }
+        if (c.maxX <= x && c.maxX > xn) { xn = c.maxX; hxn = c.maxY; }
+      }
+      if (x > c.minX - margin && x < c.maxX + margin) {
+        if (c.minZ >= z && c.minZ < zp) { zp = c.minZ; hzp = c.maxY; }
+        if (c.maxZ <= z && c.maxZ > zn) { zn = c.maxZ; hzn = c.maxY; }
+      }
+    }
+    street.walls.value.set(xp, xn, zp, zn);
+    street.heights.value.set(hxp, hxn, hzp, hzn);
+    street.absolute.value = 1;
   }
 
   // What a wheel stands on. The kerbs are real for cars, which is what makes a sidewalk a jolt, and a park's bank a ramp.

@@ -55,6 +55,14 @@ towers and the colours, materials and roof shapes mappers recorded come from © 
 https://www.openstreetmap.org/copyright). Only the facts js/building-styles.bin.gz holds are kept; how each building is
 dressed is invented by the game.
 
+Les bases dérivées d'OpenStreetMap sont redistribuées sous [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/).
+Elles sont disponibles au format machine dans le jeu publié : [géographie](./js/nyc-geodata.js),
+[empreintes des immeubles](./js/building-geodata.bin.gz) et [styles et gradins](./js/building-styles.bin.gz).
+Les lecteurs sont fournis avec elles : [immeubles](./js/building-geodata.js)
+et [styles](./js/building-styles.js). Cette licence concerne les bases de données ; le code du jeu reste sous MIT.
+PLUTO est fourni par NYC Planning via NYC Open Data ; ses [conditions de réutilisation](https://data.cityofnewyork.us/stories/s/Terms-of-Use/k9k7-3cje)
+et la [FAQ de NYC Open Data](https://www.nyc.gov/opendata/get-started/FAQs) s'appliquent aux données de la ville.
+
 ## Outil de développement local
 
 Le serveur de l'Architecte utilise le SDK TypeScript Anthropic (`@anthropic-ai/sdk`), sous licence Apache-2.0 :

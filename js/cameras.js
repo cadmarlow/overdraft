@@ -5,6 +5,16 @@ let _flyDir, _flyHit, _flyBox, _flyRay; // made on the first flight
 
 // Chase, action, cockpit, fixed-location and aerial cameras, with mouse/touch orbit and zoom.
 
+const _eye = new THREE.Vector3();
+// A point in a car's own frame (its body, leaning on its springs) in the world, from this frame's state: its matrices may
+// still hold the last frame's, a car length behind at speed
+function carPoint(car, v) {
+  v.applyQuaternion(car.bodyPivot.quaternion).applyQuaternion(car.chassisPivot.quaternion);
+  const s = Math.sin(car.heading), c = Math.cos(car.heading), x = v.x;
+  v.x = x * c + v.z * s; v.z = v.z * c - x * s;
+  return v.add(car.position);
+}
+
 const CAMERA_PRESETS = [
   { id: 'chase',       name: '3rd-Person Chase',         category: 'follow', fov: 56 },
   { id: 'action',      name: 'Low-Angle Action',         category: 'follow', fov: 60 },
@@ -293,7 +303,14 @@ class CameraSystem {
       case 'pov': {
         let fwdOffset = 0.35;
         let eyeY = 1.68;
-        if (entity.type === 'car') {
+        if (entity.type === 'car' && entity.cabin) {
+          // In the driver's seat, at eye height, looking over the wheel and the dash
+          const [x, hip, z] = entity.cabin.layout.seat;
+          const eyeH = hip + 0.74 * Math.cos(entity.cabin.layout.recline), turn = totalYaw - entity.heading;
+          desiredPos.copy(carPoint(entity, _eye.set(x, eyeH, z - 0.04)));
+          desiredLook.copy(carPoint(entity, _eye.set(x + Math.sin(turn) * 20, eyeH - 1.6 + Math.sin(-this.orbitPitchOffset) * 9, z + Math.cos(turn) * 20)));
+          break;
+        } else if (entity.type === 'car') {
           // On the bonnet, behind the glass: the models have no cabin to sit in
           fwdOffset = (entity.spec?.wheelZf ?? 1.4) * 0.42;
           eyeY = (entity.spec?.height ?? 1.5) * 0.86;

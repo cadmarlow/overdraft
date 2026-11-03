@@ -43,7 +43,7 @@ loin : plus fou, plus inventif, plus généreux. Le niveau de référence est un
 ## Versions
 
 Les versions portent des noms de la finance : 0.2 Opening Bell, 0.3 Margin Call, 0.4 Human Capital, 0.5 Hard Assets,
-0.6 Prime Real Estate, 0.7 Bull Run, 0.8 Hostile Takeover, 0.9 Leverage. Prochaine : 1.0 Closing Bell (voir `GAME_DESIGN.md`).
+0.6 Prime Real Estate, 0.7 Bull Run, 0.8 Hostile Takeover, 0.9 Leverage, 0.9.3 Main Street, 0.9.4 Momentum. Prochaine : 1.0 Closing Bell (voir `GAME_DESIGN.md`).
 
 Une nouvelle version met à jour, ensemble :
 - `BUILD` et le nom affiché dans `js/gameplay.js`, `version` dans `package.json`, le titre de `index.html` ;

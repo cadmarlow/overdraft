@@ -15,31 +15,39 @@ const lerp = (a, b, t) => a + (b - a) * t;
 
 // What makes one car drive differently from another. Forces in N, speeds in m/s; `top` is what the engine reaches on a long
 // enough straight, for the AI and the dials.
+// The driver aids are what make a keyboard enough: the wheel winds on over `wind` seconds at a standstill and `windHigh`
+// at speed and comes back `unwind` times quicker; the stability aid holds the yaw the wheel asks for (`yawAid` against
+// too much rotation, `yawHelp` for too little) and brings the nose back once the body slips past `slipMax` (rad); after
+// the handbrake it comes back over `recover` seconds; `brakeSteer` is how much grip the brakes leave the tyres for
+// turning at full lock. `leanRoll`/`leanPitch` (rad at 1 g) are how far the body is drawn leaning on its springs, on top
+// of what the physics rolls it.
 const BASE = {
   mass: 1500, cg: 0.54, bias: 0.53, hz: 1.6, damp: 0.33, rebound: 1.35, arb: 0.2, travel: 0.13, droop: 0.2,
   grip: 1.12, traction: 1.3, slide: 0.74, balance: 1.12, stiffness: 11, shape: 1.45, tc: 0.8, esc: 1,
   torque: 400, peak: 4200, redline: 6600, idle: 780, gears: [3.4, 2.15, 1.5, 1.14, 0.9, 0.72], reverse: 3.2, final: 3.7, rear: 1,
-  shift: 0.17, spinMass: 230, brake: 12, handbrake: 0.42, cd: 0.42, down: 0, lock: 0.62, cornering: 11, steer: 2.8,
-  roll: 0.85, pitch: 0.85, assist: 0.9, top: 58, nitro: 1
+  shift: 0.17, spinMass: 230, brake: 12, handbrake: 0.42, cd: 0.42, down: 0, lock: 0.62, cornering: 11, steer: 6,
+  roll: 0.85, pitch: 0.85, assist: 0.9, top: 58, nitro: 1,
+  wind: 0.1, windHigh: 0.32, unwind: 1.8, yawAid: 9, yawHelp: 2.5, slipMax: 0.22, recover: 0.6, brakeSteer: 0.45, pivot: 5,
+  leanRoll: 0.06, leanPitch: 0.035
 };
 
 const CLASSES = {
   sedan: { },
-  taxi: { mass: 1650, cg: 0.56, hz: 1.55, damp: 0.3, torque: 320, gears: [3.2, 2.05, 1.42, 1.04, 0.8], grip: 1.04, roll: 0.95, top: 52 },
-  suv: { mass: 2150, cg: 0.74, hz: 1.5, damp: 0.32, arb: 0.3, torque: 480, final: 3.4, grip: 1.0, rear: 0.5, roll: 1, cd: 0.56, top: 54 },
-  offroad: { mass: 1900, cg: 0.76, hz: 1.35, damp: 0.3, travel: 0.2, droop: 0.26, torque: 430, gears: [3.6, 2.2, 1.45, 1.05, 0.8], grip: 1.02, rear: 0.5, roll: 1, cd: 0.62, top: 47 },
-  pickup: { mass: 2200, cg: 0.72, bias: 0.57, hz: 1.45, damp: 0.3, torque: 520, grip: 0.98, balance: 1.03, tc: 0.5, esc: 0.7, final: 3.3, roll: 1, cd: 0.6, top: 53 },
-  van: { mass: 2400, cg: 0.86, bias: 0.55, hz: 1.45, damp: 0.3, torque: 400, final: 3.9, gears: [3.3, 2.0, 1.4, 1.0, 0.76], grip: 0.92, roll: 1, cd: 0.72, lock: 0.56, cornering: 8.5, top: 44 },
-  minivan: { mass: 1950, cg: 0.68, hz: 1.6, torque: 350, rear: 0, grip: 0.98, roll: 1, cd: 0.56, top: 50 },
-  truck: { mass: 4600, cg: 1.0, bias: 0.5, hz: 1.5, damp: 0.34, torque: 900, final: 4.3, gears: [4.2, 2.6, 1.7, 1.2, 0.86], redline: 3800, peak: 2200, idle: 650, shift: 0.3, grip: 0.86, brake: 8.5, roll: 1, cd: 1.0, lock: 0.54, cornering: 7, spinMass: 500, top: 34 },
+  taxi: { mass: 1650, cg: 0.56, hz: 1.55, damp: 0.3, torque: 320, gears: [3.2, 2.05, 1.42, 1.04, 0.8], grip: 1.04, roll: 0.9, top: 52, leanRoll: 0.07, leanPitch: 0.04 },
+  suv: { mass: 2150, cg: 0.74, hz: 1.5, damp: 0.32, arb: 0.3, torque: 480, final: 3.4, grip: 1.0, rear: 0.5, roll: 0.85, cd: 0.56, top: 54, slipMax: 0.16, yawAid: 10, leanRoll: 0.085, leanPitch: 0.045 },
+  offroad: { mass: 1900, cg: 0.76, hz: 1.35, damp: 0.3, travel: 0.2, droop: 0.26, torque: 430, gears: [3.6, 2.2, 1.45, 1.05, 0.8], grip: 1.02, rear: 0.5, roll: 0.85, cd: 0.62, top: 47, slipMax: 0.2, leanRoll: 0.09, leanPitch: 0.05 },
+  pickup: { mass: 2200, cg: 0.72, bias: 0.57, hz: 1.45, damp: 0.3, torque: 520, grip: 0.98, balance: 1.03, tc: 0.5, esc: 0.9, final: 3.3, roll: 0.85, cd: 0.6, top: 53, slipMax: 0.2, leanRoll: 0.08, leanPitch: 0.045 },
+  van: { mass: 2400, cg: 0.86, bias: 0.55, hz: 1.45, damp: 0.3, torque: 400, final: 3.9, gears: [3.3, 2.0, 1.4, 1.0, 0.76], grip: 0.92, roll: 0.8, cd: 0.72, lock: 0.56, cornering: 8.5, top: 44, slipMax: 0.16, yawAid: 10, leanRoll: 0.085, leanPitch: 0.045 },
+  minivan: { mass: 1950, cg: 0.68, hz: 1.6, torque: 350, rear: 0, grip: 0.98, roll: 0.85, cd: 0.56, top: 50, leanRoll: 0.08, leanPitch: 0.04 },
+  truck: { mass: 4600, cg: 1.0, bias: 0.5, hz: 1.5, damp: 0.34, torque: 900, final: 4.3, gears: [4.2, 2.6, 1.7, 1.2, 0.86], redline: 3800, peak: 2200, idle: 650, shift: 0.3, grip: 0.86, brake: 8.5, roll: 0.8, cd: 1.0, lock: 0.54, cornering: 7, spinMass: 500, top: 34, slipMax: 0.14, yawAid: 11, leanRoll: 0.07, leanPitch: 0.04 },
   hatch: { mass: 1250, cg: 0.5, bias: 0.58, hz: 1.95, torque: 300, redline: 7000, rear: 0, final: 3.9, grip: 1.14, roll: 0.78, top: 56 },
   compact: { mass: 1100, cg: 0.5, bias: 0.58, hz: 1.9, torque: 210, rear: 0, final: 4.1, redline: 6800, grip: 1.08, roll: 0.85, cd: 0.4, top: 48 },
   wagon: { mass: 1650, cg: 0.56, hz: 1.7, torque: 380, rear: 1, roll: 0.88, top: 58 },
   // Too much engine for its tyres: it squats, lights up the rear and kicks out on the throttle
-  muscle: { mass: 1620, cg: 0.5, bias: 0.55, hz: 1.7, damp: 0.3, torque: 760, peak: 3600, redline: 6200, gears: [2.9, 1.95, 1.42, 1.08, 0.85, 0.66], final: 3.55, grip: 1.14, balance: 0.98, slide: 0.76, tc: 0.3, esc: 0.45, roll: 0.85, pitch: 1, cd: 0.42, top: 71 },
-  sport: { mass: 1320, cg: 0.42, bias: 0.46, hz: 2.3, damp: 0.38, arb: 0.34, torque: 700, peak: 5400, redline: 8200, gears: [3.1, 2.2, 1.68, 1.32, 1.06, 0.86, 0.72], final: 3.55, shift: 0.1, grip: 1.36, balance: 1.03, slide: 0.78, tc: 0.55, esc: 0.6, roll: 0.6, cd: 0.42, down: 0.5, lock: 0.56, top: 88 },
+  muscle: { mass: 1620, cg: 0.5, bias: 0.55, hz: 1.7, damp: 0.3, torque: 760, peak: 3600, redline: 6200, gears: [2.9, 1.95, 1.42, 1.08, 0.85, 0.66], final: 3.55, grip: 1.14, balance: 0.98, slide: 0.76, tc: 0.3, esc: 0.75, roll: 0.85, pitch: 1, cd: 0.42, top: 71, slipMax: 0.45, yawAid: 6, pivot: 4.5, leanRoll: 0.065, leanPitch: 0.055 },
+  sport: { mass: 1320, cg: 0.42, bias: 0.46, hz: 2.3, damp: 0.38, arb: 0.34, torque: 700, peak: 5400, redline: 8200, gears: [3.1, 2.2, 1.68, 1.32, 1.06, 0.86, 0.72], final: 3.55, shift: 0.1, grip: 1.36, balance: 1.03, slide: 0.78, tc: 0.55, esc: 0.85, roll: 0.6, cd: 0.42, down: 0.5, lock: 0.56, top: 88, slipMax: 0.3, yawAid: 8, pivot: 3.5, leanRoll: 0.04, leanPitch: 0.025 },
   // Glued down by its tyres and its underbody, and it never stops pulling
-  super: { mass: 1380, cg: 0.4, bias: 0.44, hz: 2.5, damp: 0.42, arb: 0.4, travel: 0.1, droop: 0.15, torque: 980, peak: 5800, redline: 9000, gears: [3.0, 2.3, 1.85, 1.55, 1.3, 1.12, 1.0], final: 3.35, rear: 0.68, shift: 0.07, grip: 1.5, balance: 1.06, slide: 0.8, stiffness: 13, tc: 0.75, esc: 0.8, roll: 0.5, cd: 0.5, down: 1.05, lock: 0.54, brake: 15, top: 96 },
+  super: { mass: 1380, cg: 0.4, bias: 0.44, hz: 2.5, damp: 0.42, arb: 0.4, travel: 0.1, droop: 0.15, torque: 980, peak: 5800, redline: 9000, gears: [3.0, 2.3, 1.85, 1.55, 1.3, 1.12, 1.0], final: 3.35, rear: 0.68, shift: 0.07, grip: 1.5, balance: 1.06, slide: 0.8, stiffness: 13, tc: 0.75, esc: 0.9, roll: 0.5, cd: 0.5, down: 1.05, lock: 0.54, brake: 15, top: 96, slipMax: 0.2, pivot: 3.5, leanRoll: 0.028, leanPitch: 0.018 },
   cruiser: { mass: 1850, cg: 0.54, hz: 1.95, damp: 0.4, arb: 0.34, torque: 640, peak: 4000, redline: 6600, final: 3.7, grip: 1.26, balance: 1.1, slide: 0.8, roll: 0.78, brake: 13.5, top: 68 }
 };
 
@@ -70,6 +78,7 @@ function createBody(tune, spawnHeading = 0) {
     })),
     axle: [{ spin: 0, slip: 0 }, { spin: 0, slip: 0 }],
     gear: 0, shift: 0, rpm: t.idle, throttle: 0, brake: 0, steer: 0, reversing: false,
+    steerIn: 0, aid: 1, lockNow: t.lock, beta: 0, exit: 0, peakSlip: Math.tan(Math.PI * 0.5 / t.shape) / t.stiffness,
     airborne: 0, grounded: 0, scrape: 0, flipT: 0, hard: 0, landed: 0, skid: 0, smoke: 0, nitro: 0, kick: 0,
     hull: hullPoints(t), scrapeX: 0, scrapeY: 0, scrapeZ: 0, shiftUp: 0, backfire: 0
   };
@@ -151,13 +160,15 @@ function driveline(c, input, h, axleV, axleGrip) {
   if (b.shift > 0) b.shift -= h;
   else {
     const limiter = b.rpm >= t.redline ? 0.15 : 1;
-    engine = torqueAt(t, b.rpm) * b.throttle * limiter * (b.nitro > 0 ? 1.55 : 1);
+    engine = torqueAt(t, b.rpm) * b.throttle * limiter * (b.nitro > 0 ? 1.55 : 1) * (b.power ?? 1);
     if (input.throttle === 0 || !pedal) engine -= t.torque * 0.2 * (b.rpm / t.redline) ** 2 * Math.min(1, Math.abs(driven) * 0.25) * (b.handbraking ? 0 : 1);
   }
   let force = engine * ratio / r * 0.9;
   // Traction control eases the engine off a spinning axle and out of a slide, as far as this car has any
   const worst = Math.max(Math.abs(b.axle[0].slip) * front, Math.abs(b.axle[1].slip) * rear);
   force *= 1 - t.tc * clamp((worst - 1.6) / 2.4, 0, 1);
+  // and the stability control takes power away from a car sliding past its drift angle
+  if (!b.reversing && forwardSpeed > 4) force *= 1 - 0.75 * clamp((Math.abs(b.beta) - t.slipMax * 0.7) / 0.35, 0, 1) * b.aid * t.esc * (1 - b.exit * 0.8);
   // Automatic box: up near the limiter once the tyres have hooked up, down early with the foot in
   const top = t.gears.length - 1;
   const spinning = Math.abs(b.axle[1].slip) > 3 && rear > 0.4;
@@ -191,8 +202,13 @@ function driveline(c, input, h, axleV, axleGrip) {
     axle.force = grip * curve;
     const rate = 1 / (t.spinMass * share);
     axle.spin += (force * share - axle.force) * rate * h;
-    // Stiff at the top of the curve: never let one step carry it past the road speed the other way
-    if (Math.sign(axle.spin - road) !== Math.sign(slip) && Math.abs(force * share) < grip) axle.spin = road;
+    // Stiff at the top of the curve: a step must not carry the axle past the slip at which the road holds the engine (it
+    // would ring about it); it settles there. Settling on no slip at all, whatever the engine pushed, once held a car
+    // still for good with its foot down.
+    if (Math.abs(force * share) < grip) {
+      const settle = Math.asin(force * share / grip) * 2 / Math.PI * 1.3;
+      if ((slip - settle) * (axle.spin - road - settle) < 0) axle.spin = road + settle;
+    }
     axle.slip = axle.spin - road;
   }
 }
@@ -200,14 +216,25 @@ function driveline(c, input, h, axleV, axleGrip) {
 function steerStep(c, input, h, vLongBody, vLatBody) {
   const b = c.body, t = c.tune;
   const v = Math.abs(vLongBody);
+  // A key is all or nothing: the wheel winds on over a time that grows with speed, so a tap is a small correction and a
+  // held key a full turn, and comes back to the centre (or over to the other side) quicker. An AI's input is its own.
+  const want = clamp(input.steer || 0, -1, 1);
+  if (c.ai) b.steerIn = want;
+  else {
+    const back = Math.abs(want) < Math.abs(b.steerIn) || want * b.steerIn < 0;
+    const rate = (back ? t.unwind : 1) / lerp(t.wind, t.windHigh, clamp(v / 30, 0, 1));
+    b.steerIn = clamp(want, b.steerIn - rate * h, b.steerIn + rate * h);
+  }
+  // At speed the wheels go no further than what brings the front tyres to their best grip: past it they only scrub
   const wheelbase = t.wheelZf - t.wheelZr;
   const road = Math.atan(wheelbase * t.cornering / Math.max(v * v, 1));
-  const lock = Math.min(t.lock, road * 1.2 + 0.05);
-  let target = input.steer * lock;
-  // The wheels follow the way the car is travelling: a slide catches itself, and a keyboard can hold a drift
-  if (vLongBody > 3) target += clamp(Math.atan2(vLatBody, vLongBody) * t.assist, -t.lock * 0.8, t.lock * 0.8);
-  const rate = lerp(t.steer, t.steer * 0.42, clamp(v / 40, 0, 1)) * (Math.abs(target) < Math.abs(b.steer) ? 1.6 : 1);
-  b.steer = clamp(target, b.steer - rate * h, b.steer + rate * h);
+  const grip = Math.min(t.lock, road + b.peakSlip * 0.9);
+  // With the handbrake on the wheel is free to go further: that is what swings the car round
+  const lock = b.lockNow = lerp(Math.min(t.lock, grip + 0.3), grip, b.aid);
+  let target = b.steerIn * lock;
+  // The wheels follow the way the car is travelling: a slide catches itself. Not while the handbrake swings the tail.
+  if (vLongBody > 3) target += clamp(Math.atan2(vLatBody, vLongBody) * t.assist * (0.35 + 0.65 * b.aid) * (1 - b.exit), -t.lock * 0.8, t.lock * 0.8);
+  b.steer = clamp(target, b.steer - t.steer * h, b.steer + t.steer * h);
   c.steerAngle = b.steer;
 }
 
@@ -296,6 +323,7 @@ function substep(c, input, h, world) {
   }
   axleV[0] = axleCount0 ? axleV[0] / axleCount0 : b.axle[0].spin;
   axleV[1] = axleCount1 ? axleV[1] / axleCount1 : b.axle[1].spin;
+  b.beta = Math.abs(vLongBody) > 2 ? Math.atan2(vLatBody, Math.abs(vLongBody)) : 0;
   driveline(c, input, h, axleV, axleGrip);
 
   // 2. Tyres: what the driveline and the brakes ask of each one, within a friction circle shared with cornering
@@ -309,7 +337,9 @@ function substep(c, input, h, world) {
     if (brakeInput) {
       const wanted = t.mass * t.brake * brakeInput * (w.front ? 0.31 : 0.19);
       const stop = Math.abs(w.vLong) * t.mass * 0.25 / h * 0.4;
-      fLong -= Math.sign(w.vLong) * Math.min(wanted, stop, w.limit * t.traction * 0.98);
+      // Braking with the wheel turned, the ABS leaves the tyres the grip to steer: the car turns as it slows
+      const keep = 1 - t.brakeSteer * Math.min(1, Math.abs(b.steerIn)) * (w.front ? 1 : 0.7);
+      fLong -= Math.sign(w.vLong) * Math.min(wanted, stop, w.limit * t.traction * 0.98 * keep);
     }
     const alpha = Math.atan2(w.vLat, Math.abs(w.vLong) + 1.1);
     // A tyre travelling sideways cannot push along its own axis: the road's force lies along the slide
@@ -423,15 +453,38 @@ function substep(c, input, h, world) {
       sum.fy += t.mass * 6;
     }
   } else if (uy > 0.8) b.flipT = 0;
-  // Stability control: brakes the yaw beyond what the tyres can follow, so a keyboard can catch what it starts
-  if (touching >= 2 && !input.handbrake && speed > 5) {
-    const most = (t.grip * G * 1.12 + 1.5) / speed;
-    const over = Math.abs(b.wy) - most;
-    if (over > 0) sum.ty -= Math.sign(b.wy) * Math.min(over * b.iy * 9, t.mass * 7) * t.esc;
-    // Past the point of a drift the nose comes back round to where the car is going
+  // Stability control. It holds the yaw the wheel asks for, no more than the tyres can give: rotating past it (or the
+  // wrong way) is braked hard, short of it gets a gentle push. Past this car's drift angle the nose is brought back round
+  // to where the car is going. Off while the handbrake is held, it comes back as the car is driven out of the slide.
+  // Letting go of the handbrake with the car swung round: it keeps the way it now points and the slide comes round to
+  // follow it, rather than the nose swinging back to where the car was going (that undid every handbrake turn)
+  const slipNow = Math.atan2(vLatBody, Math.abs(vLongBody));
+  if (b.held && !input.handbrake && Math.abs(slipNow) > 0.25 && speed > 3) b.exit = 1;
+  b.held = !!input.handbrake;
+  b.exit = Math.max(0, b.exit - h / 1.1);
+  b.aid = input.handbrake ? Math.max(0, b.aid - h * 6) : Math.min(1, b.aid + h / t.recover);
+  if (touching >= 2 && speed > 1.5) {
+    const aid = b.aid * t.esc;
+    const wheelbase = t.wheelZf - t.wheelZr;
+    // A handbrake turn may spin the car as quick as a pivot allows, and no quicker: it stays a turn the wheel holds
+    const most = Math.max(t.grip * G * 1.05 / speed, (1 - b.aid) * 1.7);
+    const want = clamp(vLongBody * Math.tan(b.steerIn * b.lockNow) / wheelbase, -most, most);
+    const yaw = b.wx * ux + b.wy * uy + b.wz * uz;
+    const err = yaw - want;
+    const over = yaw * want < 0 ? Math.abs(yaw) > 0.05 : Math.abs(yaw) > Math.abs(want);
+    const torque = over ? -err * b.iy * t.yawAid : -clamp(err, -0.5, 0.5) * b.iy * t.yawHelp;
+    const cap = t.mass * (over ? 11 : 3);
+    const k = clamp(torque, -cap, cap) * Math.max(aid, b.exit * t.esc, input.handbrake ? 0.55 : 0);
+    sum.tx += ux * k; sum.ty += uy * k; sum.tz += uz * k;
     const slip = Math.atan2(vLatBody, Math.abs(vLongBody));
-    const past = clamp((Math.abs(slip) - 0.62) / 0.5, 0, 1);
-    if (past) sum.ty += Math.sign(slip) * past * t.mass * 10 * t.esc;
+    const past = clamp((Math.abs(slip) - t.slipMax) / 0.3, 0, 1);
+    if (past) sum.ty += Math.sign(slip) * past * t.mass * 12 * aid * (1 - b.exit);
+    if (b.exit > 0 && Math.abs(slip) > 0.1) {
+      const side = clamp(-vLatBody * t.mass * 4, -t.mass * G * 0.9, t.mass * G * 0.9) * b.exit;
+      sum.fx += ax * side; sum.fy += ay * side; sum.fz += az * side;
+    }
+    // A handbrake turn: the locked rear lets go and the car pivots the way the wheel points, as quick as the speed allows
+    if (input.handbrake && Math.abs(b.steerIn) > 0.1 && Math.abs(yaw) < 1.8) sum.ty += b.steerIn * t.mass * t.pivot * clamp(speed / 12, 0, 1) * Math.sign(vLongBody);
   }
 
   // 6. Integrate
@@ -600,8 +653,12 @@ function settleBody(c, heading = c.heading) {
   b.q[0] = 0; b.q[1] = Math.sin(heading / 2); b.q[2] = 0; b.q[3] = Math.cos(heading / 2);
   b.vx = b.vy = b.vz = b.wx = b.wy = b.wz = 0;
   b.flipT = 0; b.airborne = 0; b.rpm = c.tune.idle; b.gear = 0; b.shift = 0; b.chase = 0;
+  // A recalled car starts with centred controls and full stability, even if it was parked during a handbrake turn.
+  b.throttle = b.brake = b.steer = b.steerIn = b.beta = b.exit = b.nitro = 0;
+  b.aid = 1; b.lockNow = c.tune.lock; b.held = b.handbraking = b.reversing = false;
   b.axle[0].spin = b.axle[1].spin = 0;
-  c.speed = c.vx = c.vz = c.angularVel = 0;
+  b.axle[0].slip = b.axle[1].slip = 0;
+  c.speed = c.vx = c.vz = c.angularVel = c.steerAngle = 0;
   b.speed = b.svx = b.svz = b.syaw = 0;
   for (const w of b.wheels) { w.ready = false; w.comp = b.sag; w.travel = 0; w.load = 0; w.slip = 0; }
   refreshAxes(b);

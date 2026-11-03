@@ -26,6 +26,7 @@ import { collapse } from './ragdoll.js';
 import { Arsenal } from './arsenal.js';
 import { carSpecs } from './car-assets.js';
 import { popBody, settleBody, shuntBody } from './car-physics.js';
+import { driverPose } from './car-cabin.js';
 import { DriveEffects, FallingLamps, addDent } from './drive-fx.js';
 import { StuntScore } from './stunts.js';
 import { GangSystem } from './gangs.js';
@@ -55,6 +56,9 @@ const FLEET_MAX = 12;
 const WHEEL_STEP = 12; // pixels of scrolling to the next weapon
 const WHEEL_GESTURE_GAP = 160; // ms without a scroll event that ends a gesture
 const EJECT_ALTITUDE = 20; // a crash above this throws the pilot clear, under a canopy
+// Health a car loses to a crash at this closing speed (m/s): nothing at a parking knock, a few points at 50 km/h, about a
+// tenth at 90, a quarter at 130, half at 200. A car survives a good chase; it is bullets and blasts that set it alight.
+const crashDamage = (speed) => 0.17 * Math.max(0, speed - 9) ** 1.5;
 const IDLE_STICK = { pitch: 0, roll: 0, throttle: 0 };
 const WRECK_POOL = 4;
 const DEBUG = new URLSearchParams(location.search).has('debug');
@@ -81,8 +85,10 @@ function splitDoor(car) {
   mesh.position.set(-hingeX, 0, -front);
   mesh.castShadow = true; mesh.receiveShadow = true;
   mesh.material.side = THREE.DoubleSide;
-  hinge.add(mesh); car.chassisPivot.add(hinge);
+  hinge.add(mesh); (car.bodyPivot ?? car.chassisPivot).add(hinge);
   car.door = hinge; car.doorOpen = 0;
+  // A cabin laid out from the glass has its own seats (car-cabin.js)
+  if (car.cabin) return;
   const interior = new THREE.MeshStandardNodeMaterial({ color: 0x14181a, roughness: 0.92 });
   for (const side of [-1, 1]) {
     const seat = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.18, 0.5), interior);
@@ -91,7 +97,7 @@ function splitDoor(car) {
     back.position.set(side * 0.4, 0.78, -0.4); back.rotation.x = -0.15;
     const head = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.18, 0.13), interior);
     head.position.set(side * 0.4, 1.08, -0.43);
-    car.chassisPivot.add(seat, back, head);
+    (car.bodyPivot ?? car.chassisPivot).add(seat, back, head);
   }
 }
 
@@ -301,7 +307,7 @@ export class Game {
   buildInterface() {
     document.body.insertAdjacentHTML('beforeend', `
       <div id="game-vignette" aria-hidden="true"></div>
-      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · BRICKS &amp; MORTAR</small></span></div>
+      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · MOMENTUM</small></span></div>
       <div id="session-badge"><i></i><span>MANHATTAN</span><b id="session-mode">LIBRE</b><button id="pause-button" aria-label="Ouvrir le menu pause">Ⅱ</button></div>
       <div id="game-prompt" role="status" aria-live="polite"><kbd>F</kbd><span>Voler la voiture<small>VÉHICULE</small></span></div>
       <div id="game-toast" role="status" aria-live="polite"></div>
@@ -319,7 +325,7 @@ export class Game {
         <div class="menu-bottom"><span>MANHATTAN, NY<span class="coordinates">40°45′ N — 73°59′ W</span></span><button id="credits-button">CRÉDITS ↗</button><span class="menu-description">MISSIONS · COURSES · PRIMES<br>COMBAT · POURSUITES · 5 ÉTOILES</span></div>
         <div id="menu-options"><span>HEURE &amp; MÉTÉO</span><button data-game-time="golden">Soleil bas</button><button data-game-time="midday">Midi</button><button data-game-time="twilight">Crépuscule</button><button data-game-time="midnight">Nuit</button><button id="weather-toggle">MÉTÉO : AUTO</button><button id="sound-toggle">SON ACTIVÉ</button><button id="quality-toggle">QUALITÉ : HAUTE</button></div>
       </div>
-      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Bricks &amp; Mortar</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap.</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : Comrade1280, Daniel Zhabotinsky (Sketchfab, CC BY 4.0), Eric Chadwick / DGG (Khronos, CC BY 4.0). Modifiées pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
+      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Momentum</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap.</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : Comrade1280, Daniel Zhabotinsky (Sketchfab, CC BY 4.0), Eric Chadwick / DGG (Khronos, CC BY 4.0). Modifiées pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
       <button id="mobile-interact" class="touch-interact" hidden>F <span>VÉHICULE</span></button>
     `);
     this.ui = Object.fromEntries(['game-menu', 'game-prompt', 'game-toast', 'stamina-fill', 'drive-speed', 'drive-gear', 'drive-power', 'drive-nitro', 'drive-health', 'vehicle-name', 'game-keybar', 'play-button', 'mobile-interact', 'session-mode', 'menu-progress'].map(id => [id, document.getElementById(id)]));
@@ -712,14 +718,16 @@ export class Game {
       if (self.bicycle && self === this.car && this.state === 'driving' && speed > 11) { this.bail(self, speed); continue; }
       if (self.boat) { if (self === this.car) this.camera.addShake(Math.min(1.2, speed * 0.06)); continue; }
       if ((self.type === 'car' || self.air) && self.hp !== undefined && !self.destroyed && speed > 4.5) {
-        this.damageCar(self, (speed - 8) * 0.9, self === this.car && this.state === 'driving' ? 'crash' : 'hit');
+        const before = this.crashPeak(self, speed);
+        if (speed > before) this.damageCar(self, crashDamage(speed) - crashDamage(before), self === this.car && this.state === 'driving' ? 'crash' : 'hit');
         if (self === this.car && this.state === 'driving' && self.moto && speed > 8) { this.bail(self, speed); continue; }
-        if (self === this.car && this.state === 'driving' && speed > 22) this.damagePlayer((speed - 22) * 1.2, 'crash');
+        if (self === this.car && this.state === 'driving' && speed > 22 && speed > before) this.damagePlayer((speed - Math.max(22, before)) * 1.2, 'crash');
         if (other && other.police && self === this.car && this.state === 'driving') this.crime('copCarHit', e.x, e.z);
       }
+      // Traffic takes the blow and is left battered, never blown up by a bumper: fire is for bullets and blasts
       if (self.edge !== undefined && self.hp !== undefined && speed > 6 && other === this.car) {
-        self.hp -= (speed - 6) * 1.1;
-        if (self.hp <= 0) this.wreckTraffic(self);
+        const before = this.crashPeak(self, speed);
+        if (speed > before) self.hp = Math.max(Math.min(self.hp, 8), self.hp - crashDamage(speed) + crashDamage(before));
       }
     }
   }
@@ -1404,7 +1412,7 @@ export class Game {
         if (h.melee) this.audio.sfx('punch', h.x, h.y, h.z);
         else this.fx.impact(h.x, h.y, h.z, h.nx, h.ny, h.nz, this.player.inVehicle ? 'metal' : 'flesh');
         if (this.player.inVehicle && !this.car.moto) {
-          this.damageCar(this.car, damage * 0.5, 'shot');
+          this.damageCar(this.car, damage * 0.3, 'shot');
           this.damagePlayer(damage * 0.25, 'shot');
         } else this.damagePlayer(damage, h.melee ? 'melee' : 'shot');
         return { hit: true };
@@ -1477,11 +1485,22 @@ export class Game {
     if (this.health <= 0) this.die(cause);
   }
 
+  // One crash reaches the collision listener many times, every physics step of the contact and from both cars: only its
+  // hardest moment counts. Returns the closing speed already counted for this crash (0 for a new one).
+  crashPeak(target, speed) {
+    const fresh = !(this.clock - (target.hitAt ?? -9) < 0.4);
+    const before = fresh ? 0 : target.hitPeak ?? 0;
+    target.hitAt = this.clock;
+    if (speed > before) target.hitPeak = speed;
+    return before;
+  }
+
   damageCar(car, amount, cause) {
-    if (car.destroyed || car.hp === undefined) return;
+    if (car.destroyed || car.hp === undefined || !(amount > 0)) return;
     car.hp = Math.max(0, car.hp - amount);
     if (car.hp <= 0 && !car.burnT) {
-      car.burnT = cause === 'explosion' ? 0.4 : 5 + Math.random() * 2;
+      // The player gets the time to bail out of a burning car
+      car.burnT = cause === 'explosion' ? 0.4 : car === this.car ? 9 + Math.random() * 2 : 5 + Math.random() * 2;
       if (car === this.car && this.state === 'driving') this.toast('Le moteur prend feu', 'Sortez du véhicule avant l’explosion ! [F]');
     }
   }
@@ -1499,6 +1518,8 @@ export class Game {
         continue;
       }
       if (car.destroyed) continue;
+      // A badly hurt engine coughs along at half power: the car is telling you it has had enough
+      if (car.body) car.body.power = car.hp < 30 ? 0.5 + car.hp / 60 : 1;
       const hood = (k) => ({ x: car.position.x + Math.sin(car.heading) * k, z: car.position.z + Math.cos(car.heading) * k });
       if (car.hp < 50 && car.hp > 0) {
         const h = hood(1.5);
@@ -1602,9 +1623,11 @@ export class Game {
     for (const c of this.allCars) {
       if (c.wreck) continue;
       const dx = c.position.x - x, dz = c.position.z - z, d = Math.hypot(dx, dz);
+      // the player's own car took its share of the blast above, with the player in it
+      const hurt = !(c === this.car && this.player.inVehicle);
       if (d < 0.5 || d > radius * 1.2) continue;
       const k = 1 - d / (radius * 1.2);
-      this.damageCar(c, 90 * k * (generation ? 0.5 : 1), 'explosion');
+      if (hurt) this.damageCar(c, 90 * k * (generation ? 0.5 : 1), 'explosion');
       c.vx = (c.vx || 0) + dx / d * 9 * k;
       c.vz = (c.vz || 0) + dz / d * 9 * k;
       c.angularVel = (c.angularVel || 0) + (Math.random() - 0.5) * 4 * k;
@@ -2175,6 +2198,12 @@ export class Game {
     const sounding = this.audio.sources?.extraVehicles;
     if (sounding) { sounding.length = 0; for (const c of this.wanted.cars) sounding.push(c); }
 
+    // The player's car mirrors the street it is in (car-assets.js); a few times a second is plenty
+    const street = car?.paintMaterial?.userData?.street;
+    if (street && !car.paintMaterial.userData.shared && this.clock - (this.streetAt ?? -9) > 0.2) {
+      this.streetAt = this.clock;
+      this.controllers.streetWalls(car.position.x, car.position.z, street);
+    }
     for (const vehicle of this.allCars) {
       if (vehicle.door) vehicle.door.rotation.y = -vehicle.doorOpen;
       vehicle.mesh.position.copy(vehicle.position); vehicle.mesh.rotation.y = vehicle.heading;
@@ -2190,6 +2219,16 @@ export class Game {
       person.rig.ride(car.leanPivot, car.pedalPhase, car.bikeFrame);
       this.hero.setWeapon(null);
       this.hero.update(true, 0, dt);
+    } else if (person.inVehicle && car.cabin && this.camera.activePresetId !== 'pov') {
+      // At the wheel, seen through the glass; the head turns into the corner the car is taking
+      person.rig.drive(car.bodyPivot, driverPose(car.cabin, Math.max(-0.5, Math.min(0.5, car.body.wy * 0.35 + car.body.steer * 0.4))));
+      this.hero.setWeapon(null);
+      this.hero.update(true, 0, dt);
+    }
+    // The glass of the car the player drives clears to show them; every other car keeps its tint
+    for (const vehicle of this.allCars) {
+      const clear = vehicle.glassMaterial?.userData.clear;
+      if (clear) clear.value = vehicle === car && person.inVehicle && this.camera.activePresetId !== 'pov' ? 1 : 0;
     }
     this.vertical.draw(dt);
     this.skyRings.update();

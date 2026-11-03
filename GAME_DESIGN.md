@@ -119,13 +119,35 @@ Le vol refait de bout en bout, jugé à côté d'un AAA :
 - **Essais en ligne** : l'Architecte, son serveur et ses styles restent hors du build publié. Ce correctif poursuit la
   phase de test ; les objectifs de la 1.0 restent à réaliser.
 
-## 0.9.4 « Bricks & Mortar » — les immeubles
+## 0.9.4 « Momentum » — la conduite et les immeubles
+
+Les deux refontes développées en parallèle partagent une même version de test.
+
+### Momentum — la conduite
+
+La conduite se juge au clavier, comme la joue l'utilisateur, et à côté de GTA V : une voiture doit se tenir sans effort,
+glisser quand on le lui demande, et se rattraper.
+
+- **Les aides de conduite** : volant progressif selon la vitesse, braquage limité à l'adhérence, contrôle de stabilité
+  qui suit le volant, ABS qui laisse tourner en freinant, frein à main qui pivote puis repart dans le nouveau cap. Chaque
+  classe garde son caractère (la muscle glisse, la supercar colle, l'utilitaire penche).
+- **Mesurer avant de régler** : un banc d'essai chronomètre chaque classe (0-100, 100-0, virage, frein à main) et les
+  tests verrouillent les comportements ; un pilote automatique au clavier compare les versions en ville.
+- **Séparer la physique du spectacle** : la physique reste stable, le poids se montre par une suspension visuelle, la
+  caméra et le son.
+- **Les voitures à regarder** : reflet de la rue dans la peinture (calculé à partir des immeubles réels), habitacle et
+  conducteur visibles, vue intérieure.
+- **À venir** : le son moteur (enregistrements hors ligne d'un simulateur physique de moteur), les pièces de carrosserie
+  qui se détachent, la casse du mobilier urbain.
+
+### Bricks & Mortar — les immeubles
 
 Une ville se reconnaît à ses immeubles avant ses monuments. Chaque immeuble prend son type dans le registre foncier
 (PLUTO : catégorie, étages, année, quartier historique) et ses gradins dans OpenStreetMap ; `js/building-types.js` en fait
 une tenue (couleur, fenêtres, soubassement, corniche) que les deux shaders de façade lisent par sommet, et
-`js/building-massing.js` dessine les retraits de la loi de 1916 là où les données n'en ont pas. Suite prévue : menuiseries
-et appuis en relief près du joueur, perrons des maisons de ville, balcons d'après-guerre, couronnes éclairées la nuit.
+`js/building-massing.js` dessine les retraits de la loi de 1916 là où les données n'en ont pas. Les menuiseries et appuis
+en relief près du joueur sont livrés. Suite prévue : perrons des maisons de ville, balcons d'après-guerre,
+couronnes éclairées la nuit.
 
 ## 0.9.3 « Main Street » — la rue
 
@@ -187,5 +209,5 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.1** | **Leverage** | Le ciel refait : vrai modèle de vol, vol au regard, sensations, parapente en caissons |
 | **0.9.2** | **Leverage** | Correctif des collisions automobiles ; Architecte expérimental réservé au développement local |
 | **0.9.3** | **Main Street** | Rez-de-chaussée refaits : 25 000 boutiques réelles en relief, enseignes uniques, vrais intérieurs, la rue de nuit |
-| **0.9.4** | **Bricks & Mortar** | Immeubles refaits : douze types réels, une façade par immeuble, gradins et couronnes, corniches moulurées, fenêtres et toits en relief |
+| **0.9.4** | **Momentum** | Conduite au clavier refaite (volant progressif, stabilité, frein à main), voitures solides, reflets de la rue, conducteur et habitacle, vue intérieure ; immeubles Bricks & Mortar (types réels, gradins, corniches et fenêtres en relief) |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |
