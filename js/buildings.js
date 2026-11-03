@@ -35,7 +35,9 @@ import {
 import { GEO } from './nyc-geodata.js';
 import { REAL_BUILDINGS } from './building-geodata.js';
 import { createBuildingFootprints } from './building-footprints.js';
-import { createAwningMaterial } from './tsl-materials.js';
+import { STOREFRONTS } from './storefront-geodata.js';
+import { SHOP_TYPES } from './storefront-types.js';
+import { planStorefronts } from './storefront-plan.js';
 import { polygonContains, polygonBoxOverlaps } from './building-collision.js';
 import { pavedPlazaRects, parkTreeSites, sidewalkBlocks } from './city-grid.js';
 
@@ -144,39 +146,6 @@ class Quadtree {
     this.se.queryRange(cx, cz, radius, found);
     return found;
   }
-}
-
-// A canvas awning in a unit box: sloping down and out from the wall at -x, with a valance along its front at +x. uv.x runs
-// along the wall, so the material can stripe it
-function createAwningGeometry() {
-  const wall = -0.5, front = 0.5, top = 0.5, low = -0.2, hem = -0.5, end = 0.5;
-  const pos = [], uv = [], nor = [], idx = [];
-  const quad = (a, b, c, d, n, v0 = 0, v1 = 1) => {
-    const at = pos.length / 3;
-    pos.push(...a, ...b, ...c, ...d);
-    for (let i = 0; i < 4; i++) nor.push(...n);
-    uv.push(0, v0, 1, v0, 1, v1, 0, v1);
-    idx.push(at, at + 1, at + 2, at, at + 2, at + 3);
-  };
-  const l = Math.hypot(front - wall, top - low);
-  const up = [(top - low) / l, (front - wall) / l, 0];
-  quad([front, low, end], [front, low, -end], [wall, top, -end], [wall, top, end], up, 0.25, 1);
-  quad([front, hem, end], [front, hem, -end], [front, low, -end], [front, low, end], [1, 0, 0], 0, 0.25);
-  // closed ends
-  for (const z of [end, -end]) {
-    const n = [0, 0, Math.sign(z)];
-    const at = pos.length / 3;
-    pos.push(wall, top, z, front, low, z, front, hem, z);
-    for (let i = 0; i < 3; i++) nor.push(...n);
-    uv.push(0, 0.5, 0, 0.5, 0, 0.5);
-    if (z > 0) idx.push(at, at + 2, at + 1); else idx.push(at, at + 1, at + 2);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  g.setIndex(idx);
-  return g;
 }
 
 function buildCityBlocks(scene, landmarkColliders = []) {
@@ -407,6 +376,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
 
   const surveyedBuckets = materials.map(() => []);
   const detailsToPlace = [];
+  const records = [];
   for (const b of surveyedBuildings) {
     const seed = Math.round(b.cx * 31 + b.cz * 17);
     const rand = mulberry32(seed);
@@ -414,10 +384,10 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     const mat = b.year && b.year < 1945 ? (tone < 0.3 ? 0 : tone < 0.58 ? 5 : tone < 0.82 ? 1 : 6)
       : b.year && b.year < 1980 ? (tone < 0.3 ? 5 : tone < 0.55 ? 0 : 3)
         : tone < 0.6 ? 2 : 4;
-    // The survey has no building-use data; choose retail independently of facade style and roof details.
-    const storefronts = b.height >= 6 && mulberry32(seed ^ 0x53544f52)() < 0.55;
-    const record = { ...b, tone, storefronts };
+    // Shops come from the city's storefront registry (planned below); storefronts.js builds them
+    const record = { ...b, tone, storefronts: false, mat, floorHeight: storeys[mat] };
     surveyedBuckets[mat].push(record);
+    records.push(record);
     const detail = {
       cx: b.cx, cz: b.cz, minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ,
       cornices: [], waterTowers: [], hvacUnits: [], fireEscapes: [], awnings: [], scaffoldSheds: [], footprints: []
@@ -434,7 +404,10 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     detailsToPlace.push({ b: record, detail, masonry: MASONRY.has(mat), rand });
     allBlocks.push(detail);
   }
-  // Reserve every fire escape before placing storefronts on neighbouring buildings.
+  // Every registered storefront on the wall of its building that faces its street
+  const plan = planStorefronts(records, STOREFRONTS, SHOP_TYPES);
+  for (const [record, walls] of plan.wallsByRecord) record.shopWalls = walls;
+  // Reserve every fire escape before placing scaffolding on neighbouring buildings.
   for (const { b, detail, masonry, rand } of detailsToPlace) {
     const neighbours = nearbyReserves(b, 6);
     for (const reserve of addBuildingDetails(b, detail, { masonry, rand, neighbours })) addReserve(reserve);
@@ -559,7 +532,6 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   const MAX_CORNICES = 7000;
   const MAX_WATER_TOWERS = 1400;
   const MAX_HVAC = 1600;
-  const MAX_AWNINGS = 1800;
   const MAX_SHEDS = 300;
 
   // 1. Projecting horizontal stone cornices & parapet ledges
@@ -660,92 +632,12 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   // 4. Instanced fire escapes: real steps nearby, lightweight silhouettes in the distance.
   const fireEscapeSystem = createFireEscapes(group);
 
-  // 5. Ground-floor retail canvas awnings & illuminated storefront fascia signs
-  const awningMat = createAwningMaterial();
-  const awningPalette = [
-    new THREE.Color(0x8c2028),
-    new THREE.Color(0x24503a),
-    new THREE.Color(0x24406a),
-    new THREE.Color(0xb98a34),
-    new THREE.Color(0x2e2e33)
-  ];
-  const awningInst = new THREE.InstancedMesh(createAwningGeometry(), awningMat, MAX_AWNINGS);
-  awningInst.castShadow = awningInst.receiveShadow = true;
-  awningInst.frustumCulled = false;
-  // Pre-initialize instanceColor buffer so dynamic updates work cleanly
-  for (let i = 0; i < MAX_AWNINGS; i++) {
-    awningInst.setColorAt(i, awningPalette[i % awningPalette.length]);
-  }
-  group.add(awningInst);
-
-  const signThemes = [
-    { bg: '#161210', border: '#c89d54', text: 'FIFTH AVE BISTRO · EST. 1928', color: '#ffe4a8' },
-    { bg: '#0c2244', border: '#38b6ff', text: 'DUANE READE · PHARMACY', color: '#ffffff' },
-    { bg: '#142b20', border: '#d4af37', text: 'MANHATTAN BOOKS & ESPRESSO', color: '#fff2cc' },
-    { bg: '#280a10', border: '#ff5252', text: 'BROADWAY DELI & GRILL · 24HR', color: '#ffd180' },
-    { bg: '#101318', border: '#e0e6ed', text: 'EMPIRE WATCHES · NEW YORK', color: '#f5f9ff' }
-  ];
-  const MAX_SIGNS_PER_THEME = Math.ceil(MAX_AWNINGS / signThemes.length) + 32;
-  const signInsts = signThemes.map((st) => {
-    const c = document.createElement('canvas');
-    c.width = 512;
-    c.height = 96;
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = st.bg;
-    ctx.fillRect(0, 0, 512, 96);
-    ctx.strokeStyle = st.border;
-    ctx.lineWidth = 6;
-    ctx.strokeRect(6, 6, 500, 84);
-    ctx.fillStyle = st.color;
-    ctx.font = '800 26px Inter, Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(st.text, 256, 50);
-
-    const tex = new THREE.CanvasTexture(c);
-    tex.colorSpace = THREE.SRGBColorSpace;
-    const sMat = new THREE.MeshBasicNodeMaterial({ map: tex });
-    const sInst = new THREE.InstancedMesh(unitBox, sMat, MAX_SIGNS_PER_THEME);
-    sInst.frustumCulled = false;
-    group.add(sInst);
-    return sInst;
-  });
-
   // 6. Sidewalk construction scaffolding sheds
   const shedMat = new THREE.MeshStandardNodeMaterial({ color: 0x214f37, roughness: 0.6, metalness: 0.25 });
   const shedInst = new THREE.InstancedMesh(unitBox, shedMat, MAX_SHEDS);
   shedInst.castShadow = shedInst.receiveShadow = true;
   shedInst.frustumCulled = false;
   group.add(shedInst);
-
-  // 7. Ground-floor storefront clustered SpotLights (awnings/fascia signs)
-  const storeLightGroup = new THREE.Group();
-  storeLightGroup.name = 'StoreClusteredLights';
-  scene.add(storeLightGroup);
-
-  const storeThemeColors = [
-    new THREE.Color(0xffd896), // Bistro warm gold
-    new THREE.Color(0xd8eeff), // Pharmacy crisp cool white
-    new THREE.Color(0xffe4ad), // Bookstore warm amber
-    new THREE.Color(0xffbe88), // 24hr Deli warm orange-gold
-    new THREE.Color(0xfff2d6)  // Watch boutique warm ivory
-  ];
-
-  const STORE_SPOT_POOL = 28;
-  const STORE_SPOT_INTENSITY = 46 * ((0.85 - 0.15) / 0.90);
-  const storeSpotPool = [];
-  for (let i = 0; i < STORE_SPOT_POOL; i++) {
-    const spot = new THREE.SpotLight(0xffd896, 0, 12.0, 0.84, 0.80, 1.30);
-    spot.castShadow = false;
-    spot.position.set(0, -1000, 0);
-    spot.target.position.set(0, -1001, 0);
-    storeLightGroup.add(spot);
-    storeLightGroup.add(spot.target);
-    storeSpotPool.push(spot);
-  }
-
-  const activeAwnings = [];
-  const spotCandidates = [];
 
   // ============================================================================
   // STREAMING AROUND THE PLAYER / CAMERA
@@ -779,20 +671,14 @@ function buildCityBlocks(scene, landmarkColliders = []) {
       const db = (b.cx - focusX) * (b.cx - focusX) + (b.cz - focusZ) * (b.cz - focusZ);
       return da - db;
     });
-    activeAwnings.length = 0;
 
     let corniceCount = 0;
     let wtCount = 0;
     let hvacCount = 0;
     fireEscapeSystem.begin(focusX, focusZ);
-    let awningCount = 0;
-    let awningBlocks = 0;
     let shedCount = 0;
-    const signCounts = signInsts.map(() => 0);
 
     for (const blk of nearbyBlocks) {
-      const collectNearLights = blk.awnings.length > 0 && awningBlocks++ < 20;
-
       // 1. Stone cornices & setback ledges, hung just below their roof line (top 0.1h under it, so no two ledges or
       //    roofs share a plane) so roofs & terraces keep their own roofing instead of a stone lid
       for (let i = 0; i < blk.cornices.length && corniceCount < MAX_CORNICES; i++) {
@@ -837,29 +723,6 @@ function buildCityBlocks(scene, landmarkColliders = []) {
       // 4. Wrought-iron fire escapes
       for (const fe of blk.fireEscapes) fireEscapeSystem.add(fe);
 
-      // 5. Retail awnings & illuminated storefront fascia signs
-      for (let i = 0; i < blk.awnings.length && awningCount < MAX_AWNINGS; i++) {
-        const a = blk.awnings[i];
-        dummy.rotation.set(0, a.ry || 0, 0);
-        dummy.position.set(a.x, a.y, a.z);
-        dummy.scale.set(a.w, 1.05, a.d);
-        dummy.updateMatrix();
-        awningInst.setMatrixAt(awningCount, dummy.matrix);
-        awningInst.setColorAt(awningCount, awningPalette[a.colorIdx % awningPalette.length]);
-
-        const themeIdx = a.colorIdx % signInsts.length;
-        if (signCounts[themeIdx] < MAX_SIGNS_PER_THEME) {
-          dummy.position.set(a.x, 4.68, a.z);
-          dummy.scale.set(0.28, 0.86, a.d * 0.92);
-          dummy.updateMatrix();
-          signInsts[themeIdx].setMatrixAt(signCounts[themeIdx]++, dummy.matrix);
-        }
-        if (collectNearLights) {
-          activeAwnings.push({ a, themeIdx, ry: a.ry || 0 });
-        }
-        awningCount++;
-      }
-
       // 6. Sidewalk construction sheds
       for (let i = 0; i < blk.scaffoldSheds.length && shedCount < MAX_SHEDS; i++) {
         const s = blk.scaffoldSheds[i];
@@ -887,80 +750,8 @@ function buildCityBlocks(scene, landmarkColliders = []) {
 
     fireEscapeSystem.end();
 
-    awningInst.count = awningCount;
-    flagRange(awningInst.instanceMatrix, awningCount);
-    if (awningInst.instanceColor) flagRange(awningInst.instanceColor, awningCount);
-
-    signInsts.forEach((sInst, idx) => {
-      sInst.count = signCounts[idx];
-      flagRange(sInst.instanceMatrix, signCounts[idx]);
-    });
-
     shedInst.count = shedCount;
     flagRange(shedInst.instanceMatrix, shedCount);
-  }
-
-  function smoothFade(d, start, end) {
-    const t = Math.min(1, Math.max(0, (end - d) / (end - start)));
-    return t * t * (3 - 2 * t);
-  }
-
-  function updateLights(camera) {
-    if (!camera) {
-      for (let i = 0; i < STORE_SPOT_POOL; i++) {
-        storeSpotPool[i].intensity = 0;
-        storeSpotPool[i].position.set(0, -1000, 0);
-      }
-      return;
-    }
-
-    const camX = camera.position.x;
-    const camY = camera.position.y;
-    const camZ = camera.position.z;
-    const e = camera.matrixWorld.elements;
-    const fwdLen = Math.hypot(e[8], e[10]) || 1;
-    const fwdX = -e[8] / fwdLen;
-    const fwdZ = -e[10] / fwdLen;
-    const STORE_MAX_DIST = 115;
-
-    spotCandidates.length = 0;
-    for (let i = 0; i < activeAwnings.length; i++) {
-      const item = activeAwnings[i];
-      const a = item.a;
-      const dx = a.x - camX;
-      const dz = a.z - camZ;
-      const d2 = dx * dx + dz * dz + camY * camY;
-      if (d2 > STORE_MAX_DIST * STORE_MAX_DIST) continue;
-      const d = Math.sqrt(d2);
-      const forwardDot = dx * fwdX + dz * fwdZ;
-      const effDist = d + Math.max(0, 6.0 - forwardDot) * 2.8;
-      if (effDist >= STORE_MAX_DIST) continue;
-      spotCandidates.push({ item, effDist });
-    }
-    spotCandidates.sort((a, b) => a.effDist - b.effDist);
-
-    const storeCutoff = spotCandidates.length > STORE_SPOT_POOL
-      ? Math.min(STORE_MAX_DIST, spotCandidates[STORE_SPOT_POOL].effDist)
-      : STORE_MAX_DIST;
-    const activeSpots = Math.min(STORE_SPOT_POOL, spotCandidates.length);
-    for (let i = 0; i < STORE_SPOT_POOL; i++) {
-      const spot = storeSpotPool[i];
-      if (i < activeSpots) {
-        const cand = spotCandidates[i];
-        const { a, themeIdx, ry } = cand.item;
-        const fade = smoothFade(cand.effDist, storeCutoff * 0.62, storeCutoff);
-        const outX = Math.cos(ry);
-        const outZ = -Math.sin(ry);
-        spot.position.set(a.x + outX * 0.45, 4.35, a.z + outZ * 0.45);
-        spot.target.position.set(a.x + outX * 1.85, 0.0, a.z + outZ * 1.85);
-        spot.target.updateMatrixWorld();
-        spot.color.copy(storeThemeColors[themeIdx % storeThemeColors.length]);
-        spot.intensity = STORE_SPOT_INTENSITY * fade;
-      } else {
-        spot.intensity = 0;
-        spot.position.set(0, -1000, 0);
-      }
-    }
   }
 
   // Initial Quadtree stream centered at Midtown 5th Ave & 42nd St
@@ -972,7 +763,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     colliders,
     allBlocks,
     update,
-    updateLights
+    shops: plan.shops
   };
 }
 

@@ -1,0 +1,252 @@
+{
+  "tile": 512,
+  "border": 16,
+  "cols": 4,
+  "tiles": [
+    {
+      "name": "paint",
+      "id": "painted_plaster_wall",
+      "use": "tint",
+      "metres": 2,
+      "authors": [
+        "Amal Kumar"
+      ],
+      "average": [
+        0.4061,
+        0.3651,
+        0.3501,
+        0.9178
+      ]
+    },
+    {
+      "name": "planks",
+      "id": "distressed_painted_planks",
+      "use": "tint",
+      "metres": 1.6,
+      "authors": [
+        "Rob Tuytel"
+      ],
+      "average": [
+        0.2185,
+        0.1932,
+        0.139,
+        0.8585
+      ]
+    },
+    {
+      "name": "wood",
+      "id": "fine_grained_wood",
+      "use": "natural",
+      "metres": 0.6,
+      "authors": [
+        "Rob Tuytel"
+      ],
+      "average": [
+        0.0551,
+        0.0303,
+        0.0155,
+        0.8899
+      ]
+    },
+    {
+      "name": "granite",
+      "id": "granite_tile",
+      "use": "natural",
+      "metres": 2.3,
+      "authors": [
+        "Charlotte Baglioni"
+      ],
+      "average": [
+        0.0761,
+        0.0769,
+        0.0774,
+        0.5436
+      ]
+    },
+    {
+      "name": "marble",
+      "id": "marble_01",
+      "use": "natural",
+      "metres": 1.5,
+      "authors": [
+        "Rob Tuytel"
+      ],
+      "average": [
+        0.4416,
+        0.3369,
+        0.1939,
+        0.5057
+      ]
+    },
+    {
+      "name": "metal",
+      "id": "metal_plate",
+      "use": "natural",
+      "metres": 0.5,
+      "authors": [
+        "Rob Tuytel"
+      ],
+      "average": [
+        0.0491,
+        0.0336,
+        0.0124,
+        0.5898
+      ]
+    },
+    {
+      "name": "tiles",
+      "id": "long_white_tiles",
+      "use": "natural",
+      "metres": 1.27,
+      "authors": [
+        "Jenelle van Heerden",
+        "Sergej Majboroda"
+      ],
+      "average": [
+        0.6202,
+        0.578,
+        0.4853,
+        0.242
+      ]
+    },
+    {
+      "name": "terrazzo",
+      "id": "terrazzo_tiles",
+      "use": "natural",
+      "metres": 2,
+      "authors": [
+        "Amal Kumar"
+      ],
+      "average": [
+        0.2528,
+        0.1555,
+        0.0981,
+        0.2826
+      ]
+    },
+    {
+      "name": "shutter",
+      "id": "painted_metal_shutter",
+      "use": "natural",
+      "metres": 2,
+      "authors": [
+        "Dario Barresi",
+        "Rico Cilliers",
+        "Charlotte Baglioni"
+      ],
+      "average": [
+        0.2164,
+        0.23,
+        0.2409,
+        0.6321
+      ]
+    },
+    {
+      "name": "rustshutter",
+      "id": "rusty_metal_shutter",
+      "use": "natural",
+      "metres": 1.9,
+      "authors": [
+        "Charlotte Baglioni"
+      ],
+      "average": [
+        0.2584,
+        0.1881,
+        0.1223,
+        0.9259
+      ]
+    },
+    {
+      "name": "paintedbrick",
+      "id": "painted_brick",
+      "use": "tint",
+      "metres": 1.8,
+      "authors": [
+        "Amal Kumar"
+      ],
+      "average": [
+        0.1953,
+        0.3536,
+        0.4135,
+        0.9322
+      ]
+    },
+    {
+      "name": "concrete",
+      "id": "brushed_concrete",
+      "use": "natural",
+      "metres": 2.5,
+      "authors": [
+        "Dario Barresi",
+        "Dimitrios Savva"
+      ],
+      "average": [
+        0.1465,
+        0.1256,
+        0.0982,
+        0.7825
+      ]
+    },
+    {
+      "name": "limestone",
+      "id": "white_sandstone_bricks",
+      "use": "natural",
+      "metres": 2,
+      "authors": [
+        "Rob Tuytel"
+      ],
+      "average": [
+        0.2596,
+        0.2249,
+        0.1657,
+        0.6909
+      ]
+    },
+    {
+      "name": "redbrick",
+      "id": "red_brick_03",
+      "use": "natural",
+      "metres": 1,
+      "authors": [
+        "Rob Tuytel"
+      ],
+      "average": [
+        0.1533,
+        0.0986,
+        0.0814,
+        0.5317
+      ]
+    },
+    {
+      "name": "brownbrick",
+      "id": "brick_wall_09",
+      "use": "natural",
+      "metres": 2.01,
+      "authors": [
+        "Rob Tuytel",
+        "Matterfield"
+      ],
+      "average": [
+        0.3567,
+        0.2333,
+        0.1653,
+        0.9336
+      ]
+    },
+    {
+      "name": "buffbrick",
+      "id": "brown_brick_02",
+      "use": "natural",
+      "metres": 1,
+      "authors": [
+        "Rob Tuytel"
+      ],
+      "average": [
+        0.4853,
+        0.2985,
+        0.1523,
+        0.6909
+      ]
+    }
+  ]
+}

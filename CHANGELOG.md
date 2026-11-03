@@ -1,6 +1,71 @@
 # Changelog
 
-## 0.9.2 — Leverage, collisions et Architecte local — 3 novembre 2026
+## 0.9.3 — Main Street — 3 novembre 2026
+
+Les rez-de-chaussée de Manhattan refaits de bout en bout. Les boutiques étaient peintes à plat sur les façades, toutes de
+la même largeur, avec seize enseignes génériques et une vitre sombre. Elles sont maintenant construites en relief, une par
+une, là où la ville en recense une vraie.
+
+### Les vraies boutiques, à leur place
+- 25 259 boutiques placées à partir des registres publics de New York : la position de chaque vitrine, la rue de son
+  adresse, si elle est vide (registre des vitrines 2025), l'activité de chaque immeuble (registre 2021-2022, les
+  catégories des années suivantes étant faussées) et chaque restaurant avec sa cuisine (inspections sanitaires).
+- Trente types : épicerie, pizzeria, café, boulangerie, traiteur asiatique, japonais, latino, restaurant, bar, snack,
+  bar à jus, laverie, pressing, barbier, onglerie, pharmacie, banque, vêtements, maison de luxe, bijouterie, téléphones,
+  quincaillerie, fleuriste, vins, livres, bureau, souvenirs, chaussures, galerie, local vide.
+- Le quartier compte : la 47e Rue entre la 5e et la 6e Avenue est le quartier des diamantaires, la 5e Avenue et Madison
+  ont leurs maisons de luxe, Chelsea ses galeries, Chinatown ses traiteurs, Harlem ses épiceries et ses boutiques de
+  téléphones. Les avenues sont bordées de boutiques d'un bout à l'autre.
+- Chaque boutique trouve le mur de son immeuble qui donne sur sa rue, jamais un mur mitoyen. La largeur dépend du type
+  (une banque prend plus de place qu'un barbier).
+
+### Des devantures en relief
+- Piliers dans la brique ou la pierre de l'immeuble (même teinte que la façade au-dessus), bandeau d'enseigne,
+  corniche, soubassement, vitrines à meneaux, imposte, portes simples ou doubles avec poignée et plaque de propreté.
+- Entrées en retrait : les vitrines avancent, des vitres de retour mènent à la porte, sol en granito.
+- Matières photographiées (Poly Haven, CC0) : bois verni, planches peintes, granit, pierre, carrelage, granito, tôle,
+  inox brossé, rideau de fer. Saleté au pied des murs.
+- Les piliers et les vitrines sont solides : le joueur et les voitures butent dessus.
+
+### Des enseignes nettes et toutes différentes
+- Noms inventés pour chaque boutique (« Lotus Kitchen », « Café Delorme », « Bridge Suds »…), jamais une vraie marque :
+  un test le vérifie. Les banques portent les marques du jeu (Hauturier, Gréville, Valmont, Brisant, Corsaire).
+- Les lettres sont calculées à l'écran à partir d'un atlas à champ de distance de douze polices libres : nettes de près
+  comme de loin, et aucune enseigne n'est une image.
+- Caissons lumineux, panneaux peints éclairés par des lampes col-de-cygne, lettres en laiton, néons, lettrage sur la
+  vitre, enseignes perpendiculaires (« PIZZA », « BAR », croix de pharmacie), enseigne OPEN en néon, panneau FOR LEASE
+  sur les locaux vides.
+- Plus aucune vraie marque dans le décor : les anciennes enseignes (dont une chaîne de pharmacies) sont supprimées, le
+  panneau de soda de Times Square (qui imitait l'habillage d'une marque célèbre) devient le ginger ale Valmont, et les
+  deux enseignes géantes du Queens et de Williamsburg portent les marques du jeu (Corsaire Cola, Gréville Sugars).
+
+### Derrière la vitre, une vraie pièce
+- Trente intérieurs meublés, un par type, calculés hors du jeu par lancer de rayons (éclairage indirect, ombres douces) :
+  rayons et frigos d'épicerie, comptoir et four à pizza, tables nappées, comptoir de bar et bouteilles rétroéclairées,
+  machines de laverie, fauteuils de barbier, vitrines de bijoux, mannequins, rayons de livres, œuvres de galerie…
+- La pièce recule quand on bouge, et le mobilier proche de la vitre glisse devant elle (deux couches de parallaxe).
+- La vitre reflète les façades d'en face, le ciel et la rue. De jour la pièce est sombre derrière les reflets, la nuit
+  elle s'allume.
+
+### La rue
+- Auvents rayés ou unis, avec le nom ou le slogan sur le lambrequin.
+- Chevalets à la craie, étals de fruits devant les épiceries, seaux de fleurs, tables de bistrot, poteaux de barbier,
+  trappes de cave en tôle dans le trottoir.
+- La nuit, les rideaux de fer descendent selon les horaires de chaque type (l'épicerie ne ferme jamais, le bar ouvre à
+  16 h), avec des tags dessus. Les néons et les caissons s'allument, des spots éclairent les trottoirs devant les
+  boutiques ouvertes.
+- Au-delà de 250 m (300 m en qualité HAUTE, 170 m en FLUIDE), les façades peignent encore leurs boutiques, comme avant.
+
+### Validation et limites
+- 404 tests réussis sur 405 ; seul l'échec connu de `tree-geodata` subsiste, lié à la licence Xcode. Build statique
+  vérifié.
+- Joué dans un Chrome séparé en WebGPU, de jour et de nuit : 25 259 boutiques dans la ville, environ 200 construites
+  autour du joueur, aucune erreur. Entre 43 et 57 images par seconde en qualité ÉQUILIBRÉE dans un Chrome sans écran,
+  qui ne remplace pas une mesure sur le vrai écran.
+- Les étagères du fond de certains intérieurs entrent encore dans le mur : l'outil est corrigé, l'atlas reste à
+  recalculer. L'éclairage de nuit (néons, vitrines) n'est pas encore réglé finement.
+
+
 
 Correctif pour les essais en ligne : les chocs entre voitures sont stabilisés. L'Architecte arrive comme outil de
 développement local expérimental ; il est exclu du jeu publié.

@@ -36,6 +36,19 @@ Obtained through the catalogue of https://github.com/pedrosoandre/carros.
 
 Objects carried by passers-by are sculpted by `tools/build-humans.mjs`.
 
+Shops: where every storefront stands and what it sells come from NYC Open Data, "Storefronts Reported Vacant or Not"
+(Department of Finance, Local Law 157) and "DOHMH New York City Restaurant Inspection Results"; only positions, vacancy,
+activity and cuisine are used, never a business name. Every shop name in the game is invented.
+Shop sign typefaces are from Google Fonts, under the SIL Open Font License 1.1: Oswald, Anton, Playfair Display, Lobster,
+Bebas Neue, Josefin Sans, Bitter, Monoton, Pacifico, Cinzel and Archivo Black; Permanent Marker is under the Apache License 2.0.
+Only a distance-field atlas built from them ships (assets/shops/glyphs.png).
+Shopfront surfaces are from Poly Haven (CC0): painted_plaster_wall, painted_brick and terrazzo_tiles by Amal Kumar,
+distressed_painted_planks, fine_grained_wood, marble_01 and metal_plate by Rob Tuytel, granite_tile and rusty_metal_shutter by
+Charlotte Baglioni, long_white_tiles by Jenelle van Heerden and Sergej Majboroda, painted_metal_shutter by Dario Barresi,
+Rico Cilliers and Charlotte Baglioni, brushed_concrete by Dario Barresi and Dimitrios Savva.
+The rooms behind the shop windows were modelled for the game and path traced offline with three-gpu-pathtracer by Garrett
+Johnson (MIT): https://github.com/gkjohnson/three-gpu-pathtracer; it is not part of the published game.
+
 ## Outil de développement local
 
 Le serveur de l'Architecte utilise le SDK TypeScript Anthropic (`@anthropic-ai/sdk`), sous licence Apache-2.0 :

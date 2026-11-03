@@ -60,8 +60,7 @@ import {
   specularColorBlended,
   specularF90,
   dFdx, dFdy, normalMap,
-  cross,
-  varyingProperty
+  cross
 } from 'three/tsl';
 import {
   CENTRAL_PARK_BOUNDS,
@@ -82,7 +81,9 @@ const cityUniforms = {
   uSkySunDir: uniform(new THREE.Vector3(-0.66, 0.34, -0.67).normalize()),
   uInteriorGlow: uniform(0.78),
   uRoadWetness: uniform(0.38),
-  uCanyonBounce: uniform(0.52)
+  uCanyonBounce: uniform(0.52),
+  // Distance (start, end) over which painted shopfronts take over from the 3D ones of storefronts.js; none until it runs
+  uShopKit: uniform(new THREE.Vector2(-2, -1))
 };
 
 // Fast deterministic 2D -> 1D hash in TSL
@@ -473,7 +474,9 @@ function facadeCell(windowWidth, floorHeight, boxLocal, cornerPier = 0, footprin
   // Ground floor is strictly floor index 0 (gridV < 1.0) so floor 1 is never sliced in half!
   const floor0 = float(1.0).sub(step(1.0, gridV));
   const wall = float(1.0).sub(isRoof);
-  const isGroundFloor = floor0.mul(float(1.0).sub(step(WALL_KINDS.shop + 0.5, kind)));
+  // Shop walls: painted shopfronts in the distance, plain masonry where storefronts.js builds the real ones
+  const kitFar = smoothstep(cityUniforms.uShopKit.x, cityUniforms.uShopKit.y, positionWorld.sub(cameraPosition).length());
+  const isGroundFloor = floor0.mul(float(1.0).sub(step(WALL_KINDS.shop + 0.5, kind))).mul(kitFar);
   const blank = step(WALL_KINDS.lotLine - 0.5, kind).mul(wall);
   const back = step(WALL_KINDS.rear - 0.5, kind).mul(wall);
   const baseWall = floor0.sub(isGroundFloor).mul(float(1.0).sub(back)).mul(wall);
@@ -493,7 +496,7 @@ function facadeCell(windowWidth, floorHeight, boxLocal, cornerPier = 0, footprin
   const solid = max(max(inPier.mul(float(1.0).sub(isGroundFloor)), blank), max(partial, baseWall));
   return {
     isRoof, uCoord, vCoord, gridV, cellId, cellUV, fw, bayWidth, isGroundFloor, solid, back, blank, tone,
-    wallS, wallW, wallH, exposedHeight, fromTop, boxSeed, partial, coping, kind
+    wallS, wallW, wallH, exposedHeight, fromTop, boxSeed, partial, coping, kind, kitFar
   };
 }
 
@@ -634,7 +637,7 @@ function createStorefront(facade, seed, local) {
 
 // Entrances share the facade surface, including its lighting, shadows and distance filtering.
 function createBuildingEntrance(facade, trim, local, modern = false) {
-  const { wallS, wallW, wallH, fromTop, boxSeed, uCoord, vCoord, back, isRoof, coping, kind } = facade;
+  const { wallS, wallW, wallH, fromTop, boxSeed, uCoord, vCoord, back, isRoof, coping, kind, kitFar } = facade;
   const width = local ? wallW.div(max(floor(wallW.div(28).add(0.5)), 1)) : float(28);
   const horizontal = local ? wallS : uCoord.mul(mix(sign(facadeWorldNormal.z), sign(facadeWorldNormal.x).negate(), facadeAlongZ));
   const grid = horizontal.div(width);
@@ -646,7 +649,8 @@ function createBuildingEntrance(facade, trim, local, modern = false) {
   const height = local ? min(2.48, vCoord.add(fromTop).sub(0.74)) : float(2.48);
   const grounded = local ? float(1).sub(step(0.35, vCoord.add(fromTop).sub(wallH))) : float(1);
   const mask = band(x, halfWidth.add(0.20).negate(), halfWidth.add(0.20), fw.x)
-    .mul(band(y, 0, height.add(0.20), fw.y)).mul(grounded).mul(step(WALL_KINDS.shop + 0.5, kind))
+    // Fronts without shops have their doors; so do shop walls where storefronts.js builds the shops (between them)
+    .mul(band(y, 0, height.add(0.20), fw.y)).mul(grounded).mul(max(step(WALL_KINDS.shop + 0.5, kind), float(1).sub(kitFar)))
     .mul(float(1).sub(max(max(back, isRoof), coping))).mul(step(1.3, width)).mul(step(1.7, height)).toVar();
   const recess = band(x, halfWidth.add(0.07).negate(), halfWidth.add(0.07), fw.x)
     .mul(band(y, 0.06, height.add(0.07), fw.y));
@@ -1255,17 +1259,6 @@ function createFacadeBoxes(material, boxes) {
     box.setXYZW(i, b.w, b.h, b.d, ((i * 29) % 1000) + 0.5);
   });
   return mesh;
-}
-
-// Striped canvas: the instance's colour and cream, faded and dirty towards the hem
-function createAwningMaterial() {
-  const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.82, metalness: 0 });
-  // (three multiplies this by the instance colour: the cream stripes undo it)
-  const tint = varyingProperty('vec3', 'vInstanceColor');
-  const stripes = step(0.5, fract(uv().x.mul(11.0)));
-  const canvas = noise2D(uv().mul(vec2(60.0, 14.0))).mul(0.14).add(0.86);
-  mat.colorNode = mix(vec3(0.92, 0.89, 0.8).div(max(tint, vec3(0.004))), vec3(1.0), stripes).mul(canvas).mul(uv().y.mul(0.22).add(0.78));
-  return mat;
 }
 
 /**
@@ -2465,40 +2458,36 @@ function createBillboardCanvasTexture(themeKey) {
     ctx.textAlign = 'center';
     ctx.fillText('NDX 21,490 ▲   SPX 6,145 ▲   DOW 44,880 ▲   NYC 100 ▲', 256, 238);
   } else if (themeKey === 2) {
-    // Theme 2: Gotham Cola / Iconic Red & White Wave Billboard
+    // Theme 2: Valmont Ginger Ale, the game's own soda: bottle green, gold sunburst
     const grad = ctx.createLinearGradient(0, 0, 512, 256);
-    grad.addColorStop(0, '#b8061e');
-    grad.addColorStop(0.5, '#e6122e');
-    grad.addColorStop(1, '#9e0418');
+    grad.addColorStop(0, '#0d3a26');
+    grad.addColorStop(0.5, '#14583a');
+    grad.addColorStop(1, '#0a2e1e');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 512, 256);
-
-    // Classic dynamic white wave ribbon
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.moveTo(0, 170);
-    ctx.bezierCurveTo(160, 110, 340, 225, 512, 148);
-    ctx.lineTo(512, 192);
-    ctx.bezierCurveTo(340, 260, 160, 150, 0, 210);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = '#ffe082';
-    ctx.font = '800 18px Inter, Arial, sans-serif';
+    ctx.strokeStyle = 'rgba(232, 196, 104, 0.35)';
+    ctx.lineWidth = 3;
+    for (let i = 0; i < 24; i++) {
+      const a = (i / 24) * Math.PI * 2;
+      ctx.beginPath(); ctx.moveTo(96, 128); ctx.lineTo(96 + Math.cos(a) * 300, 128 + Math.sin(a) * 300); ctx.stroke();
+    }
+    ctx.fillStyle = '#e8c468';
+    ctx.beginPath(); ctx.arc(96, 128, 62, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#0d3a26';
+    ctx.font = '900 34px Georgia, serif';
     ctx.textAlign = 'center';
-    ctx.fillText('ICE COLD · EST. 1898 · NEW YORK', 256, 48);
+    ctx.fillText('V', 96, 141);
 
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'italic 900 54px Georgia, serif';
-    ctx.fillText('Gotham Cola', 256, 108);
-
-    ctx.fillStyle = '#fff5cc';
-    ctx.font = '800 22px Inter, Arial, sans-serif';
-    ctx.fillText('TASTE THE MANHATTAN SKYLINE', 256, 148);
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '700 17px JetBrains Mono, monospace';
-    ctx.fillText('REFRESHING TIMES SQUARE 24 HOURS A DAY', 256, 236);
+    ctx.fillStyle = '#f4e6c0';
+    ctx.font = '900 50px Georgia, serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('VALMONT', 180, 112);
+    ctx.fillStyle = '#e8c468';
+    ctx.font = '800 26px Inter, Arial, sans-serif';
+    ctx.fillText('GINGER ALE', 182, 148);
+    ctx.fillStyle = '#f4e6c0';
+    ctx.font = '700 15px JetBrains Mono, monospace';
+    ctx.fillText('SHARP · GOLDEN · SINCE 1904', 182, 214);
   } else if (themeKey === 3) {
     // Theme 3: Fifth Avenue Luxury Watch & Couture ("CHRONO GENÈVE")
     const grad = ctx.createRadialGradient(256, 128, 16, 256, 128, 260);
@@ -3449,7 +3438,6 @@ export {
   createBillboardMaterial,
   createWaterMaterial,
   createParkLawnMaterial,
-  createAwningMaterial,
   lawnColorNode,
   createSteamMaterial,
   createGodRayMaterial,

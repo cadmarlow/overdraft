@@ -1,0 +1,110 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Glyph atlas</title>
+<script>window.addEventListener('error', (e) => { window.__result = { error: String(e.message) }; }); window.addEventListener('unhandledrejection', (e) => { window.__result = { error: String(e.reason && (e.reason.stack || e.reason)) }; });</script>
+<script type="module">
+// Signed-distance glyph atlas for the shop signs. Each typeface is drawn at four times the cell size, its exact distance
+// field computed (Felzenszwalb & Huttenlocher), then sampled down. Three typefaces share each RGB texel, one per
+// channel, so twelve fit a 2048 x 1024 image.
+const FONTS = [
+  ['Oswald', 700], ['Anton', 400], ['PlayfairDisplay', 800], ['Lobster', 400], ['BebasNeue', 400], ['PermanentMarker', 400],
+  ['JosefinSans', 600], ['Bitter', 800], ['Monoton', 400], ['Pacifico', 400], ['Cinzel', 700], ['ArchivoBlack', 400]
+];
+const CHARS = Array.from({ length: 95 }, (_, i) => String.fromCharCode(32 + i)).join('') + 'ÀÁÂÇÈÉÊÍÑÓÔÚÜàáâçèéêíñóôúü•';
+const CELL = 64, UP = 4, BIG = CELL * UP, PAD = 9, SPREAD = 8; // pixels at atlas scale
+const COLS = 32, ROWS = 16;
+const INF = 1e20;
+
+function edt1d(f, n, d, v, z) {
+  let k = 0;
+  v[0] = 0; z[0] = -INF; z[1] = INF;
+  for (let q = 1; q < n; q++) {
+    let s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+    while (s <= z[k]) { k--; s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]); }
+    k++; v[k] = q; z[k] = s; z[k + 1] = INF;
+  }
+  k = 0;
+  for (let q = 0; q < n; q++) { while (z[k + 1] < q) k++; d[q] = (q - v[k]) * (q - v[k]) + f[v[k]]; }
+}
+function edt2d(grid, n) {
+  const f = new Float64Array(n), d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1);
+  for (let x = 0; x < n; x++) {
+    for (let y = 0; y < n; y++) f[y] = grid[y * n + x];
+    edt1d(f, n, d, v, z);
+    for (let y = 0; y < n; y++) grid[y * n + x] = d[y];
+  }
+  for (let y = 0; y < n; y++) {
+    for (let x = 0; x < n; x++) f[x] = grid[y * n + x];
+    edt1d(f, n, d, v, z);
+    for (let x = 0; x < n; x++) grid[y * n + x] = Math.sqrt(d[x]);
+  }
+}
+
+const big = new OffscreenCanvas(BIG, BIG);
+const g = big.getContext('2d', { willReadFrequently: true });
+const atlas = new Uint8ClampedArray(COLS * CELL * ROWS * CELL * 4);
+for (let i = 3; i < atlas.length; i += 4) atlas[i] = 255;
+const metrics = [];
+const outside = new Float64Array(BIG * BIG), inside = new Float64Array(BIG * BIG);
+
+for (let f = 0; f < FONTS.length; f++) {
+  const [name, weight] = FONTS[f];
+  const face = new FontFace(name, `url(fonts/${name}.ttf)`, { weight: String(weight) });
+  console.log('loading', name);
+  await face.load();
+  document.fonts.add(face);
+  // Fit the whole set inside a cell: tallest ascender to deepest descender, widest advance
+  let size = 200;
+  g.font = `${weight} ${size}px "${name}"`;
+  let asc = 0, desc = 0, wide = 0;
+  for (const ch of CHARS) {
+    const m = g.measureText(ch);
+    asc = Math.max(asc, m.actualBoundingBoxAscent); desc = Math.max(desc, m.actualBoundingBoxDescent);
+    wide = Math.max(wide, m.actualBoundingBoxRight + Math.max(0, m.actualBoundingBoxLeft));
+  }
+  const room = BIG - 2 * PAD * UP;
+  size = Math.floor(200 * Math.min(room / (asc + desc), room / wide));
+  g.font = `${weight} ${size}px "${name}"`;
+  const H = g.measureText('H');
+  const fontAsc = Math.max(...[...CHARS].map((ch) => g.measureText(ch).actualBoundingBoxAscent));
+  const fontDesc = Math.max(...[...CHARS].map((ch) => g.measureText(ch).actualBoundingBoxDescent));
+  const baseline = PAD * UP + fontAsc + (room - fontAsc - fontDesc) / 2;
+  let left = 0;
+  for (const ch of CHARS) left = Math.max(left, g.measureText(ch).actualBoundingBoxLeft);
+  const originX = PAD * UP + Math.min(left, 12 * UP);
+  const group = Math.floor(f / 3), channel = f % 3;
+  const advances = [];
+  for (let c = 0; c < CHARS.length; c++) {
+    const ch = CHARS[c];
+    g.clearRect(0, 0, BIG, BIG);
+    g.fillStyle = '#fff';
+    g.fillText(ch, originX, baseline);
+    advances.push(+(g.measureText(ch).width / size).toFixed(4));
+    const px = g.getImageData(0, 0, BIG, BIG).data;
+    for (let i = 0; i < BIG * BIG; i++) {
+      const a = px[i * 4 + 3] / 255;
+      outside[i] = a > 0.5 ? 0 : INF;
+      inside[i] = a > 0.5 ? INF : 0;
+    }
+    edt2d(outside, BIG); edt2d(inside, BIG);
+    const cell = group * CHARS.length + c;
+    const cx = (cell % COLS) * CELL, cy = Math.floor(cell / COLS) * CELL;
+    for (let y = 0; y < CELL; y++) for (let x = 0; x < CELL; x++) {
+      // Sample the full-size field at the centre of the small texel
+      const sx = x * UP + UP / 2, sy = y * UP + UP / 2;
+      const i = Math.floor(sy) * BIG + Math.floor(sx);
+      const d = (outside[i] - inside[i]) / UP; // atlas pixels, positive outside
+      atlas[((cy + y) * COLS * CELL + cx + x) * 4 + channel] = Math.max(0, Math.min(255, Math.round((0.5 - d / (2 * SPREAD)) * 255)));
+    }
+  }
+  metrics.push({ name, group, channel, size: +(size / UP).toFixed(3), baseline: +(baseline / UP).toFixed(3), originX: +(originX / UP).toFixed(3),
+    cap: +(H.actualBoundingBoxAscent / size).toFixed(4), ascent: +(fontAsc / size).toFixed(4), descent: +(fontDesc / size).toFixed(4), advances });
+  console.log(name, 'size', (size / UP).toFixed(1));
+}
+
+const out = new OffscreenCanvas(COLS * CELL, ROWS * CELL);
+out.getContext('2d').putImageData(new ImageData(atlas, COLS * CELL, ROWS * CELL), 0, 0);
+const blob = await out.convertToBlob({ type: 'image/png' });
+const png = await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(blob); });
+window.__result = { png, metrics: { cell: CELL, cols: COLS, rows: ROWS, spread: SPREAD, chars: CHARS, fonts: metrics } };
+</script>

@@ -119,6 +119,23 @@ Le vol refait de bout en bout, jugé à côté d'un AAA :
 - **Essais en ligne** : l'Architecte, son serveur et ses styles restent hors du build publié. Ce correctif poursuit la
   phase de test ; les objectifs de la 1.0 restent à réaliser.
 
+## 0.9.3 « Main Street » — la rue
+
+Les rez-de-chaussée sont ce que le joueur regarde le plus souvent : ils passaient avant tout le reste.
+
+- **La vraie ville** : chaque boutique est là où New York en recense une (registres publics des vitrines et des
+  restaurants), avec son type, ses horaires, et le caractère de son quartier. Les noms sont tous inventés.
+- **Le relief** : piliers dans la pierre de l'immeuble, bandeaux, vitrines à meneaux, entrées en retrait, auvents,
+  enseignes perpendiculaires, rideaux de fer. Tout est solide.
+- **Les enseignes** : lettres calculées à l'écran (champ de distance), donc une enseigne différente par boutique, nette
+  à toute distance ; caissons, peinture, laiton, néon, lettrage sur vitre.
+- **Les intérieurs** : trente pièces meublées et éclairées par lancer de rayons hors du jeu, reprojetées derrière chaque
+  vitre avec deux couches de parallaxe, et des reflets de la rue d'en face.
+- **La nuit** : les rideaux descendent selon les horaires, les néons s'allument, les trottoirs s'éclairent devant ce qui
+  reste ouvert.
+- **Ensuite** : des halls d'immeubles soignés entre les boutiques, des intérieurs en plusieurs variantes par type, et les
+  lieux emblématiques retravaillés à la main (Times Square, Grand Central, Wall Street).
+
 ## Le garage rapide
 
 Le joueur doit pouvoir changer de monture sans jamais chercher un véhicule : le garage (touche G) fige le jeu et propose
@@ -161,4 +178,5 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9** | **Leverage** | Toits jouables, grappin, wingsuit, surf sur les voitures, police verticale, toutes les armes au départ |
 | **0.9.1** | **Leverage** | Le ciel refait : vrai modèle de vol, vol au regard, sensations, parapente en caissons |
 | **0.9.2** | **Leverage** | Correctif des collisions automobiles ; Architecte expérimental réservé au développement local |
+| **0.9.3** | **Main Street** | Rez-de-chaussée refaits : 25 000 boutiques réelles en relief, enseignes uniques, vrais intérieurs, la rue de nuit |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |

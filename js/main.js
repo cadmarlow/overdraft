@@ -29,6 +29,7 @@ import { loadNature } from './nature-assets.js';
 import { loadCars } from './car-assets.js';
 import { buildRamps } from './ramps.js';
 import { loadWorld } from './world-assets.js';
+import { loadStorefronts, createStorefronts } from './storefronts.js';
 import { loadClutter } from './street-clutter.js';
 import { setTreeDetail } from './trees.js';
 import { createGrass } from './grass.js';
@@ -129,7 +130,7 @@ async function initApp() {
 
   // 3. Build Manhattan Geography, Iconic Landmarks, Blocks, Street Details & Traffic
   await showLoadingStage('Préparation des rues et des quais…');
-  await Promise.all([loadNature(), loadWorld(), loadClutter(), loadCars()]);
+  await Promise.all([loadNature(), loadWorld(), loadClutter(), loadCars(), loadStorefronts()]);
   setTreeDetail(quality.trees);
   const cityGrid = buildCityGrid(scene);
   markInit('cityGrid');
@@ -142,7 +143,10 @@ async function initApp() {
   await showLoadingStage('Préparation des bâtiments…');
   const cityBlocks = buildCityBlocks(scene, landmarkColliders);
   markInit('blocks');
-  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...boroughs.colliders, ...(cityGrid.colliders || [])];
+  // Ground-floor shops, built in 3D around the camera (the facades paint them further out)
+  const storefronts = createStorefronts(scene, cityBlocks.shops, { radius: { high: 300, balanced: 250, fluid: 170 }[quality.id] ?? 250 });
+  markInit('storefronts');
+  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...storefronts.colliders, ...boroughs.colliders, ...(cityGrid.colliders || [])];
 
   await showLoadingStage('Préparation des rues…');
   const streetDetails = buildStreetDetails(scene, allColliders);
@@ -208,7 +212,7 @@ async function initApp() {
   const dynamicRoots = [
     trafficSystem.group,
     highwayTraffic.group,
-    scene.getObjectByName('StoreClusteredLights'),
+    storefronts.group, // its shopfront spotlights move every frame
     scene.getObjectByName('StreetClusteredLights'),
     ...Object.values(controllerManager.entities).map((entity) => entity.mesh),
     controllerManager.entities.cyclist.helmet
@@ -704,7 +708,7 @@ async function initApp() {
   const pacer = new FramePacer({ renderer, level: quality, isActive: () => gameplay.active });
   let qaView = null;
   if (new URLSearchParams(location.search).has('qa')) {
-    window.__render = { renderer, scene, lightingSystem, cameraSystem, pacer, THREE, highwayTraffic, streetDetails,
+    window.__render = { renderer, scene, lightingSystem, cameraSystem, pacer, THREE, highwayTraffic, streetDetails, storefronts,
       // Inspection: the camera goes where it is told, whatever the game does
       view(x, y, z, tx, ty, tz) { qaView = x === undefined ? null : [x, y, z, tx, ty, tz]; } };
     gameplay.renderForQA = () => {
@@ -764,7 +768,7 @@ async function initApp() {
     if (boroughs.update) boroughs.update(elapsed); // Roosevelt Island Tramway cabins
     cityBlocks.update(cameraSystem.currentPos.x, cameraSystem.currentPos.z);
     grass?.update(cameraSystem.camera.position);
-    if (cityBlocks.updateLights) cityBlocks.updateLights(cameraSystem.camera);
+    storefronts.update(cameraSystem.camera, gameplay.atmosphere.hour, dt);
     if (streetDetails.update) streetDetails.update(cameraSystem.camera);
     lightingSystem.update(cameraSystem.currentPos);
     mapSystem.update();

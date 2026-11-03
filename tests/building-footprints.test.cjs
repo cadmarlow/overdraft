@@ -38,14 +38,22 @@ const THREE = {
   }
 };
 const collision = loadModule(readFileSync(join(__dirname, '../js/building-collision.js'), 'utf8'));
+const plan = loadModule(readFileSync(join(__dirname, '../js/storefront-plan.js'), 'utf8'));
 const { createBuildingFootprints } = loadModule(readFileSync(join(__dirname, '../js/building-footprints.js'), 'utf8'), {
   imports: { 'three/webgpu': THREE, './tsl-materials.js': { WALL_KINDS: { shop: 0, front: 1, rear: 2, lotLine: 3 } },
-    './building-collision.js': collision }
+    './building-collision.js': collision, './storefront-plan.js': plan }
 });
 const p = (x, z) => ({ x, z });
 const square = (x = 0) => [p(x, 0), p(x + 10, 0), p(x + 10, 10), p(x, 10)];
 const record = (outer, extra = {}) => {
-  const b = { polygons: [{ outer, holes: [] }], height: 60, seed: 123, tone: 0.75, storefronts: true, ...extra };
+  const b = { polygons: [{ outer, holes: [] }], height: 60, seed: 123, tone: 0.75, ...extra };
+  // Retail by default: every outer wall holds shops, as storefront-plan.js would mark them
+  if (!b.shopWalls && extra.shopWalls !== null) {
+    b.shopWalls = new Set(b.polygons.flatMap(({ outer: ring }) => ring.map((a, i) => {
+      const c = ring[(i + 1) % ring.length];
+      return plan.wallKey(a.x, a.z, c.x, c.z);
+    })));
+  }
   const points = b.polygons.flatMap(p => p.outer);
   b.cx = (Math.min(...points.map(p => p.x)) + Math.max(...points.map(p => p.x))) / 2;
   b.cz = (Math.min(...points.map(p => p.z)) + Math.max(...points.map(p => p.z))) / 2;
@@ -137,7 +145,7 @@ test('non-retail fronts keep their own treatment without changing courtyards or 
   const b = record(square(), { polygons: [{ outer: square(), holes: [[p(3, 3), p(7, 3), p(7, 7), p(3, 7)]] }] });
   const neighbours = () => [reserve(record(square(10), { height: 12 }))];
   const retail = build([b], neighbours).children[0].geometry;
-  const residential = build([{ ...b, storefronts: false }], neighbours).children[0].geometry;
+  const residential = build([{ ...b, shopWalls: undefined }], neighbours).children[0].geometry;
   for (let i = 0; i < 32; i++) {
     const kind = retail.attributes.facadeWall.array[i * 3 + 2];
     assert.equal(residential.attributes.facadeWall.array[i * 3 + 2], kind === 0 ? 1 : kind);

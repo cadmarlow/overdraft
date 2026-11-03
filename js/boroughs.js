@@ -2507,7 +2507,7 @@ function createSignMaterial(tex, nightGlow) {
 
 /**
  * Industrial waterfront icons seen from Manhattan: Ravenswood's red-and-white "Big Allis" stacks, the Newtown Creek
- * digester eggs, the Pepsi-Cola sign at Gantry Plaza, the Domino Sugar refinery & sign, Yankee Stadium and the
+ * digester eggs, the cola sign at Gantry Plaza, the sugar refinery & its sign (renamed for the game's brands), Yankee Stadium and the
  * Hoboken Terminal clock tower.
  */
 function buildBoroughLandmarks(parts, mats, list, group) {
@@ -2535,9 +2535,9 @@ function buildBoroughLandmarks(parts, mats, list, group) {
   parts.box(mats.darkSteel, E.x, 44, E.z + 15, 96, 1.4, 2.6);
   list.push({ x: E.x, y: 0, z: E.z + 52, w: 100, h: 12, d: 20, rot: 0, tint: [0.55, 0.53, 0.5], style: 2, seed: 11 });
 
-  // --- Pepsi-Cola sign (Gantry Plaza State Park), facing Manhattan ---
+  // --- The big red cola sign of Gantry Plaza State Park, facing Manhattan, under the game's own brand ---
   const P = LANDMARK_SITES.pepsi;
-  const pepsiTex = makeSignTexture('Pepsi-Cola', { font: 'italic bold 190px "Snell Roundhand", "Brush Script MT", "Segoe Script", cursive', color: '#ff2a2a', glow: '#7a0505' });
+  const pepsiTex = makeSignTexture('Corsaire Cola', { font: 'italic bold 190px "Snell Roundhand", "Brush Script MT", "Segoe Script", cursive', color: '#ff2a2a', glow: '#7a0505' });
   const pepsiMat = createSignMaterial(pepsiTex, 4.0);
   const signW = 34;
   const signH = 9;
@@ -2558,12 +2558,12 @@ function buildBoroughLandmarks(parts, mats, list, group) {
     parts.box(mats.darkSteel, P.x + 1, 20, gz, 16, 3.2, 10);
   }
 
-  // --- Domino Sugar refinery & sign (Williamsburg) ---
+  // --- The Williamsburg sugar refinery & its rooftop sign ---
   const D = LANDMARK_SITES.domino;
   list.push({ x: D.x - 2, y: 0, z: D.z, w: 30, h: 40, d: 60, rot: 0, tint: [0.45, 0.25, 0.18], style: 2, seed: 19 });
   list.push({ x: D.x - 2, y: 40, z: D.z - 10, w: 16, h: 10, d: 16, rot: 0, tint: [0.45, 0.25, 0.18], style: 2, seed: 23 });
   parts.add(mats.brick, new THREE.CylinderGeometry(1.8, 2.5, 64, 10), parts.matrixOf(D.x - 10, 32, D.z + 22, 1, 1, 1));
-  const dominoTex = makeSignTexture('DOMINO SUGARS', { font: 'bold 150px "Futura", "Avenir Next Condensed", "Arial Narrow", sans-serif', color: '#ffc61a', glow: '#6b4a00' });
+  const dominoTex = makeSignTexture('GRÉVILLE SUGARS', { font: 'bold 150px "Futura", "Avenir Next Condensed", "Arial Narrow", sans-serif', color: '#ffc61a', glow: '#6b4a00' });
   const dm = new THREE.Mesh(pg, createSignMaterial(dominoTex, 3.0));
   dm.position.set(D.x - 17.4, 45.5, D.z);
   dm.rotation.y = -Math.PI / 2;

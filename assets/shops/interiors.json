@@ -1,0 +1,51 @@
+{
+  "tile": [
+    512,
+    290
+  ],
+  "cols": 6,
+  "rows": 5,
+  "types": [
+    "vacant",
+    "bodega",
+    "pizza",
+    "cafe",
+    "bakery",
+    "takeout",
+    "sushi",
+    "latin",
+    "restaurant",
+    "bar",
+    "diner",
+    "juice",
+    "laundromat",
+    "cleaners",
+    "barber",
+    "salon",
+    "pharmacy",
+    "bank",
+    "boutique",
+    "luxury",
+    "jewelry",
+    "phones",
+    "hardware",
+    "florist",
+    "liquor",
+    "books",
+    "office",
+    "souvenir",
+    "shoes",
+    "gallery"
+  ],
+  "eye": {
+    "x": 3,
+    "y": 1.6,
+    "z": 3
+  },
+  "room": [
+    6,
+    3.4,
+    5
+  ],
+  "near": 1.2
+}

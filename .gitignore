@@ -6,3 +6,5 @@ node_modules/
 *.log
 .env.local
 chantier/
+# The shop sign glyph atlas is game data, not a screenshot
+!assets/shops/glyphs.png

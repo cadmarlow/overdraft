@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { WALL_KINDS } from './tsl-materials.js';
 import { polygonContains } from './building-collision.js';
+import { wallKey } from './storefront-plan.js';
 
 function partyWallHeight(record, a, b, neighbours) {
   const dx = b.x - a.x, dz = b.y - a.y, length = Math.hypot(dx, dz);
@@ -48,8 +49,9 @@ function createBuildingFootprints(material, records, getNeighbours) {
           if (width === 0) continue;
           const offset = cell.positions.length / 3;
           const adjacentHeight = !i && neighbours.length ? partyWallHeight(record, a, b, neighbours) : 0;
+          // Shop walls are the ones storefront-plan.js gave shops to (the painted shopfronts stand in for them far away)
           const kind = i ? WALL_KINDS.rear : adjacentHeight ? WALL_KINDS.lotLine
-            : record.storefronts ? WALL_KINDS.shop : WALL_KINDS.front;
+            : record.shopWalls?.has(wallKey(a.x, a.y, b.x, b.y)) ? WALL_KINDS.shop : WALL_KINDS.front;
           const exposedHeight = adjacentHeight ? Math.max(0, top - adjacentHeight) : height;
           // Match the positive-world-axis tangent used by the shared interior-map view ray.
           const reverse = (Math.abs(dz) >= Math.abs(dx) ? dz : dx) < 0;

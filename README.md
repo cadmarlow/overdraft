@@ -3,14 +3,18 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.2 — Leverage** : Manhattan à la verticale, et un ciel qui se vole pour de vrai. Les 117 000 toits se parcourent, le grappin *Levier*
+Version **0.9.3 — Main Street** : les rez-de-chaussée refaits. 25 000 boutiques en relief, chacune là où New York en
+recense une vraie, avec son enseigne (nom inventé, lettres nettes à toute distance), sa vraie pièce derrière la vitre,
+ses auvents, ses étals et son rideau de fer qui descend la nuit.
+
+Depuis la 0.9 : Manhattan à la verticale, et un ciel qui se vole pour de vrai. Les 117 000 toits se parcourent, le grappin *Levier*
 hisse jusqu'au rebord d'un immeuble ou accroche une voiture lancée, la wingsuit descend les avenues entre les
 tours, et la police monte aussi (escaliers, équipes en rappel, tireurs d'élite). Toutes les armes dès le départ.
 Avec trois actes d'histoire, un contrat sur les toits, cycle jour/nuit, météo, police à cinq étoiles, bateaux,
 territoires et radio générée en temps réel.
 
-Ce correctif stabilise les chocs entre voitures et la sortie des véhicules du trafic après une percussion. Il ajoute
-aussi l'Architecte, un outil expérimental de test et de correction réservé au développement local, exclu du jeu publié.
+La 0.9.2 a stabilisé les chocs entre voitures et ajouté l'Architecte, un outil expérimental de test et de correction
+réservé au développement local, exclu du jeu publié.
 
 Vision, niveau de recherche et feuille de route : [GAME_DESIGN.md](GAME_DESIGN.md).
 Nouveautés : [CHANGELOG.md](CHANGELOG.md).
