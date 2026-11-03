@@ -1,5 +1,80 @@
 # Changelog
 
+## 0.9.4 — Bricks & Mortar — 3 novembre 2026
+
+Les immeubles refaits. Les 37 353 immeubles de Manhattan étaient des boîtes, l'empreinte au sol montée d'un bloc jusqu'au
+toit, dessinées par sept façades tirées au hasard : la même grille de fenêtres partout, du beige partout. Chacun sait
+maintenant ce qu'il est, et s'habille en conséquence.
+
+### Chaque immeuble sait ce qu'il est
+- Le registre foncier de la ville (PLUTO) donne à chaque immeuble sa catégorie, son nombre d'étages, son année de
+  construction et son quartier historique. 93 % des immeubles ont la leur ; les autres prennent celle de leur voisin.
+- Douze types : maison de ville, immeuble ouvrier, immeuble d'avant-guerre, loft à façade de fonte, immeuble de bureaux
+  ancien, tour Art déco, immeuble d'après-guerre, bureaux des années 1960, tour de verre, immeuble contemporain,
+  bâtiment public, garage et entrepôt. Manhattan redevient d'abord de la brique : 14 862 immeubles ouvriers et 7 696
+  maisons de ville, et 1 343 façades de verre au lieu de presque un immeuble récent sur deux.
+- Les quartiers comptent : grès brun à Harlem et dans l'Upper West Side, brique Federal à Greenwich Village, fonte peinte
+  à SoHo et Tribeca.
+
+### Des façades qui ne se ressemblent plus
+- Chaque immeuble a sa couleur, tirée des vraies teintes de New York (brique rouge, brune, chamois, blanche, grise,
+  calcaire, grès brun, fonte peinte) ou de celle que les cartographes ont relevée.
+- Son rythme de fenêtres, leurs proportions et leurs petits-bois : guillotines simples ou à six carreaux, fenêtres
+  cintrées, jumelées, baies de loft à imposte, bandeaux d'après-guerre, grands vitrages contemporains, et la couleur des
+  menuiseries.
+- Soubassements en pierre à bossages, chaînes d'angle, bandeaux, fenêtres d'attique plus basses sous le toit, allèges
+  sombres des tours Art déco, climatiseurs surtout dans les immeubles ouvriers.
+- Tours de verre : couleur du verre et du métal, allèges, fenêtres en bandeau des années 1960, ailettes verticales.
+
+### Des silhouettes
+- 1 650 tours montent en gradins d'après leurs volumes relevés dans OpenStreetMap ; les grands immeubles de la loi de 1916
+  qui n'en ont pas montent en retraits successifs, et les tours Art déco finissent en couronne. Les terrasses des retraits
+  se parcourent comme les toits.
+- Corniches moulurées (frise, denticules, consoles, larmier) en tôle peinte ou en pierre, acrotères sur les toits sans
+  corniche, toits en goudron, revêtement argenté, gravier ou membrane.
+- Châteaux d'eau et escaliers de secours là où ils vont : immeubles ouvriers, avant-guerre, lofts.
+
+### Du relief et de l'usure
+- Autour du joueur (160 m, 200 m en HAUTE), les fenêtres ont leurs appuis en pierre en saillie, leurs linteaux, les
+  frontons en tôle ou en grès brun des immeubles ouvriers et des maisons de ville, des clés au-dessus des arcs, et de
+  vrais climatiseurs en 3D qui prennent le soleil et portent leur ombre. Au-delà, la façade les peint comme avant.
+- Les vitres d'une rue reflètent surtout la façade d'en face, le ciel seulement au-dessus de sa ligne de toits.
+- Usure, plus forte sur certains immeubles : coulures sous chaque appui, taches sous la corniche, éclaboussures au pied
+  du mur, plaques de briques refaites.
+- Les toits se peuplent : cabanons d'escalier et cheminées dans la brique de l'immeuble, verrières, tuyaux de
+  ventilation, paraboles.
+
+### La lumière
+- Soleil plus fort et plus chaud, ombres plus bleues, plus de contraste le jour.
+- Le terre-plein de Park Avenue devient une haie taillée au lieu d'un bloc vert lisse.
+
+### Ombres qui ne tremblent plus
+- Le soleil avance par pas de 0,1° au lieu de tourner un peu à chaque image : la carte d'ombre tournait avec lui, et
+  toutes les ombres plus fines que ses texels (escaliers de secours, bordures de trottoir, pied des murs) rampaient et
+  scintillaient en permanence pendant que l'heure passait.
+- Les escaliers de secours ne projettent plus que leurs paliers et leurs marches : leurs barreaux, plus fins qu'un texel
+  d'ombre, apparaissaient et disparaissaient de la carte d'ombre à chaque mouvement du soleil.
+- L'ombre de contact sous le joueur était celle des voitures (un rectangle sombre, des taches sous les roues) : c'est
+  maintenant une ombre ronde, légère, qui ne fait que poser le corps au sol à l'ombre.
+- L'occlusion ambiante à l'écran (GTAO) essayée pendant cette version est retirée : calculée à demi-résolution sans
+  débruitage, son grain restait fixe à l'écran et tremblait sur les bordures, le pied des murs et autour du joueur.
+- Graffitis des rideaux de fer : deux tags tirés au hasard pouvaient se chevaucher à la même profondeur et se disputer
+  chaque pixel commun. Chacun a maintenant sa place sur le rideau et sa profondeur ; les bords des lettres et des tags
+  sont lissés par l'anticrénelage (alpha to coverage) au lieu d'un découpage net qui crépitait au moindre mouvement.
+- Deux empreintes du relevé qui partagent un mur sur rue (un immeuble et un doublon de son contour) y plaçaient chacune
+  leurs boutiques, rideau sur rideau : la première les garde.
+
+### Validation et limites
+- 411 tests réussis (10 nouveaux sur les immeubles) ; seul l'échec connu de `tree-geodata` subsiste, lié à la licence
+  Xcode. Build statique vérifié.
+- Joué dans un Chrome séparé en WebGPU, de jour et de nuit, dans six quartiers, au-dessus de Midtown et dans une rue
+  témoin (9e Rue Est) : aucune erreur. À résolution fixe (0,8), 69 à 75 images par seconde en qualité ÉQUILIBRÉE dans un
+  Chrome sans écran, contre 49 à 69 pour la 0.9.3 aux mêmes endroits.
+- Le scintillement des ombres, mesuré caméra immobile et horloge en marche : sans pas du soleil, deux images à une
+  demi-seconde d'écart diffèrent partout sur les ombres des escaliers de secours ; il n'en reste que les pas eux-mêmes.
+- Les fenêtres restent ouvertes dans un mur plat (leur embrasure est simulée) ; pas encore de perrons devant les maisons
+  de ville ni de balcons. Les données datent de 2014 à 2025 : un immeuble récent peut manquer.
+
 ## 0.9.3 — Main Street — 3 novembre 2026
 
 Les rez-de-chaussée de Manhattan refaits de bout en bout. Les boutiques étaient peintes à plat sur les façades, toutes de

@@ -8,7 +8,7 @@ import {
   blockAt,
   streetZ
 } from './city-config.js';
-import { cityUniforms, createCarPaintMaterial, createContactShadowMaterial } from './tsl-materials.js';
+import { cityUniforms, createCarPaintMaterial, createContactShadowMaterial, createPersonContactShadowMaterial } from './tsl-materials.js';
 import { carModels, carSpecs, createBodyMaterial, createGlassMaterial, createWheelMaterial, trafficMaterial } from './car-assets.js';
 import { createBody, impactBody, makeTune, settleBody, stepCar } from './car-physics.js';
 import {
@@ -488,9 +488,9 @@ class ThirdPersonControllerManager {
     const rig = new PersonRig({ seed: 9.73, scale: 0.97, girth: 1.03, hair: 0.12, armSwing: 0.85 });
 
     // Soft Under-Foot Contact Shadow (AO)
-    const shadowGeo = new THREE.PlaneGeometry(0.95, 0.95);
+    const shadowGeo = new THREE.PlaneGeometry(0.8, 0.8);
     shadowGeo.rotateX(-Math.PI * 0.5);
-    const pedShadow = new THREE.Mesh(shadowGeo, createContactShadowMaterial());
+    const pedShadow = new THREE.Mesh(shadowGeo, createPersonContactShadowMaterial());
     pedShadow.position.y = 0.02;
     pedShadow.renderOrder = 998;
     root.add(pedShadow);

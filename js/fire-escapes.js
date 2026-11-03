@@ -215,7 +215,9 @@ export function createFireEscapeMaterial() {
     return alpha;
   })().toVar();
   material.maskNode = material.opacityNode.greaterThan(0);
-  material.maskShadowNode = material.opacityNode.greaterThan(0.5);
+  // Only the landing decks and the stair treads cast sun shadows, as solid plates: pickets, rails and ladder rungs are
+  // finer than a shadow texel, so in the shadow map they come and go with every turn of the sun and sparkle on the wall
+  material.maskShadowNode = vEscapeMeta.x.greaterThan(4.5);
   return material;
 }
 

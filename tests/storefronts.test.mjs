@@ -68,6 +68,22 @@ test('shops go on outer walls, side by side without overlapping, at least a shop
   for (const s of plan.shops) assert.ok(plan.wallsByRecord.get(s.record)?.has(s.wall));
 });
 
+test('no shop stands in another one, even on a wall two footprints share', () => {
+  const cells = new Map();
+  for (const s of plan.shops) {
+    const cx = Math.floor(s.x / 20), cz = Math.floor(s.z / 20);
+    for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) for (const o of cells.get((cx + dx) + ',' + (cz + dz)) || []) {
+      if (s.nx * o.nx + s.nz * o.nz < 0.98 || Math.abs((o.x - s.x) * s.nx + (o.z - s.z) * s.nz) > 0.3) continue;
+      const u0 = (o.x - s.x) * s.ux + (o.z - s.z) * s.uz, u1 = u0 + o.width * (o.ux * s.ux + o.uz * s.uz);
+      const overlap = Math.min(s.width, Math.max(u0, u1)) - Math.max(0, Math.min(u0, u1));
+      assert.ok(overlap <= 0.3, `shops overlap by ${overlap.toFixed(2)} m at ${Math.round(s.x)},${Math.round(s.z)}`);
+    }
+    const key = cx + ',' + cz;
+    if (!cells.has(key)) cells.set(key, []);
+    cells.get(key).push(s);
+  }
+});
+
 test('wall keys ignore which way round a wall is walked', () => {
   assert.equal(wallKey(1.04, 2, 5, 6.01), wallKey(5, 6.01, 1.04, 2));
   assert.notEqual(wallKey(0, 0, 5, 0), wallKey(0, 0, 0, 5));

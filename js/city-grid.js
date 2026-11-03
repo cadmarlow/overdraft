@@ -1550,7 +1550,17 @@ function buildCityGrid(scene) {
   // =========================================================================
   const sidewalkMat = createSidewalkMaterial();
   const curbMat = createCurbMaterial();
-  const medianHedgeMat = new THREE.MeshStandardNodeMaterial({ color: 0x366e3b, roughness: 0.82 });
+  // Clipped shrubs: the meadow photograph, darker and leafier, laid on the top and run along the sides
+  const medianHedgeMat = new THREE.MeshStandardNodeMaterial({ color: 0xffffff, roughness: 0.9 });
+  {
+    const top = step(0.7, normalWorldGeometry.y);
+    const leaves = texture(nature.meadow, vec2(positionWorld.x.add(positionWorld.z), positionWorld.y.mul(1.3)).div(1.4)).rgb;
+    const clumps = smoothstep(0.2, 0.8, fract(sin(dot(floor(positionWorld.xz.mul(0.8)), vec2(12.9898, 78.233))).mul(43758.5453)));
+    const sides = leaves.mul(mix(vec3(0.42, 0.52, 0.34), vec3(0.6, 0.7, 0.44), clumps));
+    const crown = lawnColorNode(nature.meadow).mul(mix(vec3(0.6, 0.7, 0.5), vec3(0.78, 0.86, 0.62), clumps));
+    // Shade toward the foot of the hedge, where the leaves thin out
+    medianHedgeMat.colorNode = mix(sides.mul(smoothstep(0.15, 0.75, positionWorld.y.sub(0.2)).mul(0.45).add(0.55)), crown, top);
+  }
   const blockSidewalks = []; // { cx, cz, w, d, block } axis-aligned slabs (irregular islands: their lot cover)
   const roadSidewalks = []; // the curbs road-network.js bounds the roads with (medians go in as footprints)
   const slabGeos = [];

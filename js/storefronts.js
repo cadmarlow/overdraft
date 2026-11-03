@@ -9,6 +9,7 @@ import { SHOP_TYPES, shopOpenAt } from './storefront-types.js';
 import { GLYPHS } from './storefront-glyphs.js';
 import { shopIdentity, encodeText, STYLE, FONTS } from './storefront-signs.js';
 import { shopLayout, shopColliders } from './storefront-plan.js';
+import { tintFor } from './building-types.js';
 
 // The ground floors of Manhattan, shop by shop (js/storefront-plan.js decides where): piers, fascias, signs, display
 // windows with a room behind them, doors, awnings, blade signs and the roll-down gates that close them at night. Every
@@ -22,16 +23,14 @@ const KIT_ATLAS = 2048, KIT_TILE = 512, KIT_BORDER = 16, KIT_INNER = KIT_TILE - 
 const KIND = { paint: 0, planks: 1, wood: 2, granite: 3, stone: 4, tread: 5, tiles: 6, terrazzo: 7, shutter: 8, rustShutter: 9,
   paintedBrick: 10, concrete: 11, limestone: 12, redbrick: 13, brownbrick: 14, buffbrick: 15,
   metal: 16, enamel: 17, lamp: 18, chrome: 19, produce: 20, barberPole: 21 };
-// Facade materials of buildings.js, by index: the piers of a shop are the wall's own stone or brick, in the shade the
-// facade shader gives that building (its tint, times a shade picked by the building's tone)
-const MASONRY_KIND = [KIND.limestone, KIND.redbrick, null, null, null, KIND.brownbrick, KIND.buffbrick];
-const MASONRY_TINT = [[1.5, 1.45, 1.32], [1.18, 1.1, 1.06], null, null, null, [0.96, 0.9, 0.84], [0.98, 0.94, 0.86]];
+// The piers of a shop are its building's own stone or brick, in the shade the facade shader gives that building (its
+// dress's tint over the wall photograph, times a slight shade picked by the building's tone)
+const SURFACE_KIND = { limestone: KIND.limestone, redbrick: KIND.redbrick, brownbrick: KIND.brownbrick, buffbrick: KIND.buffbrick };
+const masonryKind = (rec) => (rec.style && !rec.style.glass ? SURFACE_KIND[rec.style.surface] : null);
 function masonryShade(rec) {
-  const tint = MASONRY_TINT[rec.mat ?? 0];
-  if (!tint) return [1, 1, 1];
+  if (!masonryKind(rec)) return [1, 1, 1];
   const f = (((rec.tone ?? 0.5) * 4.73) % 1 + 1) % 1;
-  const a = [0.8, 0.77, 0.74], b = [1.16, 1.12, 1.06];
-  return tint.map((t, i) => t * (a[i] + (b[i] - a[i]) * f));
+  return tintFor(rec.style.surface, rec.style.wall).map((t) => t * (0.93 + 0.14 * f));
 }
 
 async function loadStorefronts() {
@@ -397,6 +396,9 @@ function createSignMaterial() {
   const transparent = isLetters.or(isVinyl).or(isTag);
   m.opacityNode = select(transparent, select(isTag, outline, cov), 1);
   m.alphaTest = 0.5;
+  // Cut-out letters and tags would otherwise end in a hard, stair-stepped edge that crawls under the slightest move:
+  // with multisampling the edge becomes a pixel-wide coverage ramp
+  m.alphaToCoverage = true;
   // Neon: tubes and their halo, on a dark board
   const halo = exp(d.min(0).mul(14)).mul(0.9);
   const neonC = select(isNeon, ink.mul(cov.mul(2.2).add(halo.mul(float(1).sub(cov)))), vec3(0));
@@ -587,7 +589,7 @@ function buildShop(shop) {
   const scheme = SCHEME.stone.includes(type.id) ? 'stone' : SCHEME.wood.includes(type.id) ? (r() < 0.5 ? 'wood' : 'painted')
     : SCHEME.metal.includes(type.id) ? (r() < 0.72 ? 'metal' : 'painted') : (r() < 0.5 ? 'metal' : r() < 0.6 ? 'stone' : 'painted');
   const paint = linear(PAINTS[Math.floor(r() * PAINTS.length)]);
-  const masonry = MASONRY_KIND[rec.mat ?? 0];
+  const masonry = masonryKind(rec);
   const white = [1, 1, 1];
   const metalC = scheme === 'stone' ? (r() < 0.5 ? METALS.bronze : METALS.black) : r() < 0.55 ? METALS.silver : METALS.black;
   const pierKind = scheme === 'stone' ? (r() < 0.5 ? KIND.granite : KIND.stone) : masonry ?? (r() < 0.5 ? KIND.granite : KIND.concrete);
@@ -857,10 +859,13 @@ function buildShop(shop) {
   const gate = box(opening0, opening1, ground, ys - 0.02, gateN, gateN + 0.03, r() < 0.65 ? KIND.shutter : KIND.rustShutter, r() < 0.7 ? white : paint);
   const tags = [];
   const nTags = Math.floor(r() * 3);
+  // Each tag in its own slot across the gate and a few millimetres proud of the one before: two tags at one depth that
+  // overlap fight over every pixel they share
+  const slot = Wo / Math.max(nTags, 1);
   for (let i = 0; i < nTags; i++) {
-    const w = Math.min(Wo * 0.45, 1.2 + r() * 1.4);
-    const uc = opening0 + w / 2 + r() * Math.max(0, Wo - w);
-    tags.push(sign(uc, ground + 0.5 + r() * 0.9, gateN + 0.035, w, w * 0.4, TAGS[Math.floor(r() * TAGS.length)],
+    const w = Math.min(slot * 0.92, Wo * 0.45, 1.2 + r() * 1.4);
+    const uc = opening0 + slot * i + w / 2 + r() * Math.max(0, slot - w);
+    tags.push(sign(uc, ground + 0.5 + r() * 0.9, gateN + 0.035 + i * 0.006, w, w * 0.4, TAGS[Math.floor(r() * TAGS.length)],
       { style: STYLE.tag, font: FONTS.marker, ink: [0xff3b6b, 0x3bd1ff, 0xffd23b, 0x7cff5a, 0xffffff, 0xb05cff][Math.floor(r() * 6)], letter: 0.8 }));
   }
 

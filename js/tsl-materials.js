@@ -83,7 +83,9 @@ const cityUniforms = {
   uRoadWetness: uniform(0.38),
   uCanyonBounce: uniform(0.52),
   // Distance (start, end) over which painted shopfronts take over from the 3D ones of storefronts.js; none until it runs
-  uShopKit: uniform(new THREE.Vector2(-2, -1))
+  uShopKit: uniform(new THREE.Vector2(-2, -1)),
+  // The same for the window sills and air conditioners of facade-kit.js
+  uFacadeKit: uniform(new THREE.Vector2(-2, -1))
 };
 
 // Fast deterministic 2D -> 1D hash in TSL
@@ -701,17 +703,18 @@ function createCurtainWallMaterial(opts = {}) {
     frameTint = 0x26323e,
     windowWidth = 2.8,
     floorHeight = 3.8,
-    mullionThickness = 0.075,
-    spandrelRatio = 0.20,
+    mullionThickness: mullionThicknessOpt = 0.075,
+    spandrelRatio: spandrelRatioOpt = 0.20,
     litProbability = 0.36,
     warmth = 0.62,
     reflectivity = 0.92,
     seed = 1.0,
     boxLocal = false,
-    footprintLocal = false
+    footprintLocal = false,
+    styled = false // each building's own glass and metal from its facadeStyle attributes (footprint walls)
   } = opts;
 
-  const cacheKey = `${glassTint}_${frameTint}_${windowWidth}_${floorHeight}_${litProbability}_${warmth}_${reflectivity}_${seed}_${boxLocal}_${footprintLocal}`;
+  const cacheKey = `${glassTint}_${frameTint}_${windowWidth}_${floorHeight}_${litProbability}_${warmth}_${reflectivity}_${seed}_${boxLocal}_${footprintLocal}_${styled}`;
   if (_curtainWallCache.has(cacheKey)) {
     return _curtainWallCache.get(cacheKey);
   }
@@ -721,16 +724,24 @@ function createCurtainWallMaterial(opts = {}) {
     roughness: 0.12
   });
 
-  // The style's parameters are uniforms (not baked-in constants), so every curtain-wall style compiles to one shader
-  const cGlass = uniform(new THREE.Color(glassTint));
-  const cFrame = uniform(new THREE.Color(frameTint));
-  const uWindowWidth = uniform(windowWidth);
-  const uFloorHeight = uniform(floorHeight);
-  const uLitProbability = uniform(litProbability);
-  const uWarmth = uniform(warmth);
-  const uReflectivity = uniform(reflectivity);
-  const uSeed = uniform(seed);
+  // The style's parameters are uniforms (not baked-in constants), so every curtain-wall style compiles to one shader.
+  // Styled walls carry their building's own: [type, bay, storey, seed], [glass colour, spandrel share], [metal colour,
+  // reflectivity], [mullion width, banding, lit share, warmth]
+  const S = styled ? [0, 1, 2, 3].map((i) => attribute(`facadeStyle${i}`, 'vec4')) : null;
+  const cGlass = S ? S[1].xyz : uniform(new THREE.Color(glassTint));
+  const cFrame = S ? S[2].xyz : uniform(new THREE.Color(frameTint));
+  const uWindowWidth = S ? S[0].y : uniform(windowWidth);
+  const uFloorHeight = S ? S[0].z : uniform(floorHeight);
+  const uLitProbability = S ? S[3].z : uniform(litProbability);
+  const uWarmth = S ? S[3].w : uniform(warmth);
+  const uReflectivity = S ? S[2].w : uniform(reflectivity);
+  const uSeed = S ? S[0].w : uniform(seed);
   const cCanyonBounce = color(0xe89c68);
+  // Banding: 0 an even grid, 1 ribbon windows between deep spandrels, 2 vertical fins on every mullion
+  const band = S ? S[3].y : float(0.0);
+  const fins = float(1.0).sub(step(0.5, abs(band.sub(2.0))));
+  const mullionThickness = S ? S[3].x : float(mullionThicknessOpt);
+  const spandrelRatio = S ? S[1].w : float(spandrelRatioOpt);
 
   mat.aoNode = canyonSkyAONode();
 
@@ -741,8 +752,8 @@ function createCurtainWallMaterial(opts = {}) {
   // Pane UV inside the mullions and spandrel.
   const winUV = clamp(
     vec2(
-      cellUV.x.sub(mullionThickness).div(max(0.01, 1.0 - 2.0 * mullionThickness)),
-      cellUV.y.sub(spandrelRatio).div(max(0.01, 1.0 - spandrelRatio - mullionThickness))
+      cellUV.x.sub(mullionThickness).div(max(float(0.01), float(1.0).sub(mullionThickness.mul(2.0)))),
+      cellUV.y.sub(spandrelRatio).div(max(float(0.01), float(1.0).sub(spandrelRatio).sub(mullionThickness)))
     ),
     vec2(0.0),
     vec2(1.0)
@@ -755,8 +766,9 @@ function createCurtainWallMaterial(opts = {}) {
 
   mat.colorNode = Fn(() => {
     // Solid walls and coping have no glazing.
-    const isGlassPane = filteredPulse(cellUV.x, mullionThickness * 0.5, 1.0 - mullionThickness * 0.5, fw.x)
-      .mul(filteredPulse(cellUV.y, spandrelRatio + 0.015, 1.0 - mullionThickness * 0.5, fw.y))
+    const halfMullion = mullionThickness.mul(0.5);
+    const isGlassPane = filteredPulse(cellUV.x, halfMullion, float(1.0).sub(halfMullion), fw.x)
+      .mul(filteredPulse(cellUV.y, spandrelRatio.add(0.015), float(1.0).sub(halfMullion), fw.y))
       .mul(float(1.0).sub(isRoof)).mul(float(1.0).sub(solid)).mul(float(1.0).sub(coping));
 
     const louverStripes = sin(vCoord.mul(22.0)).mul(0.5).add(0.5);
@@ -795,21 +807,24 @@ function createCurtainWallMaterial(opts = {}) {
     const sunSpec = pow(max(dot(reflectDir, sunDir), 0.0), 48.0).mul(1.25);
 
     // Interior mapping behind the upper-floor glazing.
-    const pooledDirt = float(1.0).sub(smoothstep(spandrelRatio, spandrelRatio + 0.22, cellUV.y)).mul(0.32);
+    const pooledDirt = float(1.0).sub(smoothstep(spandrelRatio, spandrelRatio.add(0.22), cellUV.y)).mul(0.32);
     const grime = float(0.56).add(pooledDirt).clamp(0.0, 0.92);
     const glazedBase = mix(aptRoom.xyz.mul(color(0xb6c6bf)), cGlass, grime);
 
     const glassColor = mix(glazedBase, envReflection, fresnel.mul(uReflectivity).add(0.18))
       .add(cityUniforms.uSunColor.mul(sunSpec));
 
+    // Spandrels: a darker panel of the metal; fins cast a dark line beside every mullion
     const spandrelDark = cFrame.mul(0.52);
-    const frameBase = mix(cFrame, spandrelDark, filteredPulse(cellUV.y, 0.0, spandrelRatio, fw.y));
+    const finShade = fins.mul(filteredPulse(cellUV.x, halfMullion, halfMullion.add(0.05), fw.x)).mul(0.5);
+    const frameBase = mix(cFrame, spandrelDark, filteredPulse(cellUV.y, 0.0, spandrelRatio, fw.y)).mul(float(1.0).sub(finShade));
 
     const canyonBand = smoothstep(0.0, 14.0, vCoord).mul(float(1.0).sub(smoothstep(22.0, 75.0, vCoord)));
     const canyonGlow = cCanyonBounce.mul(canyonBand.mul(cityUniforms.uCanyonBounce).mul(0.16));
 
     const roofNoise = noise2D(positionWorld.xz.mul(0.35));
-    const roofColor = mix(color(0x202429), color(0x3b4149), roofNoise);
+    // A styled roof's vertices carry its own covering (see the masonry material)
+    const roofColor = S ? roofSurface(S[1].xyz, roofNoise) : mix(color(0x202429), color(0x3b4149), roofNoise);
 
     const facadeCol = mix(frameBase, glassColor, isGlassPane.mul(float(1.0).sub(isMechFloor))).add(canyonGlow);
     const mechCol = mix(cFrame.mul(0.36), cFrame.mul(0.76), louverStripes);
@@ -824,9 +839,9 @@ function createCurtainWallMaterial(opts = {}) {
 
   mat.roughnessNode = Fn(() => {
     const isFrame = float(1.0).sub(
-      filteredPulse(cellUV.x, mullionThickness, 1.0 - mullionThickness, fw.x).mul(filteredPulse(cellUV.y, spandrelRatio, 1.0, fw.y))
+      filteredPulse(cellUV.x, mullionThickness, float(1.0).sub(mullionThickness), fw.x).mul(filteredPulse(cellUV.y, spandrelRatio, 1.0, fw.y))
     );
-    const sillDirt = float(1.0).sub(smoothstep(spandrelRatio, spandrelRatio + 0.18, cellUV.y)).mul(0.18);
+    const sillDirt = float(1.0).sub(smoothstep(spandrelRatio, spandrelRatio.add(0.18), cellUV.y)).mul(0.18);
     const glassOrFrame = mix(float(0.05).add(sillDirt), float(0.54), max(max(isFrame, isRoof), solid));
     const surface = mix(mix(glassOrFrame, float(0.36), coping), storefront.roughness, storefront.mask);
     return mix(surface, entrance.roughness, entrance.mask);
@@ -839,18 +854,19 @@ function createCurtainWallMaterial(opts = {}) {
       .mul(float(1.0).sub(smoothstep(0.03, 0.1, max(fw.x, fw.y))));
 
     const ramp = fw.mul(2.0).max(0.02);
-    const inPane = filteredPulse(cellUV.x, mullionThickness + 0.01, 0.99 - mullionThickness, ramp.x)
-      .mul(filteredPulse(cellUV.y, spandrelRatio + 0.01, 0.99 - mullionThickness, ramp.y))
+    const inPane = filteredPulse(cellUV.x, mullionThickness.add(0.01), float(0.99).sub(mullionThickness), ramp.x)
+      .mul(filteredPulse(cellUV.y, spandrelRatio.add(0.01), float(0.99).sub(mullionThickness), ramp.y))
       .mul(float(1.0).sub(solid)).mul(float(1.0).sub(coping));
-    const mullionRelief = float(1.0).sub(inPane).mul(0.014).add(coping.mul(0.01));
+    // Fins stand far prouder than plain mullions
+    const mullionRelief = float(1.0).sub(inPane).mul(mix(float(0.014), float(0.04), fins)).add(coping.mul(0.01));
 
     const relief = mix(mullionRelief, storefront.relief, storefront.mask);
     return bumpNormal(mix(relief, entrance.relief, entrance.mask).mul(detailFade));
   })();
 
   mat.emissiveNode = Fn(() => {
-    const inPane = filteredPulse(cellUV.x, mullionThickness + 0.015, 1.0 - mullionThickness - 0.015, fw.x)
-      .mul(filteredPulse(cellUV.y, spandrelRatio + 0.02, 1.0 - mullionThickness * 0.5, fw.y));
+    const inPane = filteredPulse(cellUV.x, mullionThickness.add(0.015), float(1.0).sub(mullionThickness).sub(0.015), fw.x)
+      .mul(filteredPulse(cellUV.y, spandrelRatio.add(0.02), float(1.0).sub(mullionThickness.mul(0.5)), fw.y));
     const paneMask = inPane.mul(float(1.0).sub(isRoof)).mul(float(1.0).sub(isMechFloor))
       .mul(float(1.0).sub(solid)).mul(float(1.0).sub(coping));
 
@@ -879,6 +895,41 @@ function createCurtainWallMaterial(opts = {}) {
  * - Grimy Soda-Lime Window Glazing (pooled sill dirt + vertical rain streaks)
  * - Urban Canyon Global Illumination (`aoNode` + warm terracotta bounce)
  */
+// Window frames of styled buildings, by index (js/building-types.js FRAMES): black, white, green, brown, aluminium,
+// bronze, cream, grey
+const FRAME_COLOURS = [0x1c1d1e, 0xe6e4de, 0x22362a, 0x4a3428, 0xa4a8ac, 0x3c3026, 0xd6ceb6, 0x5e6062];
+function framePalette(index) {
+  let c = color(FRAME_COLOURS[0]);
+  for (let i = 1; i < FRAME_COLOURS.length; i++) c = mix(c, color(FRAME_COLOURS[i]), step(i - 0.5, index));
+  return c;
+}
+// A flat roof's covering: its colour, mottled by weather, with seams of the membrane and gravel speckle
+function roofSurface(colour, roofNoise) {
+  const p = positionWorld.xz;
+  const seams = gridLine(p.x.add(p.y.mul(0.13)), 1.0, 0.012).mul(0.12);
+  const speckle = hash2D(floor(p.mul(9.0))).mul(0.16);
+  return colour.mul(mix(float(0.78), float(1.12), roofNoise).sub(seams).add(speckle.sub(0.08)));
+}
+
+// Glazing bars across a window opening (winUV 0..1 inside it), by kind (see createPreWarBuildingMaterial's glazing):
+// meeting rails, the muntins of six-over-six sashes, loft transoms and mullions, ribbon hoppers, and the sash frame
+function glazingBars(winUV, isGroundFloor, isGlazing) {
+  const w = float(0.016);
+  const rail = lineAA(winUV.y.sub(0.5), w.mul(1.3));
+  const midV = lineAA(winUV.x.sub(0.5), w);
+  const thirdsV = max(lineAA(winUV.x.sub(0.3333), w.mul(0.65)), lineAA(winUV.x.sub(0.6667), w.mul(0.65)));
+  const quartersH = max(lineAA(winUV.y.sub(0.25), w.mul(0.65)), lineAA(winUV.y.sub(0.75), w.mul(0.65)));
+  const transom = lineAA(winUV.y.sub(0.78), w.mul(1.3));
+  const hopper = lineAA(winUV.y.sub(0.3), w);
+  const sashed = max(max(isGlazing(0), isGlazing(1)), max(max(isGlazing(2), isGlazing(3)), isGlazing(4)));
+  const bars = max(
+    max(rail.mul(sashed), midV.mul(max(max(isGlazing(1), isGlazing(3)), isGlazing(6)))),
+    max(max(thirdsV.mul(max(isGlazing(2), isGlazing(5))), quartersH.mul(isGlazing(2))), max(transom.mul(isGlazing(5)), hopper.mul(isGlazing(6))))
+  );
+  const edge = float(1.0).sub(filteredPulse(winUV.x, 0.035, 0.965, fwidth(winUV.x).mul(2.0)).mul(filteredPulse(winUV.y, 0.03, 0.97, fwidth(winUV.y).mul(2.0))));
+  return max(bars, edge).mul(float(1.0).sub(isGroundFloor));
+}
+
 function createPreWarBuildingMaterial(opts = {}) {
   const {
     stoneColor = 0xd8ceb8,
@@ -897,10 +948,11 @@ function createPreWarBuildingMaterial(opts = {}) {
     footprintLocal = false,
     cornerPier = 1.2, // solid masonry at both ends of every wall above the shopfronts (box-local mode)
     surface = 'limestone', // the photograph on its walls (world-assets.js)
-    tint = null // over the photograph; without one, the stone colour asked for
+    tint = null, // over the photograph; without one, the stone colour asked for
+    styled = false // each building's own dress from its facadeStyle attributes (footprint walls)
   } = opts;
 
-  const cacheKey = `${surface}_${stoneColor}_${trimColor}_${windowWidth}_${floorHeight}_${litProbability}_${warmth}_${crownGlowHeight}_${seed}_${boxLocal}_${footprintLocal}_${cornerPier}`;
+  const cacheKey = `${surface}_${stoneColor}_${trimColor}_${windowWidth}_${floorHeight}_${litProbability}_${warmth}_${crownGlowHeight}_${seed}_${boxLocal}_${footprintLocal}_${cornerPier}_${styled}`;
   if (_preWarCache.has(cacheKey)) {
     return _preWarCache.get(cacheKey);
   }
@@ -910,23 +962,32 @@ function createPreWarBuildingMaterial(opts = {}) {
     roughness: 0.76
   });
 
-  // The style's parameters are uniforms (not baked-in constants), so every masonry style compiles to one shader
-  const uTint = uniform(tint ? new THREE.Color(...tint) : new THREE.Color(stoneColor).multiplyScalar(2.3));
+  // The style's parameters are uniforms (not baked-in constants), so every masonry style compiles to one shader. Styled
+  // walls (surveyed buildings, js/building-types.js) carry their own building's dress as vertex attributes instead:
+  // [type, bay, storey, seed], [wall tint, glazing], [trim colour, flags + 32 * frame], [window width and height
+  // ratios, stone base floors, belt course period]
+  const S = styled ? [0, 1, 2, 3].map((i) => attribute(`facadeStyle${i}`, 'vec4')) : null;
+  const uTint = S ? S[1].xyz : uniform(tint ? new THREE.Color(...tint) : new THREE.Color(stoneColor).multiplyScalar(2.3));
   const uDressed = uniform(surface === 'limestone' ? 0 : 1); // stone lintels on brick
-  const cTrim = uniform(new THREE.Color(trimColor));
+  const cTrim = S ? S[2].xyz : uniform(new THREE.Color(trimColor));
   const cGlass = uniform(new THREE.Color(windowGlassColor));
   const cCrown = uniform(new THREE.Color(crownGlowColor));
-  const uWindowWidth = uniform(windowWidth);
-  const uFloorHeight = uniform(floorHeight);
-  const uLitProbability = uniform(litProbability);
-  const uWarmth = uniform(warmth);
+  const uWindowWidth = S ? S[0].y : uniform(windowWidth);
+  const uFloorHeight = S ? S[0].z : uniform(floorHeight);
   const uCrownGlowHeight = uniform(crownGlowHeight);
-  const uSeed = uniform(seed);
+  const uSeed = S ? S[0].w : uniform(seed);
   const cSoot = color(0x4a4236);
   const cCanyonBounce = color(0xe89c68);
-
-  const halfWinX = (1.0 - windowRatioX) * 0.5;
-  const halfWinY = (1.0 - windowRatioY) * 0.5;
+  const styleFlags = S ? mod(S[2].w, 32.0) : float(0.0);
+  const flag = (bit) => mod(floor(styleFlags.div(bit)), 2.0);
+  const office = flag(8);
+  const uLitProbability = S ? mix(float(0.58), float(0.52), office) : uniform(litProbability);
+  const uWarmth = S ? mix(float(0.86), float(0.58), office) : uniform(warmth);
+  // Glazing: 0 one over one, 1 two over two, 2 six over six, 3 arched head, 4 paired, 5 loft, 6 ribbon, 7 casement
+  const glazing = S ? S[1].w : float(1.0);
+  const isGlazing = (k) => float(1.0).sub(step(0.5, abs(glazing.sub(k))));
+  const baseFloors = S ? S[3].z : float(0.0);
+  const beltEvery = S ? S[3].w : float(6.0);
 
   mat.aoNode = canyonSkyAONode();
 
@@ -937,8 +998,29 @@ function createPreWarBuildingMaterial(opts = {}) {
   const { wallS, wallW, wallH, exposedHeight, fromTop, boxSeed } = facade;
   const open = float(1.0).sub(solid);
   const front = float(1.0).sub(back);
-  const effHalfX = float(halfWinX);
-  const effHalfY = float(halfWinY);
+  // Attic windows under the roof are squatter: the whole last floor that fits under the wall's top (no room for another)
+  const wallTopY = vCoord.add(fromTop);
+  const attic = flag(2).mul(float(1.0).sub(step(uFloorHeight, wallTopY.sub(floor(gridV).add(1.0).mul(uFloorHeight)))));
+  // Near the camera facade-kit.js builds the sills and air conditioners in 3D: the painted ones give way to them
+  const kitFar = S ? smoothstep(cityUniforms.uFacadeKit.x, cityUniforms.uFacadeKit.y, positionWorld.sub(cameraPosition).length()) : float(1.0);
+  const halfWinX = S ? float(1.0).sub(S[3].x).mul(0.5) : float((1.0 - windowRatioX) * 0.5);
+  const halfWinY = mix(S ? float(1.0).sub(S[3].y).mul(0.5) : float((1.0 - windowRatioY) * 0.5), float(0.32), attic);
+  const effHalfX = halfWinX;
+  const effHalfY = halfWinY;
+  // Segmental arch over the window head: how far the opening rises above its square top at this point across it
+  const archU = cellUV.x.sub(0.5).div(max(float(0.5).sub(effHalfX), 0.05));
+  const archLift = isGlazing(3).mul(float(1.0).sub(archU.mul(archU)).max(0.0)).mul(0.07);
+  // Paired windows share one wide opening split by a masonry mullion
+  const pairMullion = isGlazing(4).mul(filteredPulse(cellUV.x, 0.475, 0.525, fw.x));
+  // Stone base: the first floors are dressed stone, rusticated with deep horizontal joints
+  const inBase = step(gridV, baseFloors).mul(front).mul(float(1.0).sub(isRoof));
+  // Thin band courses: at the top of the stone base and every few floors above it
+  const floorIndex = floor(gridV);
+  const beltFloor = float(0.0);
+  const bandFloor = max(
+    float(1.0).sub(step(0.5, abs(floorIndex.add(1.0).sub(baseFloors)))).mul(step(0.5, baseFloors)),
+    step(0.5, beltEvery).mul(float(1.0).sub(step(0.5, mod(floorIndex.add(1.0).sub(baseFloors), max(beltEvery, 1.0))))).mul(step(baseFloors, floorIndex))
+  ).mul(front);
 
   // The wall's own frame: T runs the way uCoord grows, up is up. Windows sit in the thickness of the wall: looking in, the
   // glass slides across the opening by RECESS metres of depth, and the sun casts the opening's edge onto it
@@ -969,30 +1051,27 @@ function createPreWarBuildingMaterial(opts = {}) {
   const aptRoom = evaluateApartmentInterior(uCoord, vCoord, winUV, cellId, bayWidth, uFloorHeight, uSeed, uWarmth, uLitProbability.mul(0.62), fw);
   const storefront = createStorefront(facade, uSeed, boxLocal || footprintLocal);
   const entrance = createBuildingEntrance(facade, cTrim, boxLocal || footprintLocal);
-  // Window AC units (~12% of upper-floor windows), none in the floor the band course covers
-  const beltFloor = step(5.0, mod(floor(gridV), 6.0)).mul(front);
+  // Window AC units (~12% of upper-floor windows in walk-ups and apartments, a few elsewhere), none in the stone base
   const acRand = hash2D(cellId.add(vec2(uSeed.mul(1.3).add(7.1), 91.7)));
-  const hasAC = step(0.88, acRand).mul(float(1.0).sub(isGroundFloor)).mul(float(1.0).sub(isRoof)).mul(open).mul(float(1.0).sub(beltFloor));
+  const acShare = S ? mix(float(0.97), float(0.86), flag(4)) : float(0.88);
+  const hasAC = step(acShare, acRand).mul(kitFar).mul(float(1.0).sub(isGroundFloor)).mul(float(1.0).sub(isRoof)).mul(open)
+    .mul(float(1.0).sub(inBase)).mul(float(1.0).sub(attic));
 
   mat.colorNode = Fn(() => {
     const oneMinusEffX = float(1.0).sub(effHalfX);
     const oneMinusEffY = float(1.0).sub(effHalfY);
 
-    const inX = filteredPulse(cellUV.x, effHalfX, oneMinusEffX, fw.x).mul(open);
-    const inY = filteredPulse(cellUV.y, effHalfY, oneMinusEffY, fw.y);
+    const inX = filteredPulse(cellUV.x, effHalfX, oneMinusEffX, fw.x).mul(open).mul(float(1.0).sub(pairMullion));
+    const inY = filteredPulse(cellUV.y, effHalfY, oneMinusEffY.add(archLift), fw.y);
 
-    // Horizontal cornice belt every 6 floors (street fronts only) + ground floor storefront fascia at top of floor 0
-    const cornicePhase = fract(gridV.div(6.0));
+    // Band courses (street fronts only) + ground floor storefront fascia at top of floor 0
     const isCornice = max(
-      filteredPulse(cornicePhase, 0.86, 1.0, fw.y.div(6.0)).mul(front),
+      bandFloor.mul(filteredPulse(cellUV.y, 0.9, 1.0, fw.y)),
       isGroundFloor.mul(filteredPulse(cellUV.y, 0.86, 1.0, fw.y))
     );
 
-    // Double-hung meeting rails.
-    const sashBarY = lineAA(glassUV.y.sub(0.52), 0.012).mul(float(1.0).sub(isGroundFloor));
-    const sashBarX = lineAA(glassUV.x.sub(0.50), 0.009).mul(float(1.0).sub(isGroundFloor)).mul(0.55);
-    const sashEdge = float(1.0).sub(filteredPulse(winUV.x, 0.035, 0.965, fw.x.mul(2.0)).mul(filteredPulse(winUV.y, 0.03, 0.97, fw.y.mul(2.0))));
-    const sashMask = max(max(sashBarY, sashBarX), sashEdge.mul(float(1.0).sub(isGroundFloor)));
+    // Glazing bars: meeting rails, muntins and transoms by kind of window
+    const sashMask = glazingBars(winUV, isGroundFloor, isGlazing);
 
     // Protruding Window Air-Conditioner Unit, sitting on the sill (see hasAC)
     const acMinX = float(0.31);
@@ -1040,16 +1119,29 @@ function createPreWarBuildingMaterial(opts = {}) {
     const underSill = filteredPulse(cellUV.x, effHalfX, oneMinusEffX, fw.x).mul(open).mul(smoothstep(0.0, effHalfY, cellUV.y))
       .mul(float(1.0).sub(step(effHalfY, cellUV.y))).mul(noise2D(vec2(uCoord.mul(3.1), vCoord.mul(0.4))).mul(0.5).add(0.5));
     const streetDirt = smoothstep(2.4, 0.2, vCoord).mul(0.3);
-    const sootDirt = max(smoothstep(0.25, 0.78, streakNoise).mul(float(1.0).sub(smoothstep(0.0, 180.0, vCoord))).mul(0.3).add(underSill.mul(0.34)), streetDirt);
+    const sootDirt0 = max(smoothstep(0.25, 0.78, streakNoise).mul(float(1.0).sub(smoothstep(0.0, 180.0, vCoord))).mul(0.3).add(underSill.mul(0.34)), streetDirt);
+    // Weathering, heavier on some buildings than others: rain runs down from every sill's ends and middle, the
+    // parapet and cornice stain the top of the wall, the street splashes the first metres; small details settle to
+    // their average once they shrink under a pixel
+    const grimy = S ? fract(tone.mul(5.31)).mul(0.7).add(0.45).mul(front) : float(0.0);
+    const detail = float(1.0).sub(smoothstep(0.5, 1.5, uFw.mul(6.0)));
+    const underNext = mix(effHalfY.sub(cellUV.y), float(1.0).add(effHalfY).sub(cellUV.y), step(effHalfY, cellUV.y)).mul(uFloorHeight);
+    const runColumn = filteredPulse(cellUV.x, effHalfX.sub(0.04), oneMinusEffX.add(0.04), fw.x).mul(open).mul(float(1.0).sub(isGroundFloor));
+    const runLines = mix(float(0.4), smoothstep(0.48, 0.78, noise2D(vec2(uCoord.mul(7.0), floor(gridV).mul(1.7).add(vCoord.mul(0.05))))), detail);
+    const rainRuns = runColumn.mul(runLines).mul(float(1.0).sub(smoothstep(0.2, 2.4, underNext))).mul(smoothstep(0.0, 0.08, underNext));
+    const topStain = float(1.0).sub(smoothstep(0.3, 3.4, fromTop)).mul(mix(float(0.5), smoothstep(0.3, 0.72, noise2D(vec2(uCoord.mul(2.3), vCoord.mul(0.14)))), detail));
+    const splash = smoothstep(1.7, 0.3, vCoord).mul(mix(float(0.6), noise2D(vec2(uCoord.mul(1.9), vCoord.mul(3.0))).mul(0.5).add(0.5), detail));
+    const sootDirt = max(sootDirt0, max(max(rainRuns.mul(0.62), topStain.mul(0.55)), splash.mul(0.5)).mul(grimy).mul(float(1.0).sub(back)));
 
     const lintelShadow = smoothstep(oneMinusEffY.sub(0.1), oneMinusEffY, glassUV.y).mul(0.4);
     const jambShadow = float(1.0).sub(smoothstep(effHalfX, effHalfX.add(0.08), glassUV.x)).mul(0.3);
     // No sills in the floor the band course covers
-    const sillSpan = filteredPulse(cellUV.x, effHalfX.sub(0.045), oneMinusEffX.add(0.045), fw.x).mul(open).mul(float(1.0).sub(beltFloor));
+    const sillSpan = filteredPulse(cellUV.x, effHalfX.sub(0.045), oneMinusEffX.add(0.045), fw.x).mul(open).mul(float(1.0).sub(beltFloor)).mul(kitFar);
     const isSillTop = filteredPulse(cellUV.y, effHalfY.sub(0.032), effHalfY, fw.y).mul(sillSpan);
     const isSillUnderShadow = filteredPulse(cellUV.y, effHalfY.sub(0.075), effHalfY.sub(0.032), fw.y).mul(sillSpan);
 
-    const corniceShadow = smoothstep(0.76, 0.86, cornicePhase).mul(0.32).mul(front);
+    // The band course's shadow on the wall just under it
+    const corniceShadow = bandFloor.mul(filteredPulse(cellUV.y, 0.84, 0.9, fw.y)).mul(0.3);
 
     const canyonBand = smoothstep(0.0, 14.0, vCoord).mul(float(1.0).sub(smoothstep(22.0, 75.0, vCoord)));
     const canyonGlow = cCanyonBounce.mul(canyonBand.mul(cityUniforms.uCanyonBounce).mul(0.22));
@@ -1098,15 +1190,35 @@ function createPreWarBuildingMaterial(opts = {}) {
     });
 
     // The wall's photograph, each building its own shade of it, broken into large patches so its repeats never show
-    const buildingShade = mix(vec3(0.8, 0.77, 0.74), vec3(1.16, 1.12, 1.06), fract(tone.mul(4.73)));
+    // A styled building's colour is its own, so its shade only wavers a little
+    const buildingShade = S ? mix(vec3(0.93), vec3(1.07), fract(tone.mul(4.73)))
+      : mix(vec3(0.8, 0.77, 0.74), vec3(1.16, 1.12, 1.06), fract(tone.mul(4.73)));
     const patches = mix(float(0.84), float(1.14), noise2D(wallUV.mul(0.09).add(tone.mul(19.0))).mul(0.6).add(noise2D(wallUV.mul(0.37)).mul(0.4)));
-    const stone = texture(stonePhoto.color, photoUV).rgb.mul(uTint).mul(buildingShade).mul(patches);
-    const wallTint = mix(mix(stone, backTint, back), signPaint.xyz, signPaint.w);
+    // Repairs: patches of newer brick or fresher pointing, a shade off the rest of the wall
+    const patchCell = hash2D(floor(vec2(uCoord.div(1.7), vCoord.div(1.25))).add(tone.mul(17.0)));
+    const repair = S ? step(0.95, patchCell).mul(front).mul(detail).mul(float(1.0).sub(isRoof)) : float(0.0);
+    const stone = texture(stonePhoto.color, photoUV).rgb.mul(uTint).mul(buildingShade).mul(patches)
+      .mul(mix(float(1.0), mix(float(0.8), float(1.16), fract(patchCell.mul(13.0))), repair));
     // Trim stone on the band courses, the storefront fascia and the coping capping every wall, and over and under every
     // window of a brick front
     const dressed = texture(world.limestone.color, wallUV.div(world.limestone.metres).mul(1.7)).rgb.mul(cTrim).mul(2.6);
-    const lintel = filteredPulse(cellUV.y, oneMinusEffY, oneMinusEffY.add(0.05), fw.y)
-      .mul(filteredPulse(cellUV.x, effHalfX.sub(0.03), oneMinusEffX.add(0.03), fw.x)).mul(open).mul(float(1.0).sub(beltFloor)).mul(uDressed);
+    // The stone base, rusticated: deep joints every course
+    const rustication = gridLine(vCoord.add(0.1), 0.62, 0.012).mul(inBase);
+    // Quoins: long and short stones in turn up both ends of a street front, above the shops
+    const quoinRow = mod(floor(vCoord.div(0.36)), 2.0);
+    const quoinWidth = mix(float(0.78), float(0.48), quoinRow);
+    const quoinEnd = min(wallS, wallW.sub(wallS));
+    const inQuoin = flag(1).mul(float(1.0).sub(step(quoinWidth, quoinEnd))).mul(front).mul(float(1.0).sub(isRoof)).mul(step(uFloorHeight, vCoord))
+      .mul(float(1.0).sub(blank)).mul(step(wallW, 200.0));
+    const quoinJoint = max(gridLine(vCoord, 0.36, 0.012), lineAA(quoinEnd.sub(quoinWidth), 0.012)).mul(inQuoin);
+    const baseStone = mix(stone, dressed.mul(1.06), max(inBase, inQuoin)).mul(float(1.0).sub(max(rustication.mul(0.3), quoinJoint.mul(0.35))));
+    // Art Deco's dark spandrels run the windows of a column together into tall strips
+    const spandrel = flag(16).mul(filteredPulse(cellUV.x, effHalfX, oneMinusEffX, fw.x)).mul(open)
+      .mul(float(1.0).sub(inY)).mul(float(1.0).sub(inBase)).mul(float(1.0).sub(isGroundFloor)).mul(front).mul(float(1.0).sub(isRoof));
+    const wallTint = mix(mix(mix(baseStone, cTrim.mul(0.32), spandrel.mul(0.9)), backTint, back), signPaint.xyz, signPaint.w);
+    const lintel = filteredPulse(cellUV.y, oneMinusEffY.add(archLift), oneMinusEffY.add(archLift).add(0.05), fw.y)
+      .mul(filteredPulse(cellUV.x, effHalfX.sub(0.03), oneMinusEffX.add(0.03), fw.x)).mul(open).mul(float(1.0).sub(beltFloor))
+      .mul(S ? float(1.0).sub(inBase) : uDressed);
     const trimMix = max(max(isCornice.mul(0.62).add(isGroundFloor.mul(0.28)), coping.mul(0.8)), lintel);
     const masonryTint = mix(wallTint, dressed, trimMix);
     const masonryWeathered = mix(masonryTint, cSoot, sootDirt.mul(0.8))
@@ -1134,14 +1246,21 @@ function createPreWarBuildingMaterial(opts = {}) {
     const curtained = mix(upperGlassBase, blindCloth.mul(0.5), blind.mul(float(1.0).sub(isGroundFloor)));
     // The street and the sky mirrored in the pane
     const bounced = reflect(wallV.negate(), wallN);
-    const mirrored = mix(color(0x2c2d2f), mix(cityUniforms.uSkyHorizonColor, cityUniforms.uSkyTopColor, clamp(bounced.y.mul(1.4), 0.0, 1.0)), smoothstep(-0.08, 0.12, bounced.y));
+    const skyMirror = mix(cityUniforms.uSkyHorizonColor, cityUniforms.uSkyTopColor, clamp(bounced.y.mul(1.4), 0.0, 1.0));
+    // In a street canyon a pane mostly mirrors the facade across the street (dark brick and its windows); only steep
+    // reflections reach the sky over its roofline, a little higher or lower from window to window
+    const skyline = S ? hash2D(cellId.add(vec2(3.3, uSeed))).mul(0.25).add(0.38) : float(0.12);
+    const across = mix(color(0x2a2522), color(0x4a3c34), hash2D(cellId.add(vec2(uSeed, 8.1)))).mul(mix(float(0.75), float(1.15), noise2D(vec2(bounced.x, bounced.z).mul(6.0))));
+    const mirrored = mix(mix(color(0x2c2d2f), across, step(-0.08, bounced.y)), skyMirror, smoothstep(skyline.sub(0.1), skyline.add(0.06), bounced.y));
     const glassCol = mix(curtained, mirrored, fresnel.mul(0.6).add(0.1))
       .mul(mix(float(0.62), float(1.0), sunOnGlass.add(step(sunIn, 0.0)).clamp(0.0, 1.0)));
 
-    const frameCol = mix(color(0x2a2b2d), color(0xcfccc2), step(0.6, fract(tone.mul(11.3)))).mul(recessShade);
+    const frameCol = (S ? framePalette(floor(S[2].w.div(32.0))) : mix(color(0x2a2b2d), color(0xcfccc2), step(0.6, fract(tone.mul(11.3)))))
+      .mul(recessShade);
     const revealCol = masonryTint.mul(0.62).mul(revealLight);
     const roofNoise = noise2D(positionWorld.xz.mul(0.35));
-    const roofCol = mix(cTrim.mul(0.42), cTrim.mul(0.62), roofNoise);
+    // A styled roof's vertices carry its own covering: tar, silver coating, gravel, tiles
+    const roofCol = S ? roofSurface(S[1].xyz, roofNoise) : mix(cTrim.mul(0.42), cTrim.mul(0.62), roofNoise);
 
     const wallOrRoof = mix(masonryWeathered, roofCol, isRoof);
     const withFrames = mix(mix(wallOrRoof, revealCol, reveal), frameCol, isWindowOpening.mul(paneSeen).mul(sashMask));
@@ -1151,12 +1270,11 @@ function createPreWarBuildingMaterial(opts = {}) {
   })();
 
   mat.roughnessNode = Fn(() => {
-    const belt = filteredPulse(gridV.div(6.0), 0.86, 1.0, fw.y.div(6.0)).mul(front);
-    const inX = filteredPulse(cellUV.x, halfWinX, 1.0 - halfWinX, fw.x).mul(open).mul(float(1.0).sub(belt));
-    const inY = filteredPulse(cellUV.y, halfWinY, 1.0 - halfWinY, fw.y);
+    const inX = filteredPulse(cellUV.x, halfWinX, float(1.0).sub(halfWinX), fw.x).mul(open).mul(float(1.0).sub(pairMullion));
+    const inY = filteredPulse(cellUV.y, halfWinY, float(1.0).sub(halfWinY).add(archLift), fw.y);
     const isWindow = inX.mul(inY).mul(float(1.0).sub(isRoof));
 
-    const winY = clamp(cellUV.y.sub(halfWinY).div(max(0.01, 1.0 - 2.0 * halfWinY)), 0.0, 1.0);
+    const winY = clamp(cellUV.y.sub(halfWinY).div(max(float(0.01), float(1.0).sub(halfWinY.mul(2.0)))), 0.0, 1.0);
     const pooledRough = float(1.0).sub(smoothstep(0.0, 0.32, winY)).mul(0.38);
     const glassRough = float(0.14).add(pooledRough);
 
@@ -1175,14 +1293,15 @@ function createPreWarBuildingMaterial(opts = {}) {
     const ramp = fw.mul(2.0);
     const footprint = max(fwidth(uCoord), fwidth(vCoord)); // Meters per pixel
 
-    // Stone band course every 6 floors on street fronts: no window recesses, sills or AC units in it
-    const belt = filteredPulse(gridV.div(6.0), 0.86, 1.0, ramp.y.div(6.0)).mul(front);
-    const inX = filteredPulse(cellUV.x, effHalfX, float(1.0).sub(effHalfX), ramp.x).mul(open).mul(float(1.0).sub(belt));
-    const inY = filteredPulse(cellUV.y, effHalfY, float(1.0).sub(effHalfY), ramp.y);
+    // Band courses stand proud of the wall; the rusticated base's joints and the quoins' edges are cut into it
+    const belt = bandFloor.mul(filteredPulse(cellUV.y, 0.9, 1.0, ramp.y));
+    const inX = filteredPulse(cellUV.x, effHalfX, float(1.0).sub(effHalfX), ramp.x).mul(open).mul(float(1.0).sub(pairMullion));
+    const inY = filteredPulse(cellUV.y, effHalfY, float(1.0).sub(effHalfY).add(archLift), ramp.y);
     const isWindow = inX.mul(inY);
 
     const sillLedge = filteredPulse(cellUV.y, effHalfY.sub(0.032), effHalfY, ramp.y).mul(inX).mul(0.016);
-    const corniceLedge = belt.mul(0.022);
+    const rusticJoint = gridLine(vCoord.add(0.1), 0.62, 0.025).mul(inBase).mul(-0.012);
+    const corniceLedge = belt.mul(0.022).add(rusticJoint);
 
     const inACBox = filteredPulse(cellUV.x, 0.31, 0.69, ramp.x)
       .mul(filteredPulse(cellUV.y, effHalfY, effHalfY.add(0.22), ramp.y))
@@ -1202,19 +1321,17 @@ function createPreWarBuildingMaterial(opts = {}) {
 
   mat.emissiveNode = Fn(() => {
     // The glow stays a hair inside the glazing
-    const glowHalfX = float(halfWinX + 0.015);
-    const glowHalfY = float(halfWinY + 0.015);
+    const glowHalfX = halfWinX.add(0.015);
+    const glowHalfY = halfWinY.add(0.015);
 
-    const inX = filteredPulse(cellUV.x, glowHalfX, float(1.0).sub(glowHalfX), fw.x).mul(open);
-    const inY = filteredPulse(cellUV.y, glowHalfY, float(1.0).sub(glowHalfY), fw.y).mul(paneSeen);
+    const inX = filteredPulse(cellUV.x, glowHalfX, float(1.0).sub(glowHalfX), fw.x).mul(open).mul(float(1.0).sub(pairMullion));
+    const inY = filteredPulse(cellUV.y, glowHalfY, float(1.0).sub(glowHalfY).add(archLift), fw.y).mul(paneSeen);
     const isCornice = max(
-      filteredPulse(fract(gridV.div(6.0)), 0.86, 1.0, fw.y.div(6.0)).mul(front),
+      bandFloor.mul(filteredPulse(cellUV.y, 0.9, 1.0, fw.y)),
       isGroundFloor.mul(filteredPulse(cellUV.y, 0.86, 1.0, fw.y))
     );
 
-    const sashBarY = lineAA(glassUV.y.sub(0.52), 0.014).mul(float(1.0).sub(isGroundFloor));
-    const sashBarX = lineAA(glassUV.x.sub(0.50), 0.010).mul(float(1.0).sub(isGroundFloor)).mul(0.55);
-    const sashMask = max(sashBarY, sashBarX);
+    const sashMask = glazingBars(winUV, isGroundFloor, isGlazing);
 
     const inACBox = filteredPulse(cellUV.x, 0.31, 0.69, fw.x)
       .mul(filteredPulse(cellUV.y, glowHalfY, glowHalfY.add(0.22), fw.y))
@@ -3383,6 +3500,16 @@ function createContactShadowMaterial() {
   return mat;
 }
 
+// Under a walker's feet: a faint round shade, only enough to set the body on the ground in the shade (the sun casts the
+// real shadow), fading to nothing well inside its quad
+function createPersonContactShadowMaterial() {
+  const mat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, fog: false });
+  const r = length(uv().sub(vec2(0.5, 0.5)).mul(2.0));
+  mat.colorNode = color(0x020305);
+  mat.opacityNode = smoothstep(0.85, 0.05, r).mul(smoothstep(0.85, 0.05, r)).mul(0.3);
+  return mat;
+}
+
 /**
  * Car lamp flares for distant traffic (instanced sprites on a unit quad): a soft round glow with a hot core per lamp,
  * placed and sized per instance (`flarePos` = x, y, z, world size) and tinted (`flareCol` = rgb (+ an unused w, so
@@ -3442,5 +3569,6 @@ export {
   createSteamMaterial,
   createGodRayMaterial,
   createContactShadowMaterial,
+  createPersonContactShadowMaterial,
   createCarFlareMaterial
 };
