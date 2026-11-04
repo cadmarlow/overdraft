@@ -39,7 +39,14 @@ test('a reproduction link round-trips position, view, hour and weather', () => {
   const link = repro.buildReproLink({ x: -581.234, y: 0.18, z: -324.06, yaw: 1.2345, pitch: -0.1, hour: 25.5, weather: 'rain' }, 'http://localhost:5173/?stats=1#x');
   assert.match(link, /^http:\/\/localhost:5173\/\?qa=1&at=-581\.2,0\.2,-324\.1,1\.23,-0\.1&heure=1\.5&meteo=rain$/);
   const view = repro.parseRepro(new URL(link).search);
-  assert.deepEqual({ ...view }, { x: -581.2, y: 0.2, z: -324.1, yaw: 1.23, pitch: -0.1, hour: 1.5, weather: 'rain' });
+  assert.deepEqual({ ...view }, { x: -581.2, y: 0.2, z: -324.1, yaw: 1.23, pitch: -0.1, hour: 1.5, weather: 'rain', eye: null });
+});
+
+test('a photo from his own eye carries the eye’s exact pose in its link', () => {
+  const link = repro.buildReproLink({ x: 10, y: 0.15, z: 20, yaw: 0.5, eye: { x: 10.3, y: 1.83, z: 20.2, yaw: 0.5123, pitch: 0.5, fov: 25 } }, 'http://localhost:5173/');
+  assert.match(link, /&oeil=10\.3,1\.8,20\.2,0\.512,0\.5,25$/);
+  assert.deepEqual({ ...repro.parseRepro(new URL(link).search).eye }, { x: 10.3, y: 1.8, z: 20.2, yaw: 0.512, pitch: 0.5, fov: 25 });
+  assert.equal(repro.parseRepro('?at=1,2,3&oeil=1,2').eye, null, 'a broken pose is dropped');
 });
 
 test('a link without a place, or with a broken one, asks for nothing; an unknown weather is dropped', () => {
@@ -134,6 +141,87 @@ test('the Architect stays out of the game online: no static import, no preload, 
   const pattern = /const DEV_ONLY = \/(.+)\/;/.exec(build);
   assert.ok(pattern, 'the build names the files it leaves out');
   const left = new RegExp(pattern[1]);
-  for (const file of ['js/architect.js', 'js/architect-senses.js', 'js/architect-panel.js', 'js/repro-link.js', 'css/architect.css']) assert.ok(left.test(`/repo/${file}`), file);
+  for (const file of ['js/architect.js', 'js/architect-senses.js', 'js/architect-panel.js', 'js/architect-eye.js', 'js/architect-retro.js', 'js/architect-lab.js', 'js/repro-link.js', 'css/architect.css']) assert.ok(left.test(`/repo/${file}`), file);
+  // his eye and his body reach main.js through optional calls only
+  assert.match(main, /gameplay\.architect\?\.beforeRender\(/);
+  assert.match(main, /gameplay\.architect\?\.attach\(/);
   for (const file of ['js/actors.js', 'js/arsenal.js', 'js/main.js', 'css/hud.css', 'assets/people/architect.webp']) assert.ok(!left.test(`/repo/${file}`), file);
+});
+
+// ---- His rear-view mirror, his experiments and his eye ------------------------------------------------------------
+const retroModule = () => loadModule(source('architect-retro.js'), { globals: { Math, Map, Promise, setTimeout } });
+
+// A car body's axes (car-physics.js: the columns of body.r) for a pitch about its own X axis
+function pitchedBody(angle) {
+  const c = Math.cos(angle), s = Math.sin(angle);
+  return { r: [1, 0, 0, 0, c, s, 0, -s, c] };
+}
+
+test('a car body’s attitude reads pitch, roll and tilt from its axes', () => {
+  const { attitude } = retroModule();
+  const level = attitude({ body: pitchedBody(0) });
+  assert.equal(Math.round(level.tilt * 100), 0);
+  const reared = attitude({ body: { r: [1, 0, 0, 0, 0, 1, 0, 1, 0] } }); // nose straight up
+  assert.equal(Math.round(reared.pitch * 180 / Math.PI), 90);
+  assert.equal(Math.round(reared.tilt * 180 / Math.PI), 90);
+  assert.equal(attitude({}), null, 'a bike without a body has no attitude');
+});
+
+test('a car tipped past 60 degrees for over half a second is reported once, then not again for 20 s', () => {
+  const { ArchitectRetro } = retroModule();
+  const reports = [];
+  const car = { kind: 'taxi', mesh: { visible: true }, body: pitchedBody(1.3), position: { x: 5, y: 1.2, z: 5 }, speed: 0 };
+  const game = { clock: 0, allCars: [car], camera: { camera: { position: { x: 0, y: 2, z: 0 } } }, state: 'onFoot', car: null };
+  const architect = { game, present: true, car: {}, senses: { report: (kind, e) => reports.push({ kind, ...e }) } };
+  const r = new ArchitectRetro(architect);
+  for (let i = 0; i < 2; i++) { game.clock += 0.2; r.scanCars(0.2); }
+  assert.equal(reports.length, 0, 'not yet: 0.4 s');
+  for (let i = 0; i < 3; i++) { game.clock += 0.2; r.scanCars(0.2); }
+  assert.equal(reports.length, 1);
+  assert.equal(reports[0].kind, 'retournement');
+  assert.match(reports[0].detail, /inclinée à 74°/);
+  for (let i = 0; i < 20; i++) { game.clock += 0.2; r.scanCars(0.2); }
+  assert.equal(reports.length, 1, 'once per car per 20 s');
+  car.body = pitchedBody(0);
+  r.scanCars(0.2);
+  assert.equal(r.tipped.has(car), false, 'back on its wheels: the watch resets');
+});
+
+test('the kerb search finds the nearest edge of the sidewalk and its direction', () => {
+  const THREE = { Vector3: class { constructor(x = 0, y = 0, z = 0) { Object.assign(this, { x, y, z }); } } };
+  const { ArchitectLab } = loadModule(source('architect-lab.js'), {
+    globals: { Math, Map, Set, Promise, document: {}, Image: class {} },
+    imports: { 'three/webgpu': THREE, './car-physics.js': { settleBody() {} }, './architect-retro.js': retroModule() }
+  });
+  // the sidewalk is everything east of x = 5
+  const game = { controllers: { isPointOnSidewalk: (x) => x > 5 } };
+  const lab = new ArchitectLab({ game });
+  const edge = lab.findKerb(0, 0);
+  assert.ok(Math.abs(edge.x - 5.5) < 0.6, `edge at ${edge.x}`);
+  assert.deepEqual([Math.round(edge.nx), Math.round(edge.nz)], [1, 0], 'its inside is the sidewalk');
+  assert.deepEqual([Math.round(Math.abs(edge.ux)), Math.round(Math.abs(edge.uz))], [0, 1], 'it runs along z');
+});
+
+test('his eye stands in front of his head and looks where he asks', () => {
+  class V3 { constructor(x = 0, y = 0, z = 0) { Object.assign(this, { x, y, z }); } }
+  const THREE = { Vector3: V3, Vector2: V3, Raycaster: class {} };
+  const { ArchitectEye } = loadModule(source('architect-eye.js'), { globals: { Math, Set, Promise, setTimeout, performance: { now: () => 0 } }, imports: { 'three/webgpu': THREE } });
+  const game = { camera: { footYaw: 0, camera: { position: { x: 0, y: 2, z: 0 } } }, player: { x: 0, z: 50 } };
+  const architect = { game, ride: null, heli: {}, actor: { heading: 0 }, focus: () => ({ x: 0, y: 0.15, z: 0 }) };
+  const eye = new ArchitectEye(architect);
+  const ahead = eye.pose({ direction: 'devant', cadrage: 'rue' });
+  assert.ok(ahead.z > 0.3 && Math.abs(ahead.x) < 1e-9, 'a step in front of his face');
+  assert.ok(Math.abs(ahead.y - 1.83) < 1e-9, 'at head height');
+  assert.equal(ahead.fov, 55);
+  const left = eye.pose({ direction: 'gauche', cadrage: 'haut', zoom: 'serre' });
+  assert.ok(Math.abs(left.yaw - Math.PI / 2) < 1e-9);
+  assert.ok(left.pitch > 0.4, 'looking up at the tops of the buildings');
+  assert.equal(left.fov, 25);
+  const down = eye.pose({ direction: 'devant', cadrage: 'sol' });
+  assert.ok(down.pitch < -0.6 && down.z < 0, 'a step back to look down at his feet');
+  const point = eye.pose({ direction: 'vers_point', x: 10, y: 11.83, z: 0 });
+  assert.ok(Math.abs(point.yaw - Math.PI / 2) < 1e-9);
+  assert.ok(Math.abs(point.pitch - Math.PI / 4) < 0.05, 'aimed at the point, up and to the side');
+  assert.match(eye.detailNote({ x: 400, z: 0 }), /400 m de la caméra du joueur/);
+  assert.equal(eye.detailNote({ x: 30, z: 0 }), '');
 });

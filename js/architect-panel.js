@@ -13,7 +13,7 @@ class ArchitectPanel {
         <header><b>L’ARCHITECTE</b><span>test</span><button data-a="fold" aria-label="Replier">–</button></header>
         <div class="ap-body">
           <p class="ap-state">Absent</p>
-          <div class="ap-row"><button data-a="presence">Faire venir</button><button data-a="watch">Laisse-le travailler <kbd>L</kbd></button></div>
+          <div class="ap-row"><button data-a="presence">Faire venir</button><button data-a="watch">Lui donner la caméra <kbd>L</kbd></button></div>
           <div class="ap-row"><select data-f="place" aria-label="Destination">${places}</select><select data-f="by" aria-label="Moyen">${BY.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><button data-a="go">Y aller</button></div>
           <div class="ap-row"><button data-a="follow">Suis-moi</button><button data-a="patrol">Patrouille</button><button data-a="stop">Stop</button></div>
           <h3>Capteurs</h3>
@@ -25,6 +25,7 @@ class ArchitectPanel {
     this.state = root.querySelector('.ap-state');
     this.list = root.querySelector('.ap-events');
     this.presence = root.querySelector('[data-a="presence"]');
+    this.watch = root.querySelector('[data-a="watch"]');
     // clicks here must not reach the game (a shot, the pointer lock)
     for (const type of ['mousedown', 'mouseup', 'pointerdown', 'pointerup', 'click', 'wheel', 'keydown']) root.addEventListener(type, (e) => e.stopPropagation());
     root.addEventListener('click', (e) => this.act(e.target.closest('[data-a]')?.dataset.a, e.target));
@@ -54,6 +55,8 @@ class ArchitectPanel {
   renderState() {
     const a = this.architect, s = a.state();
     this.presence.textContent = a.present ? 'Renvoyer' : 'Faire venir';
+    const watch = s.spectating ? 'Reprendre la caméra' : 'Lui donner la caméra';
+    if (this.watch.firstChild.textContent.trim() !== watch) this.watch.firstChild.textContent = `${watch} `;
     let text = 'Absent';
     if (s.present && s.respawnIn !== null && !s.alive) text = `Hors service · revient dans ${s.respawnIn} s`;
     else if (s.present && s.alive) text = `${s.mode} · ${s.intent || '—'} · ${s.hp} PV${s.armor ? ` + ${s.armor}` : ''}${s.grudge ? ` · rancune ${s.grudge}` : ''}${s.spectating ? ' · a la caméra' : ''}\n${s.address || ''} (${s.x}, ${s.z})`;

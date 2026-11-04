@@ -65,6 +65,9 @@ et la [FAQ de NYC Open Data](https://www.nyc.gov/opendata/get-started/FAQs) s'ap
 
 ## Outil de développement local
 
+La salle de contrôle utilise Geist et Geist Mono, © 2024 The Geist Project Authors, sous SIL Open Font License 1.1 :
+https://github.com/vercel/geist-font/blob/main/OFL.txt. Chargées via Google Fonts, elles ne sont pas incluses dans le jeu publié.
+
 Le serveur de l'Architecte utilise le SDK TypeScript Anthropic (`@anthropic-ai/sdk`), sous licence Apache-2.0 :
 https://github.com/anthropics/anthropic-sdk-typescript. Sa licence est fournie avec le paquet installé dans
 `tools/architecte/node_modules/@anthropic-ai/sdk/LICENSE`. Le SDK et le serveur sont exclus du build du jeu publié.

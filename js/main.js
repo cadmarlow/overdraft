@@ -710,14 +710,37 @@ async function initApp() {
   let warmedUp = false; // see the first frame below
   const pacer = new FramePacer({ renderer, level: quality, isActive: () => gameplay.active });
   let qaView = null;
+  let qaViewFov = null;
+  const applyQAView = () => {
+    if (!qaView) return;
+    const camera = cameraSystem.camera;
+    camera.position.set(qaView[0], qaView[1], qaView[2]);
+    camera.lookAt(qaView[3], qaView[4], qaView[5]);
+    if (Number.isFinite(qaView[6]) && camera.fov !== qaView[6]) {
+      camera.fov = qaView[6];
+      camera.updateProjectionMatrix();
+    }
+    camera.updateMatrixWorld();
+  };
   if (new URLSearchParams(location.search).has('qa')) {
     window.__render = { renderer, scene, lightingSystem, cameraSystem, pacer, THREE, highwayTraffic, streetDetails, storefronts, facadeKit, cityBlocks,
       // Inspection: the camera goes where it is told, whatever the game does
-      view(x, y, z, tx, ty, tz) { qaView = x === undefined ? null : [x, y, z, tx, ty, tz]; } };
+      view(x, y, z, tx, ty, tz, fov) {
+        if (x === undefined) {
+          qaView = null;
+          if (qaViewFov !== null) { cameraSystem.camera.fov = qaViewFov; cameraSystem.camera.updateProjectionMatrix(); }
+          qaViewFov = null;
+        } else {
+          if (qaViewFov === null) qaViewFov = cameraSystem.camera.fov;
+          qaView = [x, y, z, tx, ty, tz, Number.isFinite(fov) ? Math.max(15, Math.min(100, fov)) : null];
+          applyQAView();
+        }
+      } };
     gameplay.renderForQA = () => {
       cameraSystem.update(0.016, elapsed);
       updateSceneCulling(cameraSystem.camera.position);
       for (const root of dynamicRoots) root.updateMatrixWorld();
+      applyQAView();
       renderPipeline.render();
     };
   }
@@ -780,12 +803,7 @@ async function initApp() {
     updateSceneCulling(cameraSystem.camera.position);
     // Traffic collisions can move the player after controller updates; finalize moving hierarchies here.
     for (const root of dynamicRoots) root.updateMatrixWorld();
-    if (qaView) {
-      const camera = cameraSystem.camera;
-      camera.position.set(qaView[0], qaView[1], qaView[2]);
-      camera.lookAt(qaView[3], qaView[4], qaView[5]);
-      camera.updateMatrixWorld();
-    }
+    applyQAView();
     if (profile) mark('ville');
 
     // Render frame via TSL RenderPipeline (SSR + Bloom)
@@ -805,6 +823,8 @@ async function initApp() {
       for (const o of culled) o.frustumCulled = true;
       markInit('warmup');
     }
+    // the Architect's own eye: a photo frame rendered and read back just before the player's (local development only)
+    gameplay.architect?.beforeRender(cameraSystem.camera, () => renderPipeline.render(), renderer.domElement);
     renderPipeline.render();
     // the Architect's photos read the frame back here, while it is still on the canvas (local development only)
     gameplay.architect?.afterRender(renderer.domElement);
@@ -873,8 +893,9 @@ async function initApp() {
     }
   };
   renderer.setAnimationLoop(frame);
-  // the Architect keeps the game going while its tab is hidden (local development only)
+  // the Architect keeps the game going while its tab is hidden, and sees with his own eye (local development only)
   gameplay.architect?.keepAlive(frame);
+  gameplay.architect?.attach({ renderer, scene });
 }
 
 // This machine or its local network (an iPhone on the same Wi-Fi), never a public host

@@ -23,7 +23,8 @@ const TITLES = {
   saccade: 'Saccade',
   fps: 'Images par seconde basses',
   'sous-sol': 'Véhicule sous le sol',
-  accident: 'Accident'
+  accident: 'Accident',
+  retournement: 'Véhicule retourné'
 };
 
 class ArchitectSenses {

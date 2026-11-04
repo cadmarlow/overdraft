@@ -31,6 +31,7 @@ import {
 } from './human-skeleton.js';
 import { crowd } from './human-assets.js';
 import { createCrowdMaterial, createPropMaterial, MALE_BODIES, FEMALE_BODIES } from './human-crowd.js';
+import { lightAsPerson } from './person-lighting.js';
 
 // Skinned characters for pedestrian-system.js and the player controllers.
 // Each crowd level uses one instanced draw, with 15-bone poses in a storage buffer and seeded appearance.
@@ -703,7 +704,7 @@ const qrot = (q, v) => v.add(cross(q.xyz, cross(q.xyz, v).add(v.mul(q.w))).mul(2
  * while the far LOD (`detail = 0`) shades its part colours directly in the vertex stage.
  */
 function createPersonMaterial(pose, detail = 1) {
-  const mat = new THREE.MeshStandardNodeMaterial({ metalness: 0 });
+  const mat = lightAsPerson(new THREE.MeshStandardNodeMaterial({ metalness: 0 }));
   const base = int(instanceIndex).mul(STRIDE);
   const info = pose.element(base.add(STRIDE - 1)); // seed, female, girth, hair
 

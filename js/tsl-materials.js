@@ -82,6 +82,8 @@ const cityUniforms = {
   uInteriorGlow: uniform(0.78),
   uRoadWetness: uniform(0.38),
   uCanyonBounce: uniform(0.52),
+  // How far into the night it is: 0 by day, 0.28 at dusk, 0.86 at midnight (the presets' nightFactor)
+  uNight: uniform(0),
   // Distance (start, end) over which painted shopfronts take over from the 3D ones of storefronts.js; none until it runs
   uShopKit: uniform(new THREE.Vector2(-2, -1)),
   // The same for the window sills and air conditioners of facade-kit.js

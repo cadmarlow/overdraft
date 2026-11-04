@@ -37,8 +37,8 @@ class ArchitectStrip extends QuickStrip {
       tile.querySelector('span').textContent = label;
       tile.querySelector('small').textContent = note;
     };
-    set(0, a.present ? 'RENVOYER' : 'FAIRE VENIR', !a.present ? 'absent' : a.alive ? s.mode : 'hors service');
-    set(1, a.spectating ? 'REPRENDRE' : 'TRAVAILLER', a.spectating ? 'il a la caméra' : 'mode Seul');
+    set(0, a.present ? 'ÉTEINDRE' : 'ALLUMER', !a.present ? 'il est éteint' : a.alive ? `allumé, ${s.mode}` : 'hors service');
+    set(1, a.spectating ? 'MA CAMÉRA' : 'SA CAMÉRA', a.spectating ? 'il la tient : la reprendre' : 'tu la tiens : la lui donner');
     set(2, 'PARLER', a.link.connected ? 'touche K' : 'cerveau hors ligne');
     set(3, 'SUIS-MOI', a.order?.kind === 'follow' ? 'en cours' : '');
     set(4, 'STOP', 'il observe');
@@ -52,7 +52,7 @@ class ArchitectStrip extends QuickStrip {
     const action = TILES[i][1];
     this.close();
     const tell = (text) => g.toast('L’Architecte', text);
-    if (action === 'presence') { if (a.present) { a.dismiss(); tell('Renvoyé.'); } else { a.summon(); tell('Il arrive.'); } }
+    if (action === 'presence') { if (a.present) { a.dismiss(); tell('Éteint : il quitte la partie.'); } else { a.summon(); tell('Allumé : il arrive.'); } }
     else if (action === 'camera') tell((await a.link.execute('camera-now', {})).texte);
     else if (action === 'talk') a.link.openChat();
     else if (action === 'follow') { if (a.alive) { a.follow(); tell('Il te suit.'); } else tell('Il n’est pas là.'); }

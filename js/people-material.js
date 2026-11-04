@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { float, mix, texture, uv } from 'three/tsl';
+import { lightAsPerson } from './person-lighting.js';
 
 // Materials from an avatar's painted maps: its specular map decides how rough each surface is.
 
@@ -12,7 +13,7 @@ function createPersonMaterials(person) {
     m.side = hair ? THREE.DoubleSide : THREE.FrontSide;
     if (hair) m.alphaTest = 0.45;
     m.roughnessNode = hair ? float(0.92) : specular ? mix(float(0.92), float(name === 'head' ? 0.62 : 0.42), texture(specular, uv()).r) : float(0.8);
-    return m;
+    return lightAsPerson(m);
   });
 }
 

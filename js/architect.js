@@ -7,6 +7,9 @@ import { ArchitectSenses } from './architect-senses.js';
 import { ArchitectPanel } from './architect-panel.js';
 import { ArchitectLink } from './architect-link.js';
 import { ArchitectStrip } from './architect-strip.js';
+import { ArchitectEye } from './architect-eye.js';
+import { ArchitectRetro, attitude, vehicleSpeed } from './architect-retro.js';
+import { ArchitectLab } from './architect-lab.js';
 import { parseRepro } from './repro-link.js';
 
 // The Architect: one of the architects of this world, walking it to make it more real. He lives in the player's own
@@ -24,6 +27,8 @@ const HP = 120, ARMOR = 60;
 const WALK = 1.6, JOG = 3.4, RUN = 5.4; // m/s
 const FOOT_MAX = 260; // an "auto" trip longer than this is driven
 const CAR_MAX = 2600; // and longer than this, flown
+const SHARED_RANGE = 350;
+const TRAVEL_NAMES = { foot: 'pied', car: 'voiture', heli: 'helico' };
 const CAR_PAINT = 0x23262b;
 const CRUISE = 17; // m/s, about 60 km/h through town
 const RESPAWN_AFTER = 25;
@@ -85,6 +90,13 @@ class ArchitectSystem {
 
     this.landmarks = NYC_LANDMARKS;
     this.captures = [];
+    this.frameTimes = []; // the last frames' durations, for his performance measures
+    this.performanceProbes = new Set();
+    this.renderProbes = new Set();
+    this.measurements = new Set();
+    this.eye = new ArchitectEye(this);
+    this.retro = new ArchitectRetro(this);
+    this.lab = new ArchitectLab(this);
     this.buildInterface();
     this.link = new ArchitectLink(this);
     this.strip = new ArchitectStrip(this);
@@ -111,7 +123,9 @@ class ArchitectSystem {
   }
 
   dismiss() {
+    this.link?.stopSpeaking();
     if (!this.present) return;
+    this.cancelWork('Architecte éteint par le Créateur.');
     this.stopTicker();
     if (this.spectating) this.stopSpectating();
     this.leaveRide();
@@ -163,8 +177,12 @@ class ArchitectSystem {
 
   // ---- Orders (the QA panel today, Claude tomorrow) ----------------------------------------------------------------
   goTo(x, z, { by = 'auto', label = '' } = {}) {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return false;
+    const pl = this.game.player;
+    if (!this.spectating && Math.hypot(x - pl.x, z - pl.z) > SHARED_RANGE) return false;
     this.order = { kind: 'goto', x, z, by, label: label || getLocationLabel(x, z) || 'sa destination' };
     this.planTrip();
+    return true;
   }
 
   goToPlace(id, by = 'auto') {
@@ -175,14 +193,21 @@ class ArchitectSystem {
   follow() { this.order = { kind: 'follow' }; this.planTrip(); }
 
   // A fresh trip record: how it goes, and the stuck watch's bookkeeping
-  newTrip(fields) { return { stuckT: 0, checkT: 0, lastX: NaN, lastZ: NaN, stuck: 0, ...fields }; }
+  newTrip(fields) { return { startedAt: this.game.clock, stuckT: 0, checkT: 0, lastX: NaN, lastZ: NaN, stuck: 0, ...fields }; }
   patrol() { this.order = { kind: 'patrol', visits: 0 }; this.nextPatrolStop(); }
   stop() { this.order = { kind: 'idle' }; this.planTrip(); }
 
   nextPatrolStop() {
-    const here = this.focus();
-    const choices = PLACES.filter((p) => Math.hypot(p.x - here.x, p.z - here.z) > 150);
-    const p = pick(choices.length ? choices : PLACES);
+    const here = this.focus(), pl = this.game.player;
+    const allowed = (p) => this.spectating || Math.hypot(p.x - pl.x, p.z - pl.z) <= SHARED_RANGE;
+    const distant = (p) => Math.hypot(p.x - here.x, p.z - here.z) > 40;
+    const landmarks = PLACES.filter((p) => allowed(p) && distant(p));
+    const streets = landmarks.length ? [] : (this.game.nav?.nodes || []).filter((p) => allowed(p) && distant(p));
+    // The body can patrol without a server, but never sends an Ensemble patrol across the whole island. Programmes
+    // still own their explicit destinations; an idle order stays idle until the mind or the Creator changes it.
+    const phase = ((this.order?.visits ?? 0) + 1) * 2.399963;
+    const fallback = { x: pl.x + Math.sin(phase) * 80, z: pl.z + Math.cos(phase) * 80, label: 'le prochain carrefour' };
+    const p = pick(landmarks.length ? landmarks : streets.length ? streets : [fallback]);
     this.order = { kind: 'patrol', x: p.x, z: p.z, by: 'auto', label: p.label, visits: (this.order?.visits ?? 0) + 1 };
     this.planTrip();
   }
@@ -244,9 +269,122 @@ class ArchitectSystem {
       }
     }
     if (dt > 0 && this.actor) this.live(dt);
+    if (dt > 0) this.lab.frame(dt);
     this.spin(dt);
     this.senses.update(dt, this.bodies());
+    this.retro.update(dt);
     this.updateTag();
+    const now = performance.now();
+    if (this.lastFrameAt) {
+      const sample = { at: now, ms: now - this.lastFrameAt };
+      this.frameTimes.push(sample);
+      if (this.frameTimes.length > 600) this.frameTimes.shift();
+      for (const probe of this.performanceProbes) probe(sample);
+    }
+    this.lastFrameAt = now;
+  }
+
+  // ---- What main.js hands him (local development only) ------------------------------------------------------------
+  attach({ renderer, scene }) {
+    this.renderer = renderer;
+    this.eye.attach({ renderer, scene });
+  }
+
+  // Just before the player's frame is rendered: a photo from his own eye, if one is asked for
+  beforeRender(camera, render, canvas) { this.eye.beforeRender(camera, render, canvas); }
+
+  cancelWork(reason) {
+    for (const measure of this.measurements || []) measure.cancel(reason);
+    this.lab.cancel(reason);
+    this.retro.cancelBursts();
+    this.eye.cancelPending();
+    for (const job of [...this.captures]) job.resolve(null);
+  }
+
+  // ---- Measures ---------------------------------------------------------------------------------------------------
+  // Passive observations have a wall-clock deadline and stop synchronously when the Creator interrupts the work.
+  measureFor(seconds, cleanup) {
+    const pending = this.measurements ??= new Set();
+    return new Promise((resolve) => {
+      let timer, done = false;
+      const finish = (reason = null) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        pending.delete(job);
+        cleanup();
+        resolve(reason);
+      };
+      const job = { cancel: (reason) => finish(reason || 'Observation interrompue.') };
+      pending.add(job);
+      timer = setTimeout(finish, seconds * 1000);
+    });
+  }
+
+  async measurePerformance(seconds = 4) {
+    const s = Math.max(2, Math.min(8, seconds));
+    const collected = [], rendered = [], from = performance.now();
+    const collect = (sample) => { if (sample.at >= from && sample.ms > 0) collected.push(sample.ms); };
+    const collectRender = (sample) => { if (sample.at >= from && Number.isFinite(sample.drawCalls) && Number.isFinite(sample.triangles)) rendered.push(sample); };
+    this.performanceProbes.add(collect);
+    (this.renderProbes ??= new Set()).add(collectRender);
+    const cancelled = await this.measureFor(s, () => { this.performanceProbes.delete(collect); this.renderProbes.delete(collectRender); });
+    if (cancelled) return { ok: false, texte: `Mesure des performances interrompue : ${cancelled}` };
+    const list = collected.sort((p, q) => p - q);
+    if (list.length < 5) return { ok: false, texte: 'Pas assez d’images mesurées (onglet caché ?).' };
+    const at = (k) => list[Math.min(list.length - 1, Math.floor(list.length * k))];
+    const mean = list.reduce((p, q) => p + q, 0) / list.length;
+    const drawCalls = rendered.length ? rendered.reduce((sum, sample) => sum + sample.drawCalls, 0) / rendered.length : null;
+    const triangles = rendered.length ? rendered.reduce((sum, sample) => sum + sample.triangles, 0) / rendered.length : null;
+    const profile = window.__profile?.summary;
+    const systems = profile ? Object.entries(profile).filter(([k]) => !['fps', 'scale', 'draws', 'tris'].includes(k)).map(([k, v]) => `${k} ${v} ms`).join(', ') : '';
+    const f = this.focus();
+    return {
+      ok: true,
+      mesures: { appels_dessin_moyens: drawCalls, triangles_moyens: triangles, images_rendues: rendered.length },
+      texte: `${s} s à ${this.addressAt(f.x, f.z)} : ${Math.round(1000 / mean)} images par seconde en moyenne ; image médiane ${at(0.5).toFixed(1)} ms, 95 % sous ${at(0.95).toFixed(1)} ms, pire ${list.at(-1).toFixed(1)} ms.${rendered.length ? ` ${Math.round(drawCalls)} appels de dessin et ${(triangles / 1e6).toFixed(2)} M triangles en moyenne par image (${rendered.length} rendus).` : ' Compteurs de rendu indisponibles pendant cette mesure.'}${systems ? ` Coût par système : ${systems}.` : ' (Coût par système : seulement avec ?stats=1.)'}`
+    };
+  }
+
+  // A few seconds of a vehicle: attitude, height, vertical speed, time in the air
+  async measureVehicle(target = 'le_mien', seconds = 4) {
+    const g = this.game;
+    const car = target === 'joueur' ? (g.state === 'driving' ? g.car : null)
+      : target === 'le_mien' ? (this.ride === this.car ? this.car : null)
+      : this.nearestCar();
+    if (!car?.body) return { ok: false, texte: target === 'le_mien' ? 'Tu n’es pas dans ta voiture.' : target === 'joueur' ? 'Le joueur ne conduit pas une voiture.' : 'Aucune voiture à moins de 60 m.' };
+    const s = Math.max(1, Math.min(8, seconds));
+    const m = { pitch: 0, roll: 0, high: 0, vy: 0, air: 0, vmin: Infinity, vmax: 0, n: 0 };
+    let lastY = car.position.y;
+    const off = this.lab.every((dt) => {
+      const att = attitude(car);
+      if (att) { m.pitch = Math.max(m.pitch, Math.abs(att.pitch)); m.roll = Math.max(m.roll, Math.abs(att.roll)); }
+      const ground = g.controllers.getGroundHeight(car.position.x, car.position.z, 'car');
+      const h = car.position.y - ground;
+      m.high = Math.max(m.high, h);
+      m.vy = Math.max(m.vy, Math.abs(car.position.y - lastY) / dt);
+      lastY = car.position.y;
+      if (car.body.airborne > 0) m.air += dt;
+      const v = vehicleSpeed(car) * 3.6;
+      m.vmin = Math.min(m.vmin, v); m.vmax = Math.max(m.vmax, v);
+      m.n++;
+    }, false);
+    const cancelled = await this.measureFor(s, off);
+    if (cancelled) return { ok: false, texte: `Mesure du véhicule interrompue : ${cancelled}` };
+    if (!m.n) return { ok: false, texte: 'Aucune image simulée : mesure du véhicule incomplète (partie en pause ?).' };
+    const d = (r) => Math.round(r * 180 / Math.PI);
+    return { ok: true, texte: `${s} s de ${target === 'joueur' ? 'la voiture du joueur' : target === 'le_mien' ? 'ta voiture' : 'la voiture la plus proche'} (${car.kind || 'voiture'}, ${m.n} images) : tangage max ${d(m.pitch)}°, roulis max ${d(m.roll)}°, hauteur max au-dessus du sol ${m.high.toFixed(2)} m, vitesse verticale max ${m.vy.toFixed(1)} m/s, ${m.air.toFixed(1)} s en l’air, vitesse ${Math.round(m.vmin)} à ${Math.round(m.vmax)} km/h.` };
+  }
+
+  nearestCar() {
+    const f = this.focus();
+    let best = null, bd = 60;
+    for (const c of this.game.allCars || []) {
+      if (!c.mesh?.visible || !c.body || c === this.car) continue;
+      const d = Math.hypot(c.position.x - f.x, c.position.z - f.z);
+      if (d < bd) { bd = d; best = c; }
+    }
+    return best;
   }
 
   live(dt) {
@@ -261,6 +399,9 @@ class ArchitectSystem {
     }
     if (g.invulnerable < 1e8 && this.spectating) g.invulnerable = 1e9;
     if (g.stats.shots !== this.shots) { this.shots = g.stats.shots; this.lastPlayerShot = g.clock; }
+    const o = this.order;
+    if (!this.spectating && !this.fight && ['goto', 'patrol'].includes(o?.kind)
+      && Math.hypot(o.x - g.player.x, o.z - g.player.z) > SHARED_RANGE) this.follow();
     if (this.ride === this.car) {
       // shooting at his car is shooting at him
       if (this.car.hp < (this.rideHp ?? 300) && g.clock - (this.lastPlayerShot ?? -9) < 0.6) this.provoked((this.rideHp ?? 300) - this.car.hp, 'shot');
@@ -394,7 +535,7 @@ class ArchitectSystem {
     this.watchStuck(dt, a.x, a.z, 0.8, () => {
       // round whatever holds him: back to the route from here, then a short hop past it
       const t = this.trip;
-      if (t && t.stuck >= 2) {
+      if (t && t.stuck >= 2 && this.spectating && !this.fight) {
         const s = this.game.safeSpot(a.x + m.mx * 3, a.z + m.mz * 3, 0.5);
         this.place(s.x, s.z, a.heading);
       } else if (t?.x !== undefined) this.walkTo(t.x, t.z, this.pace);
@@ -758,6 +899,8 @@ class ArchitectSystem {
 
   onDeath() {
     const g = this.game;
+    this.link?.stopSpeaking();
+    this.cancelWork('L’Architecte est hors service.');
     this.deadAt = g.clock;
     this.fight = null;
     this.grudge += 2;
@@ -774,7 +917,7 @@ class ArchitectSystem {
   toggleSpectate() {
     if (this.spectating) { this.stopSpectating(); return; }
     const g = this.game;
-    const refuse = (why) => { this.lastRefusal = why; g.toast('Laisse-le travailler', why); };
+    const refuse = (why) => { this.lastRefusal = why; g.toast('Lui donner la caméra', why); };
     if (!this.present) return refuse('Faites d’abord venir l’Architecte (menu pause).');
     if (!this.alive) return refuse('L’Architecte n’est pas encore revenu.');
     if (this.fight) return refuse('Pas pendant qu’il se bat avec vous.');
@@ -795,14 +938,19 @@ class ArchitectSystem {
     this.senses.quiet(4);
     if (!this.order || this.order.kind === 'follow' || this.order.kind === 'idle') this.patrol();
     this.watch.hidden = false;
-    this.say('Je prends la main. Va te reposer.', 3);
+    this.say('Je prends la caméra. Ton personnage m’attend à l’abri.', 3.5);
     this.emit('camera', 'Le joueur te laisse la caméra : mode SEUL. Va où tu veux, la ville vit autour de toi.');
+    if (document.hidden) this.onHidden();
   }
 
   stopSpectating() {
     const g = this.game;
     if (!this.spectating) return;
+    this.cancelWork('Le Créateur a repris la caméra.');
     this.spectating = false;
+    clearTimeout(this.hideTimer);
+    this.stopTicker();
+    if (document.hidden && g.playing) g.setPaused(true);
     g.camera.spectate = null;
     g.camera.footYaw = this.savedYaw ?? g.camera.footYaw;
     g.camera.resetForTeleport?.();
@@ -814,7 +962,7 @@ class ArchitectSystem {
     this.emit('camera', 'Le joueur reprend la main : mode ENSEMBLE. Reste près de lui.');
     if (this.alive && !this.fight) {
       const f = this.focus();
-      if (Math.hypot(f.x - g.player.x, f.z - g.player.z) > 80) this.say('Je te rejoins.', 3);
+      this.say(Math.hypot(f.x - g.player.x, f.z - g.player.z) > 80 ? 'La caméra est à toi. Je te rejoins.' : 'La caméra est à toi. Je reste près de toi.', 3.5);
       this.follow();
     }
   }
@@ -875,11 +1023,20 @@ class ArchitectSystem {
   // Everything a mind would want to know, in one object (the QA panel, Claude tomorrow)
   state() {
     const f = this.focus();
-    const a = this.actor;
+    const a = this.actor, t = this.trip, o = this.order;
+    const target = o?.kind === 'follow' ? this.game.player : t && Number.isFinite(t.x) && Number.isFinite(t.z) ? t : o;
+    const destination = target && Number.isFinite(target.x) && Number.isFinite(target.z) ? { x: target.x, z: target.z, label: o?.label || (o?.kind === 'follow' ? 'le joueur' : '') } : null;
+    const by = this.ride === this.car ? 'car' : this.ride === this.heli ? 'heli' : t?.by || 'foot';
     return {
       present: this.present, alive: this.alive, spectating: this.spectating,
       mode: this.ride === this.car ? 'voiture' : this.ride === this.heli ? 'hélico' : a ? 'à pied' : 'absent',
       order: this.order?.kind ?? null, intent: this.intent, fighting: !!this.fight, grudge: this.grudge,
+      capacites: { deplacements: ['pied', 'voiture', 'helico'], teleportation_travail: this.spectating && !this.fight },
+      navigation: {
+        moyen: TRAVEL_NAMES[by] || 'pied', phase: t?.kind === 'inspect' ? 'inspection' : t?.kind === 'follow' ? 'suivi' : t?.phase || (t ? 'trajet' : 'attente'), destination,
+        distance_m: destination ? Math.round(Math.hypot(destination.x - f.x, destination.z - f.z)) : null,
+        blocages: t?.stuck || 0, immobile_depuis_s: t?.stuckT || 0, duree_s: t?.startedAt === undefined ? 0 : Math.max(0, this.game.clock - t.startedAt)
+      },
       hp: a ? Math.max(0, Math.round(a.hp)) : 0, armor: a ? Math.round(a.armor) : 0,
       x: Math.round(f.x), y: Math.round(f.y), z: Math.round(f.z), address: getLocationLabel(f.x, f.z),
       respawnIn: this.respawnAt ? Math.max(0, Math.ceil(this.respawnAt - this.game.clock)) : null
@@ -887,28 +1044,22 @@ class ArchitectSystem {
   }
 
   // ---- When the player leaves the game's tab ----------------------------------------------------------------------
-  // A hidden tab gets no animation frames and the game pauses itself: with him in the game, he takes the camera instead
-  // and a ticker in a worker (whose timers the browser leaves alone) runs the frame loop, so he keeps working.
+  // A hidden tab gets no animation frames and the game pauses itself. If he holds the camera, a ticker in a worker
+  // (whose timers the browser leaves alone) runs the frame loop and he keeps working; if the player holds it, the game
+  // pauses as it always did. He never takes the camera on his own: the Creator decides who holds it.
   keepAlive(frame) {
     this.frame = frame;
     document.addEventListener('visibilitychange', () => (document.hidden ? this.onHidden() : this.onShown()));
   }
 
   onHidden() {
-    if (!this.frame || !this.present) return;
+    if (!this.frame || !this.present || !this.spectating) return;
     clearTimeout(this.hideTimer);
     // a quick look at another tab is not leaving
     this.hideTimer = setTimeout(() => {
       const g = this.game;
-      if (!document.hidden || !this.present || !g.playing) return;
-      if (!this.spectating && this.alive) {
-        if (g.state === 'driving' && !g.car.air) { g.car.speed = 0; g.car.vx = g.car.vz = 0; }
-        if (g.paused) g.setPaused(false);
-        this.toggleSpectate();
-        // a chase or a mission: the game stays paused, as it always did
-        if (!this.spectating) { g.setPaused(true); return; }
-        this.emit('camera', 'Le joueur a quitté l’onglet du jeu : tu prends la main, la partie continue en arrière-plan.');
-      } else if (g.paused) g.setPaused(false);
+      if (!document.hidden || !this.present || !g.playing || !this.spectating) return;
+      if (g.paused) g.setPaused(false);
       this.startTicker();
     }, 1500);
   }
@@ -922,7 +1073,13 @@ class ArchitectSystem {
     if (!this.ticker) {
       const source = 'let t = null; onmessage = (e) => { clearInterval(t); t = e.data > 0 ? setInterval(() => postMessage(0), e.data) : null; };';
       this.ticker = new Worker(URL.createObjectURL(new Blob([source], { type: 'text/javascript' })));
-      this.ticker.onmessage = () => { if (document.hidden && this.ticking) this.frame(performance.now()); };
+      this.ticker.onmessage = () => {
+        if (!document.hidden || !this.ticking || !this.spectating) return;
+        // a new frame only when an image is wanted (his photo, the live view): without it the render repeats the last
+        // image, which costs almost nothing while nobody looks
+        if (this.captures.length || this.eye.jobs.length) this.eye.nextFrame();
+        this.frame(performance.now());
+      };
     }
     this.ticking = true;
     this.ticker.postMessage(33);
@@ -939,16 +1096,32 @@ class ArchitectSystem {
   addressAt(x, z) { return getLocationLabel(x, z) || `${Math.round(x)}, ${Math.round(z)}`; }
 
   // A picture of the frame about to be drawn: a JPEG data URL, or null if no frame comes (hidden tab)
-  capture({ width = 1024, quality = 0.74 } = {}) {
+  capture({ width = 1024, quality = 0.74, signal } = {}) {
     return new Promise((resolve) => {
-      const job = { width, quality, resolve };
+      if (signal?.aborted) { resolve(null); return; }
+      let timer;
+      const finish = (image) => {
+        clearTimeout(timer); signal?.removeEventListener('abort', abort);
+        const i = this.captures.indexOf(job); if (i >= 0) this.captures.splice(i, 1);
+        resolve(image);
+      };
+      const abort = () => finish(null);
+      const job = { width, quality, resolve: finish };
       this.captures.push(job);
-      setTimeout(() => { const i = this.captures.indexOf(job); if (i >= 0) { this.captures.splice(i, 1); resolve(null); } }, 3000);
+      signal?.addEventListener('abort', abort, { once: true });
+      timer = setTimeout(abort, 3000);
     });
   }
 
   // Called by main.js right after the frame is rendered, while it is still on the canvas
   afterRender(canvas) {
+    // Animation resets these counters before every RAF, including RAFs skipped by the frame pacer. Copy numeric values
+    // at the end of a real render; a wall-clock timer reading renderer.info later can otherwise report a false zero.
+    const info = this.renderer?.info?.render;
+    if (info && this.renderProbes?.size) {
+      const sample = { at: performance.now(), drawCalls: info.drawCalls, triangles: info.triangles };
+      for (const probe of this.renderProbes) probe(sample);
+    }
     const job = this.captures.shift();
     if (!job) return;
     try {
@@ -991,6 +1164,7 @@ class ArchitectSystem {
 
   // He reloads the game (to load what the workshop fixed) and picks up where he was, camera in hand
   reloadSoon() {
+    this.cancelWork('Rechargement du jeu.');
     const f = this.focus();
     try { localStorage.setItem(RESUME_KEY, JSON.stringify({ t: Date.now(), x: f.x, z: f.z, heading: this.actor?.heading ?? 0 })); } catch { /* storage off */ }
     this.emit('rechargement', 'Le jeu se recharge.');
@@ -1038,6 +1212,17 @@ class ArchitectSystem {
       g.atmosphere.lockWeather = true;
       g.weatherMode = r.weather;
     }
+    // a photo from his own eye: the camera stands exactly there until the first key or click
+    const view = window.__render?.view;
+    if (r.eye && view) {
+      const e = r.eye, d = 10;
+      view(e.x, e.y, e.z, e.x + Math.sin(e.yaw) * Math.cos(e.pitch) * d, e.y + Math.sin(e.pitch) * d, e.z + Math.cos(e.yaw) * Math.cos(e.pitch) * d, e.fov);
+      const release = () => { view(); window.removeEventListener('keydown', release, true); window.removeEventListener('pointerdown', release, true); };
+      window.addEventListener('keydown', release, true);
+      window.addEventListener('pointerdown', release, true);
+      g.toast('Vue de la photo de l’Architecte', 'Une touche ou un clic pour reprendre la main');
+      return;
+    }
     g.toast('Lien de reproduction', getLocationLabel(r.x, r.z) || `${Math.round(r.x)}, ${Math.round(r.z)}`);
   }
 
@@ -1047,7 +1232,7 @@ class ArchitectSystem {
     document.head.insertAdjacentHTML('beforeend', '<link rel="stylesheet" href="./css/architect.css">');
     document.body.insertAdjacentHTML('beforeend', `
       <div id="architect-tag" class="architect-tag" hidden><b>L’ARCHITECTE</b><span></span></div>
-      <div id="architect-watch" class="architect-watch" hidden><b>L’ARCHITECTE TRAVAILLE</b><span></span><em><kbd>L</kbd> reprendre la main</em></div>`);
+      <div id="architect-watch" class="architect-watch" hidden><b>L’ARCHITECTE TIENT LA CAMÉRA</b><span></span><em><kbd>L</kbd> reprendre la caméra</em></div>`);
     this.tag = document.getElementById('architect-tag');
     this.tagText = this.tag.querySelector('span');
     this.watch = document.getElementById('architect-watch');
@@ -1075,7 +1260,7 @@ class ArchitectSystem {
   }
 
   refreshButton() {
-    if (this.button) this.button.textContent = `ARCHITECTE : ${this.present ? 'PRÉSENT' : 'ABSENT'}${this.link?.connected ? '' : ' · CERVEAU HORS LIGNE'}`;
+    if (this.button) this.button.textContent = `ARCHITECTE : ${this.present ? 'ALLUMÉ' : 'ÉTEINT'}${this.link?.connected ? '' : ' · SERVEUR INJOIGNABLE'}`;
   }
 
   // The label over his head (or his vehicle), placed with a transform only: no layout, no repaint

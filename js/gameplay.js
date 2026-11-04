@@ -40,7 +40,7 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.4';
+const BUILD = '0.9.5';
 const CAR_NAMES = {
   sedan: ['VALMONT', 'ÉCUME', 'BERLINE / PROPULSION'], suv: ['BRISANT', 'RÉCIF', 'SUV / TRANSMISSION INTÉGRALE'],
   taxi: ['VALMONT', 'CAB 7', 'TAXI / PROPULSION'], pickup: ['GRÉVILLE', 'FALAISE', 'PICK-UP / PROPULSION'],
@@ -110,6 +110,7 @@ const bodyA = {}, bodyB = {}, hit = {};
 
 export class Game {
   constructor({ controllers, camera, traffic, highway, streets, scene, onMode, onTime, audio, map, touch, gamepad, lighting, grade }) {
+    this.buildVersion = BUILD;
     Object.assign(this, { controllers, camera, traffic, streets, scene, onMode, onTime, audio, map, touch, gamepad });
     this.atmosphere = new Atmosphere({ lighting, grade, scene, camera: camera.camera, controllers });
     this.state = 'onFoot'; this.playing = false; this.paused = false;
@@ -307,7 +308,7 @@ export class Game {
   buildInterface() {
     document.body.insertAdjacentHTML('beforeend', `
       <div id="game-vignette" aria-hidden="true"></div>
-      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · MOMENTUM</small></span></div>
+      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · DUE DILIGENCE</small></span></div>
       <div id="session-badge"><i></i><span>MANHATTAN</span><b id="session-mode">LIBRE</b><button id="pause-button" aria-label="Ouvrir le menu pause">Ⅱ</button></div>
       <div id="game-prompt" role="status" aria-live="polite"><kbd>F</kbd><span>Voler la voiture<small>VÉHICULE</small></span></div>
       <div id="game-toast" role="status" aria-live="polite"></div>
@@ -325,7 +326,7 @@ export class Game {
         <div class="menu-bottom"><span>MANHATTAN, NY<span class="coordinates">40°45′ N — 73°59′ W</span></span><button id="credits-button">CRÉDITS ↗</button><span class="menu-description">MISSIONS · COURSES · PRIMES<br>COMBAT · POURSUITES · 5 ÉTOILES</span></div>
         <div id="menu-options"><span>HEURE &amp; MÉTÉO</span><button data-game-time="golden">Soleil bas</button><button data-game-time="midday">Midi</button><button data-game-time="twilight">Crépuscule</button><button data-game-time="midnight">Nuit</button><button id="weather-toggle">MÉTÉO : AUTO</button><button id="sound-toggle">SON ACTIVÉ</button><button id="quality-toggle">QUALITÉ : HAUTE</button></div>
       </div>
-      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Momentum</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap.</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : Comrade1280, Daniel Zhabotinsky (Sketchfab, CC BY 4.0), Eric Chadwick / DGG (Khronos, CC BY 4.0). Modifiées pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
+      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Due Diligence</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap.</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : Comrade1280, Daniel Zhabotinsky (Sketchfab, CC BY 4.0), Eric Chadwick / DGG (Khronos, CC BY 4.0). Modifiées pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
       <button id="mobile-interact" class="touch-interact" hidden>F <span>VÉHICULE</span></button>
     `);
     this.ui = Object.fromEntries(['game-menu', 'game-prompt', 'game-toast', 'stamina-fill', 'drive-speed', 'drive-gear', 'drive-power', 'drive-nitro', 'drive-health', 'vehicle-name', 'game-keybar', 'play-button', 'mobile-interact', 'session-mode', 'menu-progress'].map(id => [id, document.getElementById(id)]));
@@ -2294,7 +2295,7 @@ export class Game {
 
   // ---- Saving ------------------------------------------------------------------------------------------------------
   save() {
-    if (this.resetting || this.transition || this.state === 'dead' || this.state === 'busted') return;
+    if (this.resetting || this.transition || this.state === 'dead' || this.state === 'busted' || this.architect?.lab?.running) return;
     try {
       const p = this.person;
       const fleet = this.fleet.filter((c) => !c.mission && !c.destroyed && !c.mode && !c.pooled);

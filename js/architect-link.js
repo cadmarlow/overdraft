@@ -2,17 +2,20 @@ import { buildReproLink } from './repro-link.js';
 
 // The line between the Architect's body (architect.js) and his server (tools/architecte, `npm run architecte`), where
 // Claude thinks. The server sends orders over Server-Sent Events; the game posts back what it saw and did: its state
-// every second, events (arrival, an attack, a sensor), the result of each order (photos included), the player's own
-// words (K), and, while a control room is open, a small live picture every second and a half. Local only, like him.
+// every second, events (arrival, an attack, a sensor; an accident with a burst of photos and the seconds before it),
+// the result of each order (photos and measures included), the player's own words (K), and, while a control room is
+// open, a small live picture every second and a half. Local only, like him.
 
 // his server's port, away from the 5173+ range dev servers take (another one for a test server: ?architecte_port=7781)
 const PORT = Number(new URLSearchParams(location.search).get('architecte_port')) || 7780;
-const DIR = { devant: 0, gauche: Math.PI / 2, droite: -Math.PI / 2, derriere: Math.PI };
-const PITCH = { rue: 0.09, facade: -0.06, haut: -0.3 };
+// the chase camera's pitch for each framing, when the camera turns with his body (alone, on foot)
+const PITCH = { sol: 0.4, rue: 0.09, facade: -0.06, haut: -0.3, ciel: -0.32 };
 const BY = { pied: 'foot', voiture: 'car', helico: 'heli', auto: 'auto' };
+const LOADED = Math.round(performance.timeOrigin); // when this page loaded the game's code
 const ZONE = 350; // playing together, he stays within the living part of town around the player
 const STATES = { onFoot: 'à pied', driving: 'au volant', dead: 'mort', busted: 'arrêté', falling: 'en chute', swimming: 'à la nage' };
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
 
 class ArchitectLink {
   constructor(architect) {
@@ -22,11 +25,9 @@ class ArchitectLink {
     this.connected = false;
     this.retry = 2000;
     this.live = false;
-    this.voice = true;
+    this.voice = false;
     this.places = null;
-    architect.senses.onEvent((e, fresh) => {
-      if (fresh) this.event('capteur', `Capteur — ${e.title}${e.who ? ` (${e.who})` : ''} : ${e.detail} À ${e.address || `${Math.round(e.x)}, ${Math.round(e.z)}`}.`, { lien: e.link });
-    });
+    architect.senses.onEvent((e, fresh) => { if (fresh) this.sensed(e).catch(() => {}); });
     this.buildChat();
     this.connect();
     // sent from the frames (frameTick), which keep coming when the tab is hidden and he works; this is the fallback
@@ -43,7 +44,7 @@ class ArchitectLink {
       this.connected = true;
       this.retry = 2000;
       this.architect.refreshButton();
-      this.post('/jeu/bonjour', { build: document.querySelector('.build-label')?.textContent?.replace('BUILD ', ''), lieux: this.placeList(), carte: this.roadMap() });
+      this.post('/jeu/bonjour', { build: this.game.buildVersion || document.querySelector('.build-label')?.textContent?.replace('BUILD ', ''), lieux: this.placeList(), carte: this.roadMap(), charge: LOADED });
       this.sendState();
     };
     source.onmessage = (m) => {
@@ -68,10 +69,21 @@ class ArchitectLink {
     return fetch(`${this.base}${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).catch(() => null);
   }
 
-  event(kind, text, data) { this.post('/jeu/evenement', { kind, text, data }); }
+  event(kind, text, data, extra = {}) { this.post('/jeu/evenement', { kind, text, data, ...extra }); }
+
+  // A sensor fired: the event, the seconds before it, and for an accident a burst of photos of the spot
+  async sensed(e) {
+    const a = this.architect;
+    const where = e.address || `${Math.round(e.x)}, ${Math.round(e.z)}`;
+    let text = `Capteur — ${e.title}${e.who ? ` (${e.who})` : ''} : ${e.detail} À ${where}.`;
+    const before = a.retro.window(4);
+    if (before) text += `\nLes secondes d’avant :\n${before}`;
+    const photos = a.retro.wantsBurst(e.kind) && this.connected ? await a.retro.burst(e).catch(() => []) : [];
+    this.event(photos.length ? 'rafale' : 'capteur', text, { lien: e.link, capteur: e.kind }, photos.length ? { photos, lieu: { x: e.x, y: e.y, z: e.z, adresse: e.address, lien: e.link } } : {});
+  }
 
   configure(msg) {
-    this.voice = msg.voix !== false;
+    if (Object.hasOwn(msg, 'voix')) this.setVoice(msg.voix === true);
     if (msg.live && !this.live) { this.live = true; this.liveLoop(msg.every || 1500); }
     if (!msg.live) this.live = false;
   }
@@ -159,16 +171,17 @@ class ArchitectLink {
   async execute(name, input) {
     const a = this.architect, g = this.game, pl = g.player;
     const alone = a.spectating;
-    const needBody = !['envoyer_sms', 'presence', 'camera', 'camera-now'].includes(name);
-    if (needBody && name !== 'photographier' && !a.alive) return { ok: false, texte: 'Tu n’as pas de corps en ce moment (absent ou hors service).' };
+    const needBody = !['envoyer_sms', 'presence', 'camera', 'camera-now', 'mesurer_performances'].includes(name) && !(name === 'dire' && input.conversation);
+    const playerView = name === 'photographier' && input.direction === 'vue_du_joueur';
+    if (needBody && !playerView && !a.alive) return { ok: false, texte: 'Tu n’as pas de corps en ce moment (absent ou hors service).' };
     switch (name) {
       case 'aller_a': {
         const t = this.target(input);
         if (!t) return { ok: false, texte: 'Destination inconnue : donne un lieu de la liste ou x et z.' };
+        if (!alone && Math.hypot(t.x - pl.x, t.z - pl.z) > ZONE) return { ok: false, texte: `Refusé : le joueur joue, et ce lieu est à ${Math.round(Math.hypot(t.x - pl.x, t.z - pl.z))} m de lui. La ville n’est vivante qu’à ${ZONE} m autour de lui. Travaille près de lui, ou attends qu’il te laisse la caméra.` };
         // the same destination again while on the way: nothing to restart
         const o = a.order, here = a.focus();
-        if (o?.kind === 'goto' && a.trip && Math.hypot(o.x - t.x, o.z - t.z) < 25) return { ok: true, texte: `Tu es déjà en route vers ${o.label} (encore ${Math.round(Math.hypot(t.x - here.x, t.z - here.z))} m). Tu seras prévenu à l’arrivée.` };
-        if (!alone && Math.hypot(t.x - pl.x, t.z - pl.z) > ZONE) return { ok: false, texte: `Refusé : le joueur joue, et ce lieu est à ${Math.round(Math.hypot(t.x - pl.x, t.z - pl.z))} m de lui. La ville n’est vivante qu’à ${ZONE} m autour de lui. Travaille près de lui, ou attends qu’il te laisse la caméra.` };
+        if (!input.reprendre && o?.kind === 'goto' && a.trip && Math.hypot(o.x - t.x, o.z - t.z) < 25) return { ok: true, texte: `Tu es déjà en route vers ${o.label} (encore ${Math.round(Math.hypot(t.x - here.x, t.z - here.z))} m). Tu seras prévenu à l’arrivée.` };
         a.goTo(t.x, t.z, { by: BY[input.moyen] || 'auto', label: t.label || undefined });
         const f = a.focus();
         return { ok: true, texte: `${a.intent} (à ${Math.round(Math.hypot(t.x - f.x, t.z - f.z))} m). Tu seras prévenu à l’arrivée.` };
@@ -181,12 +194,26 @@ class ArchitectLink {
         return { ok: true, texte: 'Tu t’arrêtes et tu observes.' };
       case 'photographier': return this.photo(input);
       case 'dire': {
-        const text = String(input.texte || '').slice(0, 220);
-        a.say(text, Math.min(9, 2.5 + text.length / 18));
+        // an answer to the Creator is always shown and spoken; a line in the street only reaches whoever is near
+        const text = String(input.texte || '').slice(0, input.conversation ? 400 : 220);
+        a.say(text, Math.min(input.conversation ? 14 : 9, 2.5 + text.length / 18));
         const f = a.focus();
-        const heard = alone || Math.hypot(pl.x - f.x, pl.z - f.z) < 60;
+        const heard = input.conversation || alone || Math.hypot(pl.x - f.x, pl.z - f.z) < 60;
         if (this.voice && heard) this.speak(text);
         return { ok: true, texte: heard ? 'Dit.' : 'Dit, mais le joueur est trop loin pour t’entendre.' };
+      }
+      case 'identifier': return a.eye.identify(clamp01(input.x ?? 0.5), clamp01(input.y ?? 0.5));
+      case 'sonder_sol': {
+        const f = a.focus();
+        a.senses.quiet(2);
+        return a.eye.probeGround(f.x, f.z, Math.max(2, Math.min(12, Number(input.rayon) || 6)));
+      }
+      case 'mesurer_vehicule': return a.measureVehicle(input.cible || 'le_mien', Number(input.duree) || 4);
+      case 'mesurer_performances': return a.measurePerformance(Number(input.duree) || 4);
+      case 'lancer_experience': {
+        const r = await a.lab.run(input);
+        if (r.ok) r.lieu = { ...r.lieu, lien: buildReproLink({ x: r.lieu.x, y: r.lieu.y, z: r.lieu.z, yaw: g.camera.footYaw, pitch: g.camera.orbitPitchOffset, hour: g.atmosphere.hour, weather: g.atmosphere.weather }, location.href) };
+        return r;
       }
       case 'envoyer_sms':
         g.phone?.text('L’ARCHITECTE', String(input.texte || '').slice(0, 300));
@@ -221,6 +248,13 @@ class ArchitectLink {
         const r = await this.execute('camera-now', input);
         return { ...r, texte: r.texte + hidden };
       }
+      // who holds the camera, as the Creator chose it in the control room (set, not toggled)
+      case 'camera-set': {
+        const him = input.qui === 'lui';
+        if (him === a.spectating) return { ok: true, texte: him ? 'Il tient déjà la caméra.' : 'Tu tiens déjà la caméra.' };
+        if (!him) { a.toggleSpectate(); return { ok: true, texte: 'Tu as repris la caméra.' }; }
+        return this.execute('camera-now', input);
+      }
       case 'camera-now': {
         if (a.spectating) { a.toggleSpectate(); return { ok: true, texte: 'Tu as repris la main : mode Ensemble.' }; }
         if (!g.playing) { a.spectateWhenReady = true; if (!a.present) a.summon(); return { ok: true, texte: 'La partie n’est pas lancée : clique ENTRER DANS LA VILLE dans le jeu, il prendra la caméra aussitôt.' }; }
@@ -236,35 +270,57 @@ class ArchitectLink {
     }
   }
 
-  // Turn (on foot, holding the camera) the way he wants to look, let the camera settle, take the picture
+  // A photo from his own eye (or, asked for, exactly what the player sees). Alone and on foot his body and the chase
+  // camera turn with it too, so that the live view in the control room shows what he looks at.
   async photo(input) {
     const a = this.architect, g = this.game;
     if (!g.playing) return { ok: false, texte: 'Le joueur est dans le menu : rien à voir.' };
-    let note = '';
-    if (a.spectating && a.actor && !a.ride && input.direction && input.direction !== 'actuelle') {
-      const f = a.focus(), pl = g.player;
-      const yaw = input.direction === 'vers_le_joueur' ? Math.atan2(pl.x - f.x, pl.z - f.z) : a.actor.heading + (DIR[input.direction] ?? 0);
-      a.lookTowards(yaw);
-      g.camera.footYaw = yaw;
+    const tab = document.visibilityState !== 'visible' && !a.ticking ? ' (onglet du jeu caché : aucune image ne vient)' : '';
+    if (input.direction === 'vue_du_joueur' || !a.actor && !a.ride) {
+      const image = await a.capture({ width: 1024, quality: 0.76 });
+      if (!image) return { ok: false, texte: `La capture a échoué${tab}.` };
+      a.eye.rememberPlayerView();
+      const p = g.player;
+      return { ok: true, texte: `Ce que voit le joueur, ${a.addressAt(p.x, p.z)}, ${g.atmosphere.clockLabel}, ${g.atmosphere.weatherLabel.toLowerCase()}.`, image, lieu: this.place({ x: p.x, y: p.y, z: p.z }, null) };
+    }
+    const pose = a.eye.pose(input);
+    if (a.spectating && a.actor && !a.ride) {
+      a.lookTowards(pose.yaw);
+      g.camera.footYaw = pose.yaw;
       g.camera.orbitPitchOffset = PITCH[input.cadrage] ?? PITCH.rue;
-      await wait(900);
-    } else if (!a.spectating) note = 'Mode Ensemble : c’est la caméra du joueur.';
-    else if (a.ride) note = 'Tu es dans un véhicule : la caméra suit le véhicule.';
-    const image = await a.capture({ width: 1024, quality: 0.74 });
-    if (!image) return { ok: false, texte: 'La capture a échoué.' };
-    const f = a.spectating ? a.focus() : { x: g.player.x, y: g.player.y, z: g.player.z };
-    const lieu = {
+      const cancelled = await a.measureFor(0.5, () => {});
+      if (cancelled) return { ok: false, texte: `Photo interrompue : ${cancelled}` };
+    }
+    const image = await a.eye.shoot(pose, { width: 1024, quality: 0.76 });
+    if (!image) return { ok: false, texte: `La capture a échoué${tab}.` };
+    const f = a.focus();
+    const note = a.eye.detailNote(pose);
+    const label = [input.direction, input.cadrage, input.zoom].filter(Boolean).join(', ');
+    return { ok: true, texte: `${a.addressAt(f.x, f.z)}, ${g.atmosphere.clockLabel}, ${g.atmosphere.weatherLabel.toLowerCase()} (œil : ${label}, ${Math.round(pose.fov)}°).${note ? ` ${note}` : ''}`, image, lieu: this.place(f, pose, input) };
+  }
+
+  // Where a photo was taken, with the link that puts anyone back in front of it
+  place(f, pose, input = {}) {
+    const g = this.game, a = this.architect;
+    return {
       x: Math.round(f.x * 10) / 10, y: Math.round(f.y * 10) / 10, z: Math.round(f.z * 10) / 10,
-      yaw: +g.camera.footYaw.toFixed(2), pitch: +g.camera.orbitPitchOffset.toFixed(2), adresse: a.addressAt(f.x, f.z),
-      lien: buildReproLink({ x: f.x, y: f.y, z: f.z, yaw: g.camera.footYaw, pitch: g.camera.orbitPitchOffset, hour: g.atmosphere.hour, weather: g.atmosphere.weather }, location.href)
+      yaw: +(pose?.yaw ?? g.camera.footYaw).toFixed(2), pitch: +g.camera.orbitPitchOffset.toFixed(2), adresse: a.addressAt(f.x, f.z),
+      heure: g.atmosphere.hour, meteo: g.atmosphere.weather, oeil: pose ? { direction: input.direction, cadrage: input.cadrage, zoom: input.zoom, ...pose } : null,
+      lien: buildReproLink({ x: f.x, y: f.y, z: f.z, yaw: pose?.yaw ?? g.camera.footYaw, pitch: g.camera.orbitPitchOffset, hour: g.atmosphere.hour, weather: g.atmosphere.weather, eye: pose }, location.href)
     };
-    return { ok: true, texte: `${lieu.adresse}, ${g.atmosphere.clockLabel}, ${g.atmosphere.weatherLabel.toLowerCase()}.${note ? ` ${note}` : ''}`, image, lieu };
   }
 
   // ---- His voice and the player's words -------------------------------------------------------------------------------
+  setVoice(enabled) {
+    this.voice = enabled === true;
+    if (!this.voice) this.stopSpeaking();
+  }
+
+  stopSpeaking() { window.speechSynthesis?.cancel(); }
+
   speak(text) {
     const synth = window.speechSynthesis;
-    if (!synth) return;
+    if (!synth || !this.voice || !this.architect.present) return;
     this.voiceChoice ??= synth.getVoices().filter((v) => v.lang?.startsWith('fr')).sort((p, q) => (q.name.includes('Thomas') - p.name.includes('Thomas')) || (q.lang === 'fr-FR') - (p.lang === 'fr-FR'))[0] || null;
     const u = new SpeechSynthesisUtterance(text);
     u.lang = 'fr-FR';

@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.9.5 — Due Diligence — 4 novembre 2026
+
+### Jeu publié
+
+- Éclairage de la foule, du joueur et des accessoires : rebond des lumières proches et appoint progressif de la ville
+  après le crépuscule. Les corps dos aux lampes gardent leurs couleurs et leur volume, y compris aux niveaux de détail.
+- Le nouveau module `person-lighting.js` est préchargé ; le build conserve l'exclusion complète de l'Architecte.
+
+### Architecte 2.2 — outil local
+
+- Prospection déterministe entre les interventions du modèle : lieux et conditions peu couverts, sujets variés,
+  déplacement à pied, en voiture et en hélico selon les capacités disponibles. Les tickets en attente ou en échec
+  n'empêchent pas de poursuivre une autre observation. Aucun ticket n'est inventé ni automatiquement validé.
+- Plus d'appel périodique pour répéter « j'attends » ; un nouveau jugement demande des photos, des mesures ou une
+  information à traiter. Les statuts du chantier et l'état réel de l'atelier priment sur ses récits mémorisés.
+- Les trajets sans progrès sont repris, puis le point inaccessible est temporairement écarté. Caméra humaine,
+  périmètre du mode Ensemble, pause, interrupteur et plafond de dépense restent prioritaires.
+- Voix coupée par défaut, bouton visible en permanence dans la salle ; couper annule immédiatement la phrase en cours.
+- Mémoire automatique externe désactivée pour l'agent de code ; leçons extérieures en lecture seule et garde avant
+  écriture. Un arrêt conserve un relevé borné des variations, distingue résultat partiel et relevé indisponible, et
+  n'affiche plus « aucun fichier modifié » faute de preuve.
+
+### Fondations de fiabilité intégrées
+
+- L'Architecte v2 : œil indépendant, rétroviseur, sondes, quatre expériences mesurées, programmes, mémoire en couches,
+  conversation séparée et salle de contrôle à cinq pages.
+- Validation du Créateur persistante et transitions de tickets contrôlées ; un statut ancien ne vaut pas autorisation.
+- Livraisons acceptées seulement avec fiche structurée, tests complets du dernier état du code et attribution vérifiée.
+  Les modifications concurrentes et les commits pendant une session sont signalés ; aucun retour arrière automatique.
+- Clôture conditionnée aux preuves prises après livraison, au bon endroit, et au rejeu valide d'une expérience compatible.
+  Relecture indisponible : constat conservé en attente, aucun ticket automatiquement confirmé.
+- Mémoire sauvegardée pendant l'activité, écritures JSON atomiques, budget partagé entre rôles et tâches annexes.
+- Réserves API persistées avant envoi, coûts incertains conservés après redémarrage ; preuve liée au chargement du jeu
+  et au code observé, aucune ancienne photo rendue valable par un rechargement.
+- Interruption entre outils ; annulation des expériences et captures à la reprise de caméra, à l'extinction ou à la mort.
+  Nettoyage des objets temporaires et restauration de l'heure et de la météo ; arrêt borné de l'atelier.
+- Restauration immédiate de l'adhérence, du soleil, des éclairs et du tonnerre ; sauvegarde joueur suspendue pendant
+  une expérience. Caméra et pause cohérentes quand l'onglet est déjà masqué ; rallumage rapide appliqué au corps.
+- Mesures FPS indépendantes du buffer, vitesse latérale et verticale incluse, zoom de reproduction restauré,
+  identification limitée aux objets visibles et réponses JSON sans référence à la scène Three.js.
+- Contrôles automatisés et essais navigateur/atelier isolés dans le guide `tools/architecte/README.md`.
+- La liste des sessions de l'atelier inclut la correction en cours dès son démarrage. Commande de suivi Terminal en
+  lecture seule, étapes mises à jour dans le détail ; reprise interactive Claude Code proposée après la fin.
+
 ## 0.9.4 — Momentum — 4 novembre 2026
 
 Cette version réunit les refontes « Bricks & Mortar » (immeubles) et « Momentum » (conduite), développées en parallèle.

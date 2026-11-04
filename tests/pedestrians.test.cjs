@@ -415,6 +415,7 @@ const { PersonCrowd, PersonRig, buildPersonGeometry, createPersonMaterial } = lo
     './human-skeleton.js': humanSkeleton,
     './human-assets.js': { crowd: { bodies: [], props: [] } },
     './human-crowd.js': { createCrowdMaterial: () => ({}), createPropMaterial: () => ({}), MALE_BODIES: 12, FEMALE_BODIES: 12 },
+    './person-lighting.js': { lightAsPerson: (material) => material },
     'three/webgpu': { Vector3, Quaternion, Matrix4, BufferAttribute, BufferGeometry, Float32BufferAttribute, MeshStandardNodeMaterial, Mesh },
     'three/tsl': tslStub,
     'three/addons/utils/BufferGeometryUtils.js': { mergeGeometries }

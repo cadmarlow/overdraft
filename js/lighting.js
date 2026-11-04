@@ -306,6 +306,7 @@ class LightingSystem {
     cityUniforms.uInteriorGlow.value = p.interiorGlow;
     cityUniforms.uRoadWetness.value = p.roadWetness;
     cityUniforms.uCanyonBounce.value = p.canyonBounce;
+    cityUniforms.uNight.value = p.nightFactor;
 
     this.scene.environmentIntensity = p.envIntensity;
     if (bake) this.bakeEnvironmentMap();

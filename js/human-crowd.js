@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { Fn, float, int, vec3, attribute, instanceIndex, normalLocal, cross, normalize, step } from 'three/tsl';
+import { lightAsPerson } from './person-lighting.js';
 
 // The crowd: real avatars reposed on the game's skeleton (tools/people/import-crowd.mjs), instanced, skinned with up to four
 // bones from the pose buffer, painted from one atlas each.
@@ -44,7 +45,7 @@ function createCrowdMaterial(pose, stride, atlas) {
   const mat = new THREE.MeshPhysicalNodeMaterial({ map: atlas, metalness: 0, roughness: 0.72, specularIntensity: 0.35 });
   mat.alphaTest = 0.4;
   mat.positionNode = skinnedPosition(pose, stride, 0.03);
-  return mat;
+  return lightAsPerson(mat);
 }
 
 /** Things they carry: one flat colour per part, painted by the sculpting tool */
@@ -55,7 +56,7 @@ function createPropMaterial(pose, stride) {
   // phone and cup bright, umbrella and bags dark
   const tone = float(0.06).add(step(1.5, part).mul(step(part, 2.5)).mul(0.62));
   mat.colorNode = vec3(tone, tone, tone.mul(1.04));
-  return mat;
+  return lightAsPerson(mat);
 }
 
 export { createCrowdMaterial, createPropMaterial, CROWD_BODIES, CROWD_PROPS, MALE_BODIES, FEMALE_BODIES };

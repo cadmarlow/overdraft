@@ -1,127 +1,167 @@
 <!doctype html>
 <html lang="fr">
 <head>
+  <link rel="icon" href="data:," />
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#0b110d">
+  <meta name="theme-color" content="#090d0a">
   <title>Salle de contrôle</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
   <link rel="stylesheet" href="./salle.css">
 </head>
 <body>
-  <header class="top">
-    <div class="brand"><b>L’ARCHITECTE</b><span>salle de contrôle</span></div>
-    <div class="pills">
-      <span class="pill" id="p-jeu"><i></i><em>Jeu</em><strong>—</strong></span>
-      <span class="pill" id="p-cerveau"><i></i><em>Cerveau</em><strong>—</strong></span>
-      <span class="pill" id="p-depense"><em>Dépense</em><strong>—</strong></span>
-    </div>
+  <header class="bar">
+    <div class="who"><span class="avatar" aria-hidden="true">A</span><div><b>L’Architecte</b><small id="who-sub">—</small></div></div>
+    <button class="power" id="power" aria-pressed="false"><span class="sw" aria-hidden="true"></span><span id="power-label">Éteint</span></button>
+    <button class="btn voice-toggle" id="voice-toggle" type="button" aria-pressed="false" title="Activer la voix de l’Architecte">Voix coupée</button>
+    <nav class="tabs" aria-label="Espaces">
+      <button data-view="direct" class="on">Direct</button>
+      <button data-view="tickets">Tickets <span class="count" id="n-tickets" hidden></span></button>
+      <button data-view="atelier">Atelier <span class="count" id="n-atelier" hidden></span></button>
+      <button data-view="profil">Profil</button>
+      <button data-view="memoire">Mémoire</button>
+    </nav>
+    <div class="meta"><span id="meta-jeu"><i class="dot"></i>—</span><span class="sep hide-m"></span><span class="mono hide-m" id="meta-depense">—</span></div>
   </header>
+  <div class="alert" id="alert" hidden><span id="alert-text"></span></div>
 
-  <main class="grid">
-    <section class="col live-col">
-      <figure class="live">
-        <img id="live" alt="Ce que voit l’Architecte" hidden>
-        <div class="live-empty" id="live-empty">En attente d’une image du jeu…</div>
-        <div class="halt" id="halt" hidden></div>
-        <figcaption>
-          <span class="mode" id="mode">—</span>
-          <span class="intent" id="intent">—</span>
-          <span class="where" id="where">—</span>
-        </figcaption>
-      </figure>
-
-      <div class="stats">
-        <div><em>Corps</em><strong id="s-corps">—</strong></div>
-        <div><em>Santé</em><strong id="s-pv">—</strong></div>
-        <div><em>Joueur</em><strong id="s-joueur">—</strong></div>
-        <div><em>Monde</em><strong id="s-monde">—</strong></div>
-      </div>
-
-      <div class="controls">
-        <div class="ctrl">
-          <em>Cerveau</em>
-          <div class="seg" id="seg-cerveau">
-            <button data-cerveau="vif">Vif</button><button data-cerveau="equilibre">Équilibré</button><button data-cerveau="maximal">Maximal</button>
-          </div>
-        </div>
-        <div class="ctrl">
-          <em>Plafond par séance</em>
-          <label class="money"><input id="plafond" type="number" min="0" max="200" step="0.5" inputmode="decimal"><span>$</span></label>
-        </div>
-        <div class="ctrl row">
-          <button id="b-pause" class="btn">Mettre en pause</button>
-          <button id="b-presence" class="btn">Faire venir</button>
-          <button id="b-camera" class="btn primary">Laisse-le travailler</button>
-        </div>
-        <p class="notice" id="notice" hidden></p>
-        <div class="ctrl row toggles">
-          <label><input type="checkbox" id="t-voix"> Voix</label>
-          <label><input type="checkbox" id="t-vue"> Vue en direct</label>
-          <label><input type="checkbox" id="t-atelier"> Atelier automatique</label>
-        </div>
-      </div>
+  <!-- Direct -->
+  <main class="page" id="v-direct">
+    <section class="card off" id="off" hidden>
+      <span class="avatar" aria-hidden="true">A</span>
+      <h1>L’Architecte est éteint</h1>
+      <p>Allumé, il entre dans ta partie, regarde la ville, te parle et te propose des tickets. Éteint, il ne fait rien et ne coûte rien.</p>
+      <div class="row"><button class="btn primary lg" id="b-on">Allumer l’Architecte</button></div>
+      <p class="small dim" id="off-note"></p>
     </section>
-
-    <section class="col journal-col">
-      <div class="col-head"><h2>Fil de pensée</h2><label class="filter"><input type="checkbox" id="f-pensees" checked> pensées</label></div>
-      <button class="fresh" id="fresh" hidden>↑ Nouveau</button>
-      <ol class="journal" id="journal"></ol>
-      <form class="say" id="say">
-        <input id="say-text" maxlength="500" autocomplete="off" placeholder="Parler à l’Architecte…">
-        <button class="btn primary">Envoyer</button>
-      </form>
-    </section>
-
-    <section class="col side-col">
-      <div class="col-head"><h2>Carte</h2>
-        <div class="seg small" id="seg-carte"><button data-zoom="pres" class="on">Autour de lui</button><button data-zoom="ile">Île</button></div>
+    <div id="on" hidden>
+      <section class="card hero">
+        <div>
+          <span class="label">En ce moment</span>
+          <h1 id="now">—</h1>
+          <div class="chips" id="now-chips"></div>
+        </div>
+        <div class="camera">
+          <span class="q">Qui tient la caméra ?</span>
+          <div class="seg" id="cam" role="group" aria-label="Qui tient la caméra"><button data-qui="toi">Toi</button><button data-qui="lui">Lui</button></div>
+          <small id="cam-note"></small>
+        </div>
+      </section>
+      <div class="grid" style="margin-top: 20px">
+        <div class="col">
+          <figure class="live">
+            <img id="live" alt="Ce que montre la caméra du jeu" hidden>
+            <p class="empty" id="live-empty">L’image en direct arrive dès que le jeu est relié.</p>
+            <figcaption><span class="tag rec">En direct</span><span class="tag hide-s" id="live-where"></span><span class="tag right" id="live-fps"></span></figcaption>
+          </figure>
+          <section class="card">
+            <header><span class="label" id="prog-title">Son programme</span><button class="btn ghost sm" id="b-prog-stop" hidden>Arrêter le programme</button></header>
+            <p class="prog-subject" id="prog-subject" hidden></p>
+            <ol class="steps" id="prog-steps"></ol>
+            <p class="empty" id="prog-empty">Pas de programme en cours : il en choisira un à sa prochaine réflexion.</p>
+          </section>
+          <section class="card">
+            <header><span class="label">Son fil</span>
+              <div class="seg sm" id="feed-filters" role="group" aria-label="Filtrer son fil">
+                <button data-kinds="all" class="on">Tout</button><button data-kinds="pensee">Pensées</button><button data-kinds="action,mesure,photo,parole">Actions</button><button data-kinds="ticket,atelier,code,evenement,systeme,memoire,createur">Le reste</button>
+              </div>
+            </header>
+            <ol class="feed" id="journal"></ol>
+          </section>
+        </div>
+        <div class="col">
+          <section class="card">
+            <header><span class="label">Conversation</span><span class="small dim" id="talk-state"></span></header>
+            <div class="thread" id="talk-thread"></div>
+            <form class="composer" id="talk-form">
+              <textarea id="talk-text" rows="1" maxlength="1000" placeholder="Écris-lui…"></textarea>
+              <button class="btn primary">Envoyer</button>
+            </form>
+          </section>
+          <section class="card">
+            <header><span class="label">À valider</span><span id="decide-count"></span></header>
+            <div id="decide-list"></div>
+          </section>
+          <section class="card" id="ws-mini"></section>
+          <section class="card">
+            <header><span class="label">Carte</span>
+              <div class="seg sm" id="map-zoom" role="group" aria-label="Zoom de la carte"><button data-zoom="pres" class="on">Autour de lui</button><button data-zoom="ile">Île</button></div>
+            </header>
+            <canvas id="map" class="map" aria-label="Carte : lui en violet, toi en vert, ses tickets"></canvas>
+          </section>
+        </div>
       </div>
-      <canvas id="carte" class="carte"></canvas>
-
-      <div class="col-head"><h2>Tickets</h2>
-        <div class="seg small" id="seg-tickets"><button data-filtre="valider" class="on">À valider <b id="n-valider">0</b></button><button data-filtre="cours">En cours</button><button data-filtre="clos">Clos</button></div>
-      </div>
-      <ul class="tickets" id="tickets"></ul>
-
-      <div class="atelier" id="atelier"><em>Atelier</em><strong>—</strong></div>
-    </section>
+    </div>
   </main>
 
-  <div class="modal" id="modal" hidden>
-    <div class="sheet">
-      <div class="viewer">
-        <img id="m-photo" alt="">
-        <button class="nav prev" id="m-prev" aria-label="Photo précédente">‹</button>
-        <button class="nav next" id="m-next" aria-label="Photo suivante">›</button>
-        <div class="thumbs" id="m-thumbs"></div>
-      </div>
+  <!-- Tickets -->
+  <main class="page tickets-page" id="v-tickets" hidden>
+    <div class="seg" id="ticket-filters" role="group" aria-label="Étape des tickets"></div>
+    <section class="card" id="ticket-list"></section>
+  </main>
+
+  <!-- The workshop -->
+  <main class="page" id="v-atelier" hidden>
+    <section class="card" id="ws-now"></section>
+    <div class="ws-grid">
+      <section class="card" id="ws-code"></section>
+      <div class="stack"><section class="card" id="ws-queue"></section><section class="card" id="ws-commit"></section></div>
+    </div>
+    <section class="card" id="ws-history"></section>
+  </main>
+
+  <!-- Who he is -->
+  <main class="page profile" id="v-profil" hidden>
+    <section class="card idcard" id="prof-id"></section>
+    <section class="card" id="prof-main"></section>
+  </main>
+
+  <!-- His memory -->
+  <main class="page" id="v-memoire" hidden>
+    <div class="mem-grid">
+      <section class="card" id="mem-seance"></section>
+      <section class="card" id="mem-cover"><header><span class="label">Ce qu’il a photographié</span></header><div class="body"><canvas id="cover-map" class="map tall"></canvas><p class="legend" id="cover-legend"></p></div></section>
+      <section class="card" id="mem-rapports"></section>
+      <section class="card" id="mem-experiences"></section>
+      <section class="card" id="mem-changes"></section>
+      <section class="card" id="mem-carnet"></section>
+    </div>
+  </main>
+
+  <!-- A ticket, in full -->
+  <div class="modal" id="review" hidden>
+    <article class="sheet review" role="dialog" aria-modal="true" aria-labelledby="r-title">
+      <div class="viewer"><div class="stage" id="r-stage"></div><div class="thumbs" id="r-thumbs"></div></div>
       <div class="details">
-        <button class="close" id="m-close" aria-label="Fermer">×</button>
-        <div class="m-tags" id="m-tags"></div>
-        <h3 id="m-titre"></h3>
-        <h4>Constat</h4><p id="m-constat"></p>
-        <h4>Piste</h4><p id="m-piste"></p>
-        <h4>Lieu</h4><p id="m-lieu"></p>
-        <h4>Fil</h4><ol class="fil" id="m-fil"></ol>
-        <section class="workshop" id="m-workshop" hidden>
-          <h4>Atelier <span id="m-ws-state"></span></h4>
-          <ol class="steps" id="m-steps"></ol>
-          <div class="row"><code id="m-cmd"></code><button type="button" class="btn" id="m-copy">Copier</button><button type="button" class="btn" id="m-open">Ouvrir dans le Terminal</button></div>
-        </section>
-        <form class="decide" id="m-decide">
-          <textarea id="m-texte" rows="2" placeholder="Une raison, une précision (facultatif ; demandé pour « Demander plus »)"></textarea>
-          <div class="row">
-            <button type="button" class="btn ok" data-action="valider">Valider <kbd>V</kbd></button>
-            <button type="button" class="btn no" data-action="rejeter">Rejeter <kbd>R</kbd></button>
-            <button type="button" class="btn" data-action="plus">Demander plus <kbd>D</kbd></button>
-            <button type="button" class="btn" data-action="atelier" id="m-atelier" hidden>Renvoyer à l’atelier</button>
+        <button class="close" id="r-close" aria-label="Fermer">×</button>
+        <div class="chips" id="r-chips"></div>
+        <h2 id="r-title"></h2>
+        <p class="plain" id="r-plain"></p>
+        <form class="decision" id="r-decide">
+          <p class="decision-state" id="r-state"></p>
+          <div class="decision-actions" id="r-actions"></div>
+          <div class="compose" id="r-compose" hidden>
+            <textarea id="r-text" rows="2"></textarea>
+            <div class="decision-actions"><button type="submit" class="btn" id="r-confirm"></button><button type="button" class="btn ghost" id="r-cancel">Annuler</button><span class="dim small" id="r-hint"></span></div>
           </div>
         </form>
+        <div class="sections" id="r-sections"></div>
       </div>
-    </div>
+    </article>
+  </div>
+
+  <!-- A diff, a report, a session -->
+  <div class="modal" id="sheet" hidden>
+    <article class="sheet doc" role="dialog" aria-modal="true" aria-labelledby="s-title">
+      <header><h2 id="s-title"></h2></header>
+      <button class="close" id="s-close" aria-label="Fermer">×</button>
+      <div class="doc-body" id="s-body"></div>
+    </article>
   </div>
 
   <div class="lightbox" id="lightbox" hidden><img alt=""></div>
+  <p class="toast" id="toast" role="status" hidden></p>
   <script type="module" src="./salle.js"></script>
 </body>
 </html>

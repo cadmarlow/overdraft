@@ -119,6 +119,25 @@ Le vol refait de bout en bout, jugé à côté d'un AAA :
 - **Essais en ligne** : l'Architecte, son serveur et ses styles restent hors du build publié. Ce correctif poursuit la
   phase de test ; les objectifs de la 1.0 restent à réaliser.
 
+### Architecte 2.2 — outil local, 4 novembre 2026
+
+Sur la base du jeu 0.9.5 : son œil indépendant, ses programmes et sa mémoire servent une boucle de correction contrôlée.
+La validation humaine est persistante ; une livraison exige les tests du dernier état du code ; la clôture exige des
+preuves nouvelles et un rejeu valide. Arrêts, budget partagé et sauvegardes restent imposés côté serveur. Les expériences
+gardent un protocole comparable et signalent le trafic perturbateur. La prospection enchaîne les lieux et les sujets,
+à pied, en voiture ou en hélico selon les capacités du corps ; un ticket en attente ou en échec ne l'arrête pas. Un
+trajet bloqué est repris puis écarté, et aucune pensée périodique ne se paie sans observation nouvelle. Les statuts
+actuels des tickets priment sur ses anciens récits. Voix coupée par défaut ; mémoire extérieure de l'atelier en lecture
+seule et relevé partiel conservé après interruption. L'outil et ses contrôles ne sont pas livrés. Suite : mesurer les
+faux positifs et le coût par correction utile sur des séances
+longues, puis isoler davantage les écritures de l'atelier si plusieurs auteurs travaillent en même temps.
+
+## 0.9.5 « Due Diligence » — personnages de nuit et outil de test local
+
+Les corps, cheveux, accessoires et niveaux de détail des personnages reçoivent une part de lumière renvoyée par la rue
+et un appoint progressif après le crépuscule. Les silhouettes dos aux lampes restent lisibles sans éclaircir la journée.
+L'Architecte 2.2 accompagne cette version comme outil local, avec une prospection qui continue pendant le cycle des tickets.
+
 ## 0.9.4 « Momentum » — la conduite et les immeubles
 
 Les deux refontes développées en parallèle partagent une même version de test.
@@ -210,4 +229,5 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.2** | **Leverage** | Correctif des collisions automobiles ; Architecte expérimental réservé au développement local |
 | **0.9.3** | **Main Street** | Rez-de-chaussée refaits : 25 000 boutiques réelles en relief, enseignes uniques, vrais intérieurs, la rue de nuit |
 | **0.9.4** | **Momentum** | Conduite au clavier refaite (volant progressif, stabilité, frein à main), voitures solides, reflets de la rue, conducteur et habitacle, vue intérieure ; immeubles Bricks & Mortar (types réels, gradins, corniches et fenêtres en relief) |
+| **0.9.5** | **Due Diligence** | Personnages lisibles de nuit ; Architecte 2.2 local : prospection continue, trajets repris, statuts réconciliés, suivi des sessions et voix coupée par défaut |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |

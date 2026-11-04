@@ -3,11 +3,16 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.4 — Momentum** : la conduite refaite pour le clavier (volant progressif, contrôle de stabilité, freiner en
+Version **0.9.5 — Due Diligence** : éclairage nocturne des personnages repris, pour conserver les volumes et les couleurs
+des corps même dos aux lampadaires. L'outil local **Architecte 2.2** poursuit sa prospection pendant que des tickets
+attendent une décision ou une correction, reprend les trajets sans progrès et garde le bilan d'une session interrompue.
+Sa voix est coupée par défaut, avec un bouton permanent dans la salle de contrôle. L'Architecte reste exclu de Vercel.
+
+La **0.9.4 — Momentum** a refait la conduite pour le clavier (volant progressif, contrôle de stabilité, freiner en
 tournant, vrai demi-tour au frein à main) et des voitures qu'on regarde : la rue se reflète dans la peinture, le héros est
 assis au volant dans un habitacle, la caisse penche sur ses ressorts, vue intérieure à la place du conducteur.
 
-La même version intègre **Bricks & Mortar** : 37 000 immeubles habillés selon leur type réel (maison de ville, immeuble
+Elle intègre aussi **Bricks & Mortar** : 37 000 immeubles habillés selon leur type réel (maison de ville, immeuble
 ouvrier, loft, tour Art déco, tour de verre), leurs couleurs, fenêtres et corniches, leurs volumes en gradins et les
 appuis de fenêtre en relief près du joueur.
 
@@ -141,8 +146,10 @@ les réglages et le lancement sont décrits dans [ARCHITECTE.md](ARCHITECTE.md) 
 Ses modules ne sont chargés qu'en local et ne sont pas copiés dans `dist/`. `?architecte=0` permet de jouer en local sans
 lui. La clé API reste dans `.env.local` et ses données dans `chantier/`, tous deux ignorés par Git.
 
-L'outil reste expérimental : la pause et le plafond de dépense ne coupent pas les appels restants d'une pensée déjà en
-cours. Le cerveau et l'atelier n'ont pas été validés de bout en bout lors de la revue de publication de la 0.9.2.
+L'outil local est en **v2.2** : prospection continue, œil indépendant, expériences mesurées, mémoire durable et contrôle strict des validations,
+des preuves de correction et du budget. Les commandes de vérification reproductibles sont dans le guide du serveur.
+Le trafic des expériences reste vivant ; les mesures perturbées doivent être reprises. Son aptitude à trouver seul des
+défauts inconnus à l'échelle de toute la ville reste à mesurer sur des séances longues.
 
 ## Architecture
 
