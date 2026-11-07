@@ -16,17 +16,23 @@
 #stamina-track{bottom:36px!important;height:2px!important;opacity:.75}
 .gh-crosshair{position:absolute;left:50%;top:50%;width:0;height:0;opacity:0;transition:opacity .12s;--spread:8px}
 .gh-crosshair.show{opacity:1}
-.gh-crosshair i{position:absolute;background:#fff;box-shadow:0 0 3px #000c;transition:transform .08s}
+.gh-crosshair i{position:absolute;background:#fff;box-shadow:0 0 3px #000c}
 .gh-crosshair i:nth-child(1),.gh-crosshair i:nth-child(2){width:2px;height:7px;left:-1px}
 .gh-crosshair i:nth-child(3),.gh-crosshair i:nth-child(4){width:7px;height:2px;top:-1px}
-.gh-crosshair i:nth-child(1){top:calc(-7px - var(--spread))}.gh-crosshair i:nth-child(2){top:var(--spread)}
-.gh-crosshair i:nth-child(3){left:calc(-7px - var(--spread))}.gh-crosshair i:nth-child(4){left:var(--spread)}
-.gh-crosshair:after{content:'';position:absolute;width:2px;height:2px;left:-1px;top:-1px;background:#fff;border-radius:50%}
-.gh-hitmarker{position:absolute;left:50%;top:50%;opacity:0}.gh-hitmarker.show{animation:ghHit .25s ease-out}
+.gh-crosshair i:nth-child(1){top:-7px;transform:translateY(calc(-1 * var(--spread)))}.gh-crosshair i:nth-child(2){top:0;transform:translateY(var(--spread))}
+.gh-crosshair i:nth-child(3){left:-7px;transform:translateX(calc(-1 * var(--spread)))}.gh-crosshair i:nth-child(4){left:0;transform:translateX(var(--spread))}
+.gh-crosshair:after{content:'';position:absolute;width:3px;height:3px;left:-1.5px;top:-1.5px;background:#fff;border-radius:50%;box-shadow:0 0 0 1px #0008}
+.gh-hitmarker{position:absolute;left:50%;top:50%;opacity:0;will-change:opacity,transform}.gh-hitmarker.show{opacity:1}
 .gh-hitmarker i{position:absolute;width:9px;height:2px;background:#fff;box-shadow:0 0 3px #000}
 .gh-hitmarker.kill i{background:#ff4b4b;width:12px}
 .gh-hitmarker i:nth-child(1){transform:translate(5px,5px) rotate(45deg)}.gh-hitmarker i:nth-child(2){transform:translate(-14px,5px) rotate(-45deg)}
 .gh-hitmarker i:nth-child(3){transform:translate(5px,-7px) rotate(-45deg)}.gh-hitmarker i:nth-child(4){transform:translate(-14px,-7px) rotate(45deg)}
+.gh-crosshair.aiming i{opacity:.65}.gh-crosshair.shotgun i{border-radius:2px}.gh-crosshair.blocked:after{background:#ffb66d;box-shadow:0 0 0 4px #ffb66d44}.gh-crosshair.blocked i{background:#ffb66d}
+.gh-hitmarker.headshot i{background:#ffd595}.gh-hit-caption{position:absolute;top:26px;left:0;transform:translateX(-50%);color:#fff4df;font-size:8px;font-weight:800;letter-spacing:.13em;white-space:nowrap;text-shadow:0 1px 5px #000}
+.gh-reload-sight{position:absolute;left:calc(50% - 21px);top:calc(50% + 25px);width:42px;height:2px;background:#fff3;opacity:0;transition:opacity .1s}.gh-reload-sight.show{opacity:1}.gh-reload-sight i{display:block;height:100%;background:var(--lime);transform-origin:left}
+.gh-combat{position:absolute;right:34px;bottom:92px;min-width:158px;padding:14px 17px 13px;border-right:2px solid #f5f1dfaa;background:linear-gradient(90deg,transparent,#0c130fbd 45%);text-align:right;opacity:0;transform:translateY(6px);transition:opacity .15s,transform .15s;text-shadow:0 1px 5px #0009;font-variant-numeric:tabular-nums}
+.gh-combat.show{opacity:1;transform:none}.gh-combat-mode{font-size:9px;font-weight:700;letter-spacing:.2em;color:#e6e7d8a8}.gh-rounds{display:flex;justify-content:flex-end;align-items:baseline;gap:9px;line-height:1;margin:7px 0}.gh-rounds strong{font-size:40px;letter-spacing:-.06em;font-weight:800}.gh-rounds span{font-size:15px;color:#dfdfcf9e}.gh-combat-status{height:10px;font-size:8px;letter-spacing:.12em;color:#e6e7d8a8}.gh-combat-track{height:2px;margin-top:10px;background:#ffffff1a}.gh-combat-track i{display:block;height:100%;transform-origin:left;background:#f5f1df9e}.gh-combat.low .gh-rounds strong{color:#ffb17b}.gh-combat.low .gh-combat-track i{background:#ffb17b}.gh-combat.reloading .gh-combat-track i{background:var(--lime)}.gh-weapon.combat-active span{display:none}
+@media(max-width:700px){.gh-combat{right:16px;bottom:88px;min-width:120px;padding:9px 11px}.gh-rounds strong{font-size:32px}}
 .gh-objective{position:absolute;left:50%;bottom:74px;transform:translate(-50%,8px);max-width:min(760px,80vw);text-align:center;font-size:17px;line-height:1.35;font-weight:600;text-shadow:0 2px 8px #000,0 0 2px #000;opacity:0;transition:opacity .3s,transform .3s}
 .gh-objective.show{opacity:1;transform:translate(-50%,0)}.gh-objective b{color:#ffd54a;font-weight:800}
 .gh-subtitle{position:absolute;left:50%;bottom:118px;transform:translateX(-50%);max-width:min(820px,84vw);text-align:center;font-size:16px;line-height:1.45;text-shadow:0 2px 6px #000,0 0 2px #000;opacity:0;transition:opacity .25s}
@@ -120,3 +126,31 @@ body.in-menu .quick-button,body.hud-minimized .quick-button{opacity:0;pointer-ev
 .gh-crosshair.hook i{background:#f3f0e6a8}.gh-crosshair.hook.bite i{background:var(--lime);box-shadow:0 0 6px #e1f3a0b0}.gh-crosshair.hook.miss i{background:#ff6b5a;box-shadow:0 0 6px #ff6b5a99}
 .sky-cell.up strong{color:var(--lime)}.sky-wind{display:flex;align-items:center;gap:8px;font-size:9px;font-weight:700;letter-spacing:.14em;color:#f3f0e6c0}.sky-wind i{display:block;width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-bottom:15px solid var(--lime);transform-origin:50% 60%;filter:drop-shadow(0 1px 4px #000a)}
 #sky-prompt{position:fixed;left:50%;top:64%;z-index:8;transform:translate(-50%,6px);padding:9px 18px;background:#0c1410b8;border-left:3px solid var(--lime);font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--paper);white-space:nowrap;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;text-shadow:0 1px 6px #000a}#sky-prompt.show{opacity:1;transform:translate(-50%,0)}body.in-menu #sky-prompt{display:none}
+
+/* Automotive instruments: a small composited cluster, readable without taking eyes off the road. */
+#drive-gauge{width:248px;bottom:48px;right:34px;gap:0;filter:none;padding:12px 14px 10px;background:linear-gradient(125deg,#07100ce0,#0b1518b8);border:1px solid #ffffff25;border-radius:5px;box-shadow:0 4px 22px #0003;contain:layout style;}
+body[data-game-state=driving] #drive-gauge{display:grid}
+#drive-gauge>div{position:relative;bottom:auto;right:auto;width:auto;height:auto;background:none}
+#drive-gauge .drive-revs{display:flex;align-items:baseline;gap:6px;font:700 8px/1.5 Arial,sans-serif;letter-spacing:.1em;color:#ffffff7d}
+#drive-rpm{color:#e8eddf;font-size:12px;letter-spacing:.03em;min-width:33px;font-variant-numeric:tabular-nums}
+.drive-revs small{font-size:6px}.drive-assists{display:flex;margin-left:auto;gap:5px}.drive-assists i{font-size:7px;font-style:normal;border:1px solid #ffffff20;border-radius:2px;padding:1px 3px;color:#ffffff50}.drive-assists i.active{color:#ffd393;border-color:#ffc275;background:#cf8f1928}
+#drive-gauge .drive-tach{height:5px;background:#ffffff18;margin-top:7px;overflow:hidden;isolation:isolate}
+#drive-gauge .drive-tach b{position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 6px,#0a141a 6px 8px);pointer-events:none}
+#drive-power{background:#d9edbc}#drive-power.redline{background:#ff725c}
+#drive-gauge .drive-readout{display:flex;align-items:center;gap:16px;padding:8px 0 10px}
+.drive-gear-wrap{display:flex;flex-direction:column;align-items:center;width:41px}.drive-gear-wrap small{font-size:6px;letter-spacing:.13em;color:#ffffff75}
+#drive-gear{font-size:34px;line-height:1.1;border:0;padding:0;font-weight:500;font-variant-numeric:tabular-nums;color:#d9edbc}
+#drive-speed{font-size:62px;letter-spacing:-.065em;font-weight:600;line-height:1;font-variant-numeric:tabular-nums}
+.drive-unit{font-size:7px;letter-spacing:.08em;color:#ffffff9b;writing-mode:vertical-rl;transform:rotate(180deg)}
+#drive-gauge .drive-bottom{display:flex;align-items:center;gap:12px;border-top:1px solid #ffffff18;padding-top:8px}
+.drive-g-meter{position:relative;width:32px;height:32px;flex:0 0 32px;border:1px solid #ffffff30;border-radius:50%;background:linear-gradient(transparent 49%,#ffffff15 49% 51%,transparent 51%),linear-gradient(90deg,transparent 49%,#ffffff15 49% 51%,transparent 51%)}
+#drive-g-dot{position:absolute;left:13px;top:13px;width:4px;height:4px;border-radius:50%;background:#d9edbc;box-shadow:0 0 4px #d9edbc88}
+.drive-g-meter b,.drive-g-meter small{position:absolute;font-size:7px;bottom:-5px;background:#0b1518;line-height:10px;color:#ffffff9b}.drive-g-meter b{left:6px;font-variant-numeric:tabular-nums;font-weight:400}.drive-g-meter small{right:4px;font-size:6px}
+.drive-pedals,.drive-reserves{display:grid;gap:5px;flex:1}.drive-pedals span,.drive-reserves span{display:flex;align-items:center;gap:5px;font-size:6px;letter-spacing:.08em;color:#ffffff8c}.drive-pedals span>i,.drive-reserves span>i{height:3px;background:#ffffff18;flex:1;min-width:26px}.drive-pedals b,.drive-reserves b{display:block;width:100%;height:100%;transform-origin:left;background:#d9edbc}
+#drive-brake{background:#f4a98d}#drive-gauge #drive-health{position:static;width:100%;height:100%;background:#d9edbc;opacity:1}#drive-gauge #drive-health.low{background:#ff725c;animation:none}#drive-gauge #drive-nitro{background:#8fcae2}#drive-gauge #drive-nitro.burning{background:#e6f6ff}
+#vehicle-name{bottom:235px;right:35px}#stunt-feed{bottom:310px}
+#drive-gauge.drive-simple .drive-revs,#drive-gauge.drive-simple .drive-bottom{display:none}
+#garage-panel{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;width:min(650px,calc(100vw - 64px));max-height:calc(100vh - 155px);overflow:auto;bottom:104px;left:32px;padding:12px;background:#0c1618f5;border-color:#ffffff35;box-shadow:0 12px 50px #0009;backdrop-filter:none}
+#garage-panel[hidden]{display:none}#garage-panel>button{width:100%;height:70px;gap:5px;border:1px solid #ffffff0e;background:#ffffff04}#garage-panel>button.sel{color:#132018;background:var(--lime)}#garage-panel>button .icon{width:23px;height:23px}#garage-panel>button span{font-size:8px;letter-spacing:.06em}#garage-panel>button small{font-size:6px;color:inherit;opacity:.6}
+.garage-spec{grid-column:1/-1;display:grid;gap:5px;padding:3px 6px 12px;margin-bottom:3px;border-bottom:1px solid #ffffff26}.garage-spec>span{font-size:7px;letter-spacing:.2em;color:var(--lime)}.garage-spec>strong{font-size:19px;font-weight:500;letter-spacing:-.015em;color:#f3f0e6}.garage-spec>small{font-size:8px;letter-spacing:.07em;color:#b9c5c4;min-height:10px}
+@media(max-width:760px){#drive-gauge{right:18px;bottom:34px;transform:scale(.76);transform-origin:bottom right}#vehicle-name{bottom:180px;right:20px}#vehicle-name>strong{font-size:21px}#stunt-feed{bottom:250px;right:20px}#garage-panel{left:12px;right:12px;top:158px;bottom:auto;width:auto;grid-template-columns:repeat(4,1fr);max-height:calc(100vh - 178px)}#garage-panel>button{height:62px}.garage-spec>small{font-size:7px}}

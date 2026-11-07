@@ -35,7 +35,9 @@ function cycleLevel() {
 const MAX_IN_FLIGHT = 2; // frames the GPU may still owe us: past this, input lag grows with every queued frame
 const STALL_MS = 250; // a lost completion callback (tab hidden, GPU reset) must not freeze the loop
 const WINDOW_MS = 1500; // adaptive scale: frame rate is judged over this period
-const TARGET_FPS = 57;
+// Recover detail only with headroom close to the 60 fps target; a marginal 52–54 fps street must not trigger a
+// resolution increase that adds GPU work and recreates the slowdown.
+const RECOVER_FPS = 57;
 const SLOW_FPS = 50;
 const SCALE_STEP = 0.1;
 const SCALE_UP_AFTER = 8; // good windows before trying a sharper image
@@ -105,7 +107,7 @@ class FramePacer {
       return;
     }
     this.justRaised = false;
-    this.goodWindows = fps >= TARGET_FPS ? this.goodWindows + 1 : 0;
+    this.goodWindows = fps >= RECOVER_FPS ? this.goodWindows + 1 : 0;
     if (this.goodWindows >= this.upAfter && this.scale < this.level.scale) {
       this.setScale(this.scale + SCALE_STEP);
       this.goodWindows = 0;
@@ -119,4 +121,26 @@ class FramePacer {
   }
 }
 
-export { currentLevel, cycleLevel, FramePacer };
+// Reuse a stable shadow atlas between 30 Hz updates. The matrices are refreshed together with the atlas by
+// SunShadowNode. A quick turn, fast vehicle or teleport forces an immediate update, preserving view coverage.
+class ShadowCadence {
+  constructor(hz = 30) {
+    this.interval = 1000 / hz;
+    this.last = -Infinity;
+    this.position = { x: 0, y: 0, z: 0 };
+    this.rotation = { x: 0, y: 0, z: 0, w: 1 };
+  }
+
+  due(now, camera) {
+    const p = camera.position, q = camera.quaternion, a = this.position, b = this.rotation;
+    const moved = (p.x - a.x) ** 2 + (p.y - a.y) ** 2 + (p.z - a.z) ** 2 > 0.75 ** 2;
+    const turned = Math.abs(q.x * b.x + q.y * b.y + q.z * b.z + q.w * b.w) < Math.cos(0.015);
+    if (now - this.last < this.interval && !moved && !turned) return false;
+    this.last = now;
+    Object.assign(a, { x: p.x, y: p.y, z: p.z });
+    Object.assign(b, { x: q.x, y: q.y, z: q.z, w: q.w });
+    return true;
+  }
+}
+
+export { currentLevel, cycleLevel, FramePacer, ShadowCadence };

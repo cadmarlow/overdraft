@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { buildCarDetails, poseCarDetails } from './car-details.js';
 import {
   ISLAND_BOUNDS,
   CENTRAL_PARK_BOUNDS,
@@ -104,14 +105,15 @@ function poseCar(c, dt) {
   const b = c.body, q = b.q, s = Math.sin(c.heading * 0.5), h = Math.cos(c.heading * 0.5);
   c.chassisPivot.quaternion.set(h * q[0] - s * q[2], h * q[1] - s * q[3], h * q[2] + s * q[0], h * q[3] + s * q[1]);
   if (c.bodyPivot) leanBody(c, dt);
-  if (c.cabin) poseCabin(c.cabin, b.steer);
+  if (c.cabin) poseCabin(c.cabin, b.steer, b);
   for (let i = 0; i < 4; i++) {
     const w = b.wheels[i], view = c.wheels[i];
     view.steerPivot.position.y = view.restY + w.travel - (w.burst ? 0.1 : 0);
-    if (view.isFront) view.steerPivot.rotation.y = b.steer;
+    if (view.isFront) view.steerPivot.rotation.y = w.steer;
     view.spin = (view.spin + Math.max(-FRAME_SPIN, Math.min(FRAME_SPIN, (w.spin || 0) * dt))) % (Math.PI * 2);
     view.tire.rotation.x = view.spin;
   }
+  if (c.details) poseCarDetails(c.details, b, dt);
   if (c.shadow) {
     const lift = c.position.y - (b.wheels[0].gy + b.wheels[3].gy) * 0.5;
     c.shadow.visible = lift < 3.5 && b.r[4] > 0.2;
@@ -576,7 +578,7 @@ class ThirdPersonControllerManager {
       carBodyMesh = new THREE.Mesh(model.body, paintMaterial);
       glassMaterial = createGlassMaterial(model, paintMaterial);
       bodyPivot.add(carBodyMesh, new THREE.Mesh(model.glass, glassMaterial));
-      if (spec.cabin) cabin = buildCabin(spec.cabin, bodyPivot);
+      if (spec.cabin) cabin = buildCabin(spec.cabin, bodyPivot, id);
     }
     carBodyMesh.castShadow = true;
     carBodyMesh.receiveShadow = true;
@@ -597,6 +599,7 @@ class ThirdPersonControllerManager {
       chassisPivot.add(steerPivot);
       wheels.push({ steerPivot, tire, isFront: i < 2, restY: y, spin: 0 });
     });
+    const details = lite ? null : buildCarDetails(model, chassisPivot, wheels);
     const tune = makeTune(handling, {
       halfW: spec.halfW, halfL: Math.max(spec.zFront, -spec.zRear), height: spec.height, sill: spec.sill,
       wheelX: (spec.wheelX + spec.wheelXr) / 2, wheelZf: spec.wheelZf, wheelZr: spec.wheelZr, wheelRadius: spec.wheelRadius
@@ -641,6 +644,7 @@ class ThirdPersonControllerManager {
       carState,
       headLights,
       wheels,
+      details,
       position: new THREE.Vector3(3.6, 0.0, SPAWN_Z + 12),
       prevX: 3.6,
       prevZ: SPAWN_Z + 12,

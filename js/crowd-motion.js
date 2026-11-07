@@ -99,13 +99,13 @@ class CrowdMotion {
   // Writes this frame's pose, or says the rig must solve it itself
   pose(rig, dt) {
     if (rig.crouch > 0.02 || rig.handsUp > 0.02 || rig.aim || rig.punch > 0.01 || rig.air > 0.03) return false;
-    const speed = rig.speed, s = rig.s;
+    const speed = rig.speed / rig.s;
     const gaits = this.gaits;
     let i = 0;
     while (i < gaits.length - 2 && speed > gaits[i + 1].speed) i++;
     const low = gaits[i], high = gaits[i + 1];
     const w = Math.min(1, Math.max(0, (speed - low.speed) / (high.speed - low.speed)));
-    this.phase = (this.phase + (speed / ((low.stride + (high.stride - low.stride) * w) * s)) * dt) % 1;
+    this.phase = (this.phase + (speed / (low.stride + (high.stride - low.stride) * w)) * dt) % 1;
     const walk = decode(low, (this.phase + low.sync) % 1, POSE_A);
     decode(high, (this.phase + high.sync) % 1, POSE_B);
     mix(walk, POSE_B, w);
@@ -144,7 +144,8 @@ class CrowdMotion {
   write(rig, pose) {
     const half = rig.yaw * 0.5, sy = Math.sin(half), cy = Math.cos(half);
     const s = rig.s, out = rig.pose;
-    const ground = rig.pelvisY - rig.standingHeight(0);
+    // Capture already contains the vertical stride; the procedural pelvis is not a ground-height estimate.
+    const ground = rig.groundY;
     const c2 = cy * cy - sy * sy, s2 = 2 * cy * sy; // cos, sin of the yaw
     for (let b = 0, i = 0, o = 0; b < BONE_COUNT; b++, i += STRIDE, o += 8) {
       const qx = pose[i], qy = pose[i + 1], qz = pose[i + 2], qw = pose[i + 3];

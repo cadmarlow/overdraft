@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { bryantParkLawn } from './landmarks.js';
+import { polygonBoxOverlaps } from './building-collision.js';
 
 let _flyDir, _flyHit, _flyBox, _flyRay; // made on the first flight
 
@@ -13,6 +14,41 @@ function carPoint(car, v) {
   const s = Math.sin(car.heading), c = Math.cos(car.heading), x = v.x;
   v.x = x * c + v.z * s; v.z = v.z * c - x * s;
   return v.add(car.position);
+}
+
+// Sweep the camera's near plane through solid geometry. Broad bounds alone would collapse the boom beside angled
+// towers and inside open courtyards; oriented boxes are exact and polygon outlines are refined at sub-radius steps.
+function cameraCollisionDistance(origin, direction, distance, collider, radius = 0.24) {
+  let enter = 0, exit = distance;
+  const slab = (o, d, lo, hi) => {
+    if (Math.abs(d) < 1e-9) return o >= lo && o <= hi;
+    const a = (lo - o) / d, b = (hi - o) / d;
+    enter = Math.max(enter, Math.min(a, b));
+    exit = Math.min(exit, Math.max(a, b));
+    return enter <= exit;
+  };
+  if (!slab(origin.y, direction.y, (collider.minY ?? 0) - radius, collider.maxY + radius)) return distance;
+  if (collider.obb && !collider.polygon) {
+    const o = collider.obb, x = origin.x - o.cx, z = origin.z - o.cz;
+    if (!slab(x * o.cs - z * o.sn, direction.x * o.cs - direction.z * o.sn, -o.hx - radius, o.hx + radius)
+      || !slab(x * o.sn + z * o.cs, direction.x * o.sn + direction.z * o.cs, -o.hz - radius, o.hz + radius)) return distance;
+  } else if (!slab(origin.x, direction.x, collider.minX - radius, collider.maxX + radius)
+    || !slab(origin.z, direction.z, collider.minZ - radius, collider.maxZ + radius)) return distance;
+  if (!collider.polygon) return Math.max(0, enter - 0.04);
+  const occupied = (t) => polygonBoxOverlaps(collider.polygon,
+    origin.x + direction.x * t, origin.z + direction.z * t, radius, radius);
+  let previous = enter;
+  for (let t = enter; t <= exit + 0.12; t += 0.12) {
+    const sample = Math.min(t, exit);
+    if (occupied(sample)) {
+      let lo = previous, hi = sample;
+      for (let i = 0; i < 5; i++) { const mid = (lo + hi) * 0.5; if (occupied(mid)) hi = mid; else lo = mid; }
+      return Math.max(0, lo - 0.04);
+    }
+    if (sample === exit) break;
+    previous = sample;
+  }
+  return distance;
 }
 
 const CAMERA_PRESETS = [
@@ -66,6 +102,21 @@ class CameraSystem {
     // Shooter controls (gameplay.js): mouse look under pointer lock, an over-the-shoulder aim, impact shake
     this.aimMode = false;
     this.aimBlend = 0;
+    this.combatMode = false;
+    this.combatBlend = 0;
+    this.shoulderSide = 1;
+    this.shoulderBlend = 1;
+    this.recoilPitch = 0;
+    this.recoilYaw = 0;
+    this.recoilPitchVelocity = 0;
+    this.recoilYawVelocity = 0;
+    this._cameraAnchor = new THREE.Vector3();
+    this._cameraDirection = new THREE.Vector3();
+    this._cameraCandidate = new THREE.Vector3();
+    this._wallCameraOffset = new THREE.Vector3();
+    this._wallSlide = 0;
+    this._cameraBoom = Infinity;
+    this.bodyOccluded = false;
     this.shake = 0;
     this.mouseSensitivity = 0.0022;
     // In flight (vertical.js) the body follows the view: raw look motion piles up here for it, in pixels, and the camera
@@ -85,6 +136,7 @@ class CameraSystem {
     this.carSide = 0;
     this.carRoll = 0;
     this.carSpeed = 0;
+    this.carAcceleration = 0;
     this.carLift = 0;
     this.carEntity = null;
     this.speedFov = 0;
@@ -201,10 +253,12 @@ class CameraSystem {
           this.zoomMultiplier = Math.max(0.45, Math.min(2.4, this.zoomMultiplier * previousDistance / distance));
         }
       } else {
-        if (this.controllerManager.activeMode === 'person') this.footYaw -= dx * 0.0065;
-        else this.orbitYawOffset -= dx * 0.0065;
+        const sensitivity = this.aimMode ? 0.0034 : 0.0065;
+        if (this.controllerManager.activeMode === 'person') this.footYaw -= dx * sensitivity;
+        else this.orbitYawOffset -= dx * sensitivity;
         this.lookDX += dx * 3; this.lookDY += dy * 3;
-        this.orbitPitchOffset = Math.max(-0.32, Math.min(0.68, this.orbitPitchOffset + dy * 0.005));
+        const [lo, hi] = this.aimMode ? [-0.95, 1.05] : [-0.32, 0.68];
+        this.orbitPitchOffset = Math.max(lo, Math.min(hi, this.orbitPitchOffset + dy * (this.aimMode ? 0.0027 : 0.005)));
       }
       this.userOrbitTimer = 4.0;
     });
@@ -263,10 +317,12 @@ class CameraSystem {
     // POV uses the orbit angles, but only chase renders a zoomed camera distance.
     if (this.activePresetId !== 'chase') zoom = 0;
     if (!lookX && !lookY && !zoom) return;
-    if (this.controllerManager.activeMode === 'person') this.footYaw -= lookX * 2.0 * dt;
-    else this.orbitYawOffset -= lookX * 2.0 * dt;
+    const precision = this.aimMode ? 0.6 : 1;
+    if (this.controllerManager.activeMode === 'person') this.footYaw -= lookX * 2.0 * dt * precision;
+    else this.orbitYawOffset -= lookX * 2.0 * dt * precision;
     this.lookDX += lookX * 900 * dt; this.lookDY += lookY * 560 * dt;
-    this.orbitPitchOffset = Math.max(-0.32, Math.min(0.68, this.orbitPitchOffset + lookY * 1.25 * dt));
+    const [lo, hi] = this.aimMode ? [-0.95, 1.05] : [-0.32, 0.68];
+    this.orbitPitchOffset = Math.max(lo, Math.min(hi, this.orbitPitchOffset + lookY * 1.25 * dt * precision));
     this.zoomMultiplier = Math.max(0.45, Math.min(2.4, this.zoomMultiplier + zoom * 0.9 * dt));
     this.userOrbitTimer = 4.0;
   }
@@ -284,10 +340,17 @@ class CameraSystem {
     this.isDragging = false;
     this.resetOrbit();
     this.smoothedSpeed = 0;
+    this.carEntity = null;
+    this.carPull = this.carPullVel = this.carSide = this.carRoll = this.carAcceleration = 0;
+    this.speedFov = this.lookBack = this.rumble = 0;
     this.followEntity = null;
     this.followOffset.set(0, 0, 0);
     this.followLookOffset.set(0, 0, 0);
     this.followBaseY = 0;
+    this._cameraBoom = Infinity;
+    this._wallSlide = 0;
+    this.bodyOccluded = false;
+    this.recoilPitch = this.recoilYaw = this.recoilPitchVelocity = this.recoilYawVelocity = 0;
     this.setCameraPreset('chase', true);
   }
 
@@ -303,11 +366,17 @@ class CameraSystem {
   update(dt, elapsed) {
     // Someone else's body when the Architect holds the camera (architect.js), else the player's
     const entity = this.spectate?.() || this.controllerManager.getActiveEntity();
+    this.bodyOccluded = false;
     if (this.cinematic) { this.updateCinematic(dt); return; }
     if (this.flightView && (this.activePresetId === 'chase' || this.activePresetId === 'action')) { this.updateFlight(dt, entity); return; }
     this.flying = false;
     const desiredPos = this._desiredPos;
     const desiredLook = this._desiredLook;
+    const footFollow = entity.type === 'person' && (this.activePresetId === 'chase' || this.activePresetId === 'action');
+    this.aimBlend += ((footFollow && this.aimMode ? 1 : 0) - this.aimBlend) * (1 - Math.exp(-dt * 19));
+    this.combatBlend += ((footFollow && (this.combatMode || this.aimMode) ? 1 : 0) - this.combatBlend) * (1 - Math.exp(-dt * 12));
+    this.shoulderBlend += (this.shoulderSide - this.shoulderBlend) * (1 - Math.exp(-dt * 13));
+    this.updateRecoil(dt);
 
     if (this.userOrbitTimer > 0 && !this.isDragging) {
       this.userOrbitTimer = Math.max(0, this.userOrbitTimer - dt);
@@ -326,11 +395,11 @@ class CameraSystem {
     if (!this.aimMode) this.orbitPitchOffset = Math.max(-0.32, Math.min(0.68, this.orbitPitchOffset));
     const totalYaw = entity.type === 'person' ? this.footYaw : entity.heading + this.orbitYawOffset;
 
+    this._lookBackChanged = false;
     switch (this.activePresetId) {
       case 'chase': {
         if (entity.body) { this.chaseCar(entity, dt, desiredPos, desiredLook); break; }
         this.speedFov += ((entity.boat ? Math.abs(entity.speed) / 31 * 15 : entity.fovBoost || 0) - this.speedFov) * (1 - Math.exp(-dt * 3));
-        if (entity.type === 'person' && this.aimBlend > 0.001) this.aimFrame(entity);
         const dist = entity.chaseDistance * this.zoomMultiplier * (1 + Math.min(0.25, this.smoothedSpeed * 0.01));
         const height = entity.chaseHeight * this.zoomMultiplier + Math.sin(this.orbitPitchOffset) * dist * 0.85;
         const horizDist = Math.cos(this.orbitPitchOffset) * dist + speedLag;
@@ -348,14 +417,12 @@ class CameraSystem {
           entity.position.y + entity.cameraTargetOffset.y + lookUpBias,
           entity.position.z + Math.cos(totalYaw) * lookAhead
         );
-        if (entity.type === 'person' && this.aimBlend > 0.001) {
-          desiredPos.lerp(this._aimPos, this.aimBlend);
-          desiredLook.lerp(this._aimLook, this.aimBlend);
-        }
         break;
       }
 
       case 'action': {
+        if (entity.type === 'car' && entity.body) { this.chaseCar(entity, dt, desiredPos, desiredLook, true); break; }
+        this.speedFov = 0;
         const sideOffset = entity.type === 'car' ? 2.65 : (entity.type === 'helicopter' ? 4.2 : 0.95);
         const backDist = (entity.type === 'car' ? 3.6 : (entity.type === 'helicopter' ? 8.5 : 2.8)) + speedLag;
         const lowY = entity.type === 'helicopter' ? entity.position.y + 1.2 : entity.position.y + 0.92;
@@ -488,6 +555,12 @@ class CameraSystem {
       }
     }
 
+    if (footFollow && this.combatBlend > 0.001) {
+      this.aimFrame(entity);
+      desiredPos.lerp(this._aimPos, this.combatBlend);
+      desiredLook.lerp(this._aimLook, this.combatBlend);
+    }
+
     if (!this.initialized || this.activePresetId === 'pov') {
       this.currentPos.copy(desiredPos);
       this.currentLookAt.copy(desiredLook);
@@ -507,7 +580,9 @@ class CameraSystem {
         this.followLookOffset.subVectors(this.currentLookAt, entity.position);
       }
       const locked = document.pointerLockElement === this.domElement;
-      const k = 1 - Math.exp(-dt * (entity.body ? 22 : entity.type === 'person' && (locked || this.aimBlend > 0.5) ? 24 : 8.5));
+      // Aim follows input immediately. Framing, shoulder switches and recoil have their own easing; smoothing the
+      // yaw a second time makes the reticle swim behind the mouse and conceals the gun behind the turning body.
+      const k = this._lookBackChanged || footFollow && (locked || this.aimMode) ? 1 : 1 - Math.exp(-dt * (entity.body ? 22 : footFollow && this.combatBlend > 0.1 ? 24 : 8.5));
       // Off a ramp the camera does not rise with the car at once: the car climbs out of the frame, and lands back in it
       this.followBaseY += (entity.position.y - this.followBaseY) * (entity.body ? 1 - Math.exp(-dt * (entity.body.grounded ? 9 : 2.6)) : k);
       this.followOffset.lerp(desiredPos.sub(entity.position), k);
@@ -523,28 +598,69 @@ class CameraSystem {
     }
 
     // Keep the third-person camera on the player's side of nearby solid geometry.
-    if ((this.activePresetId === 'chase' || this.activePresetId === 'action') && this.controllerManager.playground) {
-      const origin = entity.position.clone().add(new THREE.Vector3(0, entity.type === 'person' ? 1.5 : 1.2, 0));
-      const direction = this.currentPos.clone().sub(origin);
+    if ((this.activePresetId === 'chase' || this.activePresetId === 'action') && this.controllerManager.nearColliders) {
+      const origin = this._cameraAnchor.copy(entity.position);
+      origin.y += entity.type === 'person' ? 1.48 : 1.2;
+      const direction = this._cameraDirection.subVectors(this.currentPos, origin);
       const length = direction.length();
       if (length > 0.01) {
         direction.divideScalar(length);
         let distance = length;
-        for (const collider of this.controllerManager.nearColliders(origin.x, origin.z, length + 3)) {
-          const box = new THREE.Box3(
-            new THREE.Vector3(collider.minX - 0.15, (collider.minY ?? 0) - 0.1, collider.minZ - 0.15),
-            new THREE.Vector3(collider.maxX + 0.15, collider.maxY + 0.1, collider.maxZ + 0.15)
-          );
-          if (box.containsPoint(origin)) continue;
-          const hit = new THREE.Ray(origin, direction).intersectBox(box, new THREE.Vector3());
-          if (hit) distance = Math.min(distance, Math.max(0.55, origin.distanceTo(hit) - 0.2));
+        const colliders = this.controllerManager.nearColliders(origin.x, origin.z, length + 3);
+        for (const collider of colliders) {
+          distance = Math.min(distance, cameraCollisionDistance(origin, direction, distance, collider, footFollow ? 0.24 : 0.4));
         }
-        if (distance < length) this.currentPos.copy(origin).addScaledVector(direction, distance);
+        // Pull in immediately; emerge softly once the wall is gone. The collision distance is never eased outward
+        // through solid geometry, and unlike a minimum boom of 55 cm this also works with a wall at one's shoulder.
+        if (distance < this._cameraBoom || !Number.isFinite(this._cameraBoom)) this._cameraBoom = distance;
+        else this._cameraBoom += (distance - this._cameraBoom) * (1 - Math.exp(-dt * 10));
+        this.currentPos.copy(origin).addScaledVector(direction, Math.min(distance, this._cameraBoom));
+        // With one's back to a wall, shortening the boom alone puts the eye inside the head and rifle stock. Search
+        // along the shoulder instead. Every candidate is swept from the player, so this never grants vision through
+        // cover. In a completely closed corner gameplay can hide the obstructing body using bodyOccluded below.
+        let slid = false;
+        if (footFollow && distance < 0.9) {
+          const yaw = this.footYaw, side = this.shoulderBlend >= 0 ? 1 : -1;
+          const sx = Math.sin(yaw), cz = Math.cos(yaw);
+          search: for (let sideIndex = 0; sideIndex < 2; sideIndex++) {
+            const sign = sideIndex ? -side : side;
+            for (const back of [0.65, 0.3, 0, -0.2]) {
+              const candidate = this._cameraCandidate.set(-sx * back - cz * 0.98 * sign, 0.1, -cz * back + sx * 0.98 * sign);
+              const reach = candidate.length();
+              candidate.divideScalar(reach);
+              let clear = reach;
+              for (const collider of colliders) clear = Math.min(clear, cameraCollisionDistance(origin, candidate, clear, collider, 0.24));
+              if (clear < 0.85) continue;
+              this._wallCameraOffset.set(candidate.x * clear, candidate.y * clear, candidate.z * clear);
+              this._wallSlide = 1;
+              slid = true;
+              break search;
+            }
+          }
+        }
+        if (!slid) this._wallSlide *= Math.exp(-dt * 12);
+        if (footFollow && this._wallSlide > 0.001) {
+          const candidate = this._cameraCandidate.copy(origin).add(this._wallCameraOffset);
+          this.currentPos.lerp(candidate, this._wallSlide);
+          direction.subVectors(this.currentPos, origin);
+          const reach = direction.length();
+          if (reach > 1e-6) {
+            direction.divideScalar(reach);
+            let clear = reach;
+            for (const collider of colliders) clear = Math.min(clear, cameraCollisionDistance(origin, direction, clear, collider, 0.24));
+            this.currentPos.copy(origin).addScaledVector(direction, clear);
+          }
+        }
+        if (footFollow) this.bodyOccluded = Math.hypot(this.currentPos.x - origin.x, this.currentPos.z - origin.z) < 0.6;
       }
-    }
+    } else { this._cameraBoom = Infinity; this._wallSlide = 0; }
     this.camera.position.copy(this.currentPos);
     this.camera.lookAt(this.currentLookAt);
-    if (this.activePresetId === 'chase' && entity.body) {
+    if (this.activePresetId === 'chase' || this.activePresetId === 'action' || this.activePresetId === 'pov') {
+      if (Math.abs(this.recoilPitch) > 1e-7) this.camera.rotateX(this.recoilPitch);
+      if (Math.abs(this.recoilYaw) > 1e-7) this.camera.rotateY(this.recoilYaw);
+    }
+    if ((this.activePresetId === 'chase' || this.activePresetId === 'action') && entity.type === 'car' && entity.body) {
       this.camera.rotateZ(this.carRoll);
       // Speed through the seat: a fine shudder that grows on bad surfaces and near the top of the car's range
       const r = this.rumble;
@@ -562,10 +678,11 @@ class CameraSystem {
       this.camera.rotation.z += (Math.random() - 0.5) * a * 0.05;
       this.shake *= Math.exp(-dt * 6);
     }
-    // Aiming narrows the view
-    if (this.activePresetId === 'chase') {
-      this.aimBlend += ((this.aimMode && entity.type === 'person' ? 1 : 0) - this.aimBlend) * (1 - Math.exp(-dt * 12));
-      const fov = 56 - 12 * this.aimBlend + this.speedFov;
+    // A modest lens change keeps the muzzle in frame; magnifying the target must not swallow the player's shoulder.
+    const near = entity.type === 'person' ? 0.12 : 0.35;
+    if (this.camera.near !== near) { this.camera.near = near; this.camera.updateProjectionMatrix(); }
+    if (this.activePresetId === 'chase' || this.activePresetId === 'action') {
+      const fov = this.getActivePreset().fov - 2 * this.combatBlend - 4 * this.aimBlend + this.speedFov;
       if (Math.abs(this.camera.fov - fov) > 0.05) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
     }
   }
@@ -614,67 +731,111 @@ class CameraSystem {
     this.aimBlend = 0;
   }
 
-  // Behind a car. The camera holds its own heading, which trails the direction of travel: through a turn the car swings in
-  // the frame, and in a slide it hangs sideways across the view while the camera keeps looking where it is going.
-  chaseCar(car, dt, desiredPos, desiredLook) {
-    const b = car.body;
-    const vx = b.vx, vz = b.vz, speed = Math.hypot(vx, vz);
+  // The boom follows the route, while the car remains free to yaw inside the frame. A bounded lens change and a
+  // spring driven by longitudinal acceleration give speed and weight without shrinking the car or tipping the horizon.
+  chaseCar(car, dt, desiredPos, desiredLook, action = false) {
+    const b = car.body, h = Math.max(0, Math.min(dt, 0.25));
+    const speed = Math.hypot(b.vx, b.vz), signed = car.speed || 0;
     if (this.carEntity !== car) {
       this.carEntity = car;
       this.carYaw = car.heading;
-      this.carPull = this.carPullVel = this.carSide = this.carRoll = 0;
-      this.carSpeed = speed;
+      this.carPull = this.carPullVel = this.carSide = this.carRoll = this.carAcceleration = 0;
+      this.carSpeed = signed;
+      this.lookBack = 0;
     }
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const delta = (a, c) => Math.atan2(Math.sin(c - a), Math.cos(c - a));
-    const reversing = car.speed < -2;
-    const travel = speed > 3 ? Math.atan2(vx, vz) + (reversing ? Math.PI : 0) : car.heading;
-    const weight = Math.min(1, speed / 16) * (b.grounded ? 0.78 : 0.95);
-    const follow = car.heading + delta(car.heading, travel) * weight;
-    const lag = 1 - Math.exp(-dt * (reversing ? 2.2 : 3.4 + Math.min(2.6, speed * 0.04)));
-    this.carYaw += delta(this.carYaw, follow) * lag;
-    const wantBack = this.controllerManager.keys.down ? 1 : 0;
-    this.lookBack += (wantBack - this.lookBack) * (1 - Math.exp(-dt * 16));
-    const yaw = this.carYaw + this.orbitYawOffset + (this.lookBack > 0.5 ? Math.PI : 0);
+    const reversing = signed < -1.5;
+    const travel = speed > 2.5 ? Math.atan2(b.vx, b.vz) + (reversing ? Math.PI : 0) : car.heading;
+    const weight = clamp(speed / 14, 0, 1) * (b.grounded ? 0.72 : 0.9);
+    // Limit the contribution of a spin to the travel framing: the camera must never whip across the road.
+    const follow = car.heading + clamp(delta(car.heading, travel), -1.05, 1.05) * weight;
+    this.carYaw += delta(this.carYaw, follow) * (1 - Math.exp(-h * (reversing ? 3 : 4.4 + Math.min(2, speed * 0.035))));
+    const wantBack = this.controllerManager.keys?.down ? 1 : 0;
+    this._lookBackChanged = this.lookBack !== wantBack;
+    this.lookBack = wantBack;
+    const yaw = this.carYaw + this.orbitYawOffset + this.lookBack * Math.PI;
 
-    // The distance is a spring: it stretches as the car pulls away and closes under braking
-    const acceleration = dt > 0 ? (speed - this.carSpeed) / dt : 0;
-    this.carSpeed = speed;
-    const wanted = Math.max(-0.9, Math.min(1.5, acceleration * 0.11));
-    this.carPullVel += ((wanted - this.carPull) * 34 - this.carPullVel * 9) * dt;
-    this.carPull += this.carPullVel * dt;
+    const acceleration = h > 0 ? clamp((signed - this.carSpeed) / h, -18, 14) : 0;
+    this.carSpeed = signed;
+    this.carAcceleration += (acceleration - this.carAcceleration) * (1 - Math.exp(-h * 11));
+    const longitudinal = Number.isFinite(b.longG) ? b.longG * 9.81 : this.carAcceleration;
+    const wanted = clamp(longitudinal * 0.055, -0.62, 0.78);
+    // Closed form critical damping is stable on a missed frame and consistent at 30, 60 and 144 Hz.
+    const omega = 7.5, displacement = this.carPull - wanted;
+    const j = this.carPullVel + omega * displacement, decay = Math.exp(-omega * h);
+    this.carPull = wanted + (displacement + j * h) * decay;
+    this.carPullVel = (this.carPullVel - omega * j * h) * decay;
 
-    const span = Math.min(1, speed / 75);
-    const distance = car.chaseDistance * this.zoomMultiplier * (1 + span * 0.2) + this.carPull;
-    const lift = car.chaseHeight * this.zoomMultiplier * (1 - span * 0.14) + Math.sin(this.orbitPitchOffset - 0.09) * distance * 0.85;
-    desiredPos.set(car.position.x - Math.sin(yaw) * distance, Math.max(0.7, car.position.y + lift), car.position.z - Math.cos(yaw) * distance);
+    const span = clamp(speed / 70, 0, 1);
+    const baseDistance = action ? Math.max(4.8, car.chaseDistance * 0.78) : car.chaseDistance;
+    const distance = Math.max(2.2, baseDistance * this.zoomMultiplier * (1 + span * 0.1) + this.carPull);
+    const baseHeight = action ? Math.max(1.12, (car.spec?.height ?? 1.5) * 0.72) : car.chaseHeight;
+    const lift = baseHeight * this.zoomMultiplier * (1 - span * 0.08)
+      + Math.sin(this.orbitPitchOffset - 0.09) * distance * 0.85;
+    const shoulder = action ? Math.min(1.6, (car.spec?.halfW ?? 0.9) + 0.55) : 0;
+    desiredPos.set(car.position.x - Math.sin(yaw) * distance + Math.cos(yaw) * shoulder,
+      Math.max(0.7, car.position.y + lift), car.position.z - Math.cos(yaw) * distance - Math.sin(yaw) * shoulder);
 
-    // Ahead of the car, and leaning into the corner it is taking
-    const ahead = 6 + speed * 0.22;
-    const lateral = Math.max(-1, Math.min(1, b.wy * speed / 12));
-    this.carSide += (lateral * 1.5 - this.carSide) * (1 - Math.exp(-dt * 4));
-    const side = this.carSide * (this.lookBack > 0.5 ? -1 : 1);
-    desiredLook.set(
-      car.position.x + Math.sin(yaw) * ahead + Math.cos(yaw) * side,
-      car.position.y + car.cameraTargetOffset.y + 0.34,
-      car.position.z + Math.cos(yaw) * ahead - Math.sin(yaw) * side
-    );
-    this.carRoll += ((b.grounded ? -lateral * 0.028 : 0) - this.carRoll) * (1 - Math.exp(-dt * 5));
+    // Anticipate the road modestly; looking far past the nose conceals the car behind the bottom edge of the screen.
+    // While orbiting, keep the subject centred rather than fighting the player's inspection of the bodywork.
+    const orbit = 1 - clamp(Math.abs(delta(0, this.orbitYawOffset)) / 1.2, 0, 1);
+    const ahead = (2.8 + Math.min(4.2, speed * 0.075)) * (0.35 + orbit * 0.65);
+    const lateral = clamp((b.wy || 0) * speed / 11, -1, 1);
+    this.carSide += (lateral * 1.15 * orbit - this.carSide) * (1 - Math.exp(-h * 5));
+    const side = this.carSide * (this.lookBack ? -1 : 1);
+    desiredLook.set(car.position.x + Math.sin(yaw) * ahead + Math.cos(yaw) * side,
+      car.position.y + car.cameraTargetOffset.y + (action ? 0.18 : 0.12),
+      car.position.z + Math.cos(yaw) * ahead - Math.sin(yaw) * side);
+    this.carRoll += ((b.grounded ? -lateral * 0.018 * orbit : 0) - this.carRoll) * (1 - Math.exp(-h * 5));
 
-    const top = Math.max(car.tune.top, 50);
-    const rush = Math.min(1.2, speed / top) ** 1.5;
-    const wide = rush * 25 + (b.nitro ? 9 : 0);
-    this.speedFov += (wide - this.speedFov) * (1 - Math.exp(-dt * (wide > this.speedFov ? 2.6 : 3.6)));
-    const road = b.wheels[0].rough ?? 0;
-    this.rumble = (rush * 0.016 + (speed > 4 ? road * Math.min(1, speed / 20) * 0.7 : 0)) * (b.grounded ? 1 : 0.2) * (b.nitro ? 1.8 : 1);
+    const top = Math.max(car.tune?.top ?? 58, 50);
+    const rush = clamp(speed / top, 0, 1) ** 1.35;
+    const wide = rush * 13 + (b.nitro ? 4 : 0);
+    this.speedFov += (wide - this.speedFov) * (1 - Math.exp(-h * (wide > this.speedFov ? 2.8 : 4)));
+    let road = 0, contacts = 0;
+    for (const wheel of b.wheels ?? []) if (wheel.hasGround) { road += wheel.rough || 0; contacts++; }
+    road /= Math.max(1, contacts);
+    this.rumble = Math.min(0.035, rush * 0.007 + (speed > 4 ? road * Math.min(1, speed / 20) * 0.38 : 0))
+      * (b.grounded ? 1 : 0.1) * (this.isDragging ? 0.3 : 1);
   }
 
   // Over-the-shoulder framing: orbit a pivot at the right shoulder, pitch from the mouse
   aimFrame(entity) {
     const yaw = this.footYaw, pitch = this.orbitPitchOffset;
     const lx = Math.sin(yaw) * Math.cos(pitch), ly = -Math.sin(pitch), lz = Math.cos(yaw) * Math.cos(pitch);
-    const px = entity.position.x - Math.cos(yaw) * 0.55, py = entity.position.y + 1.58, pz = entity.position.z + Math.sin(yaw) * 0.55;
-    this._aimPos.set(px - lx * 2.35, py - ly * 2.35, pz - lz * 2.35);
-    this._aimLook.set(px + lx * 30, py + ly * 30, pz + lz * 30);
+    const side = (0.48 + 0.42 * this.aimBlend) * this.shoulderBlend;
+    const distance = 3.05 - 1.3 * this.aimBlend;
+    const px = entity.position.x - Math.cos(yaw) * side;
+    const py = entity.position.y + 1.55 - 0.07 * this.aimBlend;
+    const pz = entity.position.z + Math.sin(yaw) * side;
+    this._aimPos.set(px - lx * distance, py - ly * distance, pz - lz * distance);
+    this._aimLook.set(px + lx * 60, py + ly * 60, pz + lz * 60);
+  }
+
+  swapShoulder() {
+    this.shoulderSide *= -1;
+    return this.shoulderSide;
+  }
+
+  // The impulse is visual aim displacement, not permanently accumulated mouse input. A critically damped spring
+  // restores the original sightline after a burst; its closed form behaves identically at 30, 60 or 144 Hz.
+  addRecoil(pitch, yaw = 0) {
+    if (!Number.isFinite(pitch + yaw)) return;
+    this.recoilPitch = Math.min(0.16, this.recoilPitch + Math.max(0, pitch) * 0.55);
+    this.recoilPitchVelocity = Math.min(2.8, this.recoilPitchVelocity + Math.max(0, pitch) * 18);
+    this.recoilYaw = Math.max(-0.045, Math.min(0.045, this.recoilYaw + yaw * 0.55));
+    this.recoilYawVelocity = Math.max(-0.8, Math.min(0.8, this.recoilYawVelocity + yaw * 18));
+  }
+
+  updateRecoil(dt) {
+    const omega = 22, decay = Math.exp(-omega * Math.max(0, dt));
+    const pitchJ = this.recoilPitchVelocity + omega * this.recoilPitch;
+    const yawJ = this.recoilYawVelocity + omega * this.recoilYaw;
+    this.recoilPitch = (this.recoilPitch + pitchJ * dt) * decay;
+    this.recoilPitchVelocity = (this.recoilPitchVelocity - omega * pitchJ * dt) * decay;
+    this.recoilYaw = (this.recoilYaw + yawJ * dt) * decay;
+    this.recoilYawVelocity = (this.recoilYawVelocity - omega * yawJ * dt) * decay;
   }
 
   addShake(amount) {
@@ -682,4 +843,4 @@ class CameraSystem {
   }
 }
 
-export { CAMERA_PRESETS, CameraSystem };
+export { CAMERA_PRESETS, CameraSystem, cameraCollisionDistance };

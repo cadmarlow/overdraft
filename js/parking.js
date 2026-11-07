@@ -1,13 +1,12 @@
 import * as THREE from 'three/webgpu';
 import { carModels, carSpecs, trafficMaterial, withWheels, LAMPS_OFF } from './car-assets.js';
 import { createContactShadowMaterial } from './tsl-materials.js';
-import { carStyleCode } from './cars.js';
 import { FLEET_STYLES } from './traffic.js';
 import { blockAt, districtAt } from './city-config.js';
 import { KINDS, planSlots, occupied } from './parking-plan.js';
 
 // The cars parked along every curb of Manhattan. parking-plan.js lays the slots out along the road network's parking
-// lanes; this module streams them in 128 m cells around the camera, drawn with the traffic's own car models and
+// lanes; this module streams their occupancy and colliders in 128 m cells, drawn with the traffic's own car models and
 // compiled materials (the full body with its wheels near the camera, the coarse stand-in beyond), gives each standing
 // car a collider, and hands a car over to the gameplay layer when the player takes it, shoots it or drives into it
 // (release()). Curbs fill and empty with the hour while nobody is looking (parking-plan.js occupancy), and gameplay
@@ -28,14 +27,8 @@ const _q = new THREE.Quaternion();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3(1, 1, 1);
 const _up = new THREE.Vector3(0, 1, 0);
-const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
-
-// Frees the GPU buffer of a per-cell instanced attribute without touching the vertex buffers it shares with the models
-function freeAttribute(attribute) {
-  if (!attribute) return;
-  if (typeof attribute.dispose === 'function') attribute.dispose();
-  else if (typeof attribute.dispatchEvent === 'function') attribute.dispatchEvent({ type: 'dispose' });
-}
+const POOL_NEAR = 256, POOL_FAR = 1024;
+const RESTREAM = 4;
 
 /**
  * @param {THREE.Scene} scene
@@ -180,6 +173,75 @@ function createParking(scene, network, { hydrants = [], footprints = [], storage
     return mesh.instanceMatrix;
   };
 
+  // One prepared near/far pair per model for the whole visible neighbourhood. A cell is an occupancy / collision
+  // unit, not a level-of-detail unit: a car 200 m away must not inherit the full mesh of a close car in its cell.
+  const pools = shared.map((model, k) => {
+    const make = (source, capacity, name, shadow = false) => {
+      const paint = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 3), 3);
+      const carState = new THREE.InstancedBufferAttribute(new Float32Array(capacity * 4), 4);
+      const mesh = new THREE.InstancedMesh(shadow ? unitPlane : shareGeometry(source, paint, carState), shadow ? shadowMat : model.material, capacity);
+      storageMatrix(mesh);
+      mesh.name = 'Parked_' + KINDS[k] + '_' + name;
+      mesh.count = 0;
+      // Empty pools stay visible so the loading-time shader compiler prepares every variant, even on an empty curb.
+      mesh.frustumCulled = false;
+      mesh.castShadow = name === 'near';
+      mesh.receiveShadow = true;
+      mesh.matrixAutoUpdate = false;
+      if (shadow) mesh.renderOrder = 998;
+      group.add(mesh);
+      mesh.updateMatrixWorld();
+      return mesh;
+    };
+    return { near: make(model.near, POOL_NEAR, 'near'), far: make(model.far, POOL_FAR, 'far'),
+      shadow: make(null, POOL_NEAR + POOL_FAR, 'contact', true) };
+  });
+  const rendered = new Map();
+  let dirty = true, lastX = Infinity, lastY = Infinity, lastZ = Infinity;
+  const candidates = [];
+
+  function stream(camera) {
+    const { x, y, z } = camera.position;
+    if (!dirty && Math.hypot(x - lastX, y - lastY, z - lastZ) < RESTREAM) return;
+    lastX = x; lastY = y; lastZ = z; dirty = false;
+    rendered.clear();
+    candidates.length = 0;
+    for (const cell of cells.values()) {
+      if (!cell.built || distanceTo(cell, x, z) > DRAW_FAR) continue;
+      for (const i of cell.built.slotOf.keys()) {
+        const d = Math.hypot(plan.x[i] - x, y, plan.z[i] - z);
+        if (d <= DRAW_FAR) candidates.push({ i, d });
+      }
+    }
+    candidates.sort((a, b) => a.d - b.d);
+    for (const pool of pools) for (const mesh of Object.values(pool)) mesh.count = 0;
+    for (const { i, d } of candidates) {
+      const k = plan.kind[i], pool = pools[k], sp = spec[k];
+      const mesh = d <= DRAW_NEAR && pool.near.count < POOL_NEAR ? pool.near : pool.far;
+      if (mesh.count >= mesh.instanceMatrix.count) continue;
+      const j = mesh.count++, sj = pool.shadow.count++, style = paintOf(i);
+      _q.setFromAxisAngle(_up, plan.yaw[i]);
+      _p.set(plan.x[i], 0, plan.z[i]);
+      mesh.setMatrixAt(j, _m.compose(_p, _q, _s));
+      mesh.geometry.attributes.paintColor.array.set([style.col.r, style.col.g, style.col.b], j * 3);
+      mesh.geometry.attributes.carState.array[j * 4 + 3] = style.style + LAMPS_OFF;
+      const offset = (sp.zFront + sp.zRear) / 2;
+      _p.set(plan.x[i] + Math.sin(plan.yaw[i]) * offset, 0.018, plan.z[i] + Math.cos(plan.yaw[i]) * offset);
+      _s.set(2 * sp.halfW + 0.33, 1, sp.zFront - sp.zRear + 0.55);
+      pool.shadow.setMatrixAt(sj, _m.compose(_p, _q, _s));
+      _s.set(1, 1, 1);
+      rendered.set(i, { mesh, j, shadow: pool.shadow, sj });
+    }
+    for (const pool of pools) for (const mesh of Object.values(pool)) {
+      for (const attr of [mesh.instanceMatrix, mesh.geometry.attributes.paintColor, mesh.geometry.attributes.carState]) {
+        if (!attr) continue;
+        attr.clearUpdateRanges();
+        if (mesh.count) attr.addUpdateRange(0, mesh.count * attr.itemSize);
+        attr.needsUpdate = true;
+      }
+    }
+  }
+
   let controllers = null;
   let colliderOrder = 1e6;
   const colliderFor = (i) => {
@@ -195,86 +257,30 @@ function createParking(scene, network, { hydrants = [], footprints = [], storage
   function build(cell, hour, day) {
     if (cell.built) dispose(cell);
     cell.hour = hour; cell.day = day;
-    const byKind = KINDS.map(() => []);
+    const built = { slotOf: new Map(), colliders: new Map(), count: 0 };
     for (const i of cell.slots) {
       if (state[i] === STATE.BANNED) continue;
-      if (state[i] === STATE.TAKEN) {
-        // the gameplay car that took it may be long gone: the slot is free again unless something stands there
-        if (isBlocked && isBlocked(plan.x[i], plan.z[i])) continue;
-        state[i] = STATE.EMPTY;
-      }
+      if (state[i] === STATE.TAKEN && isBlocked && isBlocked(plan.x[i], plan.z[i])) continue;
       const on = occupied(plan, i, hour, day) && !(isBlocked && isBlocked(plan.x[i], plan.z[i]));
       state[i] = on ? STATE.OCCUPIED : STATE.EMPTY;
-      if (on) byKind[plan.kind[i]].push(i);
-    }
-    const built = { meshes: [], near: [], far: [], shadows: [], kinds: new Map(), slotOf: new Map(), colliders: new Map(), attributes: [] };
-    let total = 0;
-    for (let k = 0; k < KINDS.length; k++) {
-      const list = byKind[k];
-      if (!list.length) continue;
-      const n = list.length;
-      total += n;
-      const paint = new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3);
-      const carState = new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4);
-      const near = new THREE.InstancedMesh(shareGeometry(shared[k].near, paint, carState), shared[k].material, n);
-      const far = new THREE.InstancedMesh(shareGeometry(shared[k].far, paint, carState), shared[k].material, n);
-      const shadow = new THREE.InstancedMesh(unitPlane, shadowMat, n);
-      const sp = spec[k];
-      const shadowW = 2 * sp.halfW + 0.33, shadowL = sp.zFront - sp.zRear + 0.55, shadowZ = (sp.zFront + sp.zRear) / 2;
-      list.forEach((i, j) => {
-        const style = paintOf(i);
-        paint.array[j * 3] = style.col.r; paint.array[j * 3 + 1] = style.col.g; paint.array[j * 3 + 2] = style.col.b;
-        carState.array[j * 4 + 3] = style.style + LAMPS_OFF;
-        _q.setFromAxisAngle(_up, plan.yaw[i]);
-        _p.set(plan.x[i], 0, plan.z[i]);
-        _m.compose(_p, _q, _s);
-        near.setMatrixAt(j, _m);
-        const sy = Math.sin(plan.yaw[i]), cy = Math.cos(plan.yaw[i]);
-        _p.set(plan.x[i] + sy * shadowZ, 0.018, plan.z[i] + cy * shadowZ);
-        _s.set(shadowW, 1, shadowL);
-        _m.compose(_p, _q, _s);
-        _s.set(1, 1, 1);
-        shadow.setMatrixAt(j, _m);
-        built.slotOf.set(i, { k, j });
-        if (controllers) {
-          const c = colliderFor(i);
-          controllers.addCollider(c);
-          built.colliders.set(i, c);
-        }
-      });
-      const matrices = storageMatrix(near);
-      far.instanceMatrix = matrices;
-      storageMatrix(shadow);
-      for (const mesh of [near, far, shadow]) {
-        mesh.frustumCulled = true;
-        mesh.computeBoundingSphere();
-        mesh.receiveShadow = true;
-        mesh.matrixAutoUpdate = false;
+      if (!on) continue;
+      built.slotOf.set(i, true);
+      built.count++;
+      if (controllers) {
+        const collider = colliderFor(i);
+        controllers.addCollider(collider);
+        built.colliders.set(i, collider);
       }
-      near.castShadow = true;
-      shadow.renderOrder = 998;
-      far.visible = near.visible = false;
-      group.add(near, far, shadow);
-      near.updateMatrixWorld(); far.updateMatrixWorld(); shadow.updateMatrixWorld();
-      built.meshes.push(near, far, shadow);
-      built.near.push(near); built.far.push(far); built.shadows.push(shadow);
-      built.kinds.set(k, { near, shadow });
-      built.attributes.push(paint, carState, matrices, shadow.instanceMatrix);
     }
-    built.count = total;
     cell.built = built;
+    dirty = true;
   }
 
   function dispose(cell) {
-    const b = cell.built;
-    if (!b) return;
-    for (const c of b.colliders.values()) controllers?.removeCollider(c);
-    for (const mesh of b.meshes) {
-      mesh.removeFromParent();
-      mesh.dispose();
-    }
-    for (const a of b.attributes) freeAttribute(a);
+    if (!cell.built) return;
+    for (const c of cell.built.colliders.values()) controllers?.removeCollider(c);
     cell.built = null;
+    dirty = true;
   }
 
   // The car in slot i disappears from the street (the gameplay layer has its own now)
@@ -282,16 +288,18 @@ function createParking(scene, network, { hydrants = [], footprints = [], storage
     const cell = cells.get(cellKey(Math.floor(plan.x[i] / CELL), Math.floor(plan.z[i] / CELL)));
     const b = cell?.built;
     if (!b) return;
-    const at = b.slotOf.get(i);
-    if (at) {
-      const entry = b.kinds.get(at.k);
-      // the coarse stand-in shares the full model's matrices: one write hides both
-      entry.near.setMatrixAt(at.j, ZERO);
-      entry.near.instanceMatrix.needsUpdate = true;
-      entry.shadow.setMatrixAt(at.j, ZERO);
-      entry.shadow.instanceMatrix.needsUpdate = true;
-      b.slotOf.delete(i);
+    b.slotOf.delete(i);
+    b.count = b.slotOf.size;
+    // Release happens during gameplay, before the next parking update: remove the old draw immediately.
+    const draw = rendered.get(i);
+    if (draw) {
+      const zero = _m.makeScale(0, 0, 0);
+      draw.mesh.setMatrixAt(draw.j, zero);
+      draw.shadow.setMatrixAt(draw.sj, zero);
+      draw.mesh.instanceMatrix.needsUpdate = draw.shadow.instanceMatrix.needsUpdate = true;
+      rendered.delete(i);
     }
+    dirty = true;
     const c = b.colliders.get(i);
     if (c) {
       controllers?.removeCollider(c);
@@ -344,12 +352,7 @@ function createParking(scene, network, { hydrants = [], footprints = [], storage
         }
         if (changed) { builds--; build(cell, hour, day); }
       }
-      const b = cell.built;
-      if (!b) continue;
-      const showNear = cell.d < DRAW_NEAR, showFar = !showNear && cell.d < DRAW_FAR;
-      for (const m of b.near) m.visible = showNear;
-      for (const m of b.far) m.visible = showFar;
-      for (const m of b.shadows) m.visible = showNear || showFar;
+
     }
     // 2. far cells go
     if ((cursor++ & 15) === 0) {
@@ -357,6 +360,7 @@ function createParking(scene, network, { hydrants = [], footprints = [], storage
         if (cell.built && distanceTo(cell, cx, cz) > DROP_RADIUS) dispose(cell);
       }
     }
+    stream(camera);
   }
 
   // ---- Queries for the gameplay layer -------------------------------------------------------------------------------
@@ -444,7 +448,8 @@ function createParking(scene, network, { hydrants = [], footprints = [], storage
   const stats = () => {
     let built = 0, drawn = 0;
     for (const cell of cells.values()) if (cell.built) { built++; drawn += cell.built.count; }
-    return { slots: plan.count, cells: cells.size, built, drawn };
+    return { slots: plan.count, cells: cells.size, built, occupied: drawn, drawn: rendered.size,
+      near: pools.reduce((n, p) => n + p.near.count, 0), far: pools.reduce((n, p) => n + p.far.count, 0) };
   };
 
   return { group, plan, state, STATE, count: plan.count, attach, update, forEachNear, forEachAlong, info, release, vacateNear, ban, stats };

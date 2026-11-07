@@ -29,21 +29,25 @@ class SkidMarks {
     geometry.setAttribute('position', this.positionAttribute);
     geometry.setAttribute('skid', this.alphaAttribute);
     geometry.setIndex(new THREE.BufferAttribute(index, 1));
+    const edge = new Float32Array(quads * 4);
+    for (let i = 0; i < edge.length; i += 2) { edge[i] = 1; edge[i + 1] = -1; }
+    geometry.setAttribute('edge', new THREE.BufferAttribute(edge, 1));
+    const across = varying(attribute('edge', 'float')).abs();
     const material = new THREE.MeshBasicNodeMaterial({ color: colour, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, side: THREE.DoubleSide });
     if (fades) {
       // White in the middle of the track, gone at its edges, broken up along it
-      const edge = new Float32Array(quads * 4);
-      for (let i = 0; i < edge.length; i += 2) { edge[i] = 1; edge[i + 1] = -1; }
-      geometry.setAttribute('edge', new THREE.BufferAttribute(edge, 1));
       this.born = new Float32Array(quads * 4);
       this.bornAttribute = new THREE.BufferAttribute(this.born, 1).setUsage(THREE.DynamicDrawUsage);
       geometry.setAttribute('born', this.bornAttribute);
       this.clock = uniform(0);
       const age = this.clock.sub(varying(attribute('born', 'float')));
-      const across = varying(attribute('edge', 'float')).abs();
       const breakup = sin(positionWorld.x.mul(1.7).add(positionWorld.z.mul(2.3))).mul(sin(positionWorld.z.mul(5.1).sub(positionWorld.x.mul(3.7)))).mul(0.5).add(0.5);
       material.opacityNode = varying(attribute('skid', 'float')).mul(float(opacity)).mul(smoothstep(FOAM_LIFE, 1, age)).mul(smoothstep(1, 0.15, across)).mul(breakup.mul(0.7).add(0.3));
-    } else material.opacityNode = varying(attribute('skid', 'float')).mul(float(opacity));
+    } else {
+      // Soft shoulders and a lighter central groove keep rubber from reading as a solid painted stripe.
+      const tread = smoothstep(1, 0.78, across).mul(smoothstep(0.14, 0.3, across).mul(0.3).add(0.7));
+      material.opacityNode = varying(attribute('skid', 'float')).mul(float(opacity)).mul(tread);
+    }
     this.mesh = new THREE.Mesh(geometry, material);
     this.mesh.name = 'SkidMarks';
     this.mesh.frustumCulled = false;
@@ -51,40 +55,54 @@ class SkidMarks {
     scene.add(this.mesh);
     this.cursor = 0;
     this.dirty = false;
+    this.firstDirty = Infinity; this.lastDirty = -1;
+    this.mesh.updateMatrixWorld();
   }
 
   // A trail is one wheel's strip; it stays joined from one segment to the next while the wheel keeps sliding
-  extend(trail, x, y, z, strength) {
+  extend(trail, x, y, z, strength, width = this.width, normal = null) {
     if (trail.x === undefined || Math.hypot(x - trail.x, z - trail.z) > 3) {
-      Object.assign(trail, { x, y, z, a: strength, lx: x, ly: y, lz: z, rx: x, ry: y, rz: z });
+      Object.assign(trail, { x, y, z, a: strength, joined: false, lx: x, ly: y + SKID_HEIGHT, lz: z, rx: x, ry: y + SKID_HEIGHT, rz: z });
       return;
     }
     const dx = x - trail.x, dz = z - trail.z, length = Math.hypot(dx, dz);
     if (length < this.step) return;
-    const px = -dz / length * this.width, pz = dx / length * this.width;
+    const px = -dz / length * width, pz = dx / length * width;
+    const py = normal && normal.ny > 0.2 ? -(normal.nx * px + normal.nz * pz) / normal.ny : 0;
+    if (!trail.joined) {
+      trail.lx = trail.x + px; trail.ly = trail.y + SKID_HEIGHT + py; trail.lz = trail.z + pz;
+      trail.rx = trail.x - px; trail.ry = trail.y + SKID_HEIGHT - py; trail.rz = trail.z - pz;
+      trail.joined = true;
+    }
     const i = this.cursor;
     this.cursor = (i + 1) % this.quads;
     const v = i * 4 * 3, p = this.positions, h = y + SKID_HEIGHT;
     p[v] = trail.lx; p[v + 1] = trail.ly; p[v + 2] = trail.lz;
     p[v + 3] = trail.rx; p[v + 4] = trail.ry; p[v + 5] = trail.rz;
-    p[v + 6] = x + px; p[v + 7] = h; p[v + 8] = z + pz;
-    p[v + 9] = x - px; p[v + 10] = h; p[v + 11] = z - pz;
+    p[v + 6] = x + px; p[v + 7] = h + py; p[v + 8] = z + pz;
+    p[v + 9] = x - px; p[v + 10] = h - py; p[v + 11] = z - pz;
     const a = this.alpha;
     a[i * 4] = a[i * 4 + 1] = trail.a;
     a[i * 4 + 2] = a[i * 4 + 3] = strength;
     if (this.born) this.born.fill(this.clock.value, i * 4, i * 4 + 4);
     trail.x = x; trail.y = y; trail.z = z; trail.a = strength;
-    trail.lx = x + px; trail.ly = h; trail.lz = z + pz;
-    trail.rx = x - px; trail.ry = h; trail.rz = z - pz;
+    trail.lx = x + px; trail.ly = h + py; trail.lz = z + pz;
+    trail.rx = x - px; trail.ry = h - py; trail.rz = z - pz;
     this.dirty = true;
+    this.firstDirty = Math.min(this.firstDirty, i); this.lastDirty = Math.max(this.lastDirty, i);
   }
 
   flush() {
     if (!this.dirty) return;
     this.dirty = false;
-    this.positionAttribute.needsUpdate = true;
-    this.alphaAttribute.needsUpdate = true;
-    if (this.bornAttribute) this.bornAttribute.needsUpdate = true;
+    const count = this.lastDirty - this.firstDirty + 1;
+    for (const [attribute, stride] of [[this.positionAttribute, 12], [this.alphaAttribute, 4], [this.bornAttribute, 4]]) {
+      if (!attribute) continue;
+      attribute.clearUpdateRanges();
+      attribute.addUpdateRange(this.firstDirty * stride, count * stride);
+      attribute.needsUpdate = true;
+    }
+    this.firstDirty = Infinity; this.lastDirty = -1;
   }
 }
 
@@ -191,36 +209,43 @@ class DriveEffects {
     b.trails ??= [{}, {}, {}, {}];
     const dx = Math.hypot(b.vx, b.vz);
     const shade = this.light;
+    const frame = Math.min(0.05, Math.max(0, dt));
+    const nominalLoad = (car.tune?.mass ?? 1500) * 9.81 * 0.25;
     for (let i = 0; i < 4; i++) {
       const w = b.wheels[i], trail = b.trails[i];
       if (!w.hasGround) { trail.x = undefined; continue; }
       // On the rim: the road throws sparks off it
       if (w.burst && dx > 6 && near && Math.random() < dt * 30) this.sparks(w.px, w.py + 0.05, w.pz, b.vx, b.vz, 0.4, 0.03);
-      const slip = w.slip;
-      if (slip > 2.4 && w.grip > 0.7) this.skids.extend(trail, w.px, w.gy, w.pz, Math.min(1, 0.3 + slip * 0.06));
-      else if (slip < 1.2) trail.x = undefined;
-      if (!near || slip < 3) continue;
-      const rate = Math.min(90, 14 + slip * 4.6) * dt;
-      const grass = w.grip < 0.7;
+      const slip = w.slip || 0, grass = w.grip < 0.7 && w.rough > 0.012;
+      const load = Math.min(1.5, Math.max(0, (w.load ?? nominalLoad) / nominalLoad));
+      const heat = Math.max(0, slip - 2.8) * Math.sqrt(load);
+      // Dust belongs to loose terrain. Rain lowers grip too, but wet asphalt must never emit beige grass dust.
+      if (heat > 0.2 && !grass && this.wet < 0.85) {
+        const sport = car.kind === 'sport' || car.kind === 'super';
+        const width = (car.spec?.wheelRadius ?? 0.35) * (sport ? i > 1 ? 0.44 : 0.37 : 0.32);
+        this.skids.extend(trail, w.px, w.gy, w.pz, Math.min(0.92, heat * 0.075) * (1 - this.wet * 0.55), width, w);
+      } else if (heat < 0.1 || grass || this.wet > 0.85) trail.x = undefined;
+      if (!near || heat < 0.6 || !grass && this.wet > 0.65) continue;
+      const rate = Math.min(38, heat * 3.2) * frame;
       for (let n = rate + Math.random(); n >= 1; n--) {
         const up = 0.5 + Math.random() * 0.9;
         fx.smokeParticle(w.px + (Math.random() - 0.5) * 0.3, w.py + 0.12, w.pz + (Math.random() - 0.5) * 0.3,
           b.vx * 0.22 + (Math.random() - 0.5) * 1.1, up, b.vz * 0.22 + (Math.random() - 0.5) * 1.1,
-          0.5 + Math.random() * 0.34, 1.1 + Math.random() * 1.1, (grass ? 0.42 : 0.84) * shade, Math.min(0.3, 0.1 + slip * 0.012),
-          { grow: 2.2 + Math.random() * 1.1, drag: 2.2, gravity: -0.34, tint: grass ? [1, 0.84, 0.6] : [1, 1, 1.02] });
+          0.24 + Math.random() * 0.22, 0.8 + Math.random() * 0.7, (grass ? 0.42 : 0.84) * shade, Math.min(0.22, 0.045 + heat * 0.012),
+          { grow: 1.6 + Math.random() * 0.9, drag: 2.2, gravity: -0.24, tint: grass ? [1, 0.84, 0.6] : [1, 1, 1.02] });
       }
     }
     // Wet road: tyres throw a fine mist behind them
-    if (near && this.wet > 0.3 && dx > 12 && Math.random() < dt * 40) {
+    if (near && this.wet > 0.3 && dx > 12 && Math.random() < frame * 40) {
       const w = b.wheels[2 + (Math.random() < 0.5 ? 1 : 0)];
-      fx.smokeParticle(w.px, w.py + 0.2, w.pz, b.vx * 0.5, 0.6, b.vz * 0.5, 0.5, 0.7, 0.8 * shade, 0.1, { grow: 3, drag: 2.4, gravity: 0 });
+      if (w.hasGround) fx.smokeParticle(w.px, w.py + 0.2, w.pz, b.vx * 0.5, 0.6, b.vz * 0.5, 0.5, 0.7, 0.8 * shade, 0.1, { grow: 3, drag: 2.4, gravity: 0 });
     }
-    if (b.scrape > 0) this.sparks(b.scrapeX, b.scrapeY, b.scrapeZ, b.vx, b.vz, Math.min(1, b.scrape / 18), dt);
+    if (near && b.scrape > 0) this.sparks(b.scrapeX, b.scrapeY, b.scrapeZ, b.vx, b.vz, Math.min(1, b.scrape / 18), dt);
     if (b.wall > 0) {
       b.wall -= dt;
-      this.sparks(b.wallX, b.wallY, b.wallZ, b.vx, b.vz, Math.min(1, b.wallSpeed / 26), dt);
+      if (near) this.sparks(b.wallX, b.wallY, b.wallZ, b.vx, b.vz, Math.min(1, b.wallSpeed / 26), dt);
     }
-    if (near && (b.backfire > 0 || b.nitro > 0)) this.exhaust(car, dt);
+    if (near && (b.nitro > 0 || b.backfire > 0 && ['muscle', 'sport', 'super', 'cruiser'].includes(car.kind))) this.exhaust(car, frame);
     b.backfire = Math.max(0, b.backfire - dt * 7);
   }
 

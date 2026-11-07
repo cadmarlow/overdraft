@@ -5,7 +5,10 @@ import {
   createCurtainWallMaterial,
   createFacadeBoxes,
   createChryslerCrownMaterial,
-  createBillboardMaterial
+  createBillboardMaterial,
+  createDressedStoneMaterial,
+  createLobbyGlassMaterial,
+  createParkLawnMaterial
 } from './tsl-materials.js';
 import { batchStaticGroupMeshes } from './city-grid.js';
 
@@ -18,11 +21,7 @@ function buildLandmarks(scene) {
   group.name = 'ManhattanLandmarks';
   const colliders = [];
 
-  const limestoneTrimMat = new THREE.MeshStandardNodeMaterial({
-    color: 0xdad0bc,
-    roughness: 0.68,
-    metalness: 0.12
-  });
+  const limestoneTrimMat = createDressedStoneMaterial();
   const stainlessSteelMat = new THREE.MeshStandardNodeMaterial({
     color: 0xe2ebf4,
     metalness: 0.88,
@@ -42,12 +41,9 @@ function buildLandmarks(scene) {
   const beaconMat = new THREE.MeshBasicNodeMaterial({
     color: 0xff2b2b
   });
-  const warmFloodMat = new THREE.MeshStandardNodeMaterial({
-    color: 0xffe8be,
-    emissive: 0xffc870,
-    emissiveIntensity: 1.35,
-    roughness: 0.28
-  });
+  const warmFloodMat = createLobbyGlassMaterial();
+  const warmLampMat = new THREE.MeshStandardNodeMaterial({ color: 0xd6c7a6, roughness: 0.32, metalness: 0.12,
+    emissive: 0xffce87, emissiveIntensity: 0.35 });
 
   // Illuminated MetLife crown sign canvas texture
   const metlifeSignCanvas = document.createElement('canvas');
@@ -441,7 +437,7 @@ function buildLandmarks(scene) {
       vanderbilt.add(finX);
     }
 
-    const ovSpire = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.95, 30, 8), warmFloodMat);
+    const ovSpire = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.95, 30, 8), warmLampMat);
     ovSpire.position.y = 260 + 15;
     vanderbilt.add(ovSpire);
 
@@ -526,7 +522,7 @@ function buildLandmarks(scene) {
     clockBezel.position.set(0, 25.8, 28.55);
     gctGroup.add(clockBezel);
 
-    const clockGlow = new THREE.Mesh(new THREE.CylinderGeometry(2.05, 2.05, 0.85, 20), warmFloodMat);
+    const clockGlow = new THREE.Mesh(new THREE.CylinderGeometry(2.05, 2.05, 0.85, 20), warmLampMat);
     clockGlow.rotation.x = Math.PI * 0.5;
     clockGlow.position.set(0, 25.8, 28.6);
     gctGroup.add(clockGlow);
@@ -652,11 +648,7 @@ function buildLandmarks(scene) {
     lawnWall.receiveShadow = true;
     bpGroup.add(lawnWall);
 
-    const lawnGrassMat = new THREE.MeshStandardNodeMaterial({
-      color: 0x388c42,
-      emissive: 0x081e0b,
-      roughness: 0.80
-    });
+    const lawnGrassMat = createParkLawnMaterial();
     const lawn = new THREE.Mesh(new THREE.BoxGeometry(38, 0.28, 48), lawnGrassMat);
     lawn.position.set(-13, 0.92, 0);
     lawn.receiveShadow = true;
@@ -1018,7 +1010,7 @@ function buildLandmarks(scene) {
     spire.position.y = 295 + 34;
     owtcGroup.add(spire);
 
-    const beacon = new THREE.Mesh(new THREE.SphereGeometry(1.4, 10, 10), warmFloodMat);
+    const beacon = new THREE.Mesh(new THREE.SphereGeometry(1.4, 10, 10), warmLampMat);
     beacon.position.y = 364;
     owtcGroup.add(beacon);
 

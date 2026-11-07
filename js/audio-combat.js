@@ -35,18 +35,39 @@ function onePole(ctx, frequency) {
   return (x) => (y += (x - y) * k);
 }
 
-function gunshot(ctx, seed, { body = 110, crack = 1, length = 0.55, weight = 1 } = {}) {
+function gunshot(ctx, seed, { body = 110, crack = 1, length = 0.55, weight = 1, mechanism = 0.06 } = {}) {
   const random = rng(seed);
   const low = onePole(ctx, 180 * weight + 60), mid = onePole(ctx, 2400), high = onePole(ctx, 6500);
   return makeBuffer(ctx, length, (t) => {
     const n = random() * 2 - 1;
     const l = low(n), m = mid(n), h = high(n);
-    const snap = Math.exp(-t / 0.0035) * crack;
-    const blast = (1 - Math.exp(-t * 4000)) * Math.exp(-t / (0.045 * weight));
-    const tail = Math.exp(-t / (0.16 * weight)) * 0.22;
-    const thump = Math.sin(TAU * (body * Math.exp(-t * 18) + 38) * t) * Math.exp(-t / (0.05 * weight)) * 0.9 * weight;
-    return Math.tanh((h - m) * snap * 3 + (m - l) * blast * 1.6 + l * (blast + tail) * 2.4 + thump);
-  }, 0.95);
+    const snap = Math.exp(-t / 0.0022) * crack;
+    const blast = (1 - Math.exp(-t * 6500)) * Math.exp(-t / (0.027 * weight));
+    const tail = Math.exp(-t / (0.12 * weight)) * 0.16;
+    // Integrating the falling frequency gives a clean pressure pulse, without a synthetic pitch warble.
+    const phase = TAU * (body * (1 - Math.exp(-t * 28)) / 28 + 42 * t);
+    const thump = Math.sin(phase) * Math.exp(-t / (0.036 * weight)) * 0.65 * weight;
+    const u = t - mechanism;
+    const bolt = u > 0 ? ((n - h) * 0.18 + Math.sin(TAU * 1950 * u) * 0.035) * Math.exp(-u / 0.008) : 0;
+    // Short, low reflections add width to the report; the city's actual reverb remains spatial.
+    const echo1 = t - 0.052, echo2 = t - 0.097;
+    const reflected = (m - l) * ((echo1 > 0 ? Math.exp(-echo1 / (0.022 * weight)) * 0.2 : 0)
+      + (echo2 > 0 ? Math.exp(-echo2 / (0.022 * weight)) * 0.11 : 0));
+    return Math.tanh((h - m) * snap * 2.5 + (m - l) * blast * 1.8 + l * (blast + tail) * 2.1 + thump + bolt + reflected);
+  }, 0.88);
+}
+
+function confirmation(ctx, kind) {
+  const random = rng(kind === 'kill' ? 858 : kind === 'head' ? 859 : 857);
+  const low = onePole(ctx, 1700);
+  const length = kind === 'hit' ? 0.07 : 0.15;
+  return makeBuffer(ctx, length, (t) => {
+    const n = random() * 2 - 1;
+    const punch = low(n) * Math.exp(-t / 0.012) * 0.7;
+    const tick = n * Math.exp(-t / 0.0024) * 0.3;
+    const ring = kind === 'hit' ? 0 : Math.sin(TAU * (kind === 'head' ? 1620 : 970) * t) * Math.exp(-t / 0.024) * 0.18;
+    return (punch + tick + ring) * Math.min(1, t * 5000);
+  }, 0.45, 2);
 }
 
 function explosion(ctx, seed) {
@@ -96,7 +117,8 @@ function clickClack(ctx, seed, times) {
   return makeBuffer(ctx, times[times.length - 1] + 0.08, (t) => {
     const n = random() * 2 - 1;
     let v = 0;
-    for (const [at, level] of times.map((x, i) => [x, i ? 1 : 0.6])) {
+    for (let i = 0; i < times.length; i++) {
+      const at = times[i], level = i ? 1 : 0.6;
       const u = t - at;
       if (u > 0) v += (n - hp(n) * 0.6) * Math.exp(-u / 0.004) * level + Math.sin(TAU * 2100 * u) * Math.exp(-u / 0.01) * 0.3 * level;
     }
@@ -175,7 +197,7 @@ export function createCombatResources(ctx) {
   return {
     pistol: [1, 2, 3].map((s) => gunshot(ctx, 700 + s, { body: 120, crack: 1, length: 0.5 })),
     smg: [1, 2, 3].map((s) => gunshot(ctx, 720 + s, { body: 150, crack: 1.2, length: 0.32, weight: 0.7 })),
-    shotgun: [1, 2].map((s) => gunshot(ctx, 740 + s, { body: 80, crack: 0.8, length: 0.9, weight: 1.6 })),
+    shotgun: [1, 2].map((s) => gunshot(ctx, 740 + s, { body: 78, crack: 0.85, length: 0.72, weight: 1.75, mechanism: 0.33 })),
     rifle: [1, 2, 3].map((s) => gunshot(ctx, 750 + s, { body: 105, crack: 1.4, length: 0.6, weight: 1.1 })),
     throw: [clickClack(ctx, 812, [0.01, 0.06])],
     explosion: [1, 2].map((s) => explosion(ctx, 760 + s)),
@@ -183,6 +205,11 @@ export function createCombatResources(ctx) {
     impactMetal: [1, 2].map((s) => impact(ctx, 790 + s, true)),
     punch: [1, 2].map((s) => punch(ctx, 800 + s)),
     reload: [clickClack(ctx, 810, [0.02, 0.32])],
+    reloadInsert: [clickClack(ctx, 813, [0.005, 0.046])],
+    reloadRack: [clickClack(ctx, 814, [0.005, 0.095])],
+    hitConfirm: [confirmation(ctx, 'hit')],
+    headshot: [confirmation(ctx, 'head')],
+    killConfirm: [confirmation(ctx, 'kill')],
     dry: [clickClack(ctx, 811, [0.01])],
     cash: [cash(ctx)],
     pass: [arpeggio(ctx, [0, 4, 7, 12, 16, 19, 24], { gap: 0.09, decay: 0.7, length: 2.2, pad: 0.25 })],
@@ -210,6 +237,11 @@ export const COMBAT_SOUNDS = {
   impactMetal: { level: 0.4, range: 70, ref: 3 },
   punch: { level: 0.6, range: 40, ref: 3 },
   reload: { level: 0.5, range: 25, ref: 2 },
+  reloadInsert: { level: 0.55, range: 20, ref: 2 },
+  reloadRack: { level: 0.6, range: 20, ref: 2 },
+  hitConfirm: { level: 0.2 },
+  headshot: { level: 0.28 },
+  killConfirm: { level: 0.26 },
   dry: { level: 0.4, range: 20, ref: 2 },
   cash: { level: 0.45 },
   pass: { level: 0.5 },

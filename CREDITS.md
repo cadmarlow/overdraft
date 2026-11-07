@@ -92,3 +92,23 @@ https://github.com/vercel/geist-font/blob/main/OFL.txt. Chargées via Google Fon
 Le serveur de l'Architecte utilise le SDK TypeScript Anthropic (`@anthropic-ai/sdk`), sous licence Apache-2.0 :
 https://github.com/anthropics/anthropic-sdk-typescript. Sa licence est fournie avec le paquet installé dans
 `tools/architecte/node_modules/@anthropic-ai/sdk/LICENSE`. Le SDK et le serveur sont exclus du build du jeu publié.
+
+## Ressources dérivées de Revaluation (0.9.8)
+
+`assets/world/urban-light.bin.gz` et `assets/world/urban-reflection.bin.gz` sont calculés par
+`tools/world/bake-urban-light.mjs` à partir des empreintes et hauteurs déjà présentes dans
+`js/building-geodata.bin.gz`. Ils conservent la provenance et les conditions de cette base : NYC Open Data et
+© contributeurs OpenStreetMap, ODbL 1.0 pour les éléments dérivés d'OpenStreetMap. Aucune nouvelle collecte externe.
+Le format, son lecteur et son générateur sont fournis avec le projet. La pierre et les pelouses réutilisent les textures
+CC0 de Poly Haven et ambientCG déjà créditées ci-dessus. Les nouveaux encadrements et shaders sont créés pour le jeu.
+
+## Arsenal original — 0.9.10
+
+Les modèles Calypso 9, Hornet, Breaker 12 et Sentinel sont construits pour OVERDRAFT dans
+`js/weapon-models.js` : géométrie, matériaux et mécanismes procéduraux originaux, sans ressource externe ajoutée.
+Ils remplacent les armes Rocketbox à l’affichage ; les personnages et captures conservent leurs crédits ci-dessus.
+Les nouveaux sons de tir, mécanismes et confirmations sont synthétisés dans `js/audio-combat.js`.
+
+## Capital Gains — finitions automobiles originales
+
+Plaques fictives OVERDRAFT, badges Valmont/Brisant/Gréville/Hauturier/Corsaire, cadrans, détails de freinage et sculptures procédurales des pneus : créations du projet, générées localement au chargement. Aucune nouvelle ressource externe. Les quinze modèles conservent les licences et attributions décrites dans `assets/cars/LICENSE-cars.md`.

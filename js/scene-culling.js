@@ -151,6 +151,8 @@ function replaceWithChunks(mesh, cell) {
  * decides what the far cascade draws. Per-frame culling runs in updateSceneCulling().
  */
 function setupSceneCulling(scene, roots, shadow = null, quality = {}) {
+  state.cells.length = 0;
+  state.loose.length = 0;
   scene.updateMatrixWorld(true);
   const culled = [];
 
@@ -172,12 +174,18 @@ function setupSceneCulling(scene, roots, shadow = null, quality = {}) {
   for (const root of roots) {
     root.traverse((o) => {
       if (!isStaticMesh(o)) return;
+      // Already partitioned prop batches have an explicit reach. Their small instance count and bounding sphere
+      // are precisely why they need no further splitting, not a reason to ignore that reach altogether.
+      if (o.userData.cullDistance > 0) {
+        const sphere = meshSphere(o);
+        // Island-wide batches (tree pits, for example) still need spatial partitioning. An island-sized sphere
+        // added to a short draw distance otherwise keeps every instance alive from any street in Manhattan.
+        if (o.isInstancedMesh && o.count === o.instanceMatrix.count && sphere.radius > Math.max(512, o.userData.cullDistance * 2)) {
+          chunkable.push(o);
+        } else pushCulled(o, sphere, o.userData.cullDistance);
+        return;
+      }
       if (!o.isInstancedMesh) {
-        if (o.userData.cullDistance > 0) {
-          if (!o.geometry.boundingSphere) o.geometry.computeBoundingSphere();
-          const sphere = o.geometry.boundingSphere.clone().applyMatrix4(o.matrixWorld);
-          pushCulled(o, sphere, o.userData.cullDistance);
-        }
         return;
       }
       if (o.count < 64 || o.count !== o.instanceMatrix.count) return;

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FramePacer } from '../js/quality.js';
+import { FramePacer, ShadowCadence } from '../js/quality.js';
 
 globalThis.document ??= { hidden: false };
 
@@ -75,4 +75,27 @@ test('the render scale climbs back after a sustained good frame rate, and waits 
   assert.ok(before > 8);
   for (let i = 0; i < 9; i++) playWindow(pacer, clock, 60, 0);
   assert.equal(pacer.scale, 0.9);
+});
+
+test('a marginal frame rate does not trigger a more expensive render resolution', () => {
+  const { pacer } = setup();
+  const clock = { t: 1 };
+  pacer.setScale(0.7);
+  for (let i = 0; i < 26; i++) playWindow(pacer, clock, 54, 0);
+  assert.equal(pacer.scale, 0.7, '54 fps is not enough headroom to add GPU work');
+});
+
+test('balanced shadows reuse a stable atlas, but a quick turn or displacement refreshes immediately', () => {
+  const schedule = new ShadowCadence();
+  const camera = { position: { x: 0, y: 2, z: 0 }, quaternion: { x: 0, y: 0, z: 0, w: 1 } };
+  assert.equal(schedule.due(0, camera), true);
+  assert.equal(schedule.due(16, camera), false);
+  assert.equal(schedule.due(34, camera), true);
+  camera.position.x += 1;
+  assert.equal(schedule.due(40, camera), true, 'fast motion and teleportation never wait for the timer');
+  camera.quaternion.y = Math.sin(0.05); camera.quaternion.w = Math.cos(0.05);
+  assert.equal(schedule.due(45, camera), true, 'a trackpad turn cannot reveal an unrendered shadow edge');
+  camera.position.x += 0.04;
+  assert.equal(schedule.due(61, camera), false, 'ordinary walking can reuse the previous atlas');
+  assert.equal(schedule.due(79, camera), true);
 });

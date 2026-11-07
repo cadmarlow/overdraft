@@ -21,6 +21,7 @@ import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
 import { SunLight } from 'three/addons/lights/SunLight.js';
 import { SunLightNode } from 'three/addons/lights/SunLightNode.js';
 import { cityUniforms } from './tsl-materials.js';
+import { ShadowCadence } from './quality.js';
 
 // Atmospheric sky, environment lighting, sunlight and time-of-day presets.
 
@@ -32,17 +33,17 @@ const TIME_PRESETS = {
     id: 'golden',
     sunDir: new THREE.Vector3(-0.44, 0.58, -0.68).normalize(),
     sunColor: 0xffca92,
-    sunIntensity: 7.6,
+    sunIntensity: 5.8,
     hemiSky: 0xd2d6de,
     hemiGround: 0xd29a72, // Warm terracotta / limestone upward canyon bounce
-    hemiIntensity: 1.42,
+    hemiIntensity: 1.65,
     skyTop: 0x2c568c,
     skyHorizon: 0xebd1b5,
     fogColor: 0xdcc5ae,
     fogDensity: 0.00024,
     interiorGlow: 0.48,
     roadWetness: 0.28,
-    envIntensity: 0.40,
+    envIntensity: 0.55,
     canyonBounce: 0.58,
     turbidity: 8.0,
     rayleigh: 2.8,
@@ -56,18 +57,18 @@ const TIME_PRESETS = {
   midday: {
     id: 'midday',
     sunDir: new THREE.Vector3(-0.34, 0.82, -0.46).normalize(),
-    sunColor: 0xffead0,
-    sunIntensity: 8.2,
+    sunColor: 0xfff4e7,
+    sunIntensity: 6.0,
     hemiSky: 0xcbd8ec,
     hemiGround: 0xc4a488, // Warm sunlit masonry & pavement bounce
-    hemiIntensity: 1.5,
+    hemiIntensity: 1.8,
     skyTop: 0x225ea8,
     skyHorizon: 0xc8dff5,
     fogColor: 0xc6dcf2,
     fogDensity: 0.00018,
     interiorGlow: 0.24,
     roadWetness: 0.08,
-    envIntensity: 0.40,
+    envIntensity: 0.55,
     canyonBounce: 0.58,
     turbidity: 6.5,
     rayleigh: 2.4,
@@ -134,6 +135,7 @@ class LightingSystem {
   constructor(scene, renderer = null, quality = {}) {
     this.scene = scene;
     this.activePresetId = 'golden';
+    this.shadowCadence = quality.id === 'balanced' ? new ShadowCadence(30) : null;
 
     // Register SunLight with either supported Three.js light-node API.
     if (SunLight.registerNode) {
@@ -315,13 +317,17 @@ class LightingSystem {
     if (bake) this.bakeEnvironmentMap();
   }
 
-  update(focusPos) {
+  update(focusPos, camera = null, now = 0) {
     // SunLightShadow automatically fits & texel-snaps its 2 cascades to the view camera frustum
     // every frame inside SunShadowNode.renderShadow(), splitting [near, far] halfway between a uniform and a
     // logarithmic split (the near cascade ends at ~far / 4). Keep far at 300 m at street level so the near cascade
     // stays sharp, and expand it with altitude (helicopter / observatory) so shadows reach all the way down to street level.
     const altitude = focusPos && Number.isFinite(focusPos.y) ? Math.max(0, focusPos.y) : 0;
     this.sunLight.shadow.camera.far = Math.max(this.shadowFar, Math.min(720, this.shadowFar - 40 + altitude * 1.6));
+    if (this.shadowCadence && camera) {
+      this.sunLight.shadow.autoUpdate = false;
+      this.sunLight.shadow.needsUpdate ||= this.shadowCadence.due(now, camera);
+    }
   }
 }
 

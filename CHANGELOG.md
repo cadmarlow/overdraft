@@ -1,5 +1,196 @@
 # Changelog
 
+## 0.9.10 — Price Action — 8 novembre 2026
+
+Refonte du tir à la troisième personne et de la conduite des quinze voitures.
+
+### Tir à la troisième personne
+
+- **Caméra** : cadrage armé et visée rapprochée, changement d’épaule avec C, réponse directe au regard, collision
+  contre les empreintes réelles des bâtiments et dégagement amorti. Dos au mur, la caméra glisse latéralement ;
+  dans un coin totalement confiné, le corps et l’arme qui traverseraient l’image sont masqués temporairement, sans
+  interrompre la simulation du canon. Recul à ressort, sans dérive aléatoire permanente.
+- **Arsenal original** : quatre armes avec métal et polymère distincts, canons creux, organes de visée,
+  culasses, chargeurs et pompe mobiles. Prise à deux mains, position de garde et rechargement revisités.
+- **Précision** : tir posé plus précis, dispersion accrue en mouvement et en rafale, récupération entre les tirs,
+  perte de dégâts à distance propre à chaque arme. Une pression légèrement anticipée sur une arme semi-automatique
+  est conservée brièvement ; la cadence automatique conserve les fractions de frame entre les tirs.
+- **Cohérence** : première balle depuis la pose actualisée, cibles à bout portant conservées, obstacle entre le
+  corps et le canon respecté. Rechargement automatique sur le temps du jeu, annulé proprement au changement d’arme.
+- **Retour de tir** : douilles dans une réserve de 72 objets, 96 marques persistantes au maximum, flash bref,
+  traceurs courts, réticule réactif, confirmation de tête/élimination, munitions et progression de recharge lisibles.
+- **Pavé tactile** : X active/désactive la visée sans tenir le clic droit ; la pause et la perte de focus la libèrent.
+- **Son** : signatures des quatre armes, mécanismes de recharge et confirmations synthétiques distincts.
+
+#### Essais du chantier tir avant intégration
+
+- **Validation** : suite complète, 692 tests dont 690 réussis, un ignoré et le seul échec attendu de
+  `tree-geodata` (licence Xcode). Build de production réussi. Chrome sans fenêtre séparé, WebGPU,
+  qualité ÉQUILIBRÉE, vrais événements CDP : quatre armes, tir simple/rafales, recharges, déplacement latéral,
+  changement d’épaule, visée activable, tir au torse puis en pleine tête sur un acteur de test, mouvement de souris
+  sous verrouillage, canon obstrué par une façade et caméra dos au mur. Pas d’exception JavaScript ou WebGPU observée dans ces parcours.
+- **Mesure de fluidité** : sur secteur, sans plafond de fréquence Chrome, dans la rue de départ dense après une
+  session de combat, 35,3 images/s au repos en visée et 33,2 pendant six secondes de tir automatique, rendus effectifs
+  comptés via le régulateur GPU. Résolution interne adaptative 1007 × 569 pour une fenêtre de 1440 × 813.
+  Ce relevé court ne garantit ni 60 images/s, ni un gain global sur la version précédente.
+- **Limites** : les armes et leurs matières restent procédurales et stylisées ; elles ne constituent pas un
+  rendu photoréaliste AAA. Le corps masque encore davantage les armes longues côté gauche, même si leur canon
+  reste visible. Pas de nouvelle capture de mouvements dédiée au combat, ni de refonte de l’IA tactique/couverture.
+  Toute la campagne, les longues sessions sur batterie et une écoute humaine du mixage ne sont pas revalidées.
+
+### Capital Gains — les voitures
+
+- **Quinze personnalités** : traction, propulsion et intégrale ; le fourgon Tournée possède enfin son propre réglage
+  diesel/traction. La masse, l'empattement réel, les pneus et la transmission déterminent le comportement.
+- **Contact avec la route** : angles de braquage distincts des roues avant, rotation interne/externe différenciée,
+  déformation progressive du pneu avant sa force maximale, freinage progressif avec ABS et contre-braquage conservé.
+  La marche arrière est régulée entre 32 et 50 km/h selon la catégorie, sans imposer brutalement une vitesse.
+- **Transmission** : passages précoces à faible charge, rétrogradage en reprise, montée/descente du régime pendant
+  le changement de rapport. Les aides remontent leurs interventions réelles au son et au tableau de bord.
+- **Carrosseries** : peinture multicouche et vernis par famille, reflets de façades filtrés pour supprimer le damier
+  crénelé, vitres plus lisibles et pneus sculptés sans ajouter de texture externe. Plaques et badges des cinq marques
+  projetés sur les panneaux des quinze modèles, y compris la circulation et le stationnement.
+- **Mécanique visible** : quatre disques ventilés avec étriers qui suivent la suspension et le braquage, indépendants
+  de la rotation des pneus ; chaleur visuelle progressive sur les pistes de freinage. Un seul dessin supplémentaire
+  par voiture détaillée. Les voitures de collision simplifiées gardent leurs matériaux partagés.
+- **Habitacles** : console, assises et cadrans avec aiguilles de vitesse/régime animées. Les textures sont préparées
+  au chargement, pas repeintes pendant la conduite.
+- **Sensation** : caméra poursuite/action à ressort stable, anticipation et amplitude du champ de vision maîtrisées ;
+  six familles sonores, variations par modèle, son de charge moteur, engagement des rapports et pneus moins aigus.
+  Traces à la largeur des pneus et sur la pente du contact ; poussière, fumée et eau distinctes. L'humidité des effets
+  vient maintenant de l'état réel de la chaussée, un ancien calcul empêchant le spray de fonctionner.
+- **Garage complet** : quinze automobiles, caractéristiques affichées, sélection au clavier/pavé tactile, objets
+  préparés au chargement et réutilisés. La préparation du garage ne supprime plus une voiture d'une sauvegarde pleine.
+  L'encombrement du modèle est pris en compte pour chercher son point d'apparition.
+- **Instrumentation** : vitesse résultante même en glisse, régime, rapport, gaz, frein, ABS, TC, accélérations, nitro
+  et état mécanique. Animation locale par transformations ; aucun effet CSS animé sur tout l'écran.
+
+### Mesures reproductibles
+
+Sur piste plane sèche, sans nitro, dimensions réelles des modèles. Le freinage est mesuré de **100 à 3 km/h**.
+
+| Modèle | 0–100 km/h | Freinage |
+| --- | ---: | ---: |
+| Valmont Écume | 5,18 s | 36,08 m |
+| Brisant Tempête | 4,45 s | 37,01 m |
+| Corsaire Foudre | 2,72 s | 32,15 m |
+| Corsaire Zénith | 2,38 s | 29,84 m |
+| Hauturier Fret | 11,20 s | 49,55 m |
+
+Le banc `node tools/cars/benchmark-dynamics.mjs` vérifie les quinze modèles sur sec/faible adhérence, marche arrière,
+20/30/60/144 Hz, pauses/reprises, impacts et récupération après retournement. Sur la séquence de 13,5 s, l'écart
+maximal entre cadences reste de 0,55 m, 0,051 m/s et 0,16°. Ce banc mesure la simulation, pas le ressenti d'une manette
+ni la fluidité du rendu de Manhattan. Le scénario mouillé du banc utilise une adhérence réduite à 0,45 pour tester
+les limites ; la pluie de la ville applique actuellement une réduction plus modérée.
+
+Les modèles et textures historiques, le moteur de synthèse et la simulation thermique restent des limites de la flotte.
+La cible de 60 images/s soutenues dans Manhattan reste ouverte.
+
+### Vérification de la version intégrée
+
+- Le garage tient compte du rayon complet du véhicule près des façades, et la zone rouge des cadrans suit le réglage moteur.
+- Les tirs peuvent endommager une voiture garée. Les devantures orientées arrêtent le tir même quand elles sont minces.
+- Avec de vrais événements clavier et souris dans Chrome, les quatre armes tirent et se rechargent. L'essai a aussi
+  couvert le changement d'épaule, la visée au pavé tactile, le tir au torse et à la tête, le canon obstrué et la pause.
+  La première mission « Clé de contact » a été jouée jusqu'à sa récompense, avec déplacement au marqueur de livraison.
+- Le banc de conduite mesure un déplacement et un gain de vitesse sur quatre roues pour chacun des quinze modèles.
+  Si le départ en circulation ne réunit pas ces conditions, l'essai est repris sur une voie dégagée en isolant les
+  contacts avec le trafic ambiant. Les quinze modèles ont passé l'essai en ÉQUILIBRÉE et en HAUTE, sans erreur WebGPU.
+- La suite complète compte 738 réussites et un test ignoré. Le générateur d'arbres a été testé avec le Python fourni
+  par Codex. Le build de production réussit.
+
+## 0.9.9 — Break Even — 7 novembre 2026
+
+Correctif après retour de jeu : les améliorations graphiques de 0.9.8 étaient trop modestes au regard de la charge
+supplémentaire et ne validaient pas l'expérience réelle. Priorité aux déplacements et à la stabilité.
+
+- **Enfoncement du héros et des piétons** : l'animation enregistrée était ancrée sur un bassin qui avait déjà subi
+  les oscillations et contraintes d'une autre marche. En course sur sol plat, ce cumul abaissait le corps jusqu'à
+  environ 23 cm dans la reproduction. La capture s'ancre maintenant sur la surface réelle ; les postures de saut,
+  chute, conduite et entrée/sortie de véhicule conservent leur squelette procédural.
+- **Bordures** : le héros corrige chaque jambe selon le sol sous la semelle, pointe et talon compris, tout en gardant
+  l'orientation du pied. La correction ne remplace pas le mouvement enregistré sur sol plat et ne traite pas une
+  grande hauteur comme une marche franchissable.
+- **Cadence des pas** : choix de l'animation et longueur de foulée tiennent compte de la taille du corps affiché,
+  pour le héros comme pour les passants.
+- **Reflets et charge GPU** : la recherche dans les volumes réels reste disponible en HAUTE. ÉQUILIBRÉE et FLUIDE
+  reprennent les reflets légers et ne chargent plus le champ de hauteurs des reflets. La lumière ambiante locale,
+  les matières et les corrections de visibilité restent actives.
+- **Résolution adaptative** : retour à une cadence soutenue d'au moins 57 images/s avant de tenter une remontée,
+  au lieu de 52. Une rue déjà limitée à 54 images/s n'ajoute plus de pixels à calculer.
+- **Tests de mouvement réels** : les fichiers de capture, le squelette et les sommets des chaussures livrés sont
+  évalués en marche/course à 20, 30 et 60 images/s, sur sol plat et au franchissement d'une bordure de 22 cm dans
+  les deux sens. Tests aussi sur piétons homme/femme, changement de hauteur, téléportation, saut et taille du corps.
+
+- **Validation** : 658 tests, 656 réussis, un ignoré et le seul échec attendu de `tree-geodata` (licence Xcode).
+  Build de production réussi. Dans un Chrome séparé en ÉQUILIBRÉE : marche et course sur le trottoir de départ,
+  traversée de bordures dans les deux sens, avec de vraies touches CDP et mesures sur les sommets des chaussures.
+  Pour isoler les appuis, le dernier parcours rend temporairement le personnage invulnérable aux voitures et aux
+  renversements ; les collisions avec le sol et le mobilier restent actives. Les 154 relevés de ce parcours donnent
+  une pénétration maximale de semelle inférieure à 1 mm. Cela ne certifie pas toutes les surfaces de Manhattan.
+  Vol d'une voiture garée, conduite, freinage, sortie et reprise de la marche également rejoués, sans erreur
+  JavaScript ou WebGPU détectée. Ce dernier scénario conserve les interactions normales avec la circulation.
+- **Limites** : la fluidité reste variable dans les zones denses, avec encore des passages sous 60 images/s.
+  Les comparatifs de reflets sont indicatifs (trafic vivant), pas une garantie de gain sur chaque machine.
+  Les animations en combat, toute la campagne et les longues sessions sur batterie ne sont pas revalidées.
+
+## 0.9.8 — Revaluation — 7 novembre 2026
+
+### Matière et profondeur
+- **Lumière locale** : visibilité du ciel calculée hors ligne à 2, 16, 48 et 144 mètres à partir des 37 353 empreintes
+  d'immeubles. Les rues encaissées, les places ouvertes, les cours et les toits reçoivent un éclairage ambiant distinct.
+  Une lecture de texture par fragment ; le soleil, les lampes et leurs ombres restent dynamiques. Ce n'est pas une
+  simulation complète d'illumination globale.
+- **Reflets des voitures détaillées** : recherche des volumes réels dans un champ de hauteurs, indépendante de ce qui
+  est à l'écran. Les ouvertures des rues et les hauteurs de la skyline suivent la ville. Les façades reflétées sont
+  simplifiées et éclairées selon l'heure ; trafic et passants ne figurent pas dans ces reflets. Le trafic instancié garde
+  ses reflets légers.
+- **Façades proches** : jambages en pierre, linteaux plus profonds, doubles moulures aux soubassements et bandeaux.
+  Les détails trop hauts, trop loin ou sur la face opposée ne saturent plus les pools.
+- **Monuments** : pierre taillée à joints métriques, variation par dalle, pores discrets et pied sali ; halls en vitrage
+  avec montants et émission nocturne, au lieu de boîtes blanches lumineuses en plein jour. Pelouse texturée à Bryant Park.
+- **Image** : soleil moins écrasant, équilibre ciel/soleil revu, bloom contenu sur les hautes lumières, franges
+  chromatiques retirées, vignette et accentuation atténuées.
+
+### Budget de rendu
+- La portée explicite des petits lots instanciés est respectée : les bouches d'incendie éloignées ne sont plus toutes
+  envoyées au GPU. Les grands lots à portée explicite, notamment les fosses d'arbres, restent divisés spatialement.
+- Stationnement : sélection du niveau de détail voiture par voiture, altitude comprise, puis 21 pools persistants
+  pour les sept modèles (proche, lointain, ombre de contact). Aucun objet de rendu ni matériau créé pendant leur
+  défilement. Occupation, collisions, vol, interdictions et disparition immédiate restent indépendants du rendu.
+- En ÉQUILIBRÉE, le rafraîchissement des ombres stables est limité à 30 Hz ; une rotation rapide, un déplacement de plus de 75 cm ou
+  une téléportation les rafraîchit immédiatement. HAUTE conserve une mise à jour par image.
+- La résolution peut remonter après une cadence stable d'au moins 52 images/s. Un passage qui plafonne côté processeur
+  ne condamne plus l'image à rester floue faute d'atteindre 57 ; les essais infructueux gardent leur temporisation.
+
+### Fabrication et contrôle
+- Deux ressources dérivées, environ 5,93 Mo compressées, régénérées par `node tools/world/bake-urban-light.mjs`.
+  Aucune nouvelle source externe ; provenance et limites dans `CREDITS.md` et le guide de l'outil.
+- Tests ajoutés : portée et partitionnement du mobilier, niveaux de détail et vol des voitures, géométrie des
+  encadrements, cadence des ombres, récupération de résolution, lumière des cours et rues, format binaire et recherche
+  de reflets au-dessus des toits et dans chaque direction.
+
+### Validation du jalon et limites
+- `npm test` : 652 tests, 650 réussis, un ignoré et le seul échec attendu de `tree-geodata`, dû à la licence Xcode
+  non acceptée sur la machine. `npm run build` réussit ; les deux champs sont livrés et l'Architecte reste exclu.
+- Démarrage et marche contrôlés aussi en FLUIDE et HAUTE, sans erreur JavaScript ou WebGPU détectée. Les mesures
+  comparatives de cadence ci-dessous concernent ÉQUILIBRÉE ; elles ne sont pas un benchmark de ces deux autres qualités.
+- Parcours dans un Chrome séparé, WebGPU, synchronisation verticale et plafond d'images désactivés : Midtown,
+  Bryant Park, Times Square, Flatiron et Downtown en caméra de jeu à midi, puis Midtown la nuit. Marche et conduite
+  avec de vraies touches CDP ; vol d'une voiture garée et sortie du véhicule contrôlés.
+- Première mission « Clé de contact » jouée jusqu'à sa fin : prise du véhicule, recherche policière, livraison,
+  disparition des étoiles et récompense de 2 000 $. Le test déplace le joueur sur les marqueurs et le véhicule au
+  lieu de livraison ; il ne force ni les étapes ni la récompense. Le trajet routier complet reste à éprouver.
+- Aucune erreur JavaScript ou WebGPU pendant ces parcours. La campagne complète, les longues sessions sur batterie
+  et l'équilibrage du combat ne sont pas revalidés par cette version.
+- Le coût de la scène de départ est passé d'environ 19,7 millions à 8,4 millions de triangles soumis, selon le trafic
+  et le passage d'ombres. Le gain ne garantit pas 60 images/s : les séries en ÉQUILIBRÉE varient d'environ 40–55 à
+  55–71 images/s selon la zone et la session. Dans le dernier comparatif à résolution native de Midtown, les ombres
+  cadencées donnent 40,4 images/s contre 37,9 à cadence complète, avec un 95e centile identique de 35,9 ms.
+  La cible de 60 images/s stables reste ouverte ; les chiffres instantanés du compteur ne constituent pas une garantie.
+- Les personnages secondaires, les silhouettes de certains monuments, les animations et la mise en scène restent
+  en retrait du niveau artistique visé. Cette version améliore le rendu ; elle ne certifie pas un niveau AAA.
+
 ## 0.9.7 — Curb Appeal — 7 novembre 2026
 
 L'image. Le jeu avait une ville réelle, des voitures réelles, des gens réels, et une image de 2004 : un éclairage plat

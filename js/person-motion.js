@@ -143,10 +143,10 @@ function rigging(sk) {
 // How each weapon sits. Points are in the weapon's own space (metres, +Z along the barrel): `grip` where the palm closes,
 // `fore` where the other hand supports it, `butt` the end that meets the shoulder, `muzzle` the barrel's end
 const HOLD = {
-  pistol: { grip: [0, -0.055, -0.035], fore: null, muzzle: [0, 0.022, 0.1], stance: 'pistol' },
-  smg: { grip: [0, -0.1, -0.118], fore: [0, -0.08, 0.108], upright: true, butt: [0, 0, -0.37], muzzle: [0, 0.03, 0.167], stance: 'rifle' },
-  shotgun: { grip: [0, -0.08, -0.243], fore: [0, -0.018, 0.146], butt: [0, 0, -0.45], muzzle: [0, 0.018, 0.378], stance: 'rifle' },
-  rifle: { grip: [0, -0.057, -0.076], fore: [0, 0.03, 0.222], butt: [0, 0, -0.295], muzzle: [0, 0.035, 0.5], stance: 'rifle' },
+  pistol: { grip: [0, -0.055, -0.052], fore: null, magazine: [0, -0.13, -0.06], muzzle: [0, 0.022, 0.115], stance: 'pistol' },
+  smg: { grip: [0, -0.1, -0.118], fore: [0, -0.08, 0.108], magazine: [0, -0.18, -0.025], upright: true, butt: [0, 0, -0.37], muzzle: [0, 0.03, 0.202], stance: 'rifle' },
+  shotgun: { grip: [0, -0.08, -0.243], fore: [0, -0.018, 0.146], magazine: [0, -0.055, -0.12], butt: [0, 0, -0.45], muzzle: [0, 0.018, 0.402], stance: 'rifle' },
+  rifle: { grip: [0, -0.075, -0.076], fore: [0, -0.015, 0.222], magazine: [0, -0.17, 0.046], butt: [0, 0, -0.295], muzzle: [0, 0.035, 0.522], stance: 'rifle' },
   grenade: { grip: [0, 0, 0], fore: null, muzzle: [0, 0.05, 0], stance: 'thrown' }
 };
 
@@ -179,6 +179,7 @@ class BodyDriver {
     this.free = 1; // 1: captured motion, 0: the PersonRig's pose
     this.ready = 0; // 0 hanging .. 1 weapon in both hands, raised
     this.aimW = 0;
+    this.aimShoulder = 1;
     this.grip = [0, 0];
     this.recoil = 0;
     this.blink = 0;
@@ -197,7 +198,7 @@ class BodyDriver {
 
   // The steady walk, matched to the ground speed so feet don't slide, over the standing take
   locomotion(dt, rig, yawRate, backwards) {
-    const speed = rig.speed;
+    const speed = rig.speed / this.body.scale;
     const gaits = this.gaits;
     let i = 0;
     while (i < gaits.length - 2 && speed > gaits[i + 1].speed) i++;
@@ -373,7 +374,9 @@ class BodyDriver {
     this.yaw = wrap(this.yaw + wrap(legYaw - this.yaw) * ease(dt, 0.08));
     const yawRate = wrap(this.yaw - this.lastYaw) / Math.max(dt, 1e-3);
     this.lastYaw = this.yaw;
-    const ground = rig.pelvisY - rig.standingHeight(0);
+    // A captured stride already includes its pelvis motion. Adding the procedural rig's bob a second time can
+    // pull the whole runner 20+ cm below the pavement. Anchor capture to the actual supporting surface instead.
+    const ground = rig.groundY;
     body.root[0] = rig.x; body.root[1] = ground; body.root[2] = rig.z;
     _q.setFromAxisAngle(UP, this.yaw).multiply(_q2.setFromAxisAngle(AZ, (rig.bank || 0) * 0.8));
     body.rootQ[0] = _q.x; body.rootQ[1] = _q.y; body.rootQ[2] = _q.z; body.rootQ[3] = _q.w;
@@ -410,6 +413,7 @@ class BodyDriver {
     }
 
     body.solve();
+    if (!forced && !rig.overlay?.feet) this.conformGround(rig);
     if (free > 0 && (rig.kickX || rig.kickZ)) this.flinch(rig);
     const hold = kind ? HOLD[kind] : null;
     if (free > 0) this.upperBody(dt, rig, hold, kind);
@@ -417,6 +421,33 @@ class BodyDriver {
     if (free > 0) this.lookAround(dt, rig);
     this.eyes(dt);
     if (rig.overlay) this.overlay(rig.overlay);
+  }
+
+  // Preserve the captured stride on flat ground, but let each foot stand on its own side of a curb. Moving the
+  // whole capture up when its centre crosses a curb otherwise buries the leading foot before the centre arrives.
+  conformGround(rig) {
+    const { body, skeleton: sk } = this, { bone } = sk;
+    const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw), scale = body.scale;
+    for (let i = 0; i < 2; i++) {
+      vset(_target, body.wp, bone.foot[i]);
+      // The toe reaches the curb before the ankle does. Sample the sole's footprint, including both heel corners,
+      // so the shoe cannot enter the vertical curb face while the ankle is still over the road.
+      let support = rig.surfaceAt(_target.x, _target.z);
+      let lift = -Infinity;
+      _q.fromArray(body.wq, bone.foot[i] * 4).multiply(_q2.fromArray(sk.bindQ, bone.foot[i] * 4).invert());
+      for (const along of [-0.12, 0.25]) for (const across of [-0.12, 0.12]) {
+        _g.set(across, -sk.bindP[bone.foot[i] * 3 + 1], along).multiplyScalar(scale).applyQuaternion(_q);
+        const ground = rig.surfaceAt(_target.x + _g.x, _target.z + _g.z);
+        support = Math.max(support, ground);
+        lift = Math.max(lift, ground - (_target.y + _g.y));
+      }
+      const delta = Math.max(support - rig.groundY, lift);
+      if (Math.abs(delta) < 0.002 || Math.abs(delta) > 0.45) continue;
+      _target.y += delta;
+      _pole.set(sy, 0.05, cy);
+      _handQ.fromArray(body.wq, bone.foot[i] * 4);
+      this.reachLeg(i, _target, _pole, _handQ);
+    }
   }
 
   /**
@@ -556,8 +587,9 @@ class BodyDriver {
     const armed = !!hold && hold.stance !== 'thrown';
     const aiming = armed && !!rig.aim && rig.aim.y !== undefined;
     const rifle = armed && hold.stance === 'rifle';
+    this.aimShoulder += ((rig.aim?.shoulder === -1 ? -1 : 1) - this.aimShoulder) * ease(dt, 0.09);
     this.aimW += ((aiming ? 1 : 0) - this.aimW) * ease(dt, aiming ? 0.07 : 0.16);
-    this.ready += ((rifle ? 1 : 0) - this.ready) * ease(dt, 0.1);
+    this.ready += ((rifle || (armed && rig.combatReady) ? 1 : 0) - this.ready) * ease(dt, 0.1);
     this.hasGun = !!hold;
 
     // Aim direction from the base of the neck
@@ -627,7 +659,7 @@ class BodyDriver {
     _right.set(-_fwd.z, 0, _fwd.x);
 
     // Hanging pose first: where the weapon rests when not aimed
-    if (rifle) {
+    if (rifle || this.ready > 0.001) {
       // low ready across the body: grip by the right hip, muzzle down and to the left
       _gz.copy(_fwd).multiplyScalar(0.72).addScaledVector(_right, -0.5);
       _gz.y = -0.48;
@@ -635,8 +667,8 @@ class BodyDriver {
       _gx.crossVectors(UP, _gz).normalize();
       _gy.crossVectors(_gz, _gx);
       frameQuat(_gx, _gy, _gz, _restQ);
-      vset(_restP, body.wp, bone.spine2).addScaledVector(_right, 0.15 * s).addScaledVector(_fwd, 0.17 * s);
-      _restP.y -= 0.17 * s;
+      vset(_restP, body.wp, bone.spine2).addScaledVector(_right, (rifle ? 0.15 : 0.07) * s).addScaledVector(_fwd, (rifle ? 0.17 : 0.34) * s);
+      _restP.y -= (rifle ? 0.17 : 0.11) * s;
       _restP.sub(_c.fromArray(hold.grip).applyQuaternion(_restQ));
     } else {
       this.placeInHand(hold);
@@ -655,9 +687,15 @@ class BodyDriver {
       if (_top.y < 0) _top.negate();
       if (rifle) {
         // the stock in the shoulder, under the eye
-        vset(_aimP, body.wp, bone.upper[1]).addScaledVector(_line, (-hold.butt[2] + 0.02) * s).addScaledVector(_top, 0.035 * s).addScaledVector(_across, -0.035 * s);
+        vset(_aimP, body.wp, bone.upper[1]).addScaledVector(_line, (-hold.butt[2] + 0.02) * s).addScaledVector(_top, 0.055 * s).addScaledVector(_across, -0.035 * s);
+        const opposite = (1 - this.aimShoulder) * 0.5;
+        _aimP.addScaledVector(_line, opposite * 0.075 * s).addScaledVector(_top, opposite * 0.025 * s).addScaledVector(_across, -opposite * 0.15 * s);
       } else {
-        _aimP.copy(_b).addScaledVector(_line, 0.5 * s).addScaledVector(_top, -0.04 * s).addScaledVector(_across, 0.05 * s);
+        // Sight beneath the right eye, clear of the shoulder silhouette. A centre-chest pistol disappears
+        // behind the jacket in the actual shoulder camera even though its mathematical aim is correct.
+        // The opposite shoulder brings the same right-hand grip across to the left-eye sight line;
+        // the hands keep their anatomy rather than mirroring the character or the weapon.
+        _aimP.copy(_b).addScaledVector(_line, 0.54 * s).addScaledVector(_top, 0.025 * s).addScaledVector(_across, (0.025 + 0.175 * this.aimShoulder) * s);
       }
       _gz.subVectors(_aim, _aimP).normalize();
       _gx.crossVectors(UP, _gz).normalize();
@@ -675,8 +713,17 @@ class BodyDriver {
       this.gunP.copy(_restP);
       this.gunQ.copy(_restQ);
     }
+    if (rig.reloading >= 0) {
+      // Bring the well into view while the support hand changes the magazine, then shoulder the weapon again.
+      const t = clamp(rig.reloading, 0, 1);
+      const cant = Math.sin(Math.min(1, t / 0.18) * Math.PI / 2) * (1 - Math.max(0, (t - 0.78) / 0.22));
+      this.gunP.y -= 0.075 * cant * s;
+      _q.setFromAxisAngle(AZ, -0.36 * cant);
+      this.gunQ.multiply(_q);
+      this.gunQ.multiply(_q.setFromAxisAngle(_a.set(1, 0, 0), -0.16 * cant));
+    }
     this.recoil *= Math.exp(-dt * 14);
-    const weight = rifle ? Math.max(this.ready, aimW) : aimW;
+    const weight = Math.max(this.ready, aimW);
     if (weight <= 0.001) return;
 
     // Hands onto the weapon
@@ -719,12 +766,21 @@ class BodyDriver {
       _target.addScaledVector(_gx, 0.05 * s).addScaledVector(_fingers, -frame.length * 0.6 * s).addScaledVector(_gz, -0.01 * s);
     }
     if (rig.reloading >= 0) {
-      // down to the belt for a fresh magazine and back
-      const dip = Math.sin(Math.PI * Math.min(1, rig.reloading * 1.15));
-      vset(_a, body.wp, bone.pelvis);
-      _a.y += 0.04;
-      _a.addScaledVector(_b.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw)), 0.17 * s);
-      _target.lerp(_a, dip * dip);
+      const t = clamp(rig.reloading, 0, 1);
+      // Touch the magazine first, pull it clear, reach the belt and insert. The final short reach works
+      // the action before returning to the fore-end; it no longer performs one unexplained sinusoidal dip.
+      _restP.fromArray(hold.magazine || hold.grip).applyQuaternion(this.gunQ).add(this.gunP);
+      _restP.addScaledVector(_gy, -Math.max(0, Math.min(1, (t - 0.13) / 0.13, (0.71 - t) / 0.13)) * 0.16);
+      const contact = clamp(t / 0.13, 0, 1) * (1 - clamp((t - 0.73) / 0.22, 0, 1));
+      _target.lerp(_restP, contact);
+      vset(_restP, body.wp, bone.pelvis).addScaledVector(_b.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw)), 0.18 * s);
+      _restP.y += 0.03;
+      const belt = Math.max(0, Math.min(1, (t - 0.27) / 0.10, (0.57 - t) / 0.12));
+      _target.lerp(_restP, belt);
+      if (t > 0.78 && t < 0.94) {
+        _restP.set(-0.035, 0.04, hold.grip[2] + 0.045).applyQuaternion(this.gunQ).add(this.gunP);
+        _target.lerp(_restP, Math.sin((t - 0.78) / 0.16 * Math.PI));
+      }
     }
     _pole.set(Math.cos(yawC) * 0.4, -1, -Math.sin(yawC) * 0.4);
     this.grip[0] += (1 - this.grip[0]) * 0.3;
@@ -785,7 +841,7 @@ class BodyDriver {
     }
   }
 
-  kick() { this.recoil = 1; }
+  kick(amount = 1) { this.recoil = Math.min(1.7, Math.max(this.recoil, amount)); }
 
   // World point of the barrel's end
   muzzle(hold, out) {

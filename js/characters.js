@@ -1,10 +1,11 @@
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { loadGun, loadPerson } from './people-assets.js';
-import { createGunMaterial, createPersonMaterials } from './people-material.js';
+import { loadPerson } from './people-assets.js';
+import { createPersonMaterials } from './people-material.js';
 import { loadMocap } from './mocap.js';
 import { Skeleton } from './person-body.js';
 import { BodyDriver, HOLD } from './person-motion.js';
+import { prepareWeaponModels, createWeaponModel, animateWeapon } from './weapon-models.js';
 
 // Individually drawn people (the protagonist, police officers, crews, mission targets): real avatars wearing captured
 // motion, moved around by a PersonRig. Bodies and materials are shared between characters of the same look, so a new
@@ -25,7 +26,6 @@ const LOOKS = {
 };
 
 const people = new Map();
-const guns = new Map();
 
 // Called once at start-up, behind the loading screen
 async function loadCharacters() {
@@ -35,10 +35,7 @@ async function loadCharacters() {
     const person = await loadPerson(id);
     people.set(id, { person, skeleton: new Skeleton(person), materials: createPersonMaterials(person) });
   }));
-  await Promise.all(GUNS.map(async (g) => {
-    const gun = await loadGun(g);
-    guns.set(g, { geometry: gun.geometry, material: createGunMaterial(gun) });
-  }));
+  prepareWeaponModels();
 }
 
 const GUNS = ['pistol', 'smg', 'shotgun', 'rifle'];
@@ -47,8 +44,7 @@ const GRENADE = () => mergeGeometries([new THREE.SphereGeometry(0.045, 10, 8).sc
 let _grenade = null;
 function weaponMesh(kind) {
   if (kind === 'grenade') return new THREE.Mesh((_grenade ??= GRENADE()), GRENADE_MAT);
-  const { geometry, material } = guns.get(kind);
-  return new THREE.Mesh(geometry, material);
+  return createWeaponModel(kind);
 }
 
 const _up = new THREE.Vector3();
@@ -79,6 +75,8 @@ class CharacterModel {
     scene.add(this.mesh);
     this.weapon = null;
     this.weaponKind = null;
+    this.weaponCache = new Map();
+    this.shotAge = 10;
     this.visible = true;
   }
 
@@ -88,7 +86,9 @@ class CharacterModel {
     this.rig.holding = !!kind;
     if (this.weapon) { this.weapon.removeFromParent(); this.weapon = null; }
     if (!kind || !(kind === 'grenade' || GUNS.includes(kind))) return;
-    this.weapon = weaponMesh(kind);
+    if (!this.weaponCache.has(kind)) this.weaponCache.set(kind, weaponMesh(kind));
+    this.weapon = this.weaponCache.get(kind);
+    this.shotAge = 10;
     this.weapon.castShadow = true;
     this.weapon.matrixAutoUpdate = false;
     this.scene.add(this.weapon);
@@ -102,20 +102,39 @@ class CharacterModel {
   }
 
   // The gun kicks back in the hands
-  fired() { this.driver.kick(); }
+  fired() {
+    this.shotAge = 0;
+    this.driver.kick(this.weaponKind === 'shotgun' ? 1.45 : this.weaponKind === 'pistol' ? 0.72 : this.weaponKind === 'smg' ? 0.38 : 0.5);
+  }
+
+  // A first shot must leave this frame's raised barrel, including a turn made on the same input frame.
+  // This samples the existing capture at dt=0, so neither locomotion nor reload advances twice.
+  prepareShot(target, heading = this.rig.yaw) {
+    const rig = this.rig, driver = this.driver;
+    rig.yaw = heading;
+    rig.aim = { ...rig.aim, x: target.x, y: target.y, z: target.z };
+    driver.yaw = driver.lastYaw = heading;
+    driver.aimW = 1;
+    driver.twist = HOLD[this.weaponKind]?.stance === 'rifle' ? -0.62 : 0;
+    driver.pitch = Math.atan2(target.y - rig.groundY - 1.5, Math.hypot(target.x - rig.x, target.z - rig.z));
+    this.update(this.visible, 0, 0);
+  }
 
   update(visible = true, distance = 0, dt = 1 / 60) {
     this.visible = visible;
-    this.mesh.visible = visible;
+    this.mesh.visible = visible && !this.cameraOccluded;
     if (this.weapon) this.weapon.visible = visible;
     if (!visible) return;
+    this.shotAge += dt;
     const kind = GUNS.includes(this.weaponKind) || this.weaponKind === 'grenade' ? this.weaponKind : null;
     this.driver.update(dt, this.rig, kind);
     this.driver.body.write(this.bones);
     this.skeleton.update();
     if (this.weapon) {
+      this.weapon.visible = this.driver.hasGun && !this.cameraOccluded;
+      animateWeapon(this.weapon, this.weaponKind, this.shotAge, this.rig.reloading);
       this.weapon.matrix.compose(this.driver.gunP, this.driver.gunQ, _one);
-      this.weapon.matrixWorld.copy(this.weapon.matrix);
+      this.weapon.updateMatrixWorld(true);
     }
   }
 

@@ -1220,6 +1220,9 @@ class PersonRig {
     this.run = 0;
     this.phase = 0.05; // gait cycle: the left heel strikes at 0, the right at 0.5
     this.pelvisY = 0;
+    this.groundY = 0; // supporting surface, independent of procedural pelvis bob and leg-reach constraints
+    this.groundSampler = null;
+    this.groundOwner = null;
     this.standY = 0; // pelvis height standing straight on the ground under the feet (eased)
     this.pelvisYaw = 0;
     this.pelvisRoll = 0;
@@ -1283,6 +1286,10 @@ class PersonRig {
     return y + ANKLE_H * this.s + this.legLength * 0.997 + (PELVIS_Y - HIP_Y) * this.s;
   }
 
+  surfaceAt(x, z) {
+    return this.groundSampler ? this.groundSampler(this.groundOwner, x, z) : this.groundY;
+  }
+
   // A blow that doesn't drop them: the chest gives way along (x, z), then recovers
   flinch(x, z, amount = 0.32) {
     const l = Math.hypot(x, z) || 1;
@@ -1297,6 +1304,9 @@ class PersonRig {
     this.x = x;
     this.z = z;
     this.yaw = yaw;
+    this.groundY = ground(owner, x, z);
+    this.groundSampler = ground;
+    this.groundOwner = owner;
     this.vx = this.vz = this.tvx = this.tvz = this.speed = 0;
     this.gait = this.run = this.sway = 0;
     this.pelvisYaw = this.pelvisRoll = this.spreadF = this.arm = this.headTurn = this.bank = this.lean = 0;
@@ -1342,6 +1352,9 @@ class PersonRig {
   update(dt, x, z, heading, ground, owner = null, air = 0, updatePose = true, diveTime = -1) {
     this.riding = false;
     this.air = air;
+    this.groundY = ground(owner, x, z);
+    this.groundSampler = ground;
+    this.groundOwner = owner;
     if (this.limp) {
       this.limp.step(dt);
       if (updatePose) this.limp.pose();

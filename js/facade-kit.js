@@ -9,7 +9,7 @@ import { cityUniforms } from './tsl-materials.js';
 import { WINDOW, FLAG, linear, windowsOf } from './building-types.js';
 
 const CELL = 64;
-const RESTREAM = 15;
+const RESTREAM = 8;
 const POOL = { stone: 70000, hood: 30000, ac: 8000 };
 const HOODED = new Set(['rowhouse', 'tenement']);
 const LINTELED = new Set(['prewar', 'commercial', 'civic', 'loft']);
@@ -42,18 +42,41 @@ function dressingsOf(record) {
     m.compose(p, q, sc.set(sx, sy, sz));
     list.push(m.elements.slice(), colour);
   };
+  // The base and belt courses are real mouldings at street range. Their two lips shade the wall and catch a fine
+  // highlight along the avenue; their height agrees with the distant facade shader's painted courses.
+  if (!METAL_SILLS.has(s.type)) for (const wall of record.kitWalls) {
+    const cx = (wall.ax + wall.bx) / 2, cz = (wall.az + wall.bz) / 2;
+    for (let floor = 1; floor * s.floor < wall.top - 0.4; floor++) {
+      const base = floor === s.baseFloors || floor === 1;
+      const belt = s.belt > 0 && floor > s.baseFloors && (floor - s.baseFloors) % s.belt === 0;
+      const y = floor * s.floor - 0.12;
+      if ((!base && !belt) || y < wall.bottom + 0.4) continue;
+      put(pieces.stone, wall, cx, y, cz, wall.width, 0.18, 0.28, 0.10, trim);
+      put(pieces.stone, wall, cx, y - 0.14, cz, wall.width, 0.10, 0.16, 0.04, trim);
+    }
+  }
   for (const w of windowsOf(record)) {
     const arched = s.window === WINDOW.arched;
     // Sills: a stone ledge (a thin metal one on later buildings) a little wider than the opening
     if (METAL_SILLS.has(s.type)) put(pieces.stone, w, w.x, w.y0 - 0.015, w.z, w.width + 0.04, 0.03, 0.07, 0.025, [0.42, 0.43, 0.44]);
     else put(pieces.stone, w, w.x, w.y0 - 0.045, w.z, w.width + 0.18, 0.09, 0.14, 0.06, trim);
+    // Dressed surrounds make an opening read as a hole through a thick wall, with a lit jamb, a shadowed jamb and a
+    // projecting sill. The same survey-derived opening drives the glass shader and these physical stone edges.
+    if (!METAL_SILLS.has(s.type) && !w.base) {
+      const jamb = s.type === 'loft' ? 0.085 : s.type === 'prewar' || s.type === 'civic' ? 0.16 : 0.10;
+      const depth = s.type === 'rowhouse' || s.type === 'prewar' ? 0.22 : 0.16;
+      for (const side of [-1, 1]) {
+        const dx = side * (w.width + jamb) / 2;
+        put(pieces.stone, w, w.x + w.nz * dx, (w.y0 + w.y1) / 2, w.z - w.nx * dx, jamb, w.y1 - w.y0, depth, depth / 2 - 0.015, trim);
+      }
+    }
     // Heads: hoods on walk-ups and row houses, flat lintels on stone-dressed fronts, keystones over arches
     if (arched && !METAL_SILLS.has(s.type)) {
       put(pieces.stone, w, w.x, w.y1 + 0.07 * s.floor + 0.05, w.z, 0.2, 0.26, 0.08, 0.03, trim);
     } else if (HOODED.has(s.type)) {
       put(pieces.hood, w, w.x, w.y1 + 0.13, w.z, w.width + 0.36, 0.26, 0.3, 0.03, metalHoods ? cornice : trim);
     } else if (LINTELED.has(s.type) && !w.base) {
-      put(pieces.stone, w, w.x, w.y1 + 0.075, w.z, w.width + 0.1, 0.15, 0.06, 0.02, trim);
+      put(pieces.stone, w, w.x, w.y1 + 0.075, w.z, w.width + 0.32, 0.15, 0.22, 0.095, trim);
     }
     // Window air conditioners resting on the sill, most of the box hanging outside
     if (!w.base && !w.attic && rand() < acShare) {
@@ -150,7 +173,15 @@ function createFacadeKit(scene, records, { radius = 160 } = {}) {
       for (const kind of ['stone', 'hood', 'ac']) {
         const list = pieces[kind], mesh = meshes[kind];
         for (let i = 0; i < list.length && counts[kind] < POOL[kind]; i += 2) {
-          mesh.instanceMatrix.array.set(list[i], counts[kind] * 16);
+          const matrix = list[i];
+          const dx = cx - matrix[12], dy = cy - matrix[13], dz = cz - matrix[14];
+          const span = Math.hypot(matrix[0], matrix[2]);
+          // A long belt can pass close to the player even when its centre belongs to the far end of the building.
+          if (dx * dx + dy * dy + dz * dz > (radius + RESTREAM + (span > 4 ? span / 2 : 0)) ** 2) continue;
+          // A building's far side and upper floors must not consume the entire pool from street level. Keep a
+          // generous corner margin so their projecting details continue casting into the visible side of the street.
+          if (dx * matrix[8] + dz * matrix[10] < -8 * Math.hypot(matrix[8], matrix[10])) continue;
+          mesh.instanceMatrix.array.set(matrix, counts[kind] * 16);
           mesh.instanceColor.array.set(list[i + 1], counts[kind] * 3);
           counts[kind]++;
         }

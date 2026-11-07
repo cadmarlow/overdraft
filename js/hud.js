@@ -54,6 +54,17 @@ class GameHud {
     for (let i = 0; i < 4; i++) el('i', null, this.crosshair);
     this.hitmarker = el('div', 'gh-hitmarker', root);
     for (let i = 0; i < 4; i++) el('i', null, this.hitmarker);
+    this.hitCaption = el('span', 'gh-hit-caption', this.hitmarker);
+    this.reloadSight = el('div', 'gh-reload-sight', root);
+    this.reloadSightFill = el('i', null, this.reloadSight);
+    this.combat = el('div', 'gh-combat', root);
+    this.combatMode = el('div', 'gh-combat-mode', this.combat);
+    const rounds = el('div', 'gh-rounds', this.combat);
+    this.combatMag = el('strong', null, rounds, '12');
+    this.combatReserve = el('span', null, rounds, '/ 120');
+    this.combatStatus = el('div', 'gh-combat-status', this.combat);
+    const reloadTrack = el('div', 'gh-combat-track', this.combat);
+    this.combatReload = el('i', null, reloadTrack);
 
     // Objective, subtitles, timer, banners
     this.objective = el('div', 'gh-objective', root);
@@ -82,6 +93,9 @@ class GameHud {
     this.targetMoney = 0;
     this.deltaT = 0;
     this.hitT = 0;
+    this.hitDuration = 0.25;
+    this.reticleKick = 0;
+    this.reticleSpread = 6;
     this.subT = 0;
     this.bannerT = 0;
     this.radioT = 0;
@@ -199,17 +213,50 @@ class GameHud {
     this.mission.classList.toggle('show', !!text);
   }
 
-  setCrosshair(visible, spread = 0) {
+  setCrosshair(visible, spread = 0, { aiming = false, shotgun = false, blocked = false } = {}) {
     this.crosshair.classList.toggle('show', visible);
-    if (visible) this.crosshair.style.setProperty('--spread', `${6 + spread * 260}px`);
+    this.crosshair.classList.toggle('aiming', aiming);
+    this.crosshair.classList.toggle('shotgun', shotgun);
+    this.crosshair.classList.toggle('blocked', blocked);
+    this.reticleSpread = Math.min(42, (aiming ? 3 : 6) + Math.max(0, spread) * 260);
+    if (visible) this.crosshair.style.setProperty('--spread', `${this.reticleSpread + this.reticleKick}px`);
   }
 
-  hit(kill = false) {
+  setCombat({ visible = false, aiming = false, mag = 0, capacity = 1, reserve = 0, reload = -1, mode = '', shoulder = 1 } = {}) {
+    this.combat.classList.toggle('show', visible);
+    this.weapon.classList.toggle('combat-active', visible);
+    if (!visible) { this.reloadSight.classList.remove('show'); return; }
+    const reloading = reload >= 0;
+    const low = mag <= Math.max(1, capacity * 0.2);
+    this.combat.classList.toggle('low', low && !reloading);
+    this.combat.classList.toggle('reloading', reloading);
+    const state = `${mag}|${reserve}|${mode}|${shoulder}|${reloading}|${aiming}`;
+    if (this.state.combat !== state) {
+      this.state.combat = state;
+      this.combatMag.textContent = String(mag).padStart(2, '0');
+      this.combatReserve.textContent = `/ ${reserve}`;
+      this.combatMode.textContent = mode;
+      this.combatStatus.textContent = reloading ? 'RECHARGEMENT' : mag === 0 ? (reserve ? 'R · RECHARGER' : 'À SEC')
+        : aiming ? `ÉPAULE ${shoulder < 0 ? 'GAUCHE' : 'DROITE'}` : 'TIR À LA HANCHE';
+    }
+    const progress = Math.max(0, Math.min(1, reload));
+    this.combatReload.style.transform = `scaleX(${reloading ? progress : Math.min(1, mag / Math.max(1, capacity))})`;
+    this.reloadSight.classList.toggle('show', reloading && aiming);
+    this.reloadSightFill.style.transform = `scaleX(${progress})`;
+  }
+
+  shot(strength = 1) {
+    this.reticleKick = Math.min(18, this.reticleKick + 4 * strength);
+  }
+
+  hit(kill = false, headshot = false) {
     this.hitmarker.classList.toggle('kill', kill);
-    this.hitmarker.classList.remove('show');
-    void this.hitmarker.offsetWidth;
+    this.hitmarker.classList.toggle('headshot', headshot);
+    this.hitCaption.textContent = headshot ? 'PLEINE TÊTE' : kill ? 'NEUTRALISÉ' : '';
     this.hitmarker.classList.add('show');
-    this.hitT = 0.25;
+    this.hitT = this.hitDuration = kill || headshot ? 0.42 : 0.18;
+    this.hitmarker.style.opacity = '1';
+    this.hitmarker.style.transform = `scale(${kill ? 1.25 : 1.1})`;
   }
 
   hurt(amount) {
@@ -243,7 +290,17 @@ class GameHud {
     if (this.subT > 0 && (this.subT -= dt) <= 0) this.subtitle.classList.remove('show');
     if (this.bannerT > 0 && (this.bannerT -= dt) <= 0) this.banner.classList.remove('show');
     if (this.radioT > 0 && (this.radioT -= dt) <= 0) this.radio.classList.remove('show');
-    if (this.hitT > 0 && (this.hitT -= dt) <= 0) this.hitmarker.classList.remove('show');
+    if (this.hitT > 0) {
+      this.hitT = Math.max(0, this.hitT - dt);
+      const t = this.hitT / this.hitDuration;
+      this.hitmarker.style.opacity = String(Math.min(1, t * 2.5));
+      this.hitmarker.style.transform = `scale(${1 + t * 0.18})`;
+      if (!this.hitT) this.hitmarker.classList.remove('show');
+    }
+    if (this.reticleKick > 0.01) {
+      this.reticleKick *= Math.exp(-dt * 19);
+      this.crosshair.style.setProperty('--spread', `${this.reticleSpread + this.reticleKick}px`);
+    }
     this.damageLevel = Math.max(0, this.damageLevel - dt * 0.9);
     this.damage.style.opacity = this.damageLevel.toFixed(3);
   }

@@ -28,7 +28,11 @@ const BASE = {
   shift: 0.17, spinMass: 230, brake: 12, handbrake: 0.42, cd: 0.42, down: 0, lock: 0.62, cornering: 11, steer: 6,
   roll: 0.85, pitch: 0.85, assist: 0.9, top: 58, nitro: 1,
   wind: 0.1, windHigh: 0.32, unwind: 1.8, yawAid: 9, yawHelp: 2.5, slipMax: 0.22, recover: 0.6, brakeSteer: 0.45, pivot: 5,
-  leanRoll: 0.06, leanPitch: 0.035
+  leanRoll: 0.06, leanPitch: 0.035,
+  // Tyre carcass deflection takes distance to build, not a whole rendered frame. The differential shares torque between
+  // the two contact patches; 0 is open, 1 is fully load-proportional. Brake balance follows the actual weight transfer.
+  relaxation: 0.42, differential: 0.64, ackermann: 0.78, brakeBias: 0.64, brakeResponse: 28,
+  shiftCruise: 0.38, shiftHold: 0.38, engineBrake: 0.2, reverseTop: 14
 };
 
 const CLASSES = {
@@ -38,10 +42,11 @@ const CLASSES = {
   offroad: { mass: 1900, cg: 0.76, hz: 1.35, damp: 0.3, travel: 0.2, droop: 0.26, torque: 430, gears: [3.6, 2.2, 1.45, 1.05, 0.8], grip: 1.02, rear: 0.5, roll: 0.85, cd: 0.62, top: 47, slipMax: 0.2, leanRoll: 0.09, leanPitch: 0.05 },
   pickup: { mass: 2200, cg: 0.72, bias: 0.57, hz: 1.45, damp: 0.3, torque: 520, grip: 0.98, balance: 1.03, tc: 0.5, esc: 0.9, final: 3.3, roll: 0.85, cd: 0.6, top: 53, slipMax: 0.2, leanRoll: 0.08, leanPitch: 0.045 },
   van: { mass: 2400, cg: 0.86, bias: 0.55, hz: 1.45, damp: 0.3, torque: 400, final: 3.9, gears: [3.3, 2.0, 1.4, 1.0, 0.76], grip: 0.92, roll: 0.8, cd: 0.72, lock: 0.56, cornering: 8.5, top: 44, slipMax: 0.16, yawAid: 10, leanRoll: 0.085, leanPitch: 0.045 },
+  delivery: { mass: 1870, cg: 0.79, bias: 0.6, hz: 1.7, damp: 0.37, arb: 0.3, torque: 330, peak: 2400, redline: 4700, idle: 760, rear: 0, final: 3.55, gears: [3.65, 2.08, 1.36, 0.98, 0.75, 0.6], grip: 0.98, roll: 0.72, cd: 0.7, brake: 10.5, top: 45, cornering: 8.8, slipMax: 0.16, yawAid: 10, differential: 0.5, brakeBias: 0.69, relaxation: 0.45, leanRoll: 0.075, leanPitch: 0.04 },
   minivan: { mass: 1950, cg: 0.68, hz: 1.6, torque: 350, rear: 0, grip: 0.98, roll: 0.85, cd: 0.56, top: 50, leanRoll: 0.08, leanPitch: 0.04 },
   truck: { mass: 4600, cg: 1.0, bias: 0.5, hz: 1.5, damp: 0.34, torque: 900, final: 4.3, gears: [4.2, 2.6, 1.7, 1.2, 0.86], redline: 3800, peak: 2200, idle: 650, shift: 0.3, grip: 0.86, brake: 8.5, roll: 0.8, cd: 1.0, lock: 0.54, cornering: 7, spinMass: 500, top: 34, slipMax: 0.14, yawAid: 11, leanRoll: 0.07, leanPitch: 0.04 },
-  hatch: { mass: 1250, cg: 0.5, bias: 0.58, hz: 1.95, torque: 300, redline: 7000, rear: 0, final: 3.9, grip: 1.14, roll: 0.78, top: 56 },
-  compact: { mass: 1100, cg: 0.5, bias: 0.58, hz: 1.9, torque: 210, rear: 0, final: 4.1, redline: 6800, grip: 1.08, roll: 0.85, cd: 0.4, top: 48 },
+  hatch: { mass: 1250, cg: 0.5, bias: 0.58, hz: 1.95, torque: 300, redline: 7000, rear: 0, final: 3.9, grip: 1.14, roll: 0.78, top: 56, relaxation: 0.3, differential: 0.8, windHigh: 0.29 },
+  compact: { mass: 1100, cg: 0.5, bias: 0.58, hz: 1.9, torque: 210, rear: 0, final: 4.1, redline: 6800, grip: 1.08, roll: 0.85, cd: 0.4, top: 48, relaxation: 0.34, differential: 0.38, windHigh: 0.29 },
   wagon: { mass: 1650, cg: 0.56, hz: 1.7, torque: 380, rear: 1, roll: 0.88, top: 58 },
   // Too much engine for its tyres: it squats, lights up the rear and kicks out on the throttle
   muscle: { mass: 1620, cg: 0.5, bias: 0.55, hz: 1.7, damp: 0.3, torque: 760, peak: 3600, redline: 6200, gears: [2.9, 1.95, 1.42, 1.08, 0.85, 0.66], final: 3.55, grip: 1.14, balance: 0.98, slide: 0.76, tc: 0.3, esc: 0.75, roll: 0.85, pitch: 1, cd: 0.42, top: 71, slipMax: 0.45, yawAid: 6, pivot: 4.5, leanRoll: 0.065, leanPitch: 0.055 },
@@ -50,6 +55,15 @@ const CLASSES = {
   super: { mass: 1380, cg: 0.4, bias: 0.44, hz: 2.5, damp: 0.42, arb: 0.4, travel: 0.1, droop: 0.15, torque: 980, peak: 5800, redline: 9000, gears: [3.0, 2.3, 1.85, 1.55, 1.3, 1.12, 1.0], final: 3.35, rear: 0.68, shift: 0.07, grip: 1.5, balance: 1.06, slide: 0.8, stiffness: 13, tc: 0.75, esc: 0.9, roll: 0.5, cd: 0.5, down: 1.05, lock: 0.54, brake: 15, top: 96, slipMax: 0.2, pivot: 3.5, leanRoll: 0.028, leanPitch: 0.018 },
   cruiser: { mass: 1850, cg: 0.54, hz: 1.95, damp: 0.4, arb: 0.34, torque: 640, peak: 4000, redline: 6600, final: 3.7, grip: 1.26, balance: 1.1, slide: 0.8, roll: 0.78, brake: 13.5, top: 68 }
 };
+
+// Set the sporting drivetrains apart without making every everyday car a race car.
+Object.assign(CLASSES.muscle, { relaxation: 0.48, differential: 0.82, brakeBias: 0.65, shiftCruise: 0.4, engineBrake: 0.24 });
+Object.assign(CLASSES.sport, { relaxation: 0.25, differential: 0.86, ackermann: 0.58, brake: 14, brakeBias: 0.6, windHigh: 0.28, shiftCruise: 0.46 });
+Object.assign(CLASSES.super, { relaxation: 0.2, differential: 0.94, ackermann: 0.5, brakeBias: 0.59, windHigh: 0.27, shiftCruise: 0.46 });
+Object.assign(CLASSES.truck, { relaxation: 0.62, brakeBias: 0.6, brakeResponse: 12, windHigh: 0.4, engineBrake: 0.3, reverseTop: 9 });
+Object.assign(CLASSES.offroad, { relaxation: 0.58, differential: 0.9, brakeBias: 0.65 });
+Object.assign(CLASSES.van, { reverseTop: 11 });
+Object.assign(CLASSES.delivery, { reverseTop: 11 });
 
 const makeTune = (kind, geometry) => ({ ...BASE, ...(CLASSES[kind] || CLASSES.sedan), ...geometry });
 
@@ -74,13 +88,16 @@ function createBody(tune, spawnHeading = 0) {
       side, z, axle, x: side * t.wheelX, y: r, front: axle === 0,
       gy: 0, ready: false, travel: 0, comp: sag, load: 0, contact: false, hasGround: false,
       nx: 0, ny: 1, nz: 0, px: 0, py: 0, pz: 0, roll: side * 7 + z, grip: 1, rough: 0, ox: 0, oz: 0,
-      spin: 0, angle: 0, slip: 0, lock: false, vLong: 0, vLat: 0
+      spin: 0, angle: 0, slip: 0, lock: false, vLong: 0, vLat: 0,
+      steer: 0, alpha: 0, utilization: 0, brakeSlip: 0, abs: 0, longitudinalForce: 0, lateralForce: 0
     })),
     axle: [{ spin: 0, slip: 0 }, { spin: 0, slip: 0 }],
     gear: 0, shift: 0, rpm: t.idle, throttle: 0, brake: 0, steer: 0, reversing: false,
     steerIn: 0, aid: 1, lockNow: t.lock, beta: 0, exit: 0, peakSlip: Math.tan(Math.PI * 0.5 / t.shape) / t.stiffness,
     airborne: 0, grounded: 0, scrape: 0, flipT: 0, hard: 0, landed: 0, skid: 0, smoke: 0, nitro: 0, kick: 0,
-    hull: hullPoints(t), scrapeX: 0, scrapeY: 0, scrapeZ: 0, shiftUp: 0, backfire: 0
+    hull: hullPoints(t), scrapeX: 0, scrapeY: 0, scrapeZ: 0, shiftUp: 0, backfire: 0,
+    shiftCooldown: 0, shiftFromRpm: t.idle, shiftTotal: 0, engineLoad: 0, clutch: 0,
+    longG: 0, lateralG: 0, abs: 0, tractionControl: 0, surfaceGrip: 1, tyreLoad: 0, roadRoughness: 0
   };
   return body;
 }
@@ -154,31 +171,48 @@ function driveline(c, input, h, axleV, axleGrip) {
   const wheelRpm = Math.abs(driven / r * ratio) * 60 / TAU;
   const launching = wheelRpm < t.idle * 2.2;
   const clutchRpm = launching ? lerp(t.idle, Math.min(t.peak * 0.75, t.idle + 2600), b.throttle) : 0;
-  const target = clamp(Math.max(wheelRpm, clutchRpm, t.idle), t.idle, t.redline * 1.03);
-  b.rpm += (target - b.rpm) * (1 - Math.exp(-h * (b.shift > 0 ? 12 : 30)));
+  const coupledRpm = clamp(Math.max(wheelRpm, clutchRpm, t.idle), t.idle, t.redline * 1.03);
+  // Follow the new ratio through the shift instead of dropping the sound to idle. A downshift naturally blips the
+  // engine up to the new road speed; the short torque interruption remains in the actual tyre forces.
+  const phase = b.shift > 0 ? clamp(1 - b.shift / Math.max(b.shiftTotal, h), 0, 1) : 1;
+  const target = b.shift > 0 ? lerp(b.shiftFromRpm, coupledRpm, phase * phase * (3 - 2 * phase)) : coupledRpm;
+  b.rpm += (target - b.rpm) * (1 - Math.exp(-h * 30));
+  b.clutch = b.shift > 0 ? 0 : clamp(wheelRpm / Math.max(b.rpm, 1), 0, 1);
+  b.shiftCooldown = Math.max(0, b.shiftCooldown - h);
+  const availableTorque = torqueAt(t, b.rpm);
   let engine = 0;
-  if (b.shift > 0) b.shift -= h;
+  if (b.shift > 0) b.shift = Math.max(0, b.shift - h);
   else {
     const limiter = b.rpm >= t.redline ? 0.15 : 1;
-    engine = torqueAt(t, b.rpm) * b.throttle * limiter * (b.nitro > 0 ? 1.55 : 1) * (b.power ?? 1);
-    if (input.throttle === 0 || !pedal) engine -= t.torque * 0.2 * (b.rpm / t.redline) ** 2 * Math.min(1, Math.abs(driven) * 0.25) * (b.handbraking ? 0 : 1);
+    engine = availableTorque * b.throttle * limiter * (b.nitro > 0 ? 1.55 : 1) * (b.power ?? 1);
+    // Reverse has its own speed governor. A 9,000 rpm supercar must not accelerate backwards through city traffic at
+    // motorway speed; taper the engine torque near the reverse limit instead of snapping the body's velocity.
+    if (b.reversing) engine *= clamp((t.reverseTop - Math.abs(forwardSpeed)) / 3, 0, 1);
+    if (input.throttle === 0 || !pedal) engine -= t.torque * t.engineBrake * (b.rpm / t.redline) ** 2 * Math.min(1, Math.abs(driven) * 0.25) * (b.handbraking ? 0 : 1);
   }
   let force = engine * ratio / r * 0.9;
   // Traction control eases the engine off a spinning axle and out of a slide, as far as this car has any
   const worst = Math.max(Math.abs(b.axle[0].slip) * front, Math.abs(b.axle[1].slip) * rear);
-  force *= 1 - t.tc * clamp((worst - 1.6) / 2.4, 0, 1);
+  const tc = t.tc * clamp((worst - 1.6) / 2.4, 0, 1);
+  force *= 1 - tc;
+  b.tractionControl += (tc - b.tractionControl) * (1 - Math.exp(-h * 18));
   // and the stability control takes power away from a car sliding past its drift angle
-  if (!b.reversing && forwardSpeed > 4) force *= 1 - 0.75 * clamp((Math.abs(b.beta) - t.slipMax * 0.7) / 0.35, 0, 1) * b.aid * t.esc * (1 - b.exit * 0.8);
-  // Automatic box: up near the limiter once the tyres have hooked up, down early with the foot in
+  const stabilityPower = !b.reversing && forwardSpeed > 4 ? 1 - 0.75 * clamp((Math.abs(b.beta) - t.slipMax * 0.7) / 0.35, 0, 1) * b.aid * t.esc * (1 - b.exit * 0.8) : 1;
+  force *= stabilityPower;
+  b.engineLoad += (clamp(engine / Math.max(availableTorque, 1), 0, 1.55) * (1 - tc) * stabilityPower - b.engineLoad) * (1 - Math.exp(-h * 22));
+  // A real automatic cruises quietly, holds the gear on a full pedal, and kicks down when asked. Hysteresis and a
+  // minimum dwell prevent a constant up/down hunt at the same speed or on a lightly feathered key.
   const top = t.gears.length - 1;
-  const spinning = Math.abs(b.axle[1].slip) > 3 && rear > 0.4;
-  if (!b.reversing && b.shift <= 0) {
-    if (b.gear < top && b.rpm > t.redline * 0.965 && !spinning && wheelRpm > t.redline * 0.9) {
-      b.gear++; b.shift = t.shift; b.shiftUp = 1; b.backfire = b.throttle > 0.7 ? 1 : b.backfire; b.kick = 1;
+  const spinning = worst > 3;
+  const upAt = t.redline * lerp(t.shiftCruise, 0.965, b.throttle * b.throttle);
+  if (!b.reversing && b.shift <= 0 && b.shiftCooldown <= 0) {
+    if (b.gear < top && b.rpm > upAt && !spinning && wheelRpm > upAt * 0.94 && b.brake < 0.02) {
+      b.shiftFromRpm = b.rpm; b.gear++; b.shift = b.shiftTotal = t.shift; b.shiftCooldown = t.shift + t.shiftHold;
+      b.shiftUp = 1; b.backfire = b.throttle > 0.7 ? 1 : b.backfire; b.kick = 0.3 + b.throttle * 0.7;
     } else if (b.gear > 0) {
       const lower = wheelRpm * t.gears[b.gear - 1] / t.gears[b.gear];
-      if (lower < t.redline * (0.62 + 0.26 * b.throttle) && wheelRpm < t.peak * (0.62 + 0.3 * b.throttle)) {
-        b.gear--; b.shift = t.shift * 0.5;
+      if (lower < upAt * 0.9 && wheelRpm < t.peak * (0.45 + 0.35 * b.throttle)) {
+        b.shiftFromRpm = b.rpm; b.gear--; b.shift = b.shiftTotal = t.shift * 0.65; b.shiftCooldown = t.shift + t.shiftHold;
         b.backfire = b.throttle < 0.2 && forwardSpeed > 12 ? 0.6 : b.backfire;
       }
     }
@@ -227,15 +261,22 @@ function steerStep(c, input, h, vLongBody, vLatBody) {
   }
   // At speed the wheels go no further than what brings the front tyres to their best grip: past it they only scrub
   const wheelbase = t.wheelZf - t.wheelZr;
-  const road = Math.atan(wheelbase * t.cornering / Math.max(v * v, 1));
+  const road = Math.atan(wheelbase * t.cornering * Math.sqrt(clamp(b.surfaceGrip, 0.2, 1.25)) / Math.max(v * v, 1));
   const grip = Math.min(t.lock, road + b.peakSlip * 0.9);
   // With the handbrake on the wheel is free to go further: that is what swings the car round
   const lock = b.lockNow = lerp(Math.min(t.lock, grip + 0.3), grip, b.aid);
   let target = b.steerIn * lock;
   // The wheels follow the way the car is travelling: a slide catches itself. Not while the handbrake swings the tail.
   if (vLongBody > 3) target += clamp(Math.atan2(vLatBody, vLongBody) * t.assist * (0.35 + 0.65 * b.aid) * (1 - b.exit), -t.lock * 0.8, t.lock * 0.8);
+  target = clamp(target, -t.lock, t.lock);
   b.steer = clamp(target, b.steer - t.steer * h, b.steer + t.steer * h);
   c.steerAngle = b.steer;
+  // The inside front wheel follows the smaller circle. The wheel models and contact-patch forces use the same angle.
+  const tangent = Math.tan(b.steer);
+  for (let i = 0; i < 2; i++) {
+    const w = b.wheels[i];
+    w.steer = lerp(b.steer, Math.atan(wheelbase * tangent / Math.max(0.5, wheelbase - w.x * tangent)), t.ackermann);
+  }
 }
 
 function substep(c, input, h, world) {
@@ -249,7 +290,6 @@ function substep(c, input, h, world) {
   const vLongBody = b.vx * fx + b.vy * fy + b.vz * fz, vLatBody = b.vx * ax + b.vy * ay + b.vz * az;
   steerStep(c, input, h, vLongBody, vLatBody);
   const wr = t.wheelRadius, grip0 = world.grip ?? 1;
-  const cosS = Math.cos(b.steer), sinS = Math.sin(b.steer);
   const axleV = axleSpeed, axleGrip = axleLimit;
   axleV[0] = axleV[1] = 0; axleGrip[0] = axleGrip[1] = 0;
   let touching = 0, axleCount0 = 0, axleCount1 = 0;
@@ -284,7 +324,7 @@ function substep(c, input, h, world) {
       const bottomed = comp - b.sag - t.travel;
       if (bottomed > 0) load += b.spring[w.axle] * bottomed * 14 + Math.max(0, rate) * b.damper[w.axle] * 3.5;
       // A wheel driven deep into the ground by a blow must not throw the car over the rooftops
-      load = Math.min(load, t.mass * G * 2.4);
+      load = clamp(load, 0, t.mass * G * 2.4);
       w.comp = comp;
     } else w.comp = Math.max(comp, 0);
     w.load = load;
@@ -292,19 +332,22 @@ function substep(c, input, h, world) {
     w.px = hx - ux * distance; w.py = hy - uy * distance; w.pz = hz - uz * distance;
   }
   // Anti-roll bars tie the two sides of each axle
-  for (const [l, rr, k] of [[wheels[0], wheels[1], b.spring[0]], [wheels[2], wheels[3], b.spring[1]]]) {
+  for (let axle = 0; axle < 2; axle++) {
+    const l = wheels[axle * 2], rr = wheels[axle * 2 + 1], k = b.spring[axle];
     if (!l.hasGround || !rr.hasGround) continue;
     const f = (l.comp - rr.comp) * k * t.arb;
     l.load = Math.max(0, l.load + f); rr.load = Math.max(0, rr.load - f);
   }
   const nominal = t.mass * G * 0.25;
-  const brakeInput = (input.throttle < 0 && vLongBody > 0.8 && !b.reversing) || (input.throttle > 0 && vLongBody < -0.8) ? Math.abs(input.throttle) : 0;
-  b.brake = brakeInput;
+  const brakeRequest = (input.throttle < 0 && vLongBody > 0.8 && !b.reversing) || (input.throttle > 0 && vLongBody < -0.8) ? Math.abs(input.throttle) : 0;
+  b.brake += (brakeRequest - b.brake) * (1 - Math.exp(-h * (brakeRequest ? t.brakeResponse : 45)));
+  if (b.brake < 1e-5) b.brake = 0;
+  const brakeInput = b.brake;
   b.handbraking = !!input.handbrake;
+  let loadedGrip = 0, totalLoad = 0, roughness = 0;
   for (const w of wheels) {
     if (!w.contact || !w.hasGround) continue;
-    const n = hit;
-    const sx = w.front ? cosS : 1, sy = w.front ? sinS : 0;
+    const sx = w.front ? Math.cos(w.steer) : 1, sy = w.front ? Math.sin(w.steer) : 0;
     // The tyre's forward and sideways directions on the ground
     let tx = fx * sx + ax * sy, ty = fy * sx + ay * sy, tz = fz * sx + az * sy;
     const dot = tx * w.nx + ty * w.ny + tz * w.nz;
@@ -317,44 +360,72 @@ function substep(c, input, h, world) {
     w.vLong = vx * tx + vy * ty + vz * tz;
     w.lx = w.ny * tz - w.nz * ty; w.ly = w.nz * tx - w.nx * tz; w.lz = w.nx * ty - w.ny * tx;
     w.vLat = vx * w.lx + vy * w.ly + vz * w.lz;
-    w.limit = w.load * t.grip * (w.axle === 1 ? t.balance : 1) * w.grip * Math.max(0.72, 1 - 0.1 * (w.load / nominal - 1)) * (w.burst ? 0.4 : 1);
+    const staticLoad = t.mass * G * (w.front ? t.bias : 1 - t.bias) * 0.5;
+    w.limit = w.load * t.grip * (w.axle === 1 ? t.balance : 1) * w.grip * Math.max(0.72, 1 - 0.1 * (w.load / staticLoad - 1)) * (w.burst ? 0.4 : 1);
     axleV[w.axle] += w.vLong; axleGrip[w.axle] += w.limit * t.traction;
+    loadedGrip += w.grip * w.load; totalLoad += w.load; roughness += w.rough * w.load;
     if (w.axle === 0) axleCount0++; else axleCount1++;
   }
   axleV[0] = axleCount0 ? axleV[0] / axleCount0 : b.axle[0].spin;
   axleV[1] = axleCount1 ? axleV[1] / axleCount1 : b.axle[1].spin;
+  if (totalLoad > 1) {
+    b.surfaceGrip += (loadedGrip / totalLoad - b.surfaceGrip) * (1 - Math.exp(-h * 12));
+    b.roadRoughness = roughness / totalLoad;
+  }
+  b.tyreLoad = totalLoad / (t.mass * G);
   b.beta = Math.abs(vLongBody) > 2 ? Math.atan2(vLatBody, Math.abs(vLongBody)) : 0;
   driveline(c, input, h, axleV, axleGrip);
 
   // 2. Tyres: what the driveline and the brakes ask of each one, within a friction circle shared with cornering
-  let skid = 0;
+  let skid = 0, absActive = 0;
   for (const w of wheels) {
-    if (!w.hasGround) { w.slip *= Math.exp(-h * 12); w.spin = w.axle === 0 && !t.rear ? b.axle[0].spin / wr : w.spin + (b.axle[w.axle].spin / wr - w.spin) * 0.2; continue; }
+    if (!w.hasGround) {
+      w.slip *= Math.exp(-h * 12); w.alpha *= Math.exp(-h * 12);
+      w.utilization = w.abs = w.brakeSlip = w.longitudinalForce = w.lateralForce = 0;
+      const driven = w.front ? t.rear < 1 : t.rear > 0;
+      w.spin += (driven ? b.axle[w.axle].spin / wr - w.spin : -w.spin * 0.1) * (1 - Math.exp(-h * 12));
+      continue;
+    }
     const rx = w.px - cx, ry = w.py - cy, rz = w.pz - cz;
-    const axle = b.axle[w.axle], share = axleGrip[w.axle] > 0 ? w.limit * t.traction / axleGrip[w.axle] : 0;
+    const axle = b.axle[w.axle], loadedShare = axleGrip[w.axle] > 0 ? w.limit * t.traction / axleGrip[w.axle] : 0;
+    const share = lerp(0.5, loadedShare, t.differential);
     let fLong = (axle.force || 0) * share;
+    w.abs = w.brakeSlip = 0;
     // Brakes, front biased, with an ABS that never quite locks
     if (brakeInput) {
-      const wanted = t.mass * t.brake * brakeInput * (w.front ? 0.31 : 0.19);
+      const wanted = t.mass * t.brake * brakeInput * (w.front ? t.brakeBias : 1 - t.brakeBias) * 0.5;
       const stop = Math.abs(w.vLong) * t.mass * 0.25 / h * 0.4;
       // Braking with the wheel turned, the ABS leaves the tyres the grip to steer: the car turns as it slows
       const keep = 1 - t.brakeSteer * Math.min(1, Math.abs(b.steerIn)) * (w.front ? 1 : 0.7);
-      fLong -= Math.sign(w.vLong) * Math.min(wanted, stop, w.limit * t.traction * 0.98 * keep);
+      const available = w.limit * t.traction * 0.98 * keep;
+      const applied = Math.min(wanted, stop, available);
+      fLong -= Math.sign(w.vLong) * applied;
+      w.abs = Math.abs(w.vLong) > 2 ? clamp((wanted - available) / Math.max(wanted, 1), 0, 1) : 0;
+      w.brakeSlip = 0.1 * applied / Math.max(w.limit * t.traction, 1);
+      absActive = Math.max(absActive, w.abs);
     }
-    const alpha = Math.atan2(w.vLat, Math.abs(w.vLong) + 1.1);
+    const patchAngle = Math.atan2(w.vLat, Math.abs(w.vLong) + 1.1);
+    const response = Math.abs(w.vLong) < 2 ? 1 : 1 - Math.exp(-h * (Math.abs(w.vLong) + 5) / t.relaxation);
+    w.alpha += (patchAngle - w.alpha) * response;
+    const alpha = w.alpha;
     // A tyre travelling sideways cannot push along its own axis: the road's force lies along the slide
     const reach = w.limit * t.traction * Math.max(0.15, Math.cos(alpha));
     fLong = clamp(fLong, -reach, reach);
     const room = Math.sqrt(Math.max(0.04, 1 - (fLong / (reach || 1)) ** 2));
     let fLat = -w.limit * room * lateralCurve(alpha, t.stiffness, t.shape, t.slide);
     if (!w.front && b.handbraking) fLat *= t.handbrake;
+    w.longitudinalForce = fLong; w.lateralForce = fLat;
+    w.utilization = clamp(Math.hypot(fLong / (w.limit * t.traction || 1), fLat / (w.limit || 1)), 0, 1.1);
     const wheelSlip = Math.abs(axle.slip) > 2 ? Math.abs(axle.slip) : 0;
     const sideSlip = Math.abs(alpha) > 0.16 ? Math.abs(w.vLat) : 0;
     const braking = brakeInput && Math.abs(w.vLong) > 6 ? Math.max(0, w.load / nominal - 0.6) * 2 : 0;
     w.lock = !w.front && b.handbraking && Math.abs(w.vLong) > 1;
     w.slip = Math.max(wheelSlip * (w.axle === 1 ? t.rear : 1 - t.rear) * 1.2, sideSlip, w.lock ? Math.abs(w.vLong) : 0, braking);
     skid = Math.max(skid, w.slip);
-    w.spin = w.lock ? 0 : axle.spin / wr;
+    // A differential lets the outside tyre cover more distance. A free wheel follows its own patch; a driven wheel adds
+    // the driveline's slip. Braking produces a small slip under ABS, while a locked rear visibly stops rotating.
+    const driven = w.front ? t.rear < 1 : t.rear > 0;
+    w.spin = w.lock ? 0 : (w.vLong * (1 - w.brakeSlip) + (driven ? axle.slip : 0)) / wr;
     // Normal force at the patch; tyre forces act nearer the centre of mass, which is what keeps a car from rolling in a turn
     const nf = w.load;
     force(w.nx * nf, w.ny * nf, w.nz * nf, rx, ry, rz);
@@ -364,6 +435,7 @@ function substep(c, input, h, world) {
     force(w.tx * fLong, w.ty * fLong, w.tz * fLong, rx - ux * hp, ry - uy * hp, rz - uz * hp);
   }
   b.skid += (skid - b.skid) * (1 - Math.exp(-h * 18));
+  b.abs += (absActive - b.abs) * (1 - Math.exp(-h * 24));
   b.grounded = touching;
   for (const w of wheels) w.angle = (w.angle + (w.spin || 0) * h) % TAU;
 
@@ -467,7 +539,7 @@ function substep(c, input, h, world) {
     const aid = b.aid * t.esc;
     const wheelbase = t.wheelZf - t.wheelZr;
     // A handbrake turn may spin the car as quick as a pivot allows, and no quicker: it stays a turn the wheel holds
-    const most = Math.max(t.grip * G * 1.05 / speed, (1 - b.aid) * 1.7);
+    const most = Math.max(t.grip * G * 1.05 * clamp(b.surfaceGrip, 0.2, 1.2) / speed, (1 - b.aid) * 1.7);
     const want = clamp(vLongBody * Math.tan(b.steerIn * b.lockNow) / wheelbase, -most, most);
     const yaw = b.wx * ux + b.wy * uy + b.wz * uz;
     const err = yaw - want;
@@ -488,6 +560,9 @@ function substep(c, input, h, world) {
   }
 
   // 6. Integrate
+  const sense = 1 - Math.exp(-h * 12);
+  b.longG += (clamp((sum.fx * fx + sum.fy * fy + sum.fz * fz) / (t.mass * G), -4, 4) - b.longG) * sense;
+  b.lateralG += (clamp((sum.fx * ax + sum.fy * ay + sum.fz * az) / (t.mass * G), -4, 4) - b.lateralG) * sense;
   const im = h / t.mass;
   b.vx += sum.fx * im; b.vy = Math.min(b.vy + sum.fy * im, 13); b.vz += sum.fz * im;
   applyAngular(b, sum.tx, sum.ty, sum.tz, h);
@@ -555,7 +630,9 @@ function syncOut(c) {
  * @param {object} world - ground(x, z, hit) fills hit.y, hit.nx/ny/nz, hit.grip, hit.rough; grip: weather factor; collide(car)
  */
 function stepCar(c, input, dt, world) {
-  if (dt <= 0) return;
+  if (!(dt > 0) || !Number.isFinite(dt)) return;
+  // Resuming a background tab must not turn one large render delta into an unstable spring step or a city-sized leap.
+  dt = Math.min(dt, 0.08);
   syncIn(c);
   const steps = Math.min(16, Math.ceil(dt * (c.ai ? 120 : 200)));
   const h = dt / steps;
@@ -653,6 +730,9 @@ function settleBody(c, heading = c.heading) {
   b.q[0] = 0; b.q[1] = Math.sin(heading / 2); b.q[2] = 0; b.q[3] = Math.cos(heading / 2);
   b.vx = b.vy = b.vz = b.wx = b.wy = b.wz = 0;
   b.flipT = 0; b.airborne = 0; b.rpm = c.tune.idle; b.gear = 0; b.shift = 0; b.chase = 0;
+  b.shiftCooldown = b.shiftTotal = 0; b.shiftFromRpm = c.tune.idle;
+  b.engineLoad = b.clutch = b.longG = b.lateralG = b.abs = b.tractionControl = b.tyreLoad = b.roadRoughness = 0;
+  b.surfaceGrip = 1;
   // A recalled car starts with centred controls and full stability, even if it was parked during a handbrake turn.
   b.throttle = b.brake = b.steer = b.steerIn = b.beta = b.exit = b.nitro = 0;
   b.aid = 1; b.lockNow = c.tune.lock; b.held = b.handbraking = b.reversing = false;
@@ -660,7 +740,10 @@ function settleBody(c, heading = c.heading) {
   b.axle[0].slip = b.axle[1].slip = 0;
   c.speed = c.vx = c.vz = c.angularVel = c.steerAngle = 0;
   b.speed = b.svx = b.svz = b.syaw = 0;
-  for (const w of b.wheels) { w.ready = false; w.comp = b.sag; w.travel = 0; w.load = 0; w.slip = 0; }
+  for (const w of b.wheels) {
+    w.ready = false; w.comp = b.sag; w.travel = 0; w.load = 0; w.slip = 0;
+    w.steer = w.alpha = w.utilization = w.brakeSlip = w.abs = w.longitudinalForce = w.lateralForce = 0;
+  }
   refreshAxes(b);
 }
 

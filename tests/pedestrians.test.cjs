@@ -659,6 +659,7 @@ test('poseCharacters skips stationary inactive cyclist IK/uploads and culls park
     globals: { window: noopTarget, document: { ...noopTarget, hidden: false } },
     imports: {
       'three/webgpu': {},
+      './car-details.js': {},
       './city-config.js': { streetZ: () => 0, isTypingInField: () => false },
       './tsl-materials.js': {},
       './cars.js': {},

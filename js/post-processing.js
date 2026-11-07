@@ -31,10 +31,10 @@ import { bloom } from 'three/addons/tsl/display/BloomNode.js';
 // really glares (lamps, the sun on glass and chrome). The eye (atmosphere.js) multiplies the exposure on top of these:
 // in a building's shadow the camera opens up and the sunlit street beyond it burns a little, in the open it closes.
 const LOOKS = {
-  golden:   { exposure: 1.00, contrast: 1.28, saturation: 1.15, balance: [1.065, 1.00, 0.935], bloom: 0.27, threshold: 1.12 },
-  midday:   { exposure: 0.97, contrast: 1.26, saturation: 1.12, balance: [1.025, 1.00, 0.975], bloom: 0.20, threshold: 1.30 },
-  twilight: { exposure: 1.08, contrast: 1.18, saturation: 1.10, balance: [1.02, 0.99, 1.035], bloom: 0.31, threshold: 0.98 },
-  midnight: { exposure: 1.14, contrast: 1.10, saturation: 1.06, balance: [0.975, 1.00, 1.045], bloom: 0.33, threshold: 0.92 }
+  golden:   { exposure: 1.04, contrast: 1.14, saturation: 0.98, balance: [1.025, 1.00, 0.98], bloom: 0.20, threshold: 1.30 },
+  midday:   { exposure: 1.00, contrast: 1.12, saturation: 0.96, balance: [1.00, 1.00, 1.01], bloom: 0.15, threshold: 1.45 },
+  twilight: { exposure: 1.06, contrast: 1.14, saturation: 1.00, balance: [1.02, 0.99, 1.035], bloom: 0.25, threshold: 1.08 },
+  midnight: { exposure: 1.10, contrast: 1.10, saturation: 0.98, balance: [0.975, 1.00, 1.045], bloom: 0.26, threshold: 1.02 }
 };
 
 // Streaks towards the edges of the frame at speed, off the image itself; sceneTexture samples the rendered scene
@@ -62,10 +62,10 @@ function createPostProcessing(renderer, sceneColor, reflections, sceneTexture = 
   const saturation = uniform(1.0);
   const balance = uniform(new THREE.Vector3(1, 1, 1));
   const speedBlur = uniform(0);
-  const fringe = uniform(0.0022); // lateral chromatic aberration at the frame's edges, in screen widths at the corner
+  const fringe = uniform(0); // gameplay keeps clean window and sign edges, including on a trackpad orbit
   const aoStrength = uniform(0.92);
-  const vignetteAmount = uniform(0.17);
-  const sharpness = uniform(0.42); // unsharp mask, clamped to the neighbourhood so it never rings
+  const vignetteAmount = uniform(0.10);
+  const sharpness = uniform(0.28); // unsharp mask, clamped to the neighbourhood so it never rings
   // The sun's rays: where the sun is on screen (0..1, y up), and how much of its rays show (in frame, by day, clear)
   const sunUV = uniform(new THREE.Vector2(0.5, 0.5));
   const sunShafts = uniform(0);
@@ -146,7 +146,7 @@ function createPostProcessing(renderer, sceneColor, reflections, sceneTexture = 
     color.mulAssign(pow(max(luma, 0.0001).div(0.18), contrast.sub(1.0)));
     const gray = dot(color, vec3(0.2126, 0.7152, 0.0722));
     const chroma = max(max(color.r, color.g), color.b).sub(min(min(color.r, color.g), color.b));
-    const vibrance = float(0.12).mul(float(1).sub(chroma.div(max(max(max(color.r, color.g), color.b), 0.0001))));
+    const vibrance = float(0.05).mul(float(1).sub(chroma.div(max(max(max(color.r, color.g), color.b), 0.0001))));
     color.assign(max(mix(vec3(gray), color, saturation.add(vibrance)), vec3(0)));
 
     // Normalize by the corner radius so the lens falloff remains subtle in portrait and landscape.

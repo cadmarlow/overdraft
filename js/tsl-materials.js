@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { nature } from './nature-assets.js';
 import { world } from './world-assets.js';
+import { urbanSkyVisibility } from './urban-light.js';
 import {
   Fn,
   float,
@@ -209,19 +210,7 @@ const distantWindowLight = Fn(([grid, fw, probability, seed, lod]) => {
  * Models how Manhattan street canyons occlude overhead sky irradiance near the street floor (y = 0..65m),
  * while opening up in Central Park and on upper tower shafts.
  */
-const canyonSkyAONode = Fn(() => {
-  const wp = positionWorld;
-  // Open sky inside Central Park (city-config.js CENTRAL_PARK_BOUNDS, 5th Ave to Central Park West, 59th to 110th St)
-  const cp = CENTRAL_PARK_BOUNDS;
-  const inParkX = smoothstep(cp.minX - 10.0, cp.minX + 20.0, wp.x).mul(float(1.0).sub(smoothstep(cp.maxX - 20.0, cp.maxX + 10.0, wp.x)));
-  const inParkZ = smoothstep(cp.minZ - 10.0, cp.minZ + 30.0, wp.z).mul(float(1.0).sub(smoothstep(cp.maxZ - 30.0, cp.maxZ + 10.0, wp.z)));
-  const inPark = inParkX.mul(inParkZ);
-
-  const heightOpenness = smoothstep(0.0, 68.0, wp.y);
-  const streetCrevice = smoothstep(0.0, 7.5, wp.y).mul(0.12).add(0.88);
-  const canyonAO = mix(float(0.74), float(1.0), heightOpenness).mul(streetCrevice);
-  return mix(canyonAO, float(1.0), inPark);
-});
+const canyonSkyAONode = urbanSkyVisibility;
 
 // Material caches to prevent duplicate WebGPU WGSL shader compilation across blocks & landmarks
 const _curtainWallCache = new Map();
@@ -1888,6 +1877,51 @@ function createMarbleAshlarMaterial() {
     const grime = smoothstep(3.6, 0.2, wp.y).mul(0.24);
     return base.mul(float(1.0).sub(streaks).sub(grime)).mul(float(1.0).sub(joints.mul(0.4)));
   })();
+  return mat;
+}
+
+// Cut limestone shared by landmark plinths, stairs and cornices. World-space mapping survives the deliberately
+// different scale of each fitted landmark; the broad stone tone and fine photographed pores stay in metres.
+function createDressedStoneMaterial() {
+  const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.76, metalness: 0 });
+  mat.name = 'Dressed limestone';
+  const n = abs(normalWorldGeometry);
+  const side = step(n.z, n.x);
+  const horizontal = step(0.6, n.y);
+  const along = mix(positionWorld.x, positionWorld.z, side);
+  const coords = mix(vec2(along, positionWorld.y), positionWorld.xz, horizontal);
+  const row = floor(coords.y.div(0.6));
+  const joints = max(gridLine(coords.y, 0.6, 0.004), gridLine(coords.x.add(mod(row, 2).mul(0.6)), 1.2, 0.004));
+  const photoUV = coords.div(world.limestone.metres).mul(4);
+  const photo = texture(world.limestone.color, photoUV).rgb;
+  const tone = hash2D(vec2(floor(coords.x.add(mod(row, 2).mul(0.6)).div(1.2)), row)).mul(0.12).add(0.88);
+  const damp = smoothstep(1.8, 0.15, positionWorld.y).mul(0.2);
+  const pores = mix(float(1), dot(photo, vec3(0.2126, 0.7152, 0.0722)).div(0.22).clamp(0.65, 1.35), 0.22);
+  mat.colorNode = color(0xa9a69a).mul(pores)
+    .mul(tone).mul(float(1).sub(joints.mul(0.3))).mul(float(1).sub(damp));
+  mat.normalNode = surfaceNormal(world.limestone.normal, photoUV, 0.10);
+  mat.aoNode = canyonSkyAONode();
+  return mat;
+}
+
+// Double-height lobby glass: dark metal mullions and warm rooms after dusk. The old opaque luminous boxes turned
+// whole city-block bases white even at noon; emission now follows the day and never covers the glazing bars.
+function createLobbyGlassMaterial() {
+  const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.17, metalness: 0.30 });
+  mat.name = 'Landmark lobby glazing';
+  const n = abs(normalWorldGeometry);
+  const u = mix(positionWorld.x, positionWorld.z, step(n.z, n.x));
+  const bars = max(gridLine(u, 2.8, 0.055), gridLine(positionWorld.y.sub(0.35), 4.2, 0.055));
+  const glazing = float(1).sub(bars);
+  const room = noise2D(vec2(floor(u.div(2.8)), floor(positionWorld.y.div(4.2))));
+  const night = smoothstep(0.15, 0.8, cityUniforms.uNight);
+  const view = normalize(cameraPosition.sub(positionWorld));
+  const grazing = pow(float(1).sub(abs(dot(view, normalWorldGeometry))), 3);
+  const pane = mix(color(0x4b6470), color(0x899eaa), grazing.mul(0.65));
+  mat.colorNode = mix(pane, color(0x858c8d), bars);
+  mat.roughnessNode = mix(float(0.14), float(0.48), bars);
+  mat.emissiveNode = color(0xffd4a0).mul(glazing).mul(room.mul(0.4).add(0.1)).mul(night.mul(1.2));
+  mat.aoNode = canyonSkyAONode();
   return mat;
 }
 
@@ -3559,6 +3593,8 @@ export {
   createTunnelShadeMaterial,
   createTktsStepMaterial,
   createMarbleAshlarMaterial,
+  createDressedStoneMaterial,
+  createLobbyGlassMaterial,
   createTreeGrateMaterial,
   createRoadSurfaceMaterial,
   createRoadPaintMaterial,

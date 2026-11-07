@@ -3,9 +3,34 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.7 — Curb Appeal** : l'image. La lumière refaite (soleil contre ciel, œil qui s'ouvre à l'ombre, occlusion
-ambiante, rayons du soleil entre les tours, étalonnage photographique et affûtage), un menu et un vol d'ouverture depuis le
-ciel jusqu'au dos de Sacha, un nouveau Sacha, l'entrée en voiture jouée par le corps, et les chantiers de rue refaits.
+Version **0.9.10 — Price Action**. Le tir à la troisième personne a été refondu. Caméra à l’épaule rapprochée,
+changement d’épaule, quatre armes originales avec mécanismes mobiles, recul amorti, dispersion qui récupère entre
+les rafales, douilles et impacts persistants. Le canon et le réticule convergent vers la même cible ; un canon qui
+dépasse d’un mur ne permet plus de tirer à travers.
+
+Les quinze voitures ont désormais une direction à géométrie Ackermann, des pneus progressifs, un freinage ABS et
+une boîte adaptative. Peintures, freins, habitacles instrumentés, caméra et son ont été revus.
+
+Comparez l’Écume (**G → 2**), la Tempête (**G → 3**) et la Zénith (**G → 5**).
+Conduisez avec **ZQSD**, freinez puis reculez avec **S**, serrez le frein à main avec **Espace**.
+**V** change de caméra et **C** permet de regarder derrière.
+Dans le garage, les flèches parcourent la collection et **Entrée** prend le volant. Comparer aussi une traction Ressac,
+un SUV Récif et le camion Fret. Le compteur, les témoins ABS/TC et les pédales montrent les signaux du simulateur.
+Le niveau AAA et les 60 images/s stables restent à atteindre.
+
+La **0.9.8 — Revaluation** apportait une ville éclairée selon ses vrais volumes, des façades plus profondes et des matériaux
+plus lisibles. La visibilité du ciel est précalculée autour des 37 353 immeubles ; en qualité HAUTE, les voitures détaillées
+reflètent leurs volumes, même hors écran. Les fenêtres proches reçoivent jambages et moulures, les monuments une pierre
+taillée et des halls vitrés qui s'allument le soir. Le rendu élimine les objets trop loin et choisit le détail de chaque
+voiture garée ; en ÉQUILIBRÉE, les ombres stables sont réutilisées entre leurs mises à jour.
+
+Pour voir ce jalon : commencer sur la 5e Avenue de jour, marcher le long des façades, prendre une voiture avec **F**,
+puis visiter Bryant Park et Downtown. La première mission a été contrôlée jusqu'à sa récompense. Les performances
+restent variables dans les zones denses : les 60 images/s stables et le niveau artistique AAA restent des objectifs,
+pas des résultats acquis. Protocole et limites : [CHANGELOG.md](CHANGELOG.md#validation-du-jalon-et-limites).
+
+La **0.9.7 — Curb Appeal** avait refait la lumière, le menu et le vol d'ouverture, Sacha, l'entrée en voiture et les
+chantiers de rue.
 
 La **0.9.6 — Footfall** : la ville prend vie. 108 000 voitures garées le long de bordures redécoupées (voie de
 stationnement, piste cyclable protégée, stationnement alterné), toutes volables et poussables ; le trottoir new-yorkais
@@ -54,7 +79,7 @@ Cliquez dans la vue pour verrouiller la souris ; Échap la libère et ouvre le m
 | ZQSD / WASD / flèches | Se déplacer |
 | Tab | Sélecteur d'armes (souris, pavé tactile ou clavier) |
 | 1 à 7 | Choisir une arme directement (7 : le grappin) |
-| G | Garage rapide : à pied, voiture, moto, vélo, hélicoptère, avion |
+| G | Garage rapide : quinze voitures, à pied, moto, vélo, bateau, hélicoptère et avion |
 | Souris | Regarder |
 | Espace (maintenu) | Courir |
 | Maj | Sauter ; face à un rebord à portée, l'escalader |
@@ -62,9 +87,15 @@ Cliquez dans la vue pour verrouiller la souris ; Échap la libère et ouvre le m
 | Grappin en main | Clic droit pour viser, clic pour tirer : sur une façade (il hisse vers le toit), une voiture (pour la surfer), quelqu'un (pour l'arracher). Le viseur vire au citron quand le crochet mordrait |
 | Clic gauche | Frapper / tirer |
 | Clic droit (maintenu) | Viser à l'épaule |
+| X | Activer/désactiver la visée sans maintenir le clic droit (pavé tactile) |
+| C | Changer d’épaule à pied, arme à feu en main |
 | R | Recharger |
 | 1 à 7, molette | Choisir une arme (6 : grenades, clic pour lancer ; 7 : grappin) |
 | F | Voler / monter dans un véhicule |
+
+Pour essayer le nouveau tir : **2** pistolet, **3** mitraillette, **4** fusil à pompe, **5** fusil d’assaut.
+Visez avec le clic droit ou **X**, changez d’épaule avec **C**, tirez puis rechargez avec **R**.
+Les rafales courtes sont plus précises ; le réticule devient ambré si un obstacle bouche le canon.
 
 ### Dans les airs et sur les toits
 

@@ -10,6 +10,8 @@ const SMOKE_MAX = 1100;
 const DEBRIS_MAX = 60;
 const SCORCH_MAX = 12;
 const LIGHT_POOL = 4;
+const CASING_MAX = 72;
+const IMPACT_MAX = 96;
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -20,6 +22,8 @@ const _x = new THREE.Vector3();
 const _y = new THREE.Vector3();
 const _z = new THREE.Vector3();
 const _axis = new THREE.Vector3(0, 0, 1);
+const _euler = new THREE.Euler();
+const _caseColor = new THREE.Color();
 const zero = new THREE.Matrix4().makeScale(0, 0, 0);
 
 function particleMesh(max, blending, name) {
@@ -84,6 +88,33 @@ class EffectsSystem {
     this.scorchMesh.setMatrixAt(0, zero);
     this.root.add(this.scorchMesh);
 
+    // Warm the metal and decal pipelines at boot; firing only fills bounded instance pools.
+    this.casingMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.5, 0.5, 1, 7),
+      new THREE.MeshStandardNodeMaterial({ color: 0xffffff, metalness: 0.72, roughness: 0.29 }), CASING_MAX);
+    this.casingMesh.name = 'FxCasings';
+    this.casingMesh.frustumCulled = false;
+    this.casingMesh.count = 1;
+    this.casingMesh.setMatrixAt(0, zero);
+    this.casingMesh.setColorAt(0, _caseColor.setHex(0xb58a45));
+    this.casings = [];
+    this.root.add(this.casingMesh);
+
+    const markGeo = new THREE.PlaneGeometry(1, 1);
+    const markAlpha = this.impactAlpha = new THREE.InstancedBufferAttribute(new Float32Array(IMPACT_MAX), 1);
+    markGeo.setAttribute('fxAlpha', markAlpha);
+    const markMat = new THREE.MeshBasicNodeMaterial({ color: 0x241d17, transparent: true, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    const markUV = uv().sub(0.5).mul(2);
+    const edge = markUV.x.mul(31).sin().mul(markUV.y.mul(27).sin()).mul(0.08).add(markUV.length());
+    markMat.opacityNode = smoothstep(1, 0.2, edge).mul(attribute('fxAlpha', 'float'));
+    this.impactMesh = new THREE.InstancedMesh(markGeo, markMat, IMPACT_MAX);
+    this.impactMesh.name = 'FxBulletMarks';
+    this.impactMesh.frustumCulled = false;
+    this.impactMesh.count = 1;
+    this.impactMesh.setMatrixAt(0, zero);
+    this.impactMarks = [];
+    this.root.add(this.impactMesh);
+
     this.lights = [];
     for (let i = 0; i < LIGHT_POOL; i++) {
       const light = new THREE.PointLight(0xffa040, 0, 20, 2);
@@ -123,25 +154,53 @@ class EffectsSystem {
   }
 
   muzzleFlash(pos, dir, big = false) {
-    const s = big ? 1.4 : 1;
+    const shotgun = big === true || big === 'shotgun';
+    const s = shotgun ? 1.35 : big === 'rifle' ? 1.05 : big === 'smg' ? 0.72 : 0.8;
     for (let i = 0; i < 3; i++) {
-      const k = 0.08 + i * 0.12;
+      const k = 0.035 + i * 0.075;
       this.glowParticle(pos.x + dir.x * k, pos.y + dir.y * k, pos.z + dir.z * k, dir.x * 2, dir.y * 2, dir.z * 2,
-        (0.32 - i * 0.07) * s, 0.05, 6, 3.6, 1.2, { drag: 0 });
+        (0.22 - i * 0.055) * s, 0.042, 6, 3.8, 1.5, { drag: 0 });
     }
-    this.glowParticle(pos.x, pos.y, pos.z, 0, 0, 0, 0.55 * s, 0.035, 4, 2.4, 0.8);
-    this.smokeParticle(pos.x + dir.x * 0.2, pos.y + dir.y * 0.2, pos.z + dir.z * 0.2, dir.x * 1.5, 0.3, dir.z * 1.5, 0.2, 0.7, 0.75, 0.18);
-    this.flash(pos.x, pos.y, pos.z, 0xffb35c, big ? 60 : 35, 0.06, 9);
+    this.glowParticle(pos.x, pos.y, pos.z, 0, 0, 0, 0.34 * s, 0.033, 4, 2.4, 0.8);
+    this.smokeParticle(pos.x + dir.x * 0.2, pos.y + dir.y * 0.2, pos.z + dir.z * 0.2, dir.x * 1.1, 0.35, dir.z * 1.1,
+      0.075 * s, 0.45, 0.66, 0.14, { grow: 0.45, drag: 2.1 });
+    this.flash(pos.x, pos.y, pos.z, 0xffb35c, shotgun ? 55 : 27, 0.055, 7);
   }
 
   tracer(from, to) {
     const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
     const len = Math.hypot(dx, dy, dz);
     if (len < 1) return;
-    const speed = 380;
-    const seg = Math.min(9, len * 0.5);
-    this.glowParticle(from.x, from.y, from.z, dx / len * speed, dy / len * speed, dz / len * speed, 0.035, Math.min(0.12, len / speed),
-      2.6, 2.1, 1.4, { drag: 0, streak: seg });
+    const life = Math.max(0.04, Math.min(0.075, len / 680));
+    const speed = Math.min(680, len / life);
+    const p = this.glowParticle(from.x, from.y, from.z, dx / len * speed, dy / len * speed, dz / len * speed,
+      0.012, life, 1.7, 1.4, 0.95, { drag: 0, streak: Math.min(2.1, len * 0.3) });
+    p.tracer = true;
+    p.length = Math.min(2.1, len * 0.3);
+  }
+
+  ejectCasing(pos, dir, kind = 'pistol', groundY = 0) {
+    if (this.casings.length >= CASING_MAX) this.casings.shift();
+    const flat = Math.hypot(dir.x, dir.z) || 1;
+    const sx = -dir.z / flat, sz = dir.x / flat;
+    const speed = 1.6 + Math.random() * 1.4;
+    const shotgun = kind === 'shotgun';
+    this.casings.push({ x: pos.x - dir.x * 0.28 + sx * 0.045, y: pos.y - dir.y * 0.28,
+      z: pos.z - dir.z * 0.28 + sz * 0.045, vx: sx * speed - dir.x * 0.4,
+      vy: 1.2 + Math.random() * 0.8, vz: sz * speed - dir.z * 0.4,
+      rx: Math.random() * 6.28, rz: Math.random() * 6.28, wx: 9 + Math.random() * 12,
+      wz: 7 + Math.random() * 10, radius: shotgun ? 0.012 : 0.007,
+      length: shotgun ? 0.065 : kind === 'rifle' ? 0.052 : 0.03,
+      color: shotgun ? 0x9e3c27 : 0xb58a45, groundY, life: 7, settled: false });
+  }
+
+  impactMark(x, y, z, nx, ny, nz) {
+    if (this.impactMarks.length >= IMPACT_MAX) this.impactMarks.shift();
+    _z.set(nx, ny, nz).normalize();
+    if (_z.lengthSq() < 0.5) _z.set(0, 1, 0);
+    _q.setFromUnitVectors(_axis, _z);
+    this.impactMarks.push({ x: x + _z.x * 0.012, y: y + _z.y * 0.012, z: z + _z.z * 0.012,
+      qx: _q.x, qy: _q.y, qz: _q.z, qw: _q.w, size: 0.1 + Math.random() * 0.065, life: 26 });
   }
 
   impact(x, y, z, nx, ny, nz, kind = 'concrete') {
@@ -153,7 +212,8 @@ class EffectsSystem {
       return;
     }
     const metal = kind === 'metal';
-    const sparks = metal ? 9 : 4;
+    if (!metal) this.impactMark(x, y, z, nx, ny, nz);
+    const sparks = metal ? 8 : 1;
     for (let i = 0; i < sparks; i++) {
       const vx = nx * 4 + (Math.random() - 0.5) * 7, vy = ny * 4 + Math.random() * 4, vz = nz * 4 + (Math.random() - 0.5) * 7;
       this.glowParticle(x, y, z, vx, vy, vz, 0.025, 0.15 + Math.random() * 0.2, 3.2, 2.2, 1.1, { gravity: 9, drag: 0.5, streak: 0.18 });
@@ -161,7 +221,7 @@ class EffectsSystem {
     if (!metal || Math.random() < 0.4) {
       for (let i = 0; i < 3; i++) {
         this.smokeParticle(x + nx * 0.05, y + ny * 0.05, z + nz * 0.05, nx * 1.4 + (Math.random() - 0.5), ny * 1.4 + Math.random() * 0.6,
-          nz * 1.4 + (Math.random() - 0.5), 0.14, 0.6 + Math.random() * 0.5, metal ? 0.5 : 0.62, 0.5, { gravity: 0.6, grow: 1.6 });
+          nz * 1.4 + (Math.random() - 0.5), 0.09, 0.4 + Math.random() * 0.35, metal ? 0.5 : 0.62, 0.5, { gravity: 0.6, grow: 0.65 });
       }
     }
   }
@@ -251,6 +311,55 @@ class EffectsSystem {
   }
 
   // ---- Simulation & drawing -------------------------------------------------------------------------------------
+  updateCasings(dt, ground) {
+    let n = 0;
+    for (const c of this.casings) {
+      c.life -= dt;
+      if (c.life <= 0) continue;
+      if (!c.settled) {
+        c.vy -= 9.81 * dt;
+        c.x += c.vx * dt; c.y += c.vy * dt; c.z += c.vz * dt;
+        c.rx += c.wx * dt; c.rz += c.wz * dt;
+        const floor = (ground?.(c.x, c.z) ?? c.groundY) + c.radius;
+        if (c.y < floor) {
+          c.y = floor;
+          c.vy = Math.abs(c.vy) * 0.32;
+          c.vx *= 0.56; c.vz *= 0.56; c.wx *= 0.5; c.wz *= 0.5;
+          if (c.vy < 0.35) { c.settled = true; c.rx = Math.PI / 2; c.rz = 0; }
+        }
+      }
+      this.casings[n] = c;
+      _q.setFromEuler(_euler.set(c.rx, 0, c.rz));
+      const fade = Math.min(1, c.life);
+      _m.compose(_p.set(c.x, c.y, c.z), _q, _s.set(c.radius * 2 * fade, c.length * fade, c.radius * 2 * fade));
+      this.casingMesh.setMatrixAt(n, _m);
+      this.casingMesh.setColorAt(n++, _caseColor.setHex(c.color));
+    }
+    this.casings.length = n;
+    if (!n && this.updates <= 3) { this.casingMesh.setMatrixAt(0, zero); n = 1; }
+    this.casingMesh.count = n;
+    this.casingMesh.visible = n > 0;
+    if (n) { this.casingMesh.instanceMatrix.needsUpdate = true; this.casingMesh.instanceColor.needsUpdate = true; }
+  }
+
+  updateImpactMarks(dt) {
+    let n = 0;
+    for (const mark of this.impactMarks) {
+      mark.life -= dt;
+      if (mark.life <= 0) continue;
+      this.impactMarks[n] = mark;
+      _q.set(mark.qx, mark.qy, mark.qz, mark.qw);
+      _m.compose(_p.set(mark.x, mark.y, mark.z), _q, _s.set(mark.size, mark.size, mark.size));
+      this.impactMesh.setMatrixAt(n, _m);
+      this.impactAlpha.array[n++] = Math.min(0.88, mark.life / 4);
+    }
+    this.impactMarks.length = n;
+    if (!n && this.updates <= 3) { this.impactMesh.setMatrixAt(0, zero); n = 1; }
+    this.impactMesh.count = n;
+    this.impactMesh.visible = n > 0;
+    if (n) { this.impactMesh.instanceMatrix.needsUpdate = true; this.impactAlpha.needsUpdate = true; }
+  }
+
   updatePool(pool, dt, blended) {
     const list = pool.list;
     const cam = this.camera;
@@ -277,7 +386,7 @@ class EffectsSystem {
         _y.crossVectors(_z, _x).normalize();
         _z.crossVectors(_x, _y);
         _m.makeBasis(_x, _y, _z);
-        const length = p.streak > 1 ? p.streak : Math.max(p.size * 3, speed * p.streak * 0.05);
+        const length = p.tracer ? p.length : p.streak > 1 ? p.streak : Math.max(p.size * 3, speed * p.streak * 0.05);
         _s.set(length, p.size * 2, 1);
         _m.scale(_s);
         _m.setPosition(p.x - _x.x * length * 0.5, p.y - _x.y * length * 0.5, p.z - _x.z * length * 0.5);
@@ -310,6 +419,8 @@ class EffectsSystem {
     this.updates++;
     this.updatePool(this.glow, dt, false);
     this.updatePool(this.smoke, dt, true);
+    this.updateCasings(dt, ground);
+    this.updateImpactMarks(dt);
 
     let n = 0;
     for (const d of this.debris) {
@@ -362,6 +473,9 @@ class EffectsSystem {
   clear() {
     this.glow.list.length = this.smoke.list.length = 0;
     this.debris.length = this.scorches.length = 0;
+    this.casings.length = this.impactMarks.length = 0;
+    this.casingMesh.count = this.impactMesh.count = 0;
+    this.casingMesh.visible = this.impactMesh.visible = false;
   }
 }
 

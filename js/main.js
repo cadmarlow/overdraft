@@ -31,6 +31,7 @@ import { loadNature } from './nature-assets.js';
 import { loadCars } from './car-assets.js';
 import { buildRamps } from './ramps.js';
 import { loadWorld } from './world-assets.js';
+import { loadUrbanLight, urbanSkyVisibility } from './urban-light.js';
 import { loadStorefronts, createStorefronts } from './storefronts.js';
 import { createFacadeKit } from './facade-kit.js';
 import { loadClutter } from './street-clutter.js';
@@ -141,7 +142,8 @@ async function initApp() {
 
   // 3. Build Manhattan Geography, Iconic Landmarks, Blocks, Street Details & Traffic
   await showLoadingStage('Préparation des rues et des quais…');
-  await Promise.all([loadNature(), loadWorld(), loadClutter(), loadCars(), loadStorefronts()]);
+  await Promise.all([loadNature(), loadWorld(), loadClutter(), loadCars(undefined, { surveyedReflections: quality.id === 'high' }),
+    loadStorefronts(), loadUrbanLight({ reflections: quality.id === 'high' })]);
   setTreeDetail(quality.trees);
   const cityGrid = buildCityGrid(scene);
   markInit('cityGrid');
@@ -733,6 +735,30 @@ async function initApp() {
   if (document.fonts) document.fonts.ready.then(placeModeIndicator);
   markInit('ui');
 
+  // Garage cars wait far outside the camera. Warm their colour AND shadow pipelines before the loading screen
+  // goes away; compileAsync respects the frustum, so simply leaving their roots visible is not enough.
+  const warmupCarMeshes = [];
+  for (const ride of gameplay.rides) {
+    if (!ride.body) continue;
+    ride.mesh.updateMatrixWorld(true);
+    ride.mesh.traverse(object => {
+      if (!object.isMesh || !object.frustumCulled) return;
+      warmupCarMeshes.push(object);
+      object.frustumCulled = false;
+    });
+  }
+
+  // Props, bodies and cars share the same local ambient light as the masonry. Materials with their own cavity /
+  // foliage occlusion already include this field in tsl-materials.js. Set this before any shader is compiled.
+  const litMaterials = new Set();
+  scene.traverse(o => {
+    for (const m of Array.isArray(o.material) ? o.material : [o.material]) {
+      if (!m || litMaterials.has(m)) continue;
+      litMaterials.add(m);
+      if ((m.isMeshStandardNodeMaterial || m.isMeshPhysicalNodeMaterial) && !m.aoNode) m.aoNode = urbanSkyVisibility();
+    }
+  });
+
   // Compile shaders behind the loading screen. Overlapping compileAsync() jobs keep compilation moving
   // while individual jobs yield to the browser.
   const COMPILE_POOL = 8;
@@ -925,7 +951,7 @@ async function initApp() {
     storefronts.update(cameraSystem.camera, gameplay.atmosphere.hour, dt);
     facadeKit.update(cameraSystem.camera);
     if (streetDetails.update) streetDetails.update(cameraSystem.camera);
-    lightingSystem.update(cameraSystem.currentPos);
+    lightingSystem.update(cameraSystem.currentPos, cameraSystem.camera, now);
     mapSystem.update();
     audioSystem.update(dt, elapsed, cameraSystem.camera, lightingSystem.activePresetId === 'midnight', gameplay.active);
     updateSceneCulling(cameraSystem.camera.position);
@@ -948,6 +974,8 @@ async function initApp() {
         // Preserve view and distance culling on the first frame too.
       });
       renderPipeline.render();
+      for (const object of warmupCarMeshes) object.frustumCulled = true;
+      warmupCarMeshes.length = 0;
       for (const o of culled) o.frustumCulled = true;
       markInit('warmup');
     }

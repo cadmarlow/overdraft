@@ -132,6 +132,69 @@ seule et relevé partiel conservé après interruption. L'outil et ses contrôle
 faux positifs et le coût par correction utile sur des séances
 longues, puis isoler davantage les écritures de l'atelier si plusieurs auteurs travaillent en même temps.
 
+## 0.9.10 « Price Action » — tir et conduite
+
+### Tir à la troisième personne
+
+Le combat doit se lire dans la caméra du joueur : arme visible, réaction immédiate au clic, recul qui revient,
+impact identifiable et recharge compréhensible. Le cadrage armé et la visée sont distincts ; C change d’épaule et
+X verrouille/déverrouille la visée pour jouer au pavé tactile. Les modèles originaux partagent leurs matériaux
+préparés au chargement ; culasse, chargeur et pompe suivent le tir et la recharge. La précision récompense l’arrêt
+et les rafales courtes ; le fusil à pompe perd son efficacité à distance. Le rayon de visée conserve les cibles
+proches, le projectile part du canon et un obstacle entre le corps et le canon intercepte le tir.
+
+Références de conception : [options de visée de Rockstar](https://www.rockstargames.com/newswire/article/25o2411812oa29/rockstar-game-tips-playing-with-perspective-in-gtav)
+et [commandes et lisibilité chez Naughty Dog](https://blog.playstation.com/2020/06/09/the-last-of-us-part-ii-accessibility-features-detailed/).
+Les ressources, noms et modèles du jeu restent originaux. Le changement d’épaule et la visée activable sont repris
+comme principes de contrôle ; les nouvelles mécaniques et valeurs sont conçues pour OVERDRAFT.
+
+Cette étape ne certifie pas des animations de combat AAA, une IA tactique aboutie ou toute la campagne. Les prochains
+travaux de combat restent les transitions de couverture, les réactions localisées et les animations capturées dédiées.
+
+### Capital Gains — les voitures
+
+Les quinze modèles partagent une chaîne complète : géométrie réelle des roues, pneus à réponse progressive,
+Ackermann, différentiel, ABS, boîte adaptative et télémétrie des forces. La propulsion puissante accepte la dérive,
+la traction tire sa trajectoire et l'intégrale se relance plus vite. Les aides et la direction restent adaptées
+aux commandes numériques d'un clavier AZERTY.
+
+La finition doit se juger en caméra de conduite : vernis et reflets filtrés, vitrage, signatures optiques,
+plaques et badges originaux, disques et étriers, cadrans animés, caméra stable et son lié à la charge.
+Le garage donne accès aux quinze modèles avec leurs caractéristiques. Aucun nouveau matériau ne doit être créé
+lors d'un rappel du garage ; les variantes sont préparées avant l'entrée en jeu.
+
+Le banc de dynamique est livré dans `tools/cars/benchmark-dynamics.mjs`. Les objectifs qui restent ouverts sont une
+flotte de géométries/textures réellement AAA, l'usure et la température des pneus, des sons enregistrés sous licence,
+et 60 images/s soutenues dans la ville. Une bonne mesure sur piste plane ne clôt pas ces objectifs.
+
+## 0.9.9 « Break Even » — correctif de stabilité
+
+Le retour joueur invalide la présentation de 0.9.8 comme grand saut graphique : le gain perçu était faible, avec
+une fluidité insuffisante et des défauts de locomotion visibles. Cette version corrige le cumul de deux animations
+verticales, les appuis du héros aux bordures et la cadence selon la taille du corps. Elle réduit les calculs de reflets
+en ÉQUILIBRÉE et FLUIDE et rétablit une remontée de résolution prudente. Les prochaines validations doivent inclure
+les animations en mouvement et les transitions trottoir/chaussée ; des captures statiques et des tests de démarrage
+ne prouvent ni une démarche correcte ni un niveau AAA.
+
+## 0.9.8 « Revaluation » — lumière locale, relief et netteté
+
+L'image doit tenir pendant la marche et la conduite. Les volumes réels de Manhattan servent maintenant à précalculer
+la visibilité du ciel à quatre hauteurs, et à chercher les immeubles dans les reflets des voitures détaillées. Les
+jambages, linteaux et bandeaux proches deviennent de vrais volumes. La pierre des monuments garde ses joints et ses
+pores ; leurs halls ne deviennent plus des blocs lumineux à midi. L'étalonnage conserve davantage de matière dans les
+hautes lumières et retire les franges colorées.
+
+Le budget vient d'abord du travail inutile : portée des petits lots de mobilier enfin respectée, grands lots encore
+partitionnés, détail du stationnement choisi par voiture et rendu dans des pools persistants. En ÉQUILIBRÉE, l'atlas
+solaire stable se rafraîchit jusqu'à 30 Hz, immédiatement lors d'un déplacement ou d'une rotation importants ; HAUTE garde la
+cadence complète. La résolution remonte aussi quand le processeur plafonne à une cadence jouable.
+
+Ce jalon ne termine pas la direction artistique. Les personnages secondaires, certaines géométries de monuments et
+la variété des silhouettes restent en retrait. Les reflets par champ de hauteurs restent une approximation de la ville
+statique, avec façades simplifiées, et ne reflètent pas les voitures ou les passants. Prochain critère de production :
+un parcours continu à pied, en voiture et sur les toits, avec des mesures longues à 60 images/s en ÉQUILIBRÉE et une
+mise en scène de mission aussi travaillée que l'image. La 1.0 conserve ses exigences.
+
 ## 0.9.7 « Curb Appeal » — l'image
 
 Un jeu se juge dans sa première minute, et la première minute, c'est l'image. La règle de cette version : la lumière
@@ -261,4 +324,7 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.5** | **Due Diligence** | Personnages lisibles de nuit ; Architecte 2.2 local : prospection continue, trajets repris, statuts réconciliés, suivi des sessions et voix coupée par défaut |
 | **0.9.7** | **Curb Appeal** | L'image : lumière refaite (soleil/ciel, œil adaptatif, occlusion ambiante, rayons du soleil, étalonnage, affûtage), menu et vol d'ouverture, nouveau Sacha, entrée en voiture jouée, chantiers de rue |
 | **0.9.6** | **Footfall** | La vie : 108 000 voitures garées sur des chaussées redécoupées, le trottoir new-yorkais d'après les registres et les règles de la rue, la foule par quartier et heure avec ses postes et ses portes, bus, taxis et livreurs, pigeons, mouettes et rats, nappe sonore, événements ambiants |
+| **0.9.8** | **Revaluation** | Lumière locale calculée sur les volumes réels, reflets des immeubles hors écran sur les voitures détaillées, encadrements et bandeaux en relief, pierre et halls des monuments, mobilier et stationnement optimisés, ombres cadencées et récupération de netteté |
+| **0.9.9** | **Break Even** | Correctif : ancrage des animations au sol, appuis du héros aux bordures, foulée selon la taille, reflets coûteux réservés à HAUTE et résolution adaptative prudente |
+| **0.9.10** | **Price Action** | Tir TPS : cadrage et changement d’épaule, arsenal original articulé, précision et recul, rechargement, douilles et impacts. Refonte des quinze voitures : pneus, direction, transmission, freins, cockpit, son, caméra et garage |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |
