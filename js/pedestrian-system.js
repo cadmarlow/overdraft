@@ -1,6 +1,6 @@
 import { blockAt } from './city-config.js';
 import { createPedestrianRoutes } from './pedestrian-routes.js';
-import { PersonCrowd, PersonRig, PEDESTRIAN_DIVE_DURATION, PROP } from './pedestrians.js';
+import { PersonCrowd, PersonRig, PEDESTRIAN_DIVE_DURATION, PROP, createSeatRoot } from './pedestrians.js';
 import { collapse } from './ragdoll.js';
 import { CrowdMotion, crowdMotionLoaded } from './crowd-motion.js';
 
@@ -38,6 +38,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
     const hairRoll = hash(i, 2);
     peds.push({
       placed: false,
+      seedIndex: i,
       crossesStreets: i % 6 === 0, // some start near crossings; everyone can use them along their route
       x: 0,
       z: 0,
@@ -78,6 +79,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
       cowerUntil: -Infinity,
       diveHeading: 0,
       diveT: 0,
+      activity: null, // off the walking line for a while (street-life.js): waiting, sitting, shopping, boarding
       rig: new PersonRig({
         seed: i * 1.6180339 + 0.13,
         female,
@@ -178,6 +180,10 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
       p.dir = t < track.len * 0.5 ? 1 : -1;
       p.x = x;
       p.z = z;
+      // along the parks and the rivers, some of them are out for a run
+      p.baseSpeed ??= p.speed;
+      const parkside = track.block && track.block.park > 0.3;
+      p.speed = (parkside || Math.abs(x) > 1500) && hash(p.seedIndex ?? 0, Math.floor(clock)) < 0.22 ? 2.3 + Math.random() * 0.6 : p.baseSpeed;
       p.v = crosswalk ? 0 : p.speed;
       p.pause = 0;
       p.waiting = false;
@@ -552,7 +558,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
     meetingCells.clear();
     for (let i = 0; i < peds.length; i++) {
       const p = peds[i];
-      if (!p.placed || p.node || !p.route?.edge || p.conversation || clock < p.socialTime || p.t < 6 || p.t > p.len - 6) continue;
+      if (!p.placed || p.node || !p.route?.edge || p.conversation || p.activity || clock < p.socialTime || p.t < 6 || p.t > p.len - 6) continue;
       const ix = Math.floor(p.x * 0.5), iz = Math.floor(p.z * 0.5);
       let partner = null;
       for (let dx = -1; dx <= 1 && !partner; dx++) {
@@ -590,6 +596,108 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
   // with 2 m of sidewalk (the rig steps down and up the curbs)
   const SIDEWALK_Y = 0.22;
   const CROSSWALK_Y = 0.012;
+  // A seat (street-life.js): the rig sits as a driver would, hands in the lap, feet on the ground in front
+  let seatRoot = null; // made on first use: pedestrians.js owns the three.js side
+  const SEAT_POSE = { seat: { x: 0, y: 0.45, z: 0 }, wheel: { x: 0, y: 0.72, z: 0.34 }, radius: 0.1, tilt: 0, turn: 0, pedals: { x: 0, y: -SIDEWALK_Y + 0.02, z: 0.48 }, recline: 0.1, look: 0 };
+
+  // Off the walking line (street-life.js sets p.activity): the pedestrian walks to its spot, holds there (standing,
+  // sitting, waiting), then walks back onto its track and carries on; or walks out of a door to its track (exit),
+  // or from its track into a door and away (enter). Positions are plain lerps: the spots stand a few metres off the line.
+  const ACTIVITY_SPEED = 1.15;
+  function activityStep(p, dt) {
+    const a = p.activity;
+    const tx = p.ax + p.ux * p.t + p.uz * p.dodge, tz = p.az + p.uz * p.t - p.ux * p.dodge;
+    const goal = a.phase === 'return' ? { x: tx, z: tz } : { x: a.x, z: a.z };
+    if (a.phase === 'hold') {
+      p.v = 0;
+      if (clock >= a.until || a.release) {
+        a.phase = a.leave === 'vanish' ? 'vanish' : 'return';
+        a.until = clock + 20;
+      }
+      if (a.phase === 'hold') return;
+    }
+    if (a.phase === 'vanish') {
+      a.onDone?.(p);
+      p.activity = null;
+      p.placed = false;
+      p.rig.placed = false;
+      return;
+    }
+    const dx = goal.x - p.x, dz = goal.z - p.z, d = Math.hypot(dx, dz);
+    const step = Math.min(d, ACTIVITY_SPEED * dt);
+    if (d > 1e-3) {
+      p.x += dx / d * step;
+      p.z += dz / d * step;
+      a.moveHeading = Math.atan2(dx, dz);
+    }
+    p.v = ACTIVITY_SPEED;
+    if (d <= Math.max(0.05, step) || clock >= a.until) {
+      if (a.phase === 'approach') {
+        a.phase = 'hold';
+        a.until = clock + a.duration;
+        p.x = a.x; p.z = a.z;
+        a.onArrive?.(p);
+      } else if (a.phase === 'enter') {
+        a.onDone?.(p);
+        p.activity = null;
+        p.placed = false;
+        p.rig.placed = false;
+      } else {
+        // back on the line
+        p.x = tx; p.z = tz;
+        a.onDone?.(p);
+        p.activity = null;
+        p.v = 0;
+        p.pause = 0.2;
+      }
+    }
+  }
+
+  // An unplaced pedestrian appears at (x, z), tied to the nearest sidewalk track (within reach m), standing where it is
+  function placeAt(p, x, z, reach = 9) {
+    if (p.placed) return false;
+    let best = null, bestD = reach;
+    for (const e of nearEdges) {
+      for (const track of pedRoutes.along(e)) {
+        const t = clamp((x - track.ax) * track.ux + (z - track.az) * track.uz, 0.5, track.len - 0.5);
+        const d = Math.hypot(track.ax + track.ux * t - x, track.az + track.uz * t - z);
+        if (d < bestD) { bestD = d; best = { track, t }; }
+      }
+    }
+    if (!best) return false;
+    if (p.conversation) endConversation(p.conversation);
+    Object.assign(p, best.track);
+    p.route = best.track;
+    p.t = best.t;
+    p.dir = Math.random() < 0.5 ? 1 : -1;
+    p.x = x;
+    p.z = z;
+    p.v = 0;
+    p.pause = 0;
+    p.waiting = false;
+    p.walkAt = -1;
+    p.avoidUntil = 0;
+    p.resumeDir = 0;
+    p.dodge = p.dodgeTarget = 0;
+    p.diveStart = -Infinity;
+    p.dead = false;
+    p.hp = 100;
+    p.panicUntil = 0;
+    p.cowerUntil = -Infinity;
+    p.avoidCheck = clock + Math.random() * PED_AVOID_INTERVAL;
+    p.nextRoute = null;
+    p.nextLeg = 0;
+    p.goalTime = 0;
+    p.restTime = clock + 25 + Math.random() * 45;
+    p.socialTime = clock + 5 + Math.random() * 15;
+    p._curbNode = null;
+    p.node = null;
+    p.rig.placed = false;
+    p.placed = true;
+    return true;
+  }
+  // How many of the pool stand in the city (street-life.js sets it by district and hour)
+  let density = 1;
   function pedGround(p, x, z) {
     if (!p.node) return SIDEWALK_Y;
     const t = (x - p.ax) * p.ux + (z - p.az) * p.uz;
@@ -625,6 +733,20 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
       return;
     }
     const partner = p.conversation && (p.conversation.a === p ? p.conversation.b : p.conversation.a);
+    const act = p.activity;
+    if (act && draw && act.phase === 'hold' && act.seat) {
+      // Sitting: the seat poses the whole body (bench, café chair, shelter bench)
+      seatRoot ??= createSeatRoot();
+      seatRoot.position.set(act.seat.x, SIDEWALK_Y, act.seat.z);
+      seatRoot.rotation.y = act.seat.yaw;
+      seatRoot.updateMatrixWorld(true);
+      const rig = p.rig;
+      if (!rig.placed || (rig.x - p.x) ** 2 + (rig.z - p.z) ** 2 > 9) rig.reset(p.x, p.z, act.seat.yaw, pedGround, p);
+      rig.carry = act.carry ?? -1;
+      rig.drive(seatRoot, SEAT_POSE);
+      pedCrowd.add(rig, Math.sqrt(distSq));
+      return;
+    }
     const sideStep = p.dodgeTarget - p.dodge;
     let fx = p.ux * p.dir, fz = p.uz * p.dir;
     const ahead = p.dir > 0 ? p.len - p.t : p.t, leg = p.nextRoute?.[p.nextLeg];
@@ -636,19 +758,22 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
         fz += (nz - fz) * w;
       }
     }
-    const heading = diving ? p.diveHeading : partner ? Math.atan2(partner.x - p.x, partner.z - p.z)
-      : Math.abs(sideStep) > 0.01 ? Math.atan2(p.uz * Math.sign(sideStep), -p.ux * Math.sign(sideStep))
-      : Math.atan2(fx, fz);
+    const heading = diving ? p.diveHeading : act ? (act.phase === 'hold' ? act.heading : act.moveHeading)
+      : partner ? Math.atan2(partner.x - p.x, partner.z - p.z)
+        : Math.abs(sideStep) > 0.01 ? Math.atan2(p.uz * Math.sign(sideStep), -p.ux * Math.sign(sideStep))
+          : Math.atan2(fx, fz);
     const rig = p.rig;
     const cowering = clock < p.cowerUntil;
     if (draw && distSq < 2500 && rig.lookAt) {
-      // Nothing in the hands while running for it; an umbrella comes out in the rain
+      // Nothing in the hands while running for it; an umbrella comes out in the rain; whatever the activity put there
       const fleeing = clock < p.panicUntil;
-      rig.carry = fleeing || cowering ? (rig.prop === PROP.BAG || rig.prop === PROP.BACKPACK ? rig.prop : -1) : rain && rig.umbrella ? PROP.UMBRELLA : rig.prop;
+      rig.carry = fleeing || cowering ? (rig.prop === PROP.BAG || rig.prop === PROP.BACKPACK ? rig.prop : -1)
+        : rain && rig.umbrella ? PROP.UMBRELLA : act && act.carry !== undefined ? act.carry : rig.prop;
       rig.crouchTarget = cowering && !p.heldUp ? 1 : 0;
       rig.handsUpTarget = cowering ? 1 : 0;
-      // heads turn towards someone who comes close, or anything that makes them run
-      if (fleeing || distSq < 30 || partner) rig.lookAt(partner ? partner.x : focusX, partner ? partner.z : focusZ);
+      // heads turn towards someone who comes close, or anything that makes them run, or what they wait for
+      if (act && act.look && act.phase === 'hold') rig.lookAt(act.look.x, act.look.z);
+      else if (fleeing || distSq < 30 || partner) rig.lookAt(partner ? partner.x : focusX, partner ? partner.z : focusZ);
       else rig.lookAt();
     }
     rig.update(dt, p.x, p.z, heading, pedGround, p, 0, draw, diving ? diveTime : -1);
@@ -666,22 +791,37 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
 
     for (const n of walkedNodes) n.walkers.length = 0;
     walkedNodes.length = 0;
+    let placedCount = 0;
+    for (let i = 0; i < NUM_PEDS; i++) if (peds[i].placed) placedCount++;
+    const target = Math.round(NUM_PEDS * clamp(density, 0.15, 1));
     let pedBudget = jump ? NUM_PEDS : 6;
     const keepRadius = jump ? NEAR_RADIUS : PED_RADIUS;
     const keepRadiusSq = keepRadius * keepRadius;
-    for (let scanned = 0; scanned < NUM_PEDS && pedBudget > 0; scanned++) {
+    // over the district's density: the far ones leave first, a few a frame, out of sight
+    let shed = placedCount > target ? 3 : 0;
+    for (let scanned = 0; scanned < NUM_PEDS && (pedBudget > 0 || shed > 0); scanned++) {
       const p = peds[pedCursor];
       pedCursor = (pedCursor + 1) % NUM_PEDS;
       if (p.placed) {
         const dx = p.x - focusX, dz = p.z - focusZ;
-        if (dx * dx + dz * dz <= keepRadiusSq) continue;
+        const d2 = dx * dx + dz * dz;
+        if (shed > 0 && !p.activity && !p.dead && d2 > 160 * 160 && !(hasView && visible(p.x, p.z, 4))) {
+          shed--;
+          placedCount--;
+          if (p.conversation) endConversation(p.conversation);
+          p.placed = false;
+          p.rig.placed = false;
+          continue;
+        }
+        if (d2 <= keepRadiusSq) continue;
       }
+      if (pedBudget <= 0 || (!jump && placedCount >= target)) continue;
       pedBudget--;
-      spawnPed(p, jump ? 0 : 60, jump ? NEAR_RADIUS : 280, !jump);
+      if (spawnPed(p, jump ? 0 : 60, jump ? NEAR_RADIUS : 280, !jump)) placedCount++;
     }
     for (let i = 0; i < NUM_PEDS; i++) {
       const p = peds[i];
-      if (p.placed && !p.dead) avoidPlayer(p);
+      if (p.placed && !p.dead && !p.activity) avoidPlayer(p);
     }
     meet(dt);
     gatherCurbs();
@@ -689,8 +829,11 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
     for (let i = 0; i < NUM_PEDS; i++) {
       const p = peds[i];
       if (!p.placed) continue;
-      if (!p.dead) walk(p, dt);
-      renderPed(p, dt);
+      if (!p.dead) {
+        if (p.activity) activityStep(p, dt);
+        else walk(p, dt);
+      }
+      if (p.placed) renderPed(p, dt);
     }
     pedCrowd.end();
   }
@@ -701,9 +844,22 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
   let groundAt = () => SIDEWALK_Y;
   let rain = false;
 
+  // Whatever took them off the line is over (panic, a shot, a gun pointed at them): back on it where they stand
+  function cancelActivity(p) {
+    const a = p.activity;
+    if (!a) return;
+    p.activity = null;
+    a.onDone?.(p, true);
+    if (p.route) {
+      p.t = clamp((p.x - p.ax) * p.ux + (p.z - p.az) * p.uz, 0, p.len);
+      p.dodge = p.dodgeTarget = 0;
+    }
+  }
+
   function kill(p, heading = p.rig.yaw, push = 0, cause = 'shot') {
     if (!p.placed || p.dead) return false;
     if (p.conversation) endConversation(p.conversation);
+    cancelActivity(p);
     p.dead = true;
     p.deadAt = clock;
     p.deadHeading = heading;
@@ -728,6 +884,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
       const dx = p.x - x, dz = p.z - z, d = Math.hypot(dx, dz);
       if (d > range || (dx * dirX + dz * dirZ) / (d || 1) < 0.93) continue;
       if (p.conversation) endConversation(p.conversation);
+      cancelActivity(p);
       if (clock >= p.cowerUntil) p.heldUp = true;
       p.cowerUntil = clock + 2.5;
       p.panicUntil = Math.max(p.panicUntil, clock + 8);
@@ -750,6 +907,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
       // close to the danger, some freeze and cover their head instead of running
       if (fresh && dx * dx + dz * dz < 200 && Math.random() < 0.28) { p.cowerUntil = clock + 4 + Math.random() * 5; p.heldUp = false; }
       if (p.conversation) endConversation(p.conversation);
+      cancelActivity(p);
       p.goalX = p.x + dx * 6;
       p.goalZ = p.z + dz * 6;
       p.goalTime = p.panicUntil;
@@ -763,7 +921,8 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
     return count;
   }
 
-  return { peds, meshes: pedCrowd.meshes, update, kill, panic, setGround: (fn) => { groundAt = fn; }, setRain: (on) => { rain = on; }, holdUp };
+  return { peds, meshes: pedCrowd.meshes, update, kill, panic, setGround: (fn) => { groundAt = fn; }, setRain: (on) => { rain = on; }, holdUp,
+    placeAt, setDensity: (f) => { density = Number.isFinite(f) ? f : 1; }, get density() { return density; }, get clock() { return clock; }, NUM_PEDS };
 }
 
 export { createPedestrianSystem };

@@ -55,6 +55,23 @@ towers and the colours, materials and roof shapes mappers recorded come from © 
 https://www.openstreetmap.org/copyright). Only the facts js/building-styles.bin.gz holds are kept; how each building is
 dressed is invented by the game.
 
+Street furniture: where each piece stands in js/street-geodata.bin.gz (built by tools/street/build-street-data.mjs) comes
+from these public datasets; only positions (and a shed's stated length) are kept, never a business or owner name.
+- "Hydrants", NYC Department of Environmental Protection (NYC Open Data, https://data.cityofnewyork.us/d/5bgh-vtsn).
+- "Bus Stop Shelters", NYC Department of Transportation (NYC Open Data, https://data.cityofnewyork.us/d/t4f2-8md7).
+- "MTA Bus Stops", Metropolitan Transportation Authority (Open NY, https://data.ny.gov/d/2ucp-7wg5). Data obtained from the
+  MTA; the MTA does not endorse this game.
+- "Newsstands", NYC Department of Transportation (NYC Open Data, https://data.cityofnewyork.us/d/w9zq-xm8b).
+- "Bicycle Parking", NYC Department of Transportation (NYC Open Data, https://data.cityofnewyork.us/d/592z-n7dk).
+- "Seating Locations" (CityBench), NYC Department of Transportation (NYC Open Data, https://data.cityofnewyork.us/d/esmy-s8q5).
+- "LinkNYC Kiosk Locations", NYC Office of Technology and Innovation (NYC Open Data, https://data.cityofnewyork.us/d/s4kf-3yrf).
+- "Parking Meters Locations and Status", NYC Department of Transportation (NYC Open Data, https://data.cityofnewyork.us/d/693u-uax6).
+- "DOB NOW: Build – Approved Permits" (sidewalk shed permits), NYC Department of Buildings (NYC Open Data,
+  https://data.cityofnewyork.us/d/rbx6-tga4).
+- "Dining Out NYC Locations", NYC Department of Transportation (NYC Open Data, https://data.cityofnewyork.us/d/fpeh-f7ci).
+- "Building Footprints", NYC Office of Technology and Innovation (NYC Open Data, https://data.cityofnewyork.us/d/5zhs-2jue):
+  the walls sheds and outdoor dining are placed on.
+
 Les bases dérivées d'OpenStreetMap sont redistribuées sous [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/).
 Elles sont disponibles au format machine dans le jeu publié : [géographie](./js/nyc-geodata.js),
 [empreintes des immeubles](./js/building-geodata.bin.gz) et [styles et gradins](./js/building-styles.bin.gz).
@@ -62,6 +79,10 @@ Les lecteurs sont fournis avec elles : [immeubles](./js/building-geodata.js)
 et [styles](./js/building-styles.js). Cette licence concerne les bases de données ; le code du jeu reste sous MIT.
 PLUTO est fourni par NYC Planning via NYC Open Data ; ses [conditions de réutilisation](https://data.cityofnewyork.us/stories/s/Terms-of-Use/k9k7-3cje)
 et la [FAQ de NYC Open Data](https://www.nyc.gov/opendata/get-started/FAQs) s'appliquent aux données de la ville.
+Elles s'appliquent aussi aux jeux de données du mobilier urbain publiés par la ville ([données](./js/street-geodata.bin.gz),
+[lecteur](./js/street-geodata.js)). Les arrêts de bus de la MTA relèvent des
+[conditions d'Open NY](https://data.ny.gov/download/77gx-ii52/application%2Fpdf) et des
+[conditions de la MTA pour ses données](https://www.mta.info/developers/terms-and-conditions).
 
 ## Outil de développement local
 

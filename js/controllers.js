@@ -1023,6 +1023,31 @@ class ThirdPersonControllerManager {
   }
 
   // Static colliders within `r` of (x, z), kept in their original order and indexed once into 48 m cells.
+  // Colliders that come and go during the game (parked cars, parking.js): they live in the collider cells only
+  addCollider(c) {
+    if (!this._colliderCells) this.nearColliders(c.minX, c.minZ, 0);
+    if (c._order === undefined) c._order = 1e6 + (this._dynamicOrder = (this._dynamicOrder || 0) + 1);
+    c._cells = [];
+    for (let ix = Math.floor(c.minX / COLLIDER_CELL); ix <= Math.floor(c.maxX / COLLIDER_CELL); ix++) {
+      for (let iz = Math.floor(c.minZ / COLLIDER_CELL); iz <= Math.floor(c.maxZ / COLLIDER_CELL); iz++) {
+        const k = cellKey(ix, iz);
+        let list = this._colliderCells.get(k);
+        if (!list) this._colliderCells.set(k, (list = []));
+        list.push(c);
+        c._cells.push(list);
+      }
+    }
+  }
+
+  removeCollider(c) {
+    c.maxY = -100; // out of every test at once, whatever list still holds it
+    for (const list of c._cells || []) {
+      const i = list.indexOf(c);
+      if (i >= 0) list.splice(i, 1);
+    }
+    c._cells = null;
+  }
+
   nearColliders(x, z, r) {
     const CELL = COLLIDER_CELL;
     const key = cellKey;
@@ -1098,6 +1123,9 @@ class ThirdPersonControllerManager {
           carEntity.speed *= c.soft ? 0.985 : 0.9;
           continue;
         }
+        // A parked car struck with any speed becomes a car of its own and takes the blow (gameplay.js); a nudge
+        // leaves it standing, solid
+        if (c.parked !== undefined && carEntity && this.onParkedHit && this.onParkedHit(c, carEntity, contact)) continue;
         const { nx, nz, depth } = contact;
         pos.x += nx * depth;
         pos.z += nz * depth;

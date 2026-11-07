@@ -40,7 +40,7 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.5';
+const BUILD = '0.9.6';
 const CAR_NAMES = {
   sedan: ['VALMONT', 'ÉCUME', 'BERLINE / PROPULSION'], suv: ['BRISANT', 'RÉCIF', 'SUV / TRANSMISSION INTÉGRALE'],
   taxi: ['VALMONT', 'CAB 7', 'TAXI / PROPULSION'], pickup: ['GRÉVILLE', 'FALAISE', 'PICK-UP / PROPULSION'],
@@ -109,7 +109,8 @@ const _camDir = new THREE.Vector3();
 const bodyA = {}, bodyB = {}, hit = {};
 
 export class Game {
-  constructor({ controllers, camera, traffic, highway, streets, scene, onMode, onTime, audio, map, touch, gamepad, lighting, grade }) {
+  constructor({ controllers, camera, traffic, highway, streets, scene, onMode, onTime, audio, map, touch, gamepad, lighting, grade, parking = null }) {
+    this.parking = parking;
     this.buildVersion = BUILD;
     Object.assign(this, { controllers, camera, traffic, streets, scene, onMode, onTime, audio, map, touch, gamepad });
     this.atmosphere = new Atmosphere({ lighting, grade, scene, camera: camera.camera, controllers });
@@ -180,7 +181,9 @@ export class Game {
     this.wanted.gameCars = this.allCars;
     this.markers = new MarkerSystem(scene);
     this.pickups = new PickupSystem(scene);
-    this.world = { controllers, traffic, cars: this.allCars, actors: this.actors.actors, player: this.player };
+    this.world = { controllers, traffic, cars: this.allCars, actors: this.actors.actors, player: this.player, parking };
+    // A parked car driven into: it becomes a car of its own and takes the blow through the car-to-car collisions
+    controllers.onParkedHit = (c, car) => this.hitParked(c, car);
     this.wrecks = Array.from({ length: WRECK_POOL }, (_, i) => {
       const car = controllers.createCarEntity({ kind: 'sedan', paint: 0x1d1a17 });
       car.wreck = true; car.destroyed = true; car.hp = 0; car.burnT = 0;
@@ -252,6 +255,8 @@ export class Game {
     const car = boat ? createBoat(this.scene, { paint }) : moto ? createMotorbike(this.scene, { paint }) : this.controllers.createCarEntity({ kind, paint, lite });
     car.id = this.nextId++; car.stolen = stolen;
     car.position.copy(position); car.heading = heading; car.prevX = position.x; car.prevZ = position.z;
+    // whatever was parked where this car now stands is gone
+    this.parking?.vacateNear(position.x, position.z, moto ? 2.5 : 4.5);
     if (!moto && !boat) car.drive = { speed: car.tune.top, reverseSpeed: 14, wheelbase: car.spec.wheelZ * 2 };
     car.hp = 100; car.burnT = 0; car.destroyed = false;
     if (!moto && !lite && !boat) splitDoor(car);
@@ -308,7 +313,7 @@ export class Game {
   buildInterface() {
     document.body.insertAdjacentHTML('beforeend', `
       <div id="game-vignette" aria-hidden="true"></div>
-      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · DUE DILIGENCE</small></span></div>
+      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · FOOTFALL</small></span></div>
       <div id="session-badge"><i></i><span>MANHATTAN</span><b id="session-mode">LIBRE</b><button id="pause-button" aria-label="Ouvrir le menu pause">Ⅱ</button></div>
       <div id="game-prompt" role="status" aria-live="polite"><kbd>F</kbd><span>Voler la voiture<small>VÉHICULE</small></span></div>
       <div id="game-toast" role="status" aria-live="polite"></div>
@@ -317,7 +322,16 @@ export class Game {
       <div id="drive-gauge"><span id="drive-gear">N</span><strong id="drive-speed">000</strong><span class="gauge-unit">KM/H</span><div><i id="drive-power"></i></div><em><i id="drive-nitro"></i></em><b id="drive-health"></b></div>
       <div id="game-keybar"></div>
       <div id="game-menu" class="game-menu">
-        <div class="menu-top"><span class="edition-label">EVERY DEBT GETS PAID.</span><span class="build-label">BUILD ${BUILD}</span></div>
+        <div class="menu-top">
+          <span class="edition-label">EVERY DEBT GETS PAID.</span>
+          <div class="menu-top-actions">
+            <span class="build-label">BUILD ${BUILD}</span>
+            <button id="fullscreen-toggle" type="button" hidden>
+              <svg class="icon icon-sm" aria-hidden="true"><use href="#i-fit"/></svg><span>Plein écran</span>
+            </button>
+            <span id="fullscreen-status" role="status"></span>
+          </div>
+        </div>
         <div class="menu-body"><div class="menu-eyebrow"><span></span> <b id="menu-act">ACTE I — LA DETTE</b></div><h1>OVER<span>DRAFT<span class="title-dot">.</span></span></h1>
           <p class="menu-copy">Sacha Roux est arrivé à New York avec une dette qui ne lui appartient pas.<br>Deux cent cinquante mille dollars. Une ville entière pour les trouver.</p>
           <button id="play-button" class="primary-play">ENTRER DANS LA VILLE <span>↗</span></button>
@@ -326,7 +340,7 @@ export class Game {
         <div class="menu-bottom"><span>MANHATTAN, NY<span class="coordinates">40°45′ N — 73°59′ W</span></span><button id="credits-button">CRÉDITS ↗</button><span class="menu-description">MISSIONS · COURSES · PRIMES<br>COMBAT · POURSUITES · 5 ÉTOILES</span></div>
         <div id="menu-options"><span>HEURE &amp; MÉTÉO</span><button data-game-time="golden">Soleil bas</button><button data-game-time="midday">Midi</button><button data-game-time="twilight">Crépuscule</button><button data-game-time="midnight">Nuit</button><button id="weather-toggle">MÉTÉO : AUTO</button><button id="sound-toggle">SON ACTIVÉ</button><button id="quality-toggle">QUALITÉ : HAUTE</button></div>
       </div>
-      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Due Diligence</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap.</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : Comrade1280, Daniel Zhabotinsky (Sketchfab, CC BY 4.0), Eric Chadwick / DGG (Khronos, CC BY 4.0). Modifiées pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
+      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Footfall</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap. Mobilier urbain : registres publics de la ville et de la MTA (bouches d’incendie, arrêts et abris de bus, kiosques, arceaux, bancs, bornes, parcmètres, échafaudages, terrasses).</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : Comrade1280, Daniel Zhabotinsky (Sketchfab, CC BY 4.0), Eric Chadwick / DGG (Khronos, CC BY 4.0). Modifiées pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
       <button id="mobile-interact" class="touch-interact" hidden>F <span>VÉHICULE</span></button>
     `);
     this.ui = Object.fromEntries(['game-menu', 'game-prompt', 'game-toast', 'stamina-fill', 'drive-speed', 'drive-gear', 'drive-power', 'drive-nitro', 'drive-health', 'vehicle-name', 'game-keybar', 'play-button', 'mobile-interact', 'session-mode', 'menu-progress'].map(id => [id, document.getElementById(id)]));
@@ -346,6 +360,7 @@ export class Game {
   bind() {
     document.getElementById('play-button').addEventListener('click', () => this.start());
     document.getElementById('pause-button').addEventListener('click', () => this.setPaused(true));
+    this.bindFullscreen();
     document.getElementById('new-session').addEventListener('click', () => this.reset());
     document.getElementById('credits-button').addEventListener('click', () => document.getElementById('credits-dialog').showModal());
     document.getElementById('close-credits').addEventListener('click', () => document.getElementById('credits-dialog').close());
@@ -460,6 +475,29 @@ export class Game {
       const i = owned.indexOf(this.weaponId);
       this.selectWeapon(owned[(i + (this.wheelSum > 0 ? 1 : -1) + owned.length) % owned.length]);
     }, { capture: true, passive: false });
+  }
+
+  bindFullscreen() {
+    if (!document.fullscreenEnabled) return;
+    const button = document.getElementById('fullscreen-toggle');
+    const label = button.querySelector('span');
+    const status = document.getElementById('fullscreen-status');
+    const updateLabel = () => {
+      label.textContent = document.fullscreenElement ? 'Quitter le plein écran' : 'Plein écran';
+      status.textContent = '';
+    };
+    button.hidden = false;
+    updateLabel();
+    document.addEventListener('fullscreenchange', updateLabel);
+    button.addEventListener('click', async () => {
+      status.textContent = '';
+      try {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        else await document.documentElement.requestFullscreen();
+      } catch {
+        status.textContent = 'Le changement de mode d’affichage a échoué.';
+      }
+    });
   }
 
   releasePointer() {
@@ -694,6 +732,7 @@ export class Game {
   }
 
   onCollision(e) {
+    this.ambient?.onCollision(e);
     const { a, b, speed } = e;
     const person = this.person;
     if (speed > 3) {
@@ -1314,6 +1353,7 @@ export class Game {
     if (landed) this.hud.hit(killed);
     this.fx.muzzleFlash(_muzzle, _dir, w.id === 'shotgun');
     this.audio.sfx(w.sound, _muzzle.x, _muzzle.y, _muzzle.z);
+    this.birds?.scatter(_muzzle.x, _muzzle.z, 45);
     this.camera.addShake(w.shake);
     this.camera.orbitPitchOffset -= w.recoil * (0.6 + Math.random() * 0.8);
     this.camera.footYaw += (Math.random() - 0.5) * w.recoil * 0.5;
@@ -1398,6 +1438,14 @@ export class Game {
         v.panicUntil = 0; this.traffic.flee(v.x, v.z, 4, 6);
         if (v.hp <= 0) this.wreckTraffic(v);
         if (byPlayer && v.isPolice) this.crime('copCarHit', v.x, v.z);
+        return { hit: true, kill: false };
+      }
+      case 'parked': {
+        // the first bullet turns the parked car loose; it takes the damage as any gameplay car
+        this.fx.impact(h.x, h.y, h.z, h.nx, h.ny, h.nz, 'metal');
+        this.audio.sfx('impactMetal', h.x, h.y, h.z);
+        const c = this.takeParked(h.target, true);
+        if (c && !c.destroyed) this.damageCar(c, damage * 0.4, 'shot');
         return { hit: true, kill: false };
       }
       case 'car': {
@@ -1589,6 +1637,7 @@ export class Game {
 
   // generation: 0 for a blast the player caused, 1+ for the cars it set off in turn (weaker, bounded)
   explode(x, y, z, power = 1, cause = 'npc', generation = 0) {
+    this.birds?.scatter(x, z, 70);
     // At most a few blasts a second, however the chain reaction spreads
     const now = this.clock;
     this.blastBudget = Math.min(3, (this.blastBudget ?? 3) + (now - (this.blastT ?? now)) * 1.5);
@@ -1890,7 +1939,40 @@ export class Game {
       const d = Math.hypot(door.x - person.position.x, door.z - person.position.z);
       if (d < nearest) { best = { source, distance: d }; nearest = d; }
     }
+    // Cars parked along the curb (parking.js)
+    this.parking?.forEachNear(person.position.x, person.position.z, 5.5, (i) => {
+      const s = this.parking.info(i);
+      const door = doorPosition({ position: { x: s.x, z: s.z }, heading: s.yaw });
+      const d = Math.hypot(door.x - person.position.x, door.z - person.position.z);
+      if (d < nearest) { best = { parked: i, distance: d }; nearest = d; }
+    });
     return best;
+  }
+
+  // The parked car in slot i leaves the curb as a gameplay car (lite: drawn with the street's compiled materials, so a
+  // pile-up never stalls a frame; the player's own ride gets the full car when stolen, see interact())
+  takeParked(i, lite = true) {
+    const s = this.parking?.release(i);
+    if (!s) return null;
+    const car = this.makeCar(s.kind, s.paint, new THREE.Vector3(s.x, 0, s.z), s.yaw, false, lite);
+    car.hp = 100;
+    // a knocked or broken-into car's alarm goes off, some of the time
+    if (Math.random() < (lite ? 0.3 : 0.5)) this.audio.ambienceEvent?.('alarm', s.x, 0.8, s.z);
+    return car;
+  }
+
+  // controllers.onParkedHit: a car (the player's, a cruiser, a mission car) drove into a parked one. Returns true when
+  // the parked car has been turned loose and the collider must be ignored this frame.
+  hitParked(c, car) {
+    const speed = Math.abs(car.speed || 0) + Math.hypot(car.vx || 0, car.vz || 0) + Math.hypot(car.body?.vx || 0, car.body?.vz || 0);
+    if (speed < 1.1) return false;
+    const pl = this.player;
+    // far from the player (an AI car cutting a corner across town) the parked car simply stands firm
+    if (Math.hypot(c.obb.cx - pl.x, c.obb.cz - pl.z) > 140) return false;
+    const loose = this.takeParked(c.parked, true);
+    if (!loose) return false;
+    if (car === this.car && this.state === 'driving' && speed > 6) this.camera.addShake(Math.min(0.5, speed * 0.03));
+    return true;
   }
 
   interact() {
@@ -1908,7 +1990,12 @@ export class Game {
     if (!candidate) return;
     let car = candidate.car;
     if (car?.ai) car.ai = null; // a mission car the player takes over
-    if (!car) {
+    if (!car && candidate.parked !== undefined) {
+      car = this.takeParked(candidate.parked, false);
+      if (!car) return;
+      car.stolen = true;
+      if (this.policeNear(40) || this.wanted.level > 0) this.crime('carjack', car.position.x, car.position.z);
+    } else if (!car) {
       const source = candidate.source;
       const color = new THREE.Color().setRGB(...source.paint);
       car = this.makeCar(source.bodyType, color.getHex(), new THREE.Vector3(source.x, 0, source.z), source.yaw || 0);
@@ -2253,7 +2340,7 @@ export class Game {
     const span = prompt.querySelector('span');
     if (this.candidate) {
       const target = this.candidate.car;
-      const kind = target?.kind || this.candidate.source.bodyType;
+      const kind = target?.kind || this.candidate.source?.bodyType || (this.candidate.parked !== undefined ? this.parking.info(this.candidate.parked).kind : null);
       const [brand, model] = CAR_NAMES[kind] || ['', 'VÉHICULE'];
       const owned = target && (target.stolen || target.mission) && !target.police;
       span.replaceChildren(document.createTextNode(owned ? 'Monter dans le véhicule' : target?.police ? 'Voler la voiture de police' : 'Voler la voiture'));

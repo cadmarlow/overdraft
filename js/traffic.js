@@ -21,7 +21,7 @@ import {
 // Vehicles replenish around the player; pedestrian-system.js manages the nearby walking population.
 
 const NUM_CARS = 200;
-const NUM_BUSES = 12;
+const NUM_BUSES = 20;
 
 // Intelligent Driver Model: max acceleration, comfortable braking, time headway, standstill gap; the sideways
 // acceleration drivers accept in bends, which sets how fast they take each turn or lane shift; and how hard they brake
@@ -104,7 +104,76 @@ function createBusDestinationTexture() {
 
 const clamp = (x, lo, hi) => Math.max(lo, Math.min(hi, x));
 
-function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
+// NYC street fleet palettes shared with the parked cars (parking.js)
+const FLEET_STYLES = {
+  sedan: [
+    { col: new THREE.Color(0x12151a), style: carStyleCode({ livery: 3, metallic: 0, trim: 1, wheel: 1 }) }, // TLC / Uber Black Car
+    { col: new THREE.Color(0x161a20), style: carStyleCode({ livery: 3, metallic: 1, trim: 2, wheel: 2 }) }, // TLC Obsidian Blackout
+    { col: new THREE.Color(0xf2f4f7), style: carStyleCode({ livery: 0, metallic: 0, trim: 0, wheel: 0 }) }, // Alpine White Sedan
+    { col: new THREE.Color(0xe6eaef), style: carStyleCode({ livery: 4, metallic: 1, trim: 2, wheel: 2 }) }, // Pearl White Sport (black roof)
+    { col: new THREE.Color(0xc8d0d8), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }, // Liquid Silver Metallic
+    { col: new THREE.Color(0x9aa2ac), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 1 }) }, // Tungsten Silver Metallic
+    { col: new THREE.Color(0x52575e), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 2 }) }, // Graphite Grey Metallic
+    { col: new THREE.Color(0x363b42), style: carStyleCode({ livery: 0, metallic: 1, trim: 2, wheel: 3 }) }, // Charcoal Dark Grey
+    { col: new THREE.Color(0x1c2026), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }, // Jet Black Metallic
+    { col: new THREE.Color(0x1d3b6c), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 1 }) }, // Deep Navy Metallic
+    { col: new THREE.Color(0x285086), style: carStyleCode({ livery: 4, metallic: 1, trim: 2, wheel: 2 }) }, // Atlantic Blue Sport (black roof)
+    { col: new THREE.Color(0x741d22), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }  // Crimson Red Metallic
+  ],
+  suv: [
+    { col: new THREE.Color(0x101318), style: carStyleCode({ livery: 3, metallic: 0, trim: 1, wheel: 1 }) }, // Executive Black Escalade / Suburban TLC
+    { col: new THREE.Color(0x171b22), style: carStyleCode({ livery: 3, metallic: 1, trim: 2, wheel: 3 }) }, // Uber Black SUV (blackout)
+    { col: new THREE.Color(0xf0f3f7), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }, // Pearl White Luxury SUV
+    { col: new THREE.Color(0xe4e8ed), style: carStyleCode({ livery: 4, metallic: 0, trim: 2, wheel: 2 }) }, // Glacier White SUV (black roof)
+    { col: new THREE.Color(0x3a434d), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 2 }) }, // Slate Grey Metallic SUV
+    { col: new THREE.Color(0x5c636b), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 1 }) }, // Gunmetal Grey SUV
+    { col: new THREE.Color(0xbec6cf), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }, // Silver Metallic Crossover
+    { col: new THREE.Color(0x181c22), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 3 }) }, // Onyx Black SUV
+    { col: new THREE.Color(0x20385c), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 1 }) }, // Midnight Blue SUV
+    { col: new THREE.Color(0x28382e), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 0 }) }, // Forest Green Metallic SUV
+    { col: new THREE.Color(0x682024), style: carStyleCode({ livery: 4, metallic: 1, trim: 2, wheel: 2 }) }, // Burgundy Crossover (black roof)
+    { col: new THREE.Color(0x787670), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 3 }) }  // Urban Putty Grey Crossover
+  ],
+  // Minivans: family colours plus TLC / Uber XL black
+  minivan: [
+    { col: new THREE.Color(0x111419), style: carStyleCode({ livery: 3, metallic: 1, trim: 1, wheel: 1 }) }, // TLC / Uber XL Black
+    { col: new THREE.Color(0xf0f2f5), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }, // Blizzard Pearl
+    { col: new THREE.Color(0xaab2bb), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 1 }) }, // Celestial Silver
+    { col: new THREE.Color(0x4a5058), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 2 }) }, // Modern Steel Grey
+    { col: new THREE.Color(0x1a1d22), style: carStyleCode({ livery: 0, metallic: 1, trim: 2, wheel: 3 }) }, // Midnight Black
+    { col: new THREE.Color(0x26354f), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }, // Obsidian Blue
+    { col: new THREE.Color(0xe9ecef), style: carStyleCode({ livery: 0, metallic: 0, trim: 0, wheel: 1 }) }, // Super White
+    { col: new THREE.Color(0x5a1f24), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }  // Velvet Red
+  ],
+  // Pickups: black, white & silver with chrome or blackout grilles
+  pickup: [
+    { col: new THREE.Color(0x14171b), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 1 }) }, // Agate Black (chrome)
+    { col: new THREE.Color(0xf2f3f5), style: carStyleCode({ livery: 0, metallic: 0, trim: 1, wheel: 0 }) }, // Oxford White (chrome)
+    { col: new THREE.Color(0x9da4ab), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 2 }) }, // Iconic Silver
+    { col: new THREE.Color(0x3d434a), style: carStyleCode({ livery: 0, metallic: 1, trim: 2, wheel: 3 }) }, // Carbonized Grey (blackout)
+    { col: new THREE.Color(0x1e2f4f), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 1 }) }, // Antimatter Blue
+    { col: new THREE.Color(0x8f1a1d), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 3 }) }, // Race Red (blackout)
+    { col: new THREE.Color(0xf2f3f5), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 3 }) }, // Oxford White (blackout)
+    { col: new THREE.Color(0x2c3a30), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 0 }) }  // Forest Green
+  ],
+  // Delivery vans: mostly fleet white, black plastic trim; never two-tone, whose black roof would cover the van's
+  // cargo box (part of its glasshouse loft)
+  van: [
+    { col: new THREE.Color(0xf4f5f6), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 0 }) }, // Fleet White
+    { col: new THREE.Color(0xeef0f2), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 3 }) }, // Arctic White (dark wheels)
+    { col: new THREE.Color(0xb9c0c7), style: carStyleCode({ livery: 0, metallic: 1, trim: 2, wheel: 0 }) }, // Brilliant Silver
+    { col: new THREE.Color(0xf4f5f6), style: carStyleCode({ livery: 0, metallic: 0, trim: 0, wheel: 1 }) }, // Fleet White
+    { col: new THREE.Color(0x8e959c), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 3 }) }, // Pebble Grey
+    { col: new THREE.Color(0xf0f1f2), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 3 }) }, // Fleet White (dark wheels)
+    { col: new THREE.Color(0x15181c), style: carStyleCode({ livery: 0, metallic: 1, trim: 2, wheel: 3 }) }, // Obsidian Black
+    { col: new THREE.Color(0xf4f5f6), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 0 }) }, // Fleet White
+    { col: new THREE.Color(0x1f3354), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 0 }) }, // Navy Blue
+    { col: new THREE.Color(0xf4f5f6), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 1 }) }, // Fleet White
+    { col: new THREE.Color(0x9b1c1f), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 0 }) }  // Flame Red
+  ]
+};
+
+function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, builtNetwork = null) {
   const group = new THREE.Group();
   group.name = 'ManhattanTrafficAndPedestrians';
   let collisionListener = null;
@@ -132,7 +201,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
   // =========================================================================
   // 0. ROAD NETWORK
   // =========================================================================
-  const network = buildRoadNetwork(sidewalks, obstacles, signalIntersections);
+  const network = builtNetwork || buildRoadNetwork(sidewalks, obstacles, signalIntersections);
   const { nodes, edges, connector, curvePoint } = network;
 
   // Sides of an intersection (road-network.js step 9): a grid intersection's are 0 east, 1 west, 2 south, 3 north;
@@ -174,7 +243,9 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
       evade: 0, alarm: 0, panicUntil: 0, panicAcc: 0, reaction: 0.6 + Math.random() * 0.4,
       x: 0, z: 0, prevX: 0, prevZ: 0, tx: 0, tz: 1, nose: 0, yaw: 0, yawRate: 0, steer: 0, delta: 0,
       pitch: 0, roll: 0, pitchVel: 0, rollVel: 0, vx: 0, vz: 0, yawOffset: 0, yawVel: 0, impactTime: 0,
-      pAhead: Infinity, pRight: 0, pSpeed: 0, wheelSpin: Math.random() * Math.PI * 2
+      pAhead: Infinity, pRight: 0, pSpeed: 0, wheelSpin: Math.random() * Math.PI * 2,
+      // a stop on the way (street-life.js): a bus at its stop, a taxi hailed, a van delivering; hazards blink while stopped
+      stopAt: -1, dwell: 0, hazard: false, serving: null, fare: 0
     };
   }
 
@@ -191,73 +262,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
   const policeWhite = new THREE.Color(0xf6f9fc);
   // NYC street fleet palettes: white/black/grey/silver dominate with TLC black cars, blue/red/green accents,
   // metallic vs solid clearcoat, chrome/blackout trim & multi-spoke wheel styles encoded in carState.w.
-  const fleetStyles = {
-    sedan: [
-      { col: new THREE.Color(0x12151a), style: carStyleCode({ livery: 3, metallic: 0, trim: 1, wheel: 1 }) }, // TLC / Uber Black Car
-      { col: new THREE.Color(0x161a20), style: carStyleCode({ livery: 3, metallic: 1, trim: 2, wheel: 2 }) }, // TLC Obsidian Blackout
-      { col: new THREE.Color(0xf2f4f7), style: carStyleCode({ livery: 0, metallic: 0, trim: 0, wheel: 0 }) }, // Alpine White Sedan
-      { col: new THREE.Color(0xe6eaef), style: carStyleCode({ livery: 4, metallic: 1, trim: 2, wheel: 2 }) }, // Pearl White Sport (black roof)
-      { col: new THREE.Color(0xc8d0d8), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }, // Liquid Silver Metallic
-      { col: new THREE.Color(0x9aa2ac), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 1 }) }, // Tungsten Silver Metallic
-      { col: new THREE.Color(0x52575e), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 2 }) }, // Graphite Grey Metallic
-      { col: new THREE.Color(0x363b42), style: carStyleCode({ livery: 0, metallic: 1, trim: 2, wheel: 3 }) }, // Charcoal Dark Grey
-      { col: new THREE.Color(0x1c2026), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }, // Jet Black Metallic
-      { col: new THREE.Color(0x1d3b6c), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 1 }) }, // Deep Navy Metallic
-      { col: new THREE.Color(0x285086), style: carStyleCode({ livery: 4, metallic: 1, trim: 2, wheel: 2 }) }, // Atlantic Blue Sport (black roof)
-      { col: new THREE.Color(0x741d22), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }  // Crimson Red Metallic
-    ],
-    suv: [
-      { col: new THREE.Color(0x101318), style: carStyleCode({ livery: 3, metallic: 0, trim: 1, wheel: 1 }) }, // Executive Black Escalade / Suburban TLC
-      { col: new THREE.Color(0x171b22), style: carStyleCode({ livery: 3, metallic: 1, trim: 2, wheel: 3 }) }, // Uber Black SUV (blackout)
-      { col: new THREE.Color(0xf0f3f7), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }, // Pearl White Luxury SUV
-      { col: new THREE.Color(0xe4e8ed), style: carStyleCode({ livery: 4, metallic: 0, trim: 2, wheel: 2 }) }, // Glacier White SUV (black roof)
-      { col: new THREE.Color(0x3a434d), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 2 }) }, // Slate Grey Metallic SUV
-      { col: new THREE.Color(0x5c636b), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 1 }) }, // Gunmetal Grey SUV
-      { col: new THREE.Color(0xbec6cf), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }, // Silver Metallic Crossover
-      { col: new THREE.Color(0x181c22), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 3 }) }, // Onyx Black SUV
-      { col: new THREE.Color(0x20385c), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 1 }) }, // Midnight Blue SUV
-      { col: new THREE.Color(0x28382e), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 0 }) }, // Forest Green Metallic SUV
-      { col: new THREE.Color(0x682024), style: carStyleCode({ livery: 4, metallic: 1, trim: 2, wheel: 2 }) }, // Burgundy Crossover (black roof)
-      { col: new THREE.Color(0x787670), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 3 }) }  // Urban Putty Grey Crossover
-    ],
-    // Minivans: family colours plus TLC / Uber XL black
-    minivan: [
-      { col: new THREE.Color(0x111419), style: carStyleCode({ livery: 3, metallic: 1, trim: 1, wheel: 1 }) }, // TLC / Uber XL Black
-      { col: new THREE.Color(0xf0f2f5), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }, // Blizzard Pearl
-      { col: new THREE.Color(0xaab2bb), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 1 }) }, // Celestial Silver
-      { col: new THREE.Color(0x4a5058), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 2 }) }, // Modern Steel Grey
-      { col: new THREE.Color(0x1a1d22), style: carStyleCode({ livery: 0, metallic: 1, trim: 2, wheel: 3 }) }, // Midnight Black
-      { col: new THREE.Color(0x26354f), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }, // Obsidian Blue
-      { col: new THREE.Color(0xe9ecef), style: carStyleCode({ livery: 0, metallic: 0, trim: 0, wheel: 1 }) }, // Super White
-      { col: new THREE.Color(0x5a1f24), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 0 }) }  // Velvet Red
-    ],
-    // Pickups: black, white & silver with chrome or blackout grilles
-    pickup: [
-      { col: new THREE.Color(0x14171b), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 1 }) }, // Agate Black (chrome)
-      { col: new THREE.Color(0xf2f3f5), style: carStyleCode({ livery: 0, metallic: 0, trim: 1, wheel: 0 }) }, // Oxford White (chrome)
-      { col: new THREE.Color(0x9da4ab), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 2 }) }, // Iconic Silver
-      { col: new THREE.Color(0x3d434a), style: carStyleCode({ livery: 0, metallic: 1, trim: 2, wheel: 3 }) }, // Carbonized Grey (blackout)
-      { col: new THREE.Color(0x1e2f4f), style: carStyleCode({ livery: 0, metallic: 1, trim: 1, wheel: 1 }) }, // Antimatter Blue
-      { col: new THREE.Color(0x8f1a1d), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 3 }) }, // Race Red (blackout)
-      { col: new THREE.Color(0xf2f3f5), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 3 }) }, // Oxford White (blackout)
-      { col: new THREE.Color(0x2c3a30), style: carStyleCode({ livery: 0, metallic: 1, trim: 0, wheel: 0 }) }  // Forest Green
-    ],
-    // Delivery vans: mostly fleet white, black plastic trim; never two-tone, whose black roof would cover the van's
-    // cargo box (part of its glasshouse loft)
-    van: [
-      { col: new THREE.Color(0xf4f5f6), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 0 }) }, // Fleet White
-      { col: new THREE.Color(0xeef0f2), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 3 }) }, // Arctic White (dark wheels)
-      { col: new THREE.Color(0xb9c0c7), style: carStyleCode({ livery: 0, metallic: 1, trim: 2, wheel: 0 }) }, // Brilliant Silver
-      { col: new THREE.Color(0xf4f5f6), style: carStyleCode({ livery: 0, metallic: 0, trim: 0, wheel: 1 }) }, // Fleet White
-      { col: new THREE.Color(0x8e959c), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 3 }) }, // Pebble Grey
-      { col: new THREE.Color(0xf0f1f2), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 3 }) }, // Fleet White (dark wheels)
-      { col: new THREE.Color(0x15181c), style: carStyleCode({ livery: 0, metallic: 1, trim: 2, wheel: 3 }) }, // Obsidian Black
-      { col: new THREE.Color(0xf4f5f6), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 0 }) }, // Fleet White
-      { col: new THREE.Color(0x1f3354), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 0 }) }, // Navy Blue
-      { col: new THREE.Color(0xf4f5f6), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 1 }) }, // Fleet White
-      { col: new THREE.Color(0x9b1c1f), style: carStyleCode({ livery: 0, metallic: 0, trim: 2, wheel: 0 }) }  // Flame Red
-    ]
-  };
+  const fleetStyles = FLEET_STYLES;
   // Of every 20 cars: 4 yellow cabs, 5 sedans, 6 SUVs, 2 delivery vans, 2 minivans & a pickup. NYPD cruisers are sedans
   // or Interceptor SUVs, green Boro cabs sedans or SUVs.
   const FLEET_MIX = ['taxi', 'sedan', 'van', 'hatch', 'suv', 'taxi', 'wagon', 'minivan', 'compact', 'pickup', 'taxi', 'sedan', 'delivery', 'suv', 'muscle',
@@ -1110,6 +1115,19 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     }
     const acc = Math.min(freeAcc(v) + worst, (cap - v.speed) * 2);
     v.acc = clamp(acc, -9, v.driver.a);
+    // A stop of its own ahead (bus stop, a fare, a delivery): ease to it, then hold until the dwell is over
+    if (v.stopAt >= 0 && !v.conn) {
+      const d = v.stopAt - v.s;
+      if (d > 0.6) v.acc = Math.min(v.acc, clamp(freeAcc(v) + stopAt(v, d, 0.4), -9, v.driver.a));
+      else {
+        v.acc = Math.min(v.acc, -6);
+        if (v.speed < 0.25) {
+          v.speed = 0;
+          v.dwell -= DT_FRAME;
+          if (v.dwell <= 0) { v.stopAt = -1; v.hazard = false; v.serving = null; }
+        }
+      }
+    }
     // dodging the player: braking (as hard as it can, unless that would stop it before it has swerved out of the way),
     // or flooring it (unless it must brake for something ahead)
     if (clock < v.panicUntil) {
@@ -1238,11 +1256,78 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     v.move = chooseMove(v, false);
   }
 
+  // =========================================================================
+  // 5b. STOPS OF THEIR OWN: BUS STOPS, HAILED TAXIS, DELIVERIES (street-life.js)
+  // =========================================================================
+  let DT_FRAME = 0.016;
+  const stopsByEdge = new Map(); // edge id -> [{ t, stop }] sorted along the edge
+  function setBusStops(stops) {
+    stopsByEdge.clear();
+    for (const stop of stops) {
+      if (!stop.edge || stop.edge.id === undefined) continue;
+      let list = stopsByEdge.get(stop.edge.id);
+      if (!list) stopsByEdge.set(stop.edge.id, (list = []));
+      list.push({ t: stop.t, stop });
+      stop.servedUntil = 0;
+      stop.bus = null;
+    }
+    for (const list of stopsByEdge.values()) list.sort((a, b) => a.t - b.t);
+  }
+  // A bus in the curb lane pulls in at the next stop of its edge it has not served lately: its front door (4.3 m
+  // ahead of its centre) level with the pole, hazards on, a dwell for the doors
+  function pickBusStop(v) {
+    const list = stopsByEdge.get(v.edge.id);
+    if (!list) return;
+    for (const { t, stop } of list) {
+      const centre = Math.min(v.edge.len - v.half - 1, t - 4.3);
+      const d = centre - v.s;
+      if (d < 6 || d > 70 || clock < stop.servedUntil) continue;
+      v.stopAt = centre;
+      v.dwell = 7 + Math.random() * 4;
+      v.hazard = true;
+      v.serving = stop;
+      stop.servedUntil = clock + 90;
+      stop.bus = v;
+      return;
+    }
+  }
+  // Someone hailing from the curb (street-life.js pushes { edge, s, ped }): the first free cab behind them in the
+  // curb lane stops level with them for a few seconds, then drives on with its fare
+  const hails = [];
+  function pickFare(v) {
+    for (const h of hails) {
+      if (h.taxi || h.edge !== v.edge) continue;
+      const d = h.s - v.s;
+      if (d < 8 || d > 60) continue;
+      h.taxi = v;
+      v.stopAt = Math.min(v.edge.len - v.half - 1, h.s - 0.8);
+      v.dwell = 6.5;
+      v.hazard = true;
+      v.serving = h;
+      v.fare = clock + 75;
+      return;
+    }
+  }
+  // A vehicle stops where it is for a while (a van unloading): true when it could
+  function requestStop(v, seconds) {
+    if (!v.edge || v.conn || v.stopAt >= 0 || v.edge.len - v.s - v.half < 14) return false;
+    v.stopAt = v.s + Math.max(2, v.speed * 1.2);
+    v.dwell = seconds;
+    v.hazard = true;
+    v.serving = 'delivery';
+    return true;
+  }
+
   function drive(v, dt) {
+    DT_FRAME = dt;
     v.laneTimer -= dt;
-    if (v.laneTimer <= 0) {
+    if (v.laneTimer <= 0 && v.stopAt < 0) {
       v.laneTimer = 0.4 + Math.random() * 0.3;
       changeLanes(v);
+    }
+    if (v.stopAt < 0 && !v.conn) {
+      if (v.bus && v.lane === v.edge.lanes.length - 1) pickBusStop(v);
+      else if (v.bodyType === 'taxi' && !v.isPolice && clock > v.fare && v.lane >= v.edge.lanes.length - 2) pickFare(v);
     }
     accelerate(v);
     // Give the driver a moment to recover after an impact before accelerating again.
@@ -1553,6 +1638,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     v.dl = v.dlv = 0;
     v.evade = v.alarm = v.panicUntil = v.panicAcc = 0;
     v.vx = v.vz = v.yawOffset = v.yawVel = v.pitch = v.pitchVel = v.roll = v.rollVel = 0;
+    v.stopAt = -1; v.dwell = 0; v.hazard = false; v.serving = null;
     v.hp = 100; // gameplay damage (gameplay.js); a fresh car for every placement
     v.serial = (v.serial || 0) + 1;
     locate(v);
@@ -1634,10 +1720,10 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
   // Lamp state for the car & bus materials: brake lights while slowing down or standing, the turn signal on the side
   // v is heading for (left = +x)
   function writeLampState(v, array, o) {
-    const blinkOn = v.blink !== 0 && (clock + v.blinkPhase) % 0.8 <= 0.4;
+    const blinkOn = (v.blink !== 0 || v.hazard) && (clock + v.blinkPhase) % 0.8 <= 0.4;
     array[o] = v.acc < -0.8 || v.speed < 0.3 ? 1 : 0;
-    array[o + 1] = blinkOn && v.blink < 0 ? 1 : 0;
-    array[o + 2] = blinkOn && v.blink > 0 ? 1 : 0;
+    array[o + 1] = blinkOn && (v.blink < 0 || v.hazard) ? 1 : 0;
+    array[o + 2] = blinkOn && (v.blink > 0 || v.hazard) ? 1 : 0;
   }
 
   function renderCar(c) {
@@ -1675,10 +1761,10 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     }
     const state = attrs.carState.array;
     const o4 = slot * 4;
-    const blinkOn = c.blink !== 0 && (clock + c.blinkPhase) % 0.8 <= 0.4;
+    const blinkOn = (c.blink !== 0 || c.hazard) && (clock + c.blinkPhase) % 0.8 <= 0.4;
     const b0 = c.acc < -0.8 || c.speed < 0.3 ? 1 : 0;
-    const b1 = blinkOn && c.blink < 0 ? 1 : 0;
-    const b2 = blinkOn && c.blink > 0 ? 1 : 0;
+    const b1 = blinkOn && (c.blink < 0 || c.hazard) ? 1 : 0;
+    const b2 = blinkOn && (c.blink > 0 || c.hazard) ? 1 : 0;
     const b3 = c.style;
     if (state[o4] !== b0 || state[o4 + 1] !== b1 || state[o4 + 2] !== b2 || state[o4 + 3] !== b3) {
       state[o4] = b0;
@@ -2080,7 +2166,11 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections) {
     flee,
     removeVehicle,
     spawnSparks: spawnCollisionSparks,
-    network
+    network,
+    setBusStops,
+    hails,
+    requestStop,
+    get clock() { return clock; }
   };
 }
 
@@ -2626,4 +2716,4 @@ function createHighwayTraffic(scene, lanes, traffic) {
   return { group, update, cars, lanes };
 }
 
-export { createTrafficSystem, createHighwayTraffic };
+export { createTrafficSystem, createHighwayTraffic, FLEET_STYLES };

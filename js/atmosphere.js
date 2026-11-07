@@ -38,6 +38,7 @@ class Atmosphere {
   constructor({ lighting, grade, scene, camera, controllers }) {
     Object.assign(this, { lighting, grade, scene, camera, controllers });
     this.hour = 17.2;
+    this.day = 0; // days since the game began: alternate side parking (parking-plan.js) and other rhythms count them
     this.running = true;
     this.weather = 'clear';
     this.cloud = 0.05; this.rain = 0; this.storm = 0; this.wet = 0;
@@ -168,7 +169,11 @@ class Atmosphere {
   }
 
   update(dt, active) {
-    if (active && this.running) this.hour = (this.hour + dt * 24 / DAY_SECONDS) % 24;
+    if (active && this.running) {
+      const h = this.hour + dt * 24 / DAY_SECONDS;
+      if (h >= 24) this.day++;
+      this.hour = h % 24;
+    }
 
     // Weather drifts towards its state; a new state now and then
     if (active) {
@@ -228,10 +233,11 @@ class Atmosphere {
     }
   }
 
-  serialize() { return { hour: this.hour, weather: this.weather }; }
+  serialize() { return { hour: this.hour, weather: this.weather, day: this.day }; }
   restore(data) {
     if (!data) return;
     if (Number.isFinite(data.hour)) this.setHour(data.hour);
+    if (Number.isInteger(data.day) && data.day >= 0) this.day = data.day;
     if (WEATHER[data.weather]) this.setWeather(data.weather, true);
   }
 }

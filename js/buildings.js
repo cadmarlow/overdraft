@@ -807,15 +807,8 @@ function buildCityBlocks(scene, landmarkColliders = []) {
       // 4. Wrought-iron fire escapes
       for (const fe of blk.fireEscapes) fireEscapeSystem.add(fe);
 
-      // 6. Sidewalk construction sheds
-      for (let i = 0; i < blk.scaffoldSheds.length && shedCount < MAX_SHEDS; i++) {
-        const s = blk.scaffoldSheds[i];
-        dummy.rotation.set(0, s.ry || 0, 0);
-        dummy.position.set(s.x, s.y + 3.6, s.z);
-        dummy.scale.set(s.w, 0.85, s.d);
-        dummy.updateMatrix();
-        shedInst.setMatrixAt(shedCount++, dummy.matrix);
-      }
+      // 6. Sidewalk construction sheds: built in full by sidewalk-furniture.js (posts, bracing, deck, lights) over the
+      //    buildings this streaming marked (blk.scaffoldSheds keeps their street reservation for the awnings)
     }
     dummy.rotation.set(0, 0, 0);
 

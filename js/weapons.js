@@ -181,6 +181,15 @@ function castShot(world, ox, oy, oz, dx, dy, dz, maxDist, ignore = null) {
     const t = rayBox(ox, oy, oz, dx, dy, dz, c.position.x, c.position.z, c.heading, c.halfW ?? 0.9, c.halfL ?? 2.2, y + 0.15, y + 1.55, hit.t);
     if (t < hit.t) { hit.t = t; hit.kind = 'car'; hit.target = c; }
   }
+  // Cars parked along the curbs (parking.js): hit, one becomes a gameplay car (applyShot)
+  if (world.parking) {
+    const parking = world.parking;
+    parking.forEachAlong(ox, oz, ux, uz, reach, 3.5, (i) => {
+      const s = parking.info(i);
+      const t = rayBox(ox, oy, oz, dx, dy, dz, s.x, s.z, s.yaw, s.halfW, s.halfL, 0.15, 1.55, hit.t);
+      if (t < hit.t) { hit.t = t; hit.kind = 'parked'; hit.target = i; }
+    });
+  }
   for (const a of actors) {
     if (a === ignore || a.dead || !near(a.x, a.z, 1)) continue;
     const t = rayCylinder(ox, oy, oz, dx, dy, dz, a.x, a.z, 0.32, a.y, a.y + (a.height ?? 1.85), hit.t);
@@ -193,7 +202,7 @@ function castShot(world, ox, oy, oz, dx, dy, dz, maxDist, ignore = null) {
     if (t < hit.t) { hit.t = t; hit.kind = 'player'; hit.target = player; }
   }
   hit.x = ox + dx * hit.t; hit.y = oy + dy * hit.t; hit.z = oz + dz * hit.t;
-  if (hit.kind === 'ped' || hit.kind === 'actor' || hit.kind === 'player' || hit.kind === 'traffic' || hit.kind === 'car') {
+  if (hit.kind === 'ped' || hit.kind === 'actor' || hit.kind === 'player' || hit.kind === 'traffic' || hit.kind === 'car' || hit.kind === 'parked') {
     hit.nx = -dx; hit.ny = -dy; hit.nz = -dz;
   }
   return hit;

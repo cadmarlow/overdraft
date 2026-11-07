@@ -46,6 +46,7 @@ import { cabinLayout } from './car-cabin.js';
 
 const base = new URL('../assets/cars/', import.meta.url);
 const DENTS = 6;
+const LAMPS_OFF = 256; // added to an instance's style code (carState.w): headlights and tail lamps dark
 const models = {};
 const carSpecs = {}; // what the game asks of a body kind: its size, axles, lamps, doors
 const FLAG = { HEAD: 1, BRAKE: 2, REVERSE: 3, BLINKER: 4, GLASS: 6 };
@@ -297,9 +298,11 @@ function createBodyMaterial(model, { paint = null, instanced = false, livery = 0
   const glow = cityUniforms.uInteriorGlow;
   const night = smoothstep(0.6, 1.15, glow);
   const blink = state.y.mul(step(0, side)).add(state.z.mul(step(side, 0)));
+  // A parked car's lamps are off: parking.js sets LAMPS_OFF in the style code (bit 8, above the style fields)
+  const lampsOn = instanced ? step(state.w, float(LAMPS_OFF - 0.5)) : float(1);
   mat.emissiveNode = Fn(() => {
     const e = vec3(0).toVar();
-    e.addAssign(base.rgb.mul(head).mul(night.mul(5).add(0.6)));
+    e.addAssign(base.rgb.mul(head).mul(night.mul(5).add(0.6)).mul(lampsOn));
     e.addAssign(vec3(1, 0.03, 0.05).mul(brake).mul(state.x.mul(5).add(night.mul(1.1)).add(0.08)));
     e.addAssign(vec3(1, 0.5, 0.08).mul(blinker).mul(blink.mul(4)));
     if (!instanced) e.addAssign(vec3(0.9, 0.95, 1).mul(reverse).mul(state.w.mul(3)));
@@ -367,4 +370,4 @@ function createWheelMaterial(model) {
   return mat;
 }
 
-export { DENTS, FLAG, carSpecs, createBodyMaterial, createGlassMaterial, createWheelMaterial, loadCars, models as carModels, trafficMaterial, withWheels };
+export { DENTS, FLAG, LAMPS_OFF, carSpecs, createBodyMaterial, createGlassMaterial, createWheelMaterial, loadCars, models as carModels, trafficMaterial, withWheels };

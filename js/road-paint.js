@@ -162,8 +162,21 @@ function buildRoadPaint(scene, network, sharedBuilder = null) {
       }
     }
 
-    // Wide one-way avenues: edge line, then a buffer and a green bike lane along the curb on the side left free
-    if (!back && e.axis === 'ave' && lanes.length >= 4) {
+    // A solid edge line between the travel lanes and each parking lane (road-layout.js), and on the wide one-way
+    // avenues the parking-protected bike lane along the left curb: green lane, a buffer line, then the parked cars
+    const PARK_HALF = 1.15;
+    for (const f of back ? [e, back] : [e]) {
+      const sign = f === e ? 1 : -1;
+      const park = f.park || {};
+      if (park.r !== null && park.r !== undefined) along(e, sign * (park.r - PARK_HALF), 0.11, WHITE);
+      if (park.l !== null && park.l !== undefined) along(e, sign * (park.l + PARK_HALF), 0.11, WHITE);
+      if (f.bike !== null && f.bike !== undefined) {
+        along(e, sign * f.bike, 1.7, GREEN);
+        along(e, sign * (f.bike + 1.0), 0.13, WHITE);
+      }
+    }
+    // Wide one-way roads with no parking lane keep their old curbside bike lane
+    if (!back && e.axis === 'ave' && lanes.length >= 4 && !(e.park && (e.park.r !== null || e.park.l !== null))) {
       for (const [edge, sign] of [[lanes[lanes.length - 1].o + 1.8, 1], [lanes[0].o - 1.8, -1]]) {
         const curb = sign * e.half;
         if ((curb - edge) * sign < 3.5) continue;

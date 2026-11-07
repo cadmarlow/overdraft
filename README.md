@@ -3,10 +3,17 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.5 — Due Diligence** : éclairage nocturne des personnages repris, pour conserver les volumes et les couleurs
-des corps même dos aux lampadaires. L'outil local **Architecte 2.2** poursuit sa prospection pendant que des tickets
-attendent une décision ou une correction, reprend les trajets sans progrès et garde le bilan d'une session interrompue.
-Sa voix est coupée par défaut, avec un bouton permanent dans la salle de contrôle. L'Architecte reste exclu de Vercel.
+Version **0.9.6 — Footfall** : la ville prend vie. 108 000 voitures garées le long de bordures redécoupées (voie de
+stationnement, piste cyclable protégée, stationnement alterné), toutes volables et poussables ; le trottoir new-yorkais
+d'après les registres de la ville (bouches d'incendie, arrêts et abris de bus, kiosques, arceaux et vélos, bancs,
+bornes, parcmètres, 2 600 échafaudages, terrasses sur chaussée) et d'après les règles de la rue (panneaux, paniers,
+boîtes à journaux, grilles de métro, colonnes sèches, portes de cave) ; une foule dont la densité suit le quartier et
+l'heure, qui s'assoit, fait la queue, lèche les vitrines, sort des boutiques et des bouches de métro, monte dans les
+bus et hèle les taxis ; des pigeons, des mouettes et des rats ; une nappe sonore de la ville ; et les petites histoires
+de la rue (accrochage, contrôle de police, bouche d'incendie ouverte, camion poubelle, badauds autour d'un accident).
+
+La **0.9.5 — Due Diligence** avait repris l'éclairage nocturne des personnages et poursuivi l'outil local Architecte 2.2
+(prospection continue, trajets repris, voix coupée par défaut), toujours exclu de Vercel.
 
 La **0.9.4 — Momentum** a refait la conduite pour le clavier (volant progressif, contrôle de stabilité, freiner en
 tournant, vrai demi-tour au frein à main) et des voitures qu'on regarde : la rue se reflète dans la peinture, le héros est

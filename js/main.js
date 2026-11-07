@@ -32,6 +32,14 @@ import { loadWorld } from './world-assets.js';
 import { loadStorefronts, createStorefronts } from './storefronts.js';
 import { createFacadeKit } from './facade-kit.js';
 import { loadClutter } from './street-clutter.js';
+import { createParking } from './parking.js';
+import { createSidewalkFurniture } from './sidewalk-furniture.js';
+import { createStreetLife } from './street-life.js';
+import { createAmbientEvents } from './ambient-events.js';
+import { createBirds } from './birds.js';
+import { getIslandBoundsAtZ } from './city-config.js';
+import { STREET } from './street-geodata.js';
+import { buildRoadNetwork } from './road-network.js';
 import { setTreeDetail } from './trees.js';
 import { createGrass } from './grass.js';
 import { currentLevel, FramePacer } from './quality.js';
@@ -160,13 +168,42 @@ async function initApp() {
   // inside the property line anyway, so the road network (lanes & sidewalks) doesn't need them.
   // Elevated building sections that clear even a bus don't obstruct ground traffic.
   const grass = quality.grass ? createGrass(scene, scene, new THREE.Vector3(0, 10, 140)) : null;
-  const trafficSystem = createTrafficSystem(scene, cityGrid.sidewalks, [
+  // The road network first: the street furniture lines its curbs, then the traffic drives it
+  const roadNetwork = buildRoadNetwork(cityGrid.sidewalks, [
     ...cityGrid.footprints,
     ...streetDetails.footprints,
     ...allColliders.filter((c) => !c.obb && (c.minY ?? 0) < 3.5)
   ], streetDetails.signalIntersections);
+  markInit('roads');
+  await showLoadingStage('Préparation des trottoirs…');
+  const footprintsBefore = streetDetails.footprints.length;
+  const furniture = createSidewalkFurniture(scene, {
+    network: roadNetwork, records: cityBlocks.records, shops: cityBlocks.shops, trunks: streetDetails.treeField.trunks, street: STREET,
+    isOnSidewalk: streetDetails.isOnSidewalk, isClearOfPoles: streetDetails.isClearOfPoles, addPole: streetDetails.addPole,
+    addFootprint: streetDetails.addFootprint, obstacles: streetDetails.obstacles, colliders: allColliders, quality: quality.id
+  });
+  // what it put on the sidewalks keeps the pedestrians' routes clear of it
+  for (let i = footprintsBefore; i < streetDetails.footprints.length; i++) roadNetwork.addObstacle(streetDetails.footprints[i]);
+  markInit('furniture');
+  const trafficSystem = createTrafficSystem(scene, cityGrid.sidewalks, [], streetDetails.signalIntersections, roadNetwork);
   markInit('traffic');
   const highwayTraffic = createHighwayTraffic(scene, cityGrid.highwayLanes, trafficSystem);
+  // The cars parked along every curb, drawn with the traffic's models; gameplay.js takes them over when touched
+  const parking = createParking(scene, trafficSystem.network, {
+    hydrants: streetDetails.hydrants, footprints: [...cityGrid.footprints, ...streetDetails.footprints],
+    storage: renderer.backend.isWebGPUBackend,
+    isBlocked: (x, z) => gameplay ? gameplay.allCars.some((c) => c.mesh?.visible && Math.abs(c.position.x - x) < 5 && Math.abs(c.position.z - z) < 5) : false
+  });
+  // nobody parks at a bus stop or where a building site's dumpster stands
+  for (const stop of furniture.busStops) parking.ban(stop.x, stop.z, 13);
+  for (const b of furniture.roadBlocks) parking.ban(b.x, b.z, b.r);
+  markInit('parking');
+  // People with somewhere to be: the crowd's density, its stops at the street's spots, doors, bus stops, cabs
+  const streetLife = createStreetLife({
+    pedestrians: trafficSystem.pedestrians, traffic: trafficSystem, shops: cityBlocks.shops, subwayMouths: streetDetails.subwayMouths,
+    foodCarts: streetDetails.foodCarts, seats: furniture.seats, stands: furniture.stands, busStops: furniture.busStops,
+    hourOf: () => gameplay?.atmosphere?.hour ?? 12
+  });
   await showLoadingStage('Derniers préparatifs…');
   buildRoadPaint(scene, trafficSystem.network, cityGrid.roadPaint);
   markInit('roadPaint');
@@ -176,6 +213,19 @@ async function initApp() {
   const jumpRamps = buildRamps(scene);
   const controllerManager = new ThirdPersonControllerManager(scene, [...allColliders, ...streetDetails.obstacles, ...jumpRamps.colliders]);
   controllerManager.landAt = boroughLandAt;
+  parking.attach(controllerManager);
+  // Pigeons on the sidewalks, gulls over the rivers, rats at night (birds.js); made before the shaders compile
+  const toXZ = (list, key) => Float32Array.from(list.map((p) => p[key]));
+  const birds = createBirds(scene, {
+    groundHeight: (x, z) => controllerManager.getGroundHeight(x, z, 'person'),
+    onSidewalk: (x, z) => roadNetwork.onSidewalk(x, z),
+    perches: { x: toXZ(streetDetails.perches, 'x'), y: toXZ(streetDetails.perches, 'y'), z: toXZ(streetDetails.perches, 'z') },
+    trashPiles: { x: toXZ(streetDetails.trashPiles, 'x'), z: toXZ(streetDetails.trashPiles, 'z') },
+    nearWater: (x, z) => { const s = getIslandBoundsAtZ(z); return Math.min(Math.abs(x - s.westX), Math.abs(x - s.eastX)) < 150; },
+    quality: quality.id
+  });
+  const birdWorld = { player: { x: 0, z: 0, speed: 0 }, cars: [], peds: [], hour: 12, night: 0 };
+  markInit('birds');
   function savePlayerState() { gameplay?.save(); }
 
   const cameraSystem = new CameraSystem(renderer.domElement, controllerManager);
@@ -580,7 +630,11 @@ async function initApp() {
         if (!e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) audioSystem.setEnabled(!audioSystem.enabled);
         break;
       case 'KeyB':
-        if (!e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && !mapSystem.isFullMapOpen) audioSystem.honk(controllerManager.getActiveEntity());
+        if (!e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && !mapSystem.isFullMapOpen) {
+          const ent = controllerManager.getActiveEntity();
+          audioSystem.honk(ent);
+          birds.scatter(ent.position.x, ent.position.z, 22);
+        }
         break;
     }
   });
@@ -601,10 +655,39 @@ async function initApp() {
   selectTime('golden');
   gameplay = new Playground({ controllers: controllerManager, camera: cameraSystem, traffic: trafficSystem, highway: highwayTraffic, streets: streetDetails,
     scene, onMode: selectMode, onTime: selectTime, audio: audioSystem, map: mapSystem, touch: touchControls, gamepad: gamepadControls,
-    lighting: lightingSystem, grade: colorGrade });
+    lighting: lightingSystem, grade: colorGrade, parking });
   // The Architect (ARCHITECTE.md) is a local development tool: on this machine or its network only, never online, where
   // the production build does not even ship his files (scripts/build.mjs). Built here, before the shaders compile, so his
   // car and helicopter compile behind the loading screen. ?architecte=0 plays without him, as online.
+  // The street's small stories (ambient-events.js), and what the city sounds like where the listener stands
+  gameplay.birds = birds;
+  gameplay.ambient = createAmbientEvents({ game: gameplay, traffic: trafficSystem, pedestrians: trafficSystem.pedestrians, streetLife, streetDetails, hourOf: () => gameplay.atmosphere.hour });
+  {
+    const BARS = new Set(['bar', 'latin', 'restaurant']);
+    let probeAt = -Infinity;
+    const probe = { crowd: 0, hour: 12, subway: 0, construction: 0, bar: 0, birds: 0, water: 0, indoor: 0, rain: 0 };
+    const nearestOf = (list, x, z, r) => { let best = r; for (const p of list) { const dx = p.x - x, dz = p.z - z; if (Math.abs(dx) > r || Math.abs(dz) > r) continue; const d = Math.hypot(dx, dz); if (d < best) best = d; } return best; };
+    audioSystem.ambienceProbe = (position) => {
+      const t = performance.now();
+      if (t - probeAt < 250) return probe;
+      probeAt = t;
+      const x = position.x, z = position.z;
+      let crowd = 0;
+      for (const p of trafficSystem.peds) if (p.placed && Math.abs(p.x - x) < 45 && Math.abs(p.z - z) < 45) crowd++;
+      probe.crowd = Math.min(1, crowd / 38);
+      probe.hour = gameplay.atmosphere.hour;
+      probe.rain = gameplay.atmosphere.rain || 0;
+      probe.subway = 1 - nearestOf(streetDetails.subwayMouths, x, z, 45) / 45;
+      probe.subway = Math.max(probe.subway, 0.8 * (1 - nearestOf(furniture.grates, x, z, 30) / 30));
+      probe.construction = 1 - nearestOf(furniture.sheds, x, z, 70) / 70;
+      probe.bar = 1 - Math.min(40, streetLife.nearestOpen(BARS, x, z, 40)) / 40;
+      const shore = getIslandBoundsAtZ(z);
+      probe.water = Math.max(0, 1 - Math.min(Math.abs(x - shore.westX), Math.abs(x - shore.eastX)) / 160);
+      probe.birds = gameplay.birds?.near ? gameplay.birds.near(x, z) : 0;
+      probe.indoor = 0;
+      return probe;
+    };
+  }
   if (architectAllowed()) {
     try {
       const { ArchitectSystem } = await import('./architect.js');
@@ -617,6 +700,8 @@ async function initApp() {
   controllerManager.update(0.016, 0, controllerManager.getActiveEntity().position);
   cameraSystem.update(0.016, 0);
   updateSceneCulling(cameraSystem.camera.position);
+  // the curbs around the start fill before the shaders compile, so the first frame shows them
+  for (let i = 0; i < 12; i++) parking.update(cameraSystem.camera, gameplay.atmosphere.hour, gameplay.atmosphere.day, 0);
   // the web fonts change the buttons' widths once they arrive
   if (document.fonts) document.fonts.ready.then(placeModeIndicator);
   markInit('ui');
@@ -723,7 +808,7 @@ async function initApp() {
     camera.updateMatrixWorld();
   };
   if (new URLSearchParams(location.search).has('qa')) {
-    window.__render = { renderer, scene, lightingSystem, cameraSystem, pacer, THREE, highwayTraffic, streetDetails, storefronts, facadeKit, cityBlocks,
+    window.__render = { renderer, scene, lightingSystem, cameraSystem, pacer, THREE, highwayTraffic, streetDetails, storefronts, facadeKit, cityBlocks, parking, furniture, streetLife, birds,
       // Inspection: the camera goes where it is told, whatever the game does
       view(x, y, z, tx, ty, tz, fov) {
         if (x === undefined) {
@@ -784,6 +869,22 @@ async function initApp() {
       cameraSystem.camera
     );
     if (worldDt > 0) highwayTraffic.update(worldDt, cameraSystem.camera, controllerManager.getActiveEntity(), controllerManager.activeMode);
+    parking.update(cameraSystem.camera, gameplay.atmosphere.hour, gameplay.atmosphere.day, worldDt);
+    if (worldDt > 0) streetLife.update(worldDt, cameraSystem.camera);
+    if (simulationDt > 0) gameplay.ambient?.update(simulationDt, cameraSystem.camera);
+    if (worldDt > 0) {
+      const pe = controllerManager.getActiveEntity(), cam = cameraSystem.camera.position;
+      birdWorld.player.x = pe.position.x; birdWorld.player.z = pe.position.z; birdWorld.player.speed = Math.abs(pe.speed || 0) + Math.hypot(pe.vx || 0, pe.vz || 0);
+      birdWorld.cars.length = 0;
+      for (const v of trafficSystem.vehicles) if (v.edge && Math.abs(v.x - cam.x) < 70 && Math.abs(v.z - cam.z) < 70) birdWorld.cars.push({ x: v.x, z: v.z, speed: v.speed });
+      for (const c of gameplay.allCars) if (c.mesh?.visible && Math.abs(c.position.x - cam.x) < 70 && Math.abs(c.position.z - cam.z) < 70) birdWorld.cars.push({ x: c.position.x, z: c.position.z, speed: Math.abs(c.speed || 0) });
+      birdWorld.peds.length = 0;
+      for (const p of trafficSystem.peds) if (p.placed && Math.abs(p.x - cam.x) < 60 && Math.abs(p.z - cam.z) < 60) birdWorld.peds.push({ x: p.x, z: p.z, speed: p.v || 0 });
+      birdWorld.hour = gameplay.atmosphere.hour;
+      birdWorld.night = gameplay.atmosphere.night || 0;
+      birds.update(worldDt, cameraSystem.camera, birdWorld);
+    }
+    furniture.update(cameraSystem.camera);
     if (profile) mark('trafic');
     gameplay.update(simulationDt);
     if (profile) mark('jeu');

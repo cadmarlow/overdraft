@@ -3,10 +3,12 @@ import {
   ALL_STREETS,
   ISLAND_BOUNDS,
   getIslandBoundsAtZ,
-  BLOCKS
+  BLOCKS,
+  blockAt
 } from './city-config.js';
 import { GEO } from './nyc-geodata.js';
 import { polygonBoxOverlaps } from './building-collision.js';
+import { NO_LANES, PARK_OFF, layoutOneWay, layoutSide } from './road-layout.js';
 
 // Drivable road graph derived from the ground layout that city-grid.js actually builds: avenue corridors
 // between the raised curbs, cross-street gaps between curb rows, lanes that keep clear of medians, plazas
@@ -109,11 +111,8 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
   //    (CSCL: an avenue only exists between its ends, e.g. Irving Pl 14th-20th St, so it never claims a neighbour's
   //    roadway), and the stretches of z (at least 30 m long) where at least one of its lanes is clear. Each stretch
   //    keeps its real direction: two-way stretches (Central Park West, West End Ave, York Ave...) carry half of the
-  //    lanes each way
-  const laneOffsets = (half) => (half >= 10.0 ? [-7.2, -3.6, 0, 3.6, 7.2]
-    : half >= 8.5 ? [-5.4, -1.8, 1.8, 5.4]
-      : half >= 6.8 ? [-3.6, 0, 3.6]
-        : half >= 4.4 ? [-1.8, 1.8] : null);
+  //    lanes each way. Lanes and the parking lanes along the curbs come from road-layout.js, as offsets to the right
+  //    of each direction of travel (southbound = +z, whose right is -x).
   const avenues = [];
   for (const ave of ALL_AVENUES) {
     if (ave.isHighway) continue;
@@ -158,18 +157,21 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
     // of the stretch (1: southbound, -1: northbound, 0: two-way)
     let byDir;
     if (ave.hasMedian) {
-      // Park Ave: three lanes each way either side of the planted malls (lanes in the malls drop out below)
-      const both = { south: [-11.4, -7.8, -4.2], north: [4.2, 7.8, 11.4] };
+      // Park Ave: three lanes each way either side of the planted malls (lanes in the malls drop out below), parked
+      // cars along the outer curbs
+      const side = { lanes: [4.2, 7.8, 11.4], park: { r: half - PARK_OFF, l: null }, bike: null };
+      const both = { south: side, north: side };
       byDir = { 1: both, '-1': both, 0: both };
     } else {
-      // Real curb-to-curb roadways (CSCL): 21.3 m (8th, 3rd, 1st, 11th Aves) carry five lanes, 18.3 m (7th, 9th,
-      // 10th, 2nd Aves) four, 14.6-15.8 m (5th, Madison, Lexington Aves) three
-      const lanes = laneOffsets(half);
-      if (!lanes) continue;
+      // Real curb-to-curb roadways (CSCL): 21.3 m (8th, 3rd, 1st, 11th Aves) carry five lanes between their parking
+      // lanes, 18.3 m (7th, 9th, 10th, 2nd Aves) four, 14.6-15.8 m (5th, Madison, Lexington Aves) three
+      const one = layoutOneWay(half);
+      if (!one) continue;
+      const side = layoutSide(half);
       byDir = {
-        1: { south: lanes, north: [] },
-        '-1': { south: [], north: lanes },
-        0: { south: lanes.filter((o) => o < -0.5), north: lanes.filter((o) => o > 0.5) }
+        1: { south: one, north: NO_LANES },
+        '-1': { south: NO_LANES, north: one },
+        0: { south: side, north: side }
       };
     }
     const lanesAt = (z) => {
@@ -183,7 +185,8 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
       const z = Z_MIN + i;
       const set = lanesAt(z);
       if (!set) continue;
-      free[i] = [...set.south, ...set.north].some((o) => !blocked(x + o - LANE_CLEAR, x + o + LANE_CLEAR, z - 0.5, z + 0.5)) ? 1 : 0;
+      // physical x offsets: a southbound lane's right is -x
+      free[i] = [...set.south.lanes.map((o) => -o), ...set.north.lanes].some((o) => !blocked(x + o - LANE_CLEAR, x + o + LANE_CLEAR, z - 0.5, z + 0.5)) ? 1 : 0;
     }
     for (let i = 0; i < free.length;) {
       let j = i;
@@ -220,16 +223,47 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
     }
   }
 
+  // The curb rects only cover the blocks drawn as polygons (city-grid.js grows their lot rects back out by a nominal
+  // sidewalk): the roadway the player sees lies between the polygon curbs. Measured across the piece at three
+  // stations, it fixes the centreline and width the lanes and parked cars are laid out on.
+  const measure = typeof blockAt === 'function';
+  function measurePiece(p) {
+    const x0 = p.a.x + p.a.half + 5, x1 = p.b.x - p.b.half - 5;
+    if (!measure || x1 - x0 < 6) return null;
+    let south = Infinity, north = Infinity;
+    for (const f of [0.2, 0.5, 0.8]) {
+      const x = x0 + (x1 - x0) * f;
+      let s = null, n = null;
+      for (let d = 0.5; d <= 14 && (s === null || n === null); d += 0.1) {
+        if (s === null && blockAt(x, p.z + d)) s = d;
+        if (n === null && blockAt(x, p.z - d)) n = d;
+      }
+      if (s === null || n === null) return null; // open ground on one side (park, plaza, river): the rects hold
+      south = Math.min(south, s);
+      north = Math.min(north, n);
+    }
+    return { z: p.z + (south - north) / 2, half: (south + north) / 2 };
+  }
+
   // One-way or two-way from the nearest named street inside the gap (majors and wide gaps are two-way)
   for (const p of pieces) {
+    const measured = measurePiece(p);
+    if (measured && measured.half >= 3.6 && Math.abs(measured.z - p.z) < 3) {
+      p.z = measured.z;
+      p.half = measured.half;
+    }
     let st = null;
     for (const s of ALL_STREETS) {
       if (Math.abs(s.z - p.z) <= p.gap / 2 && (!st || Math.abs(s.z - p.z) < Math.abs(st.z - p.z))) st = s;
     }
     const twoWay = !st || st.dir === 0 || p.gap >= 20;
-    const pair = p.gap >= 17 ? [1.8, 5.4] : [1.8];
-    p.east = twoWay ? pair : st.dir > 0 ? [-1.8, 1.8] : [];
-    p.west = twoWay ? pair : st.dir < 0 ? [-1.8, 1.8] : [];
+    // the gap counts the free 1 m steps between the curbs (p.half below); one lane between two rows of parked cars on
+    // the usual 9 m one-way street, a lane each way with parking from 11 m across
+    const half = p.half ?? (p.gap + 1) / 2;
+    const side = layoutSide(half);
+    const one = layoutOneWay(half) || { lanes: [0], park: { r: null, l: null } };
+    p.east = twoWay ? side : st.dir > 0 ? one : NO_LANES;
+    p.west = twoWay ? side : st.dir < 0 ? one : NO_LANES;
   }
 
   // 4. Intersections: street ends on avenue corridors (merged within 6 m)
@@ -242,7 +276,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
     return n;
   }
   for (const p of pieces) {
-    p.half = (p.gap + 1) / 2; // the gap counts the free 1 m steps between the curbs
+    p.half ??= (p.gap + 1) / 2; // the gap counts the free 1 m steps between the curbs (measured above where it could be)
     p.from = nodeAt(p.a, p.z);
     p.to = nodeAt(p.b, p.z);
     for (const n of [p.from, p.to]) n.hz = Math.max(n.hz, Math.abs(p.z - n.z) + Math.min(p.half, 13));
@@ -393,11 +427,12 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
       const half = w / 2;
       const axis = w >= 14.5 || l.lanes >= 3 || MAJOR.test(l.name) ? 'ave' : 'st';
       if (l.dir !== 0) {
-        const lanes = laneOffsets(half) || [0];
-        return { half, axis, fwd: l.dir > 0 ? lanes : [], back: l.dir < 0 ? lanes : [] };
+        const one = layoutOneWay(half) || { lanes: [0], park: { r: null, l: null } };
+        return { half, axis, fwd: l.dir > 0 ? one.lanes : [], back: l.dir < 0 ? one.lanes : [],
+          fwdPark: l.dir > 0 ? one.park : NO_LANES.park, backPark: l.dir < 0 ? one.park : NO_LANES.park };
       }
-      const each = half >= 8.5 ? [1.8, 5.4] : [1.8];
-      return { half, axis, fwd: each, back: each };
+      const each = layoutSide(half);
+      return { half, axis, fwd: each.lanes, back: each.lanes, fwdPark: each.park, backPark: each.park };
     }
     const DEG = Math.PI / 180;
     for (const l of links) {
@@ -432,7 +467,10 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
 
   // 5. Directed edges between intersections, keeping only the lanes clear of obstacles node to node
   let edges = [];
-  function addEdge(from, to, axis, x0, z0, x1, z1, lanes, half) {
+  // `park`: the offsets (to the right of travel) of the parked cars along this edge's right and left curbs, or null
+  // where nobody parks (parking.js fills them)
+  const noPark = { r: null, l: null };
+  function addEdge(from, to, axis, x0, z0, x1, z1, lanes, half, park = noPark, bike = null) {
     const span = Math.hypot(x1 - x0, z1 - z0);
     const dx = (x1 - x0) / span;
     const dz = (z1 - z0) / span;
@@ -445,7 +483,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
         Math.min(az, az + dz * span) - cz, Math.max(az, az + dz * span) + cz);
     });
     if (!open.length) return;
-    edges.push({ from, to, axis, x0, z0, dx, dz, rx: -dz, rz: dx, span, half, lanes: open.sort((p, q) => p - q), moves: [] });
+    edges.push({ from, to, axis, x0, z0, dx, dz, rx: -dz, rz: dx, span, half, lanes: open.sort((p, q) => p - q), moves: [], park, bike });
   }
   for (const a of avenues) {
     a.nodes.sort((m, n) => m.z - n.z);
@@ -457,8 +495,8 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
       if (!connected) continue;
       const set = a.lanesAt((n0.z + n1.z) * 0.5) || a.lanesAt(n0.z) || a.lanesAt(n1.z);
       if (!set) continue;
-      addEdge(n0, n1, 'ave', a.x, n0.z, a.x, n1.z, set.south.map((o) => -o), a.half);
-      addEdge(n1, n0, 'ave', a.x, n1.z, a.x, n0.z, set.north, a.half);
+      addEdge(n0, n1, 'ave', a.x, n0.z, a.x, n1.z, set.south.lanes, a.half, set.south.park, set.south.bike);
+      addEdge(n1, n0, 'ave', a.x, n1.z, a.x, n0.z, set.north.lanes, a.half, set.north.park, set.north.bike);
     }
   }
   for (const p of pieces) {
@@ -467,8 +505,8 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
     for (let k = 0; k + 1 < chain.length; k++) {
       const m = chain[k];
       const n = chain[k + 1];
-      addEdge(m, n, 'st', m.x, p.z, n.x, p.z, p.east, p.half);
-      addEdge(n, m, 'st', n.x, p.z, m.x, p.z, p.west, p.half);
+      addEdge(m, n, 'st', m.x, p.z, n.x, p.z, p.east.lanes, p.half, p.east.park, p.east.bike);
+      addEdge(n, m, 'st', n.x, p.z, m.x, p.z, p.west.lanes, p.half, p.west.park, p.west.bike);
     }
   }
   // Centreline streets: any direction, so their lanes are checked for obstacles every 2.5 m (clear of the junctions,
@@ -480,7 +518,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
     }
     return true;
   };
-  function addEdgeGeneral(from, to, axis, lanes, half, divided) {
+  function addEdgeGeneral(from, to, axis, lanes, half, divided, park = noPark) {
     const x0 = from.x;
     const z0 = from.z;
     const span = Math.hypot(to.x - x0, to.z - z0);
@@ -489,7 +527,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
     const dz = (to.z - z0) / span;
     const open = lanes.filter((o) => laneOpen(x0, z0, dx, dz, span, o));
     if (!open.length) return;
-    edges.push({ from, to, axis, x0, z0, dx, dz, rx: -dz, rz: dx, span, half, lanes: open.sort((p, q) => p - q), moves: [], general: true, cand: lanes, divided: !!divided });
+    edges.push({ from, to, axis, x0, z0, dx, dz, rx: -dz, rz: dx, span, half, lanes: open.sort((p, q) => p - q), moves: [], general: true, cand: lanes, divided: !!divided, park });
   }
   // A divided road drawn as two one-way roadways between the same two junctions (most of the Bowery) runs both ways
   // along one centreline here: each way keeps to the right of it, as on a two-way street, and the road is as wide as
@@ -515,11 +553,14 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
       q.divided = true;
     }
     r.half = o.half = r.half + o.half;
+    // parked cars along the outer curbs of both roadways, the median between them stays clear
+    const outer = { r: r.half - PARK_OFF, l: null };
+    r.fwdPark = r.backPark = o.fwdPark = o.backPark = outer;
     if (r.half >= 7.25) r.axis = o.axis = 'ave'; // as wide as a major road (see lanesOf)
   }
   for (const r of genRuns) {
-    if (r.fwd.length) addEdgeGeneral(r.from, r.to, r.axis, r.fwd, r.half, r.divided);
-    if (r.back.length) addEdgeGeneral(r.to, r.from, r.axis, r.back, r.half, r.divided);
+    if (r.fwd.length) addEdgeGeneral(r.from, r.to, r.axis, r.fwd, r.half, r.divided, r.fwdPark);
+    if (r.back.length) addEdgeGeneral(r.to, r.from, r.axis, r.back, r.half, r.divided, r.backPark);
   }
   // Two edges from one node to the same next one (a service road whose ends were drawn onto its main road's junctions)
   // would drive through each other: keep the grid's, else the one with the most lanes
@@ -764,8 +805,8 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
   // Paint describes the physical streets, including dead ends and roads AI traffic cannot circulate through.
   // Snapshot their geometry before routing moves stop lines, drops edges and renumbers the surviving junctions.
   const paintNodes = new Map(nodes.map((n, id) => [n, { id, x: n.x, z: n.z, shape: n.shape }]));
-  const paintEdges = edges.map(({ from, to, axis, x0, z0, sx, sz, dx, dz, rx, rz, span, len, half, lanes }) => ({
-    from: paintNodes.get(from), to: paintNodes.get(to), axis, x0, z0, sx, sz, dx, dz, rx, rz, span, len, half, lanes
+  const paintEdges = edges.map(({ from, to, axis, x0, z0, sx, sz, dx, dz, rx, rz, span, len, half, lanes, park, bike }) => ({
+    from: paintNodes.get(from), to: paintNodes.get(to), axis, x0, z0, sx, sz, dx, dz, rx, rz, span, len, half, lanes, park, bike
   }));
 
   // 6. Movements at each intersection (no U-turns) and the lane each lane leads to, along obstacle-free curves:
@@ -1057,7 +1098,9 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
   }
 
   const isRoadClear = (x, z, clear = 0.15) => !blockedOnStreet(x, z, clear);
-  return { nodes, edges, paintEdges, connector, curvePoint, walkable, onSidewalk, isRoadClear };
+  // Street furniture placed after the roads were laid out (sidewalk-furniture.js) still gets in the pedestrians' way
+  const addObstacle = (r) => insert(r);
+  return { nodes, edges, paintEdges, connector, curvePoint, walkable, onSidewalk, isRoadClear, addObstacle };
 }
 
 // The largest strongly connected set of `list` (a Set), going on from item e to the items next(e)

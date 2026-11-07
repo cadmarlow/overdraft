@@ -2098,4 +2098,7 @@ class PersonRig {
 }
 
 
-export { PROP, BONE as PERSON_BONES, buildPersonGeometry, createPersonMaterial, PersonCrowd, PersonRig, PEDESTRIAN_DIVE_DURATION };
+// A root to seat a rig on (pedestrian-system.js: benches, café chairs)
+const createSeatRoot = () => new THREE.Object3D();
+
+export { PROP, BONE as PERSON_BONES, buildPersonGeometry, createPersonMaterial, PersonCrowd, PersonRig, PEDESTRIAN_DIVE_DURATION, createSeatRoot };

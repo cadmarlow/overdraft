@@ -1,6 +1,7 @@
 import { createSynthResources, createMotorVoice, setControlRate } from './audio-synthesis.js';
 import { DriveAudio } from './audio-drive.js';
 import { createEventResources, playEvent, createWindVoice } from './audio-events.js';
+import { createAmbienceVoice } from './audio-ambience.js';
 import { CityAudioSources } from './audio-sources.js';
 import { CityAcoustics } from './audio-acoustics.js';
 import { createCombatResources, COMBAT_SOUNDS } from './audio-combat.js';
@@ -172,6 +173,10 @@ class CityAudioSystem {
     this.reflectionFilter.Q.value = 0.5;
     this.reflections.connect(this.reverb).connect(this.reflectionFilter).connect(this.mix);
     this.wind = createWindVoice(context, this.resources, this.mix);
+    // The city's own murmur: crowd, subway, building sites, bars, birds, far sirens (audio-ambience.js); its
+    // parameters come from the world through ambienceProbe (main.js)
+    this.ambience = createAmbienceVoice(context, this.resources, this.mix);
+    this.ambienceParams = { crowd: 0, traffic: 0, night: 0, hour: 12, subway: 0, construction: 0, bar: 0, birds: 0, water: 0, indoor: 0, rain: 0, enclosure: 0 };
     // Gameplay one-shots (spatial, through the city's acoustics) and flat interface / music buses
     this.combat = createCombatResources(context);
     this.sfxVoices = [];
@@ -560,6 +565,17 @@ class CityAudioSystem {
     }
     Object.assign(this.windParams, { speed: Math.min(sources.motion, 50), rush: sources.rush || 0, altitude: position.y, traffic: sources.traffic, night: night ? 1 : 0, enclosure });
     this.wind.update(this.windParams, now);
+    if (this.ambience) {
+      const probe = this.ambienceProbe ? this.ambienceProbe(position) : null;
+      Object.assign(this.ambienceParams, probe || {}, { traffic: sources.traffic, night: night ? 1 : 0, enclosure });
+      this.ambience.update(this.ambienceParams, this.context.currentTime);
+    }
+  }
+
+  // A one-off from the city's ambience (audio-ambience.js): 'alarm' (a car alarm going off), 'coo', 'gull'
+  ambienceEvent(kind, x, y, z) {
+    if (!this.enabled || !this.context || this.context.state !== 'running' || !this.ambience) return false;
+    return this.ambience.event(kind, x, y, z);
   }
 
   dispose() {
@@ -570,6 +586,7 @@ class CityAudioSystem {
     document.removeEventListener('visibilitychange', this.onVisibility);
     this.reset();
     this.wind?.dispose(true);
+    this.ambience?.dispose(true);
     for (const node of [this.mix, this.compressor, this.master, this.reflections, this.reverb, this.reflectionFilter]) node?.disconnect();
     if (this.context) {
       this.context.onstatechange = null;

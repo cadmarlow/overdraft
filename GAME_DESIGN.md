@@ -132,6 +132,27 @@ seule et relevé partiel conservé après interruption. L'outil et ses contrôle
 faux positifs et le coût par correction utile sur des séances
 longues, puis isoler davantage les écritures de l'atelier si plusieurs auteurs travaillent en même temps.
 
+## 0.9.6 « Footfall » — la vie
+
+Une ville se juge à ce qui s'y passe quand on ne fait rien. La vie a trois couches, et la 0.9.6 les construit sur les deux
+armes que GTA V n'a pas : les registres publics de New York, qui donnent déjà les boutiques et les immeubles, et une
+journée de 32 minutes qui fait voir au joueur le rythme entier de la ville en une partie.
+
+- **Les traces** : des voitures garées partout où New York en gare (chaussées redécoupées avec leur file de stationnement,
+  règles vraies, occupation par quartier et par heure, stationnement alterné), le mobilier du trottoir là où la ville le
+  recense (arrêts, abris, kiosques, arceaux, bancs, bornes, parcmètres, échafaudages de chantier, terrasses) et là où les
+  règles le mettent (panneaux, paniers, boîtes à journaux, grilles, colonnes sèches, portes de cave), les bêtes, la nappe
+  sonore. Tout ce qui peut tomber tombe ; tout ce qui a un volume arrête les voitures et les gens.
+- **Les intentions** : une densité de foule qui suit le quartier et l'heure, des postes où les passants s'arrêtent (bancs,
+  chaises, comptoirs, vitrines, files d'attente), des portes qui respirent selon les horaires des boutiques, des bus qui
+  s'arrêtent, des taxis qui se rangent, des livreurs en double file.
+- **Les histoires** : un metteur en scène d'événements ambiants, un toutes les une à deux minutes, branché sur les
+  systèmes existants, jamais deux fois le même d'affilée.
+
+Suite prévue : des voitures qui se garent et repartent sous les yeux du joueur, des musiciens de rue (la radio
+procédurale a la musique), des promeneurs de chiens, des stands de marché le week-end, des manifestations et des
+tournages qui ferment une rue, le son réglé à l'oreille.
+
 ## 0.9.5 « Due Diligence » — personnages de nuit et outil de test local
 
 Les corps, cheveux, accessoires et niveaux de détail des personnages reçoivent une part de lumière renvoyée par la rue
@@ -230,4 +251,5 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.3** | **Main Street** | Rez-de-chaussée refaits : 25 000 boutiques réelles en relief, enseignes uniques, vrais intérieurs, la rue de nuit |
 | **0.9.4** | **Momentum** | Conduite au clavier refaite (volant progressif, stabilité, frein à main), voitures solides, reflets de la rue, conducteur et habitacle, vue intérieure ; immeubles Bricks & Mortar (types réels, gradins, corniches et fenêtres en relief) |
 | **0.9.5** | **Due Diligence** | Personnages lisibles de nuit ; Architecte 2.2 local : prospection continue, trajets repris, statuts réconciliés, suivi des sessions et voix coupée par défaut |
+| **0.9.6** | **Footfall** | La vie : 108 000 voitures garées sur des chaussées redécoupées, le trottoir new-yorkais d'après les registres et les règles de la rue, la foule par quartier et heure avec ses postes et ses portes, bus, taxis et livreurs, pigeons, mouettes et rats, nappe sonore, événements ambiants |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |

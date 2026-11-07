@@ -21,6 +21,7 @@ import { REAL_TREES } from './tree-geodata.js';
 import { placeStreetTrees } from './tree-placements.js';
 import { createSubwayEntranceParts, createFoodCartParts } from './street-props.js';
 import { createSubwayEntrances } from './subway-entrances.js';
+import { STREET } from './street-geodata.js';
 import { pavedPlazaRects, centralParkClearings, parkTreeSites, parkLampSites } from './city-grid.js';
 import { bryantParkLawn } from './landmarks.js';
 
@@ -789,14 +790,24 @@ function buildStreetDetails(scene, colliders = []) {
   // =========================================================================
   const hydrantPositions = [];
   const mailboxPositions = [];
+  // Hydrants where the city's water department has them (js/street-geodata.js), every street included; without the
+  // register, two per avenue block face
+  const realHydrants = STREET?.kinds?.hydrant;
+  if (realHydrants && realHydrants.count > 0) {
+    const { data, stride, count } = realHydrants;
+    for (let i = 0; i < count; i++) {
+      const x = data[i * stride], z = data[i * stride + 1];
+      if (isOnSidewalk(x, z, 0.3)) hydrantPositions.push([x, z]);
+    }
+  }
   for (const ave of AVENUES) {
     for (let row = 0; row < STREETS.length - 1; row++) {
       const zMid = (STREETS[row].z + STREETS[row + 1].z) * 0.5;
       const h1 = [ave.x - ave.width * 0.5 - 0.8, zMid - 16];
       const h2 = [ave.x + ave.width * 0.5 + 0.8, zMid + 16];
       const mb = [ave.x + ave.width * 0.5 + 1.2, zMid - 22];
-      if (isOnSidewalk(h1[0], h1[1], 0.45)) hydrantPositions.push(h1);
-      if (isOnSidewalk(h2[0], h2[1], 0.45)) hydrantPositions.push(h2);
+      if (!realHydrants && isOnSidewalk(h1[0], h1[1], 0.45)) hydrantPositions.push(h1);
+      if (!realHydrants && isOnSidewalk(h2[0], h2[1], 0.45)) hydrantPositions.push(h2);
       if (isOnSidewalk(mb[0], mb[1], 0.45)) mailboxPositions.push(mb);
     }
   }
@@ -1177,7 +1188,16 @@ function buildStreetDetails(scene, colliders = []) {
   // Carts and barricades stand in the way of cars as well as people
   for (const f of footprints) if (!f.pedestrianOnly) obstacles.push({ ...f, maxY: 2.2, minY: 0, obstacle: 'furniture' });
 
-  return { group, footprints, obstacles, removeProp, lampParts: { post: pedLampPostGeo, globe: pedGlobeGeo, metal: poleMetalMat, glow: pedGlobeGlow }, signalClock, signalIntersections, audioSignals, treeField, update };
+  const hydrants = hydrantPositions.map(([x, z]) => ({ x, z }));
+  // Perches for the birds (birds.js): the tops of the cobra-head lamps; the piles of bags the rats run between
+  const perches = cobraLampSites.map((s) => ({ x: s.x, y: s.y + 0.1, z: s.z }));
+  const trashPiles = clutterItems.filter((c) => c.name === 'trashbag').map((c) => ({ x: c.x, z: c.z }));
+  // Where people come and go (street-life.js): the stair mouths of the subway entrances, the food carts' counters
+  const subwayMouths = subwaySites.map(({ x, z, yaw }) => ({ x: x + Math.sin(yaw) * 3.8, z: z + Math.cos(yaw) * 3.8, yaw }));
+  const foodCarts = cartMatrices.map((m) => ({ x: m.elements[12], z: m.elements[14] }));
+  return { group, footprints, obstacles, removeProp, lampParts: { post: pedLampPostGeo, globe: pedGlobeGeo, metal: poleMetalMat, glow: pedGlobeGlow }, signalClock, signalIntersections, audioSignals, treeField, hydrants, perches, trashPiles, subwayMouths, foodCarts,
+    // sidewalk-furniture.js places more along the curbs with the same rules
+    isOnSidewalk, isClearOfPoles, addPole, addFootprint, update };
 }
 
 export { buildStreetDetails };

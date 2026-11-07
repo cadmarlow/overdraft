@@ -1,5 +1,88 @@
 # Changelog
 
+## 0.9.6 — Footfall — 7 novembre 2026
+
+La ville prend vie. Avant, les trottoirs étaient nus (six objets tirés au hasard sur les avenues seulement), aucune
+voiture n'était garée parce que les voies occupaient toute la chaussée, 340 piétons ne faisaient que marcher, rien ne
+volait, rien ne se passait. Cette version ajoute les traces de la vie, les gens qui ont une raison d'être là, et les
+petites histoires de la rue, en s'appuyant comme toujours sur les registres publics de New York.
+
+### Le stationnement
+- **Les chaussées redécoupées** (`js/road-layout.js`) : une file de stationnement de 2,3 m le long de chaque bordure qui a la
+  place, le reste en voies de 3,1 à 3,7 m. Une rue transversale de 9 m garde une voie entre deux rangées de voitures
+  garées, les grandes avenues (18 m et plus) prennent une piste cyclable protégée le long de leur bordure gauche,
+  derrière la rangée de voitures. La largeur réelle des rues transversales est maintenant mesurée sur les trottoirs
+  dessinés (le réseau les croyait à deux voies là où il n'y en a qu'une).
+- **108 000 places** (`js/parking-plan.js`, `js/parking.js`) pare-chocs contre pare-chocs : rien à 4,5 m d'une bouche
+  d'incendie, rien aux angles, aux arrêts de bus, devant les bennes de chantier ni les terrasses. Taux d'occupation par
+  quartier et par heure (les quartiers d'affaires se vident la nuit, les rues résidentielles restent pleines) et
+  **stationnement alterné** : un côté des rues résidentielles se vide pour le balayage de 9 h 30 à 11 h, un jour sur deux.
+  Les bordures changent hors du champ de la caméra.
+- Dessinées avec les modèles et le matériau compilé du trafic (aucune saccade), le modèle complet à moins de 76 m, le
+  modèle grossier jusqu'à 230 m, phares éteints la nuit, ombres portées de près.
+- **Toutes solides, toutes volables** (F), toutes poussables : une voiture garée percutée, poussée ou touchée par une balle
+  devient une vraie voiture physique qui encaisse le choc ; son alarme part parfois. Les voitures de jeu posées dans la
+  rue (missions, garage, départ) libèrent les places qu'elles occupent.
+
+### Le trottoir new-yorkais
+- **D'après les registres** (`tools/street/build-street-data.mjs`, `js/street-geodata.bin.gz`, 160 Ko) : 10 981 bouches
+  d'incendie partout, 1 771 arrêts de bus et 613 abris (MTA, DOT), 284 kiosques à journaux, 9 843 arceaux vélo avec
+  leurs vélos, 848 bancs, 1 037 bornes Wi-Fi, 3 622 parcmètres, **2 600 chantiers sous échafaudage** (permis en cours du
+  DOB) et 1 258 terrasses de restaurant, dont les cabanes de restauration sur la chaussée.
+- **Les règles de la rue** là où aucun registre ne dit rien (`js/sidewalk-furniture.js`, `js/sidewalk-kit.js`) : 22 000 panneaux
+  de stationnement, les paniers à déchets verts des angles, les boîtes à journaux, les grilles d'aération du métro
+  au-dessus des lignes, 21 000 colonnes sèches sur les façades, 7 500 portes de cave, 7 800 grilles d'arbres, des cafés en
+  terrasse devant les restaurants, des boîtes d'alarme incendie. Tout est construit en code à la vraie taille, dans un
+  seul atlas et deux matériaux ; les paniers, boîtes et cônes tombent sous une voiture.
+- **Les échafaudages** : poteaux, croix de Saint-André, platelage à 3,75 m praticable (on peut y monter), bandeau vert,
+  guirlande d'ampoules allumée la nuit ; devant certains, la benne à gravats dans la rue avec ses cônes, la cabine de
+  chantier.
+
+### Les gens ont une raison d'être là (`js/street-life.js`)
+- **Densité par quartier et par heure** : Midtown bondé aux heures de bureau et mort la nuit, les quartiers résidentiels
+  plus calmes, le Village et le Lower East Side pleins le soir, pointes du matin et du soir. Les piétons en trop s'en vont
+  hors de vue.
+- **Des postes** : les passants s'assoient sur les bancs, les chaises des cafés et dans les abris de bus, font la queue aux
+  arrêts et aux chariots, s'arrêtent devant les vitrines, au comptoir des kiosques, téléphone ou café à la main.
+- **Les portes respirent** : les 25 000 boutiques laissent sortir des clients selon leurs horaires (un café à la main au sortir
+  d'un café, un sac au sortir d'une épicerie) et en font entrer ; les bouches de métro lâchent des grappes de voyageurs,
+  plus fournies aux heures de pointe. Des joggeurs le long des parcs et des rivières.
+- **Des véhicules à intentions** : les bus s'arrêtent aux vrais arrêts, feux de détresse allumés, la queue monte à l'avant
+  et des voyageurs descendent à l'arrière ; quelqu'un hèle un taxi et le prochain libre s'arrête ; les camionnettes de
+  livraison s'arrêtent en double file pendant que le livreur décharge, et le trafic klaxonne derrière.
+
+### Les bêtes (`js/birds.js`, `js/birds-flock.js`)
+- **Pigeons** par bandes de 6 à 18 sur les trottoirs (250 en qualité ÉQUILIBRÉE) : ils picorent, marchent par petits pas,
+  s'écartent des passants, s'envolent devant un coureur, une voiture, un coup de feu, une explosion ou un klaxon, tournent en
+  bande puis se reposent plus loin ou sur les lampadaires. **Mouettes** au-dessus des rivières. **Rats** la nuit entre les
+  sacs poubelle.
+
+### La nappe sonore (`js/audio-ambience.js`, tout synthétisé)
+- Murmure de foule selon les piétons visibles, bourdon de la ville, grondement et passages de rames sous les grilles
+  de métro, marteau-piqueur sous les échafaudages de jour, musique qui filtre des bars la nuit, roucoulements, cris de
+  mouettes au bord de l'eau, sirènes très lointaines, et l'alarme des voitures qu'on bouscule.
+
+### Les petites histoires de la rue (`js/ambient-events.js`)
+- Toutes les une à deux minutes près du joueur, jamais deux fois la même d'affilée : un **accrochage** et deux
+  conducteurs qui s'expliquent dans la rue pendant que ça klaxonne derrière ; un **contrôle de police**, l'agent à la
+  vitre et la voiture de patrouille derrière ; une **bouche d'incendie ouverte** qui inonde le caniveau ; le **camion
+  poubelle** de nuit et son équipe qui ramasse les sacs. Et quand le joueur se plante, les passants se retournent,
+  téléphone à la main.
+
+### Validation et limites
+- Mesuré en Chrome sans fenêtre, à échelle fixe 0,8 : à la 9e Rue Est, 61 images/s avec et sans les ajouts (stationnement
+  et mobilier ajoutent environ 160 draws et 1,3 M de triangles) ; le départ, 5e Avenue et 37e Rue, reste limité par le GPU
+  à 40-44 images/s avec ou sans eux. Le son n'a été vérifié qu'en simulation : les niveaux sont à régler à l'oreille.
+- Joué sans fenêtre : vol d'une voiture garée, choc contre une voiture garée (elle devient libre et part en travers),
+  tir sur une voiture garée, nuit sans phares ; piétons assis dans un abri, montées et descentes de bus, sorties de
+  boutiques et de métro ; accrochage avec ses deux conducteurs, contrôle de police, bouche ouverte ; pigeons au sol et en
+  vol, mouettes sur l'Hudson.
+- Non vérifié : les rats (il faut des sacs poubelle à portée, la nuit), le camion poubelle (il faut un camion du trafic
+  près de sacs la nuit), les taxis hélés jusqu'au bout (rarement servis en deux minutes), les manettes et le mobile.
+- Reste faible : pas de voiture qui se gare ou quitte sa place sous les yeux du joueur (les bordures changent hors
+  champ) ; les chaises et bancs sont simples ; pas de promeneurs de chiens ni de musiciens (pas de modèle) ; les
+  piétons traversent encore un peu les tables ; les échafaudages n'ont pas de filet en façade.
+
 ## 0.9.5 — Due Diligence — 4 novembre 2026
 
 ### Jeu publié
