@@ -240,3 +240,52 @@ test('teleport releases every camera pointer and ignores old gestures before acc
   close(h.camera.orbitYawOffset, -0.065);
   assert.equal(h.camera.isDragging, true);
 });
+
+test('a cinematic flies the camera through its keys, then hands over to the follow camera', () => {
+  const h = cameraHarness();
+  const key = (x, y, z, lx, ly, lz) => ({ pos: new Vector3(x, y, z), look: new Vector3(lx, ly, lz) });
+  let done = 0;
+  h.camera.playCinematic([key(0, 100, 0, 0, 0, 50), key(0, 40, 60, 0, 0, 100), key(0, 2, 96, 0, 1.5, 100)], 2, () => done++);
+  assert.ok(h.camera.cinematic);
+  const heights = [];
+  for (let i = 0; i < 40; i++) {
+    h.camera.update(0.05, i * 0.05);
+    heights.push(h.camera.camera.position.y);
+  }
+  // it descends the whole way, lands on the last key, and the follow camera has somewhere to glide from
+  for (let i = 1; i < heights.length; i++) assert.ok(heights[i] <= heights[i - 1] + 1e-6, `descending at step ${i}`);
+  close(h.camera.camera.position.y, 2);
+  close(h.camera.camera.position.z, 96);
+  assert.equal(h.camera.cinematic, null);
+  assert.equal(done, 1);
+  assert.equal(h.camera.followEntity, null);
+  // easing: little distance covered in the first tenth, most of it in the middle
+  assert.ok(heights[3] > 95, `slow start: ${heights[3]}`);
+  assert.ok(heights[20] < 60 && heights[20] > 10, `mid flight: ${heights[20]}`);
+});
+
+test('skipping a cinematic jumps to its end once', () => {
+  const h = cameraHarness();
+  let done = 0;
+  h.camera.playCinematic([{ pos: new Vector3(0, 50, 0), look: new Vector3(0, 0, 10) }, { pos: new Vector3(5, 2, 20), look: new Vector3(5, 1, 30) }], 6, () => done++);
+  h.camera.update(0.5, 0.5);
+  assert.ok(h.camera.camera.position.y > 40);
+  h.camera.skipCinematic();
+  close(h.camera.camera.position.x, 5);
+  close(h.camera.camera.position.y, 2);
+  assert.equal(done, 1);
+  h.camera.skipCinematic(); // nothing left to skip
+  assert.equal(done, 1);
+});
+
+test('the menu view flies a slow aerial pass on the drone preset', () => {
+  const h = cameraHarness();
+  h.camera.setMenuView(new Vector3(0, 100, -300), new Vector3(0, 90, -100), new Vector3(0, 60, 200), 40);
+  assert.equal(h.camera.activePresetId, 'drone');
+  h.camera.update(0.1, 0);
+  const start = { ...h.camera.camera.position };
+  for (let t = 0.1; t < 20; t += 0.1) h.camera.update(0.1, t);
+  const mid = { ...h.camera.camera.position };
+  assert.ok(mid.z > start.z + 80, `the pass advances: ${start.z} -> ${mid.z}`);
+  assert.ok(mid.y < start.y, 'and comes down a little');
+});

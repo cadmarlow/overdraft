@@ -12,8 +12,8 @@ npm install
 
 | Étape | Commande |
 | --- | --- |
-| Télécharger des avatars | `node fetch.mjs <dossier> Adults/Male_Adult_04 Professions/Police_Male_03` (`COLOR_ONLY=1` pour la foule) |
-| Un personnage complet | `node import-avatar.mjs hero <dossier>/Male_Adult_04/Male_Adult_04.fbx <dossier>/Male_Adult_04 --size 2048 --normal 1024 --hair 0.3` |
+| Télécharger des avatars | `node fetch.mjs <dossier> Adults/Male_Adult_07 Professions/Police_Male_03` (`COLOR_ONLY=1` pour la foule) |
+| Un personnage complet | `node import-avatar.mjs hero <dossier>/Male_Adult_07/Male_Adult_07.fbx <dossier>/Male_Adult_07 --size 2048 --normal 1024 --hair 0.5` |
 | Un piéton | `node import-crowd.mjs m01 <fichier.fbx> <textures> m`, la liste est dans `crowd-list.txt` |
 | Une arme portée par un avatar | `node import-weapon.mjs pistol <avatar.bin> pistol <préfixe des textures> -1 1 -0.30` |
 | Le fusil | `node import-rifle.mjs <dossier M4A1> 2,-1,1,1,0.86,0.045,-0.106` |

@@ -282,9 +282,22 @@ class BodyDriver {
    * `w` blends from where the arm is now.
    */
   reach(i, target, pole, handQ, w = 1) {
-    const { body } = this, { bone, localP, belowHand } = this.skeleton;
+    const { bone, belowHand } = this.skeleton;
+    this.reachChain(bone.upper[i], bone.fore[i], bone.hand[i], belowHand[i], target, pole, handQ, w);
+  }
+
+  // The same for a leg: the ankle to `target`, the knee towards `pole`, the foot turned to `footQ` (world) if given
+  reachLeg(i, target, pole, footQ, w = 1) {
+    const { bone } = this.skeleton;
+    const below = this.kit.belowFoot ??= bone.foot.map((f) => this.skeleton.below(f));
+    this.reachChain(bone.thigh[i], bone.calf[i], bone.foot[i], below[i], target, pole, footQ, w);
+  }
+
+  // Two-bone chain `up` - `fo` - `ha` (upper, lower, end bone), the end joint to `target`, the middle bending towards
+  // `pole`; `below` lists what hangs from the end bone
+  reachChain(up, fo, ha, below, target, pole, handQ, w = 1, qw = w) {
+    const { body } = this, { localP } = this.skeleton;
     const { wp, wq, q, scale } = body;
-    const up = bone.upper[i], fo = bone.fore[i], ha = bone.hand[i];
     const A = vset(_a, wp, up), B = vset(_b, wp, fo), C = vset(_c, wp, ha);
     const la = A.distanceTo(B), lb = B.distanceTo(C);
     const T = _t.copy(C).lerp(target, w);
@@ -314,9 +327,9 @@ class BodyDriver {
     _p.multiplyScalar(lb).add(E);
     vput(wp, ha, _p);
     qset(_q3, wq, fo).multiply(qset(_q2, q, ha));
-    if (handQ) _q3.slerp(handQ, w);
+    if (handQ) _q3.slerp(handQ, qw);
     qput(wq, ha, _q3);
-    body.settle(ha, belowHand[i]);
+    body.settle(ha, below);
   }
 
   // Closes the fingers of hand i on a named grip
@@ -367,8 +380,10 @@ class BodyDriver {
     _rootInv.copy(_q).invert();
 
     // How much the capture shows
+    // Normally the rig's pose takes over at once (a fall, a bike); a rig that sets `rideFade` (seconds) is faded into, so
+    // the hero's capture crosses into the scripted body getting into a car (gameplay.js, vehicle-entry.js)
     const forced = !!rig.limp || rig.diving || rig.riding || rig.air > 0.03;
-    this.free += ((forced ? 0 : 1) - this.free) * (forced ? 1 : ease(dt, 0.14));
+    this.free += ((forced ? 0 : 1) - this.free) * (forced ? (rig.rideFade > 0 ? ease(dt, rig.rideFade) : 1) : ease(dt, 0.14));
     const free = this.free < 0.002 ? 0 : this.free > 0.998 ? 1 : this.free;
     if (free > 0) {
       const pose = this.locomotion(dt, rig, yawRate, backwards);
@@ -417,7 +432,17 @@ class BodyDriver {
     if (w <= 0.001) return;
     const fwd = _fwd.set(Math.sin(this.yaw), 0, Math.cos(this.yaw));
     const left = _right.crossVectors(UP, fwd); // the body's left
-    if (o.arms) {
+    if (o.arms === 'hands') {
+      // Each hand to its own world point, the elbow towards (px, py, pz) (gameplay.js getting into a car):
+      // handL / handR = { x, y, z, w, px, py, pz }
+      for (let i = 0; i < 2; i++) {
+        const h = i === 0 ? o.handL : o.handR;
+        if (!h || !(h.w > 0.001)) continue;
+        _target.set(h.x, h.y, h.z);
+        _pole.set(h.px ?? 0, h.py ?? -1, h.pz ?? 0);
+        this.reach(i, _target, _pole, null, clamp(h.w * w, 0, 1));
+      }
+    } else if (o.arms) {
       const rope = o.arms === 'rope' && o.toward;
       for (let i = 0; i < 2; i++) {
         const sgn = i === 0 ? 1 : -1;
@@ -456,6 +481,20 @@ class BodyDriver {
         if (o.sit) this.turn(bone.thigh[i], _q.setFromAxisAngle(left, -o.sit * w));
         body.settle(bone.thigh[i], below[i]);
         if (o.sit) { this.turn(bone.calf[i], _q.setFromAxisAngle(left, o.sit * 1.1 * w)); body.settle(bone.calf[i], belowCalf[i]); }
+      }
+    }
+    // Each foot to its own world ankle point (a leg into a car's footwell, a foot planted beside it): feet[i] = { x, y, z,
+    // yaw, w, flat }: the knee forward of the foot's heading, the foot flat on the ground facing `yaw` by `flat` (else
+    // carried round with the shin)
+    if (o.feet) {
+      for (let i = 0; i < 2; i++) {
+        const f = o.feet[i];
+        if (!f || !(f.w > 0.001)) continue;
+        _target.set(f.x, f.y, f.z);
+        _pole.set(Math.sin(f.yaw), 0.15, Math.cos(f.yaw));
+        const flat = clamp(f.flat ?? 1, 0, 1), fw = clamp(f.w * w, 0, 1);
+        const footQ = flat > 0.001 ? _handQ.setFromAxisAngle(UP, f.yaw).multiply(_q.fromArray(sk.bindQ, bone.foot[i] * 4)) : null;
+        this.reachLeg(i, _target, _pole, footQ, fw, flat * fw);
       }
     }
     // Chin up: a body flying face down still looks where it goes

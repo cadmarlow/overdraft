@@ -32,18 +32,18 @@ const TIME_PRESETS = {
     id: 'golden',
     sunDir: new THREE.Vector3(-0.44, 0.58, -0.68).normalize(),
     sunColor: 0xffca92,
-    sunIntensity: 5.8,
+    sunIntensity: 7.6,
     hemiSky: 0xd2d6de,
     hemiGround: 0xd29a72, // Warm terracotta / limestone upward canyon bounce
-    hemiIntensity: 2.3,
+    hemiIntensity: 1.42,
     skyTop: 0x2c568c,
     skyHorizon: 0xebd1b5,
     fogColor: 0xdcc5ae,
     fogDensity: 0.00024,
     interiorGlow: 0.48,
     roadWetness: 0.28,
-    envIntensity: 0.46,
-    canyonBounce: 0.52,
+    envIntensity: 0.40,
+    canyonBounce: 0.58,
     turbidity: 8.0,
     rayleigh: 2.8,
     mieCoefficient: 0.008,
@@ -57,17 +57,17 @@ const TIME_PRESETS = {
     id: 'midday',
     sunDir: new THREE.Vector3(-0.34, 0.82, -0.46).normalize(),
     sunColor: 0xffead0,
-    sunIntensity: 6.4,
+    sunIntensity: 8.2,
     hemiSky: 0xcbd8ec,
     hemiGround: 0xc4a488, // Warm sunlit masonry & pavement bounce
-    hemiIntensity: 2.5,
+    hemiIntensity: 1.5,
     skyTop: 0x225ea8,
     skyHorizon: 0xc8dff5,
     fogColor: 0xc6dcf2,
     fogDensity: 0.00018,
     interiorGlow: 0.24,
     roadWetness: 0.08,
-    envIntensity: 0.42,
+    envIntensity: 0.40,
     canyonBounce: 0.58,
     turbidity: 6.5,
     rayleigh: 2.4,
@@ -82,10 +82,10 @@ const TIME_PRESETS = {
     id: 'twilight',
     sunDir: new THREE.Vector3(-0.52, 0.36, -0.77).normalize(),
     sunColor: 0xff9466,
-    sunIntensity: 3.1,
+    sunIntensity: 3.6,
     hemiSky: 0x4c6ca8,
     hemiGround: 0x6e5048,
-    hemiIntensity: 0.85,
+    hemiIntensity: 0.7,
     skyTop: 0x102248,
     skyHorizon: 0xb86b6c,
     fogColor: 0x353c58,
@@ -110,8 +110,8 @@ const TIME_PRESETS = {
     sunIntensity: 1.45,
     hemiSky: 0x263a62,
     hemiGround: 0x382e36,
-    hemiIntensity: 0.72,
-    skyTop: 0x060c1a,
+    hemiIntensity: 0.9,
+    skyTop: 0x0a1222,
     skyHorizon: 0x182640,
     fogColor: 0x0c1424,
     fogDensity: 0.00036,
@@ -166,7 +166,8 @@ class LightingSystem {
     // Calibrate SkyMesh raw radiance (EE=1000 * 0.04) into standard exposure=1.0 HDR range
     this.uSkyExposure = uniform(0.148);
     this.uNightFactor = uniform(0.0);
-    this.uNightSkyColor = uniform(new THREE.Color(0x0b1528));
+    // The city's night sky is never black: its light comes back off the haze, warm over the avenues
+    this.uNightSkyColor = uniform(new THREE.Color(0x121a2a));
     const rawSkyNode = this.sky.material.colorNode;
     this.sky.material.colorNode = Fn(() => {
       const raw = rawSkyNode;
@@ -206,6 +207,8 @@ class LightingSystem {
     // Suppress shadow acne along the surface normal in world units
     // so short casters like cars, curbs, tree trunks, and pedestrians keep crisp contact shadows
     this.sunLight.shadow.normalBias = 0.05;
+    // A wider filter: edges soften a texel or two, the sun of a city is not a laser
+    this.sunLight.shadow.radius = 1.5;
     this.scene.add(this.sunLight);
 
     // Subtle Hemisphere Sky + Warm Terracotta/Limestone Ground Bounce Fill

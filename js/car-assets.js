@@ -221,7 +221,8 @@ class StreetReflectionNode extends THREE.Node {
 }
 
 // The bodywork: paint where the mask says, the model's own texture elsewhere, lamps lit by state
-function createBodyMaterial(model, { paint = null, instanced = false, livery = 0, physical = !instanced } = {}) {
+// Every car, the traffic's included, is a physical material: coloured paint under a clear coat is what makes a car a car
+function createBodyMaterial(model, { paint = null, instanced = false, livery = 0, physical = true } = {}) {
   const mat = physical ? new THREE.MeshPhysicalNodeMaterial() : new THREE.MeshStandardNodeMaterial();
   const stateUniform = uniform(new THREE.Vector4(0, 0, 0, 0));
   const paintUniform = uniform(new THREE.Color(paint ?? 0xffffff));
@@ -286,7 +287,7 @@ function createBodyMaterial(model, { paint = null, instanced = false, livery = 0
   const gloss = mix(float(0.2), float(0.34), mask.oneMinus());
   mat.roughnessNode = mix(mix(mix(surface.g.max(0.24), gloss, mask).add(dentNode.mul(0.4)), float(0.07), glassMask), float(0.9), inside);
   // Car paint is coloured underneath and mirrors through its clear coat: a little metal for the flake, the coat does the rest
-  mat.metalnessNode = mix(mix(surface.b, float(instanced ? 0.42 : 0.18), mask), float(0.1), glassMask).mul(inside.oneMinus());
+  mat.metalnessNode = mix(mix(surface.b, float(instanced ? 0.24 : 0.18), mask), float(0.1), glassMask).mul(inside.oneMinus());
   if (physical) {
     mat.clearcoatNode = mask.mul(dentNode.oneMinus());
     mat.clearcoatRoughnessNode = float(0.04);

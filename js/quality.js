@@ -4,11 +4,11 @@
 
 const KEY = 'overdraft:quality';
 const LEVELS = {
-  high: { label: 'HAUTE', trees: 1.5, grass: true, reflections: true, shadows: true, shadowTile: 3072, shadowFar: 300, farPropShadows: true,
+  high: { label: 'HAUTE', trees: 1.5, grass: true, reflections: true, shadows: true, shadowTile: 3072, shadowFar: 300, farPropShadows: true, ao: true, aoSamples: 12,
     cull: 1, boroughCull: 0, scale: 1, minScale: 0.75 },
-  balanced: { label: 'ÉQUILIBRÉE', trees: 1, grass: true, reflections: false, shadows: true, shadowTile: 2048, shadowFar: 260, farPropShadows: false,
+  balanced: { label: 'ÉQUILIBRÉE', trees: 1, grass: true, reflections: false, shadows: true, shadowTile: 2048, shadowFar: 260, farPropShadows: false, ao: true, aoSamples: 8,
     cull: 0.72, boroughCull: 2200, scale: 1, minScale: 0.7 },
-  fluid: { label: 'FLUIDE', trees: 0.6, grass: false, reflections: false, shadows: false, shadowTile: 0, shadowFar: 0, farPropShadows: false,
+  fluid: { label: 'FLUIDE', trees: 0.6, grass: false, reflections: false, shadows: false, shadowTile: 0, shadowFar: 0, farPropShadows: false, ao: false, aoSamples: 0,
     cull: 0.55, boroughCull: 1500, scale: 0.85, minScale: 0.6 }
 };
 const ORDER = ['high', 'balanced', 'fluid'];

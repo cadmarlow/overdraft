@@ -46,6 +46,12 @@ class Atmosphere {
     this.flash = 0; this.nextFlash = 8; this.thunderQueue = [];
     this.bakeT = 0;
     this.bakedSig = '';
+    // The eye: 1 in the open sun, opening up in the shade of the buildings (adapt()); sunlit = how much of the
+    // camera's surroundings the sun reaches, probed every few frames
+    this.eye = 1;
+    this.sunlit = 1;
+    this.probeFrame = 0;
+    this._fwd = new THREE.Vector3();
     this.colors = Object.fromEntries(Object.entries(TIME_PRESETS).map(([id, p]) => [id, presetColors(p)]));
     this.params = { id: 'golden', sunDir: new THREE.Vector3() };
     for (const k of COLOR_KEYS) this.params[k] = new THREE.Color();
@@ -209,13 +215,21 @@ class Atmosphere {
     }
 
     const p = this.compute();
+    this.adapt(dt, p);
     // Re-bake the sky environment when it has visibly changed (or during lightning), never every frame
     this.bakeT -= dt;
     const sig = `${p.sunDir.x.toFixed(2)}${p.sunDir.y.toFixed(2)}|${p.skyExposure.toFixed(3)}|${p.cloudCoverage.toFixed(2)}|${p.nightFactor.toFixed(2)}|${p.fogColor.getHexString()}`;
     const bake = (sig !== this.bakedSig && this.bakeT <= 0) || this.bakedSig === '';
     if (bake) { this.bakedSig = sig; this.bakeT = 3; }
     this.lighting.applyParams(p, bake);
+    this.look.exposure *= this.eye;
     this.grade.applyLook(this.look);
+    // The sun's rays through the towers: by day, under a clear enough sky, strongest when the sun is low
+    if (this.grade.setSun) {
+      const low = 1 - smooth(Math.min(1, Math.max(0, (p.sunDir.y - 0.25) / 0.6)));
+      const up = smooth(Math.min(1, Math.max(0, (p.sunDir.y - 0.01) / 0.12)));
+      this.grade.setSun(p.sunDir, this.camera, up * (0.45 + 0.55 * low) * (1 - 0.85 * this.cloud) * (1 - p.nightFactor));
+    }
 
     // Rain drops round the camera
     const cam = this.camera.position;
@@ -231,6 +245,43 @@ class Atmosphere {
       const ctx = this.rainGain.context;
       this.rainGain.gain.setTargetAtTime(this.rain * 0.16, ctx.currentTime, 0.4);
     }
+  }
+
+  // ---- Eye adaptation -------------------------------------------------------------------------------------------------
+  // Does the sun reach this point? A march along the sun's direction through the building colliders, a few metres a
+  // step, as high as the shadow casters go: 1 in the open, 0 in a building's (or a shed's) shadow
+  sunReaches(x, y, z, dir) {
+    const c = this.controllers;
+    if (!c?.nearColliders || dir.y <= 0.02) return 1;
+    const step = 3;
+    const steps = Math.min(90, Math.ceil((220 - y) / (dir.y * step)));
+    for (let i = 1; i <= steps; i++) {
+      const px = x + dir.x * step * i, py = y + dir.y * step * i, pz = z + dir.z * step * i;
+      for (const k of c.nearColliders(px, pz, 0)) {
+        if (px > k.minX && px < k.maxX && pz > k.minZ && pz < k.maxZ && py < k.maxY && py > (k.minY ?? 0)) return 0;
+      }
+    }
+    return 1;
+  }
+
+  // The camera opens up in the shade: by day a street in the shadow of its buildings is exposed for the shade, and the
+  // sunlit facades and the sky beyond it glare, as they do to the eye; stepping out into the sun, it closes again. Three
+  // probes (the camera, the player, the street ahead) averaged and eased: brightening takes a second, darkening half of it.
+  adapt(dt, p) {
+    if (!(dt > 0)) return;
+    const lift = 0.62 * smooth(Math.min(1, Math.max(0, (p.sunDir.y - 0.02) / 0.22))) * (1 - 0.7 * this.cloud) * (1 - p.nightFactor);
+    if (lift > 0.001 && (this.probeFrame++ & 3) === 0) {
+      const cam = this.camera.position, m = this.camera.matrixWorld.elements;
+      this._fwd.set(-m[8], 0, -m[10]).normalize();
+      const ent = this.controllers.getActiveEntity?.();
+      let lit = 0.4 * this.sunReaches(cam.x, cam.y, cam.z, p.sunDir);
+      lit += 0.25 * this.sunReaches(cam.x + this._fwd.x * 10, Math.max(0.5, cam.y - 1), cam.z + this._fwd.z * 10, p.sunDir);
+      lit += ent ? 0.35 * this.sunReaches(ent.position.x, ent.position.y + 1.5, ent.position.z, p.sunDir) : 0.35;
+      this.sunlit = lit;
+    }
+    const target = 1 + lift * (1 - this.sunlit);
+    const tau = target > this.eye ? 1.0 : 0.5;
+    this.eye += (target - this.eye) * (1 - Math.exp(-dt / tau));
   }
 
   serialize() { return { hour: this.hour, weather: this.weather, day: this.day }; }

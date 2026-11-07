@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { BRDF_Lambert, cameraViewMatrix, diffuseContribution, dot, float, mix, normalView, smoothstep, uniform, vec4 } from 'three/tsl';
+import { BRDF_Lambert, cameraViewMatrix, diffuseContribution, dot, float, max, mix, normalView, smoothstep, uniform, vec3, vec4 } from 'three/tsl';
 import { cityUniforms } from './tsl-materials.js';
 
 // People lit like the street round them. At night a street is lit in pools, by lamps and headlights, and a surface that
@@ -22,7 +22,11 @@ const PERSON_LIGHT = {
   sky: uniform(new THREE.Color(0.13, 0.16, 0.23)),
   // the floor comes up between dusk and night (nightFactor: 0.28 at dusk, 0.86 at midnight)
   nightFrom: 0.15,
-  nightTo: 0.8
+  nightTo: 0.8,
+  // skin: how far the light wraps past the terminator (0 none .. 1 a full hemisphere) and the colour it scatters there
+  skinWrap: uniform(0.42),
+  skinTint: uniform(new THREE.Color(0.92, 0.36, 0.26)),
+  skinAmount: uniform(0.55)
 };
 
 // Lamps, headlights and shop lights, clustered or shading on their own; never the sun or the moon, whose bounce the
@@ -35,7 +39,15 @@ const facingDown = () => dot(normalView, cameraViewMatrix.mul(vec4(0, 1, 0, 0)).
 class PersonLightingModel extends THREE.PhysicalLightingModel {
   direct(input, builder) {
     super.direct(input, builder);
-    const { lightNode, lightColor, reflectedLight } = input;
+    const { lightNode, lightColor, lightDirection, reflectedLight } = input;
+    if (this.skin && lightDirection) {
+      // Skin: light wraps round the terminator and comes back reddened by the blood under it, so a face in the sun has a
+      // soft warm edge where a stone would have a hard one
+      const ndl = dot(normalView, lightDirection);
+      const wrapped = max(ndl.add(PERSON_LIGHT.skinWrap).div(PERSON_LIGHT.skinWrap.add(1)), 0);
+      const band = max(wrapped.mul(wrapped).sub(max(ndl, 0)), 0);
+      reflectedLight.directDiffuse.addAssign(lightColor.mul(band).mul(PERSON_LIGHT.skinTint).mul(PERSON_LIGHT.skinAmount).mul(BRDF_Lambert({ diffuseColor: diffuseContribution })));
+    }
     if (!isLocalLight(lightNode)) return;
     // the direct sum: the clustered lights loop declares it before its loop, a new variable would live inside it
     const share = PERSON_LIGHT.bounce.mul(mix(PERSON_LIGHT.bounceUp, float(1), facingDown()));
@@ -50,12 +62,15 @@ class PersonLightingModel extends THREE.PhysicalLightingModel {
   }
 }
 
-/** Lights a body, its hair or what it carries as a person in the street: the material's own model, plus the city's fill */
-function lightAsPerson(material) {
+/**
+ * Lights a body, its hair or what it carries as a person in the street: the material's own model, plus the city's fill.
+ *  adds the wrapped, reddened light of a face (the head's material).
+ */
+function lightAsPerson(material, { skin = false } = {}) {
   const setup = material.setupLightingModel;
   material.setupLightingModel = function (builder) {
     // the material's own model (clearcoat, sheen... flags and all), with the person's light on top
-    return Object.assign(new PersonLightingModel(), setup.call(this, builder));
+    return Object.assign(new PersonLightingModel(), setup.call(this, builder), { skin });
   };
   return material;
 }

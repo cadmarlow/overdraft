@@ -530,7 +530,9 @@ class ThirdPersonControllerManager {
       shadow: pedShadow,
       crowd,
       rig,
-      position: new THREE.Vector3(12.2, ISLAND_BOUNDS.sidewalkHeight, SPAWN_Z + 12),
+      // The west sidewalk of 5th Avenue at 37th Street, facing downtown: the avenue, its traffic and the Empire State
+      // Building ahead, and no sidewalk shed over the first frame
+      position: new THREE.Vector3(-12.2, ISLAND_BOUNDS.sidewalkHeight, SPAWN_Z - 26),
       heading: 0,
       speed: 0,
       verticalVel: 0,

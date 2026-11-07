@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { ISLAND_BOUNDS, getIslandBoundsAtZ, streetZ, isTypingInField } from './city-config.js';
+import { ISLAND_BOUNDS, getIslandBoundsAtZ, streetZ, isTypingInField, districtAt, getLocationLabel } from './city-config.js';
 import { angleDelta, doorPosition, smooth, clamp, canInteract, validPosition } from './interaction-state.js';
 import { CharacterModel, LOOKS } from './characters.js';
 import { EffectsSystem } from './fx.js';
@@ -27,6 +27,7 @@ import { Arsenal } from './arsenal.js';
 import { carSpecs } from './car-assets.js';
 import { popBody, settleBody, shuntBody } from './car-physics.js';
 import { driverPose } from './car-cabin.js';
+import { carFrame, planEntry, planExit, sampleEntry, sampleExit, createSample, stations as entryStations, REST_WHEEL, restPedals, lerp, FAST as ENTRY_FAST } from './vehicle-entry.js';
 import { DriveEffects, FallingLamps, addDent } from './drive-fx.js';
 import { StuntScore } from './stunts.js';
 import { GangSystem } from './gangs.js';
@@ -40,7 +41,21 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.6';
+const BUILD = '0.9.7';
+const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
+// The neighbourhoods as the opening card names them (city-config.js districtAt)
+const DISTRICT_NAMES = {
+  central_park: 'Central Park', morningside: 'Morningside Heights', east_harlem: 'East Harlem', harlem: 'Harlem', uws: 'Upper West Side',
+  ues: 'Upper East Side', hudson_yards: 'Hudson Yards', hells_kitchen: 'Hell’s Kitchen', turtle_bay: 'Turtle Bay', billionaires_row: 'Billionaires’ Row',
+  garment: 'Garment District', times_square: 'Times Square', theater_district: 'Theater District', koreatown: 'Koreatown', plaza_district: 'Plaza District',
+  murray_hill: 'Murray Hill', kips_bay: 'Kips Bay', midtown: 'Midtown', chelsea: 'Chelsea', west_chelsea: 'West Chelsea', flatiron: 'Flatiron',
+  gramercy: 'Gramercy', stuytown: 'Stuyvesant Town', meatpacking: 'Meatpacking District', west_village: 'West Village', greenwich_village: 'Greenwich Village',
+  east_village: 'East Village', alphabet_city: 'Alphabet City', noho: 'NoHo', soho: 'SoHo', hudson_square: 'Hudson Square', nolita: 'Nolita',
+  lower_east_side: 'Lower East Side', chinatown: 'Chinatown', little_italy: 'Little Italy', tribeca: 'Tribeca', civic_center: 'Civic Center',
+  two_bridges: 'Two Bridges', financial_district: 'Financial District', fidi: 'Financial District', battery_park_city: 'Battery Park City', seaport: 'South Street Seaport',
+  stuy_town: 'Stuyvesant Town', village: 'Greenwich Village'
+};
+const districtName = (id) => DISTRICT_NAMES[id] || (id ? id.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) : 'Manhattan');
 const CAR_NAMES = {
   sedan: ['VALMONT', 'ÉCUME', 'BERLINE / PROPULSION'], suv: ['BRISANT', 'RÉCIF', 'SUV / TRANSMISSION INTÉGRALE'],
   taxi: ['VALMONT', 'CAB 7', 'TAXI / PROPULSION'], pickup: ['GRÉVILLE', 'FALAISE', 'PICK-UP / PROPULSION'],
@@ -102,6 +117,11 @@ function splitDoor(car) {
 }
 
 const _v = new THREE.Vector3();
+// Getting into a car (vehicle-entry.js): the seat point the body is posed on, under the car's body, and the pose it is
+// given there (PersonRig.drive); a point in the car's frame
+const _entryRoot = new THREE.Object3D();
+const _entryPose = { seat: new THREE.Vector3(), wheel: new THREE.Vector3(), pedals: new THREE.Vector3(), radius: 0.18, tilt: 0.42, turn: 0, recline: 0, look: 0 };
+const _lp = new THREE.Vector3();
 const _aim = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const _muzzle = new THREE.Vector3();
@@ -236,6 +256,66 @@ export class Game {
     this.jets = []; // broken hydrants
     controllers.onPropHit = (prop, car) => this.knockProp(prop, car);
     if (new URLSearchParams(location.search).has('qa')) window.__playground = window.__game = this;
+    // The title menu looks down the avenue from the air, over the player; the opening flight lands from there
+    this.intro = false;
+    if (!this.playing) {
+      const p = this.person.position, s = Math.sin(this.person.heading), c = Math.cos(this.person.heading);
+      this.camera.setMenuView(
+        new THREE.Vector3(p.x - s * 330 - c * 40, 118, p.z - c * 330 + s * 40),
+        new THREE.Vector3(p.x - s * 150 + c * 30, 96, p.z - c * 150 - s * 30),
+        new THREE.Vector3(p.x + s * 230, 90, p.z + c * 230)
+      );
+    }
+  }
+
+  // ---- The opening ------------------------------------------------------------------------------------------------------
+  // From the menu's aerial view down to Sacha in one flight: the long one for a new game (over the avenue, then a low
+  // pass down the street to his back), a short dive when coming back to a game
+  playIntro(long) {
+    const p = this.person, cam = this.camera;
+    const yaw = p.heading, s = Math.sin(yaw), c = Math.cos(yaw);
+    const head = new THREE.Vector3(p.position.x, p.position.y + 1.5, p.position.z);
+    const keys = [{ pos: cam.currentPos.clone(), look: cam.currentLookAt.clone(), fov: cam.camera.fov }];
+    // the approach comes down over the roadway (to the right of a sidewalk on the left of its street), clear of the
+    // sheds and tree crowns along the curb
+    const road = Math.sign(-p.position.x * c) || 1;
+    if (long) {
+      keys.push({ pos: new THREE.Vector3(p.position.x - s * 110 + c * road * 12, p.position.y + 74, p.position.z - c * 110 - s * road * 12), look: head.clone() });
+      keys.push({ pos: new THREE.Vector3(p.position.x - s * 26 + c * road * 7, p.position.y + 11.5, p.position.z - c * 26 - s * road * 7), look: head.clone() });
+    } else keys.push({ pos: new THREE.Vector3(p.position.x - s * 14 + c * road * 4, p.position.y + 26, p.position.z - c * 14 - s * road * 4), look: head.clone() });
+    keys.push({ pos: new THREE.Vector3(p.position.x - s * 4.3, p.position.y + 2.2, p.position.z - c * 4.3), look: new THREE.Vector3(p.position.x + s * 0.7, p.position.y + 1.55, p.position.z + c * 0.7), fov: 56 });
+    cam.menuDolly = null;
+    cam.setCameraPreset('chase', false);
+    cam.footYaw = yaw;
+    cam.resetOrbit();
+    this.intro = true;
+    document.body.classList.add('in-intro');
+    cam.playCinematic(keys, long ? 9.5 : 4.2, () => this.endIntro());
+    if (long) this.showIntroCard();
+  }
+
+  showIntroCard() {
+    const card = this.ui['intro-card'];
+    if (!card) return;
+    const p = this.person.position;
+    card.querySelector('strong').textContent = districtName(districtAt(p.x, p.z));
+    card.querySelector('em').textContent = `${getLocationLabel(p.x, p.z).replace(' · ', ' — ')} · ${this.atmosphere.clockLabel}`;
+    clearTimeout(this.cardShow); clearTimeout(this.cardHide);
+    this.cardShow = setTimeout(() => card.classList.add('visible'), 1800);
+    this.cardHide = setTimeout(() => card.classList.remove('visible'), 7200);
+  }
+
+  endIntro() {
+    if (!this.intro) return;
+    this.intro = false;
+    document.body.classList.remove('in-intro');
+    clearTimeout(this.cardShow); clearTimeout(this.cardHide);
+    this.ui['intro-card']?.classList.remove('visible');
+    this.camera.skipCinematic();
+    if (!this.missionsDone.length) {
+      this.hud.say('', 'New York. Toute dette finit par se payer.', 4);
+      this.toast('Bienvenue, Sacha', 'Rejoignez le marqueur vert : Mireille a du travail pour vous.');
+    } else this.toast('Retour à Manhattan', `${this.missionsDone.length} mission(s) accomplie(s). Le marqueur vert indique la suite.`);
   }
 
   get active() { return this.playing && !this.paused && !this.modal && !this.map.isFullMapOpen; }
@@ -288,15 +368,17 @@ export class Game {
   }
 
   spawnFleet() {
-    const z = streetZ(37) + 12;
-    this.makeCar('muscle', 0x12305c, new THREE.Vector3(8.15, 0, z));
-    this.makeCar('suv', 0x163c36, new THREE.Vector3(8.15, 0, z + 18));
-    this.makeCar('taxi', 0xffbd22, new THREE.Vector3(8.15, 0, z - 18));
+    // The west curb of 5th Avenue just below 37th Street: Sacha on the sidewalk beside his cars, facing downtown, the
+    // avenue and the Empire State Building ahead of him and no sidewalk shed over the first frame
+    const z = streetZ(37) - 26;
+    this.makeCar('muscle', 0x12305c, new THREE.Vector3(-8.15, 0, z + 6));
+    this.makeCar('suv', 0x163c36, new THREE.Vector3(-8.15, 0, z + 24));
+    this.makeCar('taxi', 0xffbd22, new THREE.Vector3(-8.15, 0, z - 12));
     this.controllers.entities.car = this.fleet[0];
     const person = this.person;
-    person.position.set(11.9, this.controllers.getGroundHeight(11.9, z, 'person'), z - 0.4);
+    person.position.set(-12.2, this.controllers.getGroundHeight(-12.2, z, 'person'), z);
     person.heading = 0;
-    this.camera.footYaw = 0.18;
+    this.camera.footYaw = -0.18;
   }
 
   // Every driven body this layer simulates: the fleet, active cruisers, wrecks in the street
@@ -313,7 +395,7 @@ export class Game {
   buildInterface() {
     document.body.insertAdjacentHTML('beforeend', `
       <div id="game-vignette" aria-hidden="true"></div>
-      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · FOOTFALL</small></span></div>
+      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · CURB APPEAL</small></span></div>
       <div id="session-badge"><i></i><span>MANHATTAN</span><b id="session-mode">LIBRE</b><button id="pause-button" aria-label="Ouvrir le menu pause">Ⅱ</button></div>
       <div id="game-prompt" role="status" aria-live="polite"><kbd>F</kbd><span>Voler la voiture<small>VÉHICULE</small></span></div>
       <div id="game-toast" role="status" aria-live="polite"></div>
@@ -321,6 +403,8 @@ export class Game {
       <div id="vehicle-name"><span>VALMONT</span><strong>ÉCUME</strong><small>BERLINE / PROPULSION</small></div>
       <div id="drive-gauge"><span id="drive-gear">N</span><strong id="drive-speed">000</strong><span class="gauge-unit">KM/H</span><div><i id="drive-power"></i></div><em><i id="drive-nitro"></i></em><b id="drive-health"></b></div>
       <div id="game-keybar"></div>
+      <div id="intro-bars" aria-hidden="true"><i></i><i></i></div>
+      <div id="intro-card" aria-hidden="true"><span>MANHATTAN · NEW YORK</span><strong>Midtown</strong><em>5e Avenue</em></div>
       <div id="game-menu" class="game-menu">
         <div class="menu-top">
           <span class="edition-label">EVERY DEBT GETS PAID.</span>
@@ -340,10 +424,10 @@ export class Game {
         <div class="menu-bottom"><span>MANHATTAN, NY<span class="coordinates">40°45′ N — 73°59′ W</span></span><button id="credits-button">CRÉDITS ↗</button><span class="menu-description">MISSIONS · COURSES · PRIMES<br>COMBAT · POURSUITES · 5 ÉTOILES</span></div>
         <div id="menu-options"><span>HEURE &amp; MÉTÉO</span><button data-game-time="golden">Soleil bas</button><button data-game-time="midday">Midi</button><button data-game-time="twilight">Crépuscule</button><button data-game-time="midnight">Nuit</button><button id="weather-toggle">MÉTÉO : AUTO</button><button id="sound-toggle">SON ACTIVÉ</button><button id="quality-toggle">QUALITÉ : HAUTE</button></div>
       </div>
-      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Footfall</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap. Mobilier urbain : registres publics de la ville et de la MTA (bouches d’incendie, arrêts et abris de bus, kiosques, arceaux, bancs, bornes, parcmètres, échafaudages, terrasses).</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : Comrade1280, Daniel Zhabotinsky (Sketchfab, CC BY 4.0), Eric Chadwick / DGG (Khronos, CC BY 4.0). Modifiées pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
+      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Curb Appeal</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap. Mobilier urbain : registres publics de la ville et de la MTA (bouches d’incendie, arrêts et abris de bus, kiosques, arceaux, bancs, bornes, parcmètres, échafaudages, terrasses).</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : Comrade1280, Daniel Zhabotinsky (Sketchfab, CC BY 4.0), Eric Chadwick / DGG (Khronos, CC BY 4.0). Modifiées pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
       <button id="mobile-interact" class="touch-interact" hidden>F <span>VÉHICULE</span></button>
     `);
-    this.ui = Object.fromEntries(['game-menu', 'game-prompt', 'game-toast', 'stamina-fill', 'drive-speed', 'drive-gear', 'drive-power', 'drive-nitro', 'drive-health', 'vehicle-name', 'game-keybar', 'play-button', 'mobile-interact', 'session-mode', 'menu-progress'].map(id => [id, document.getElementById(id)]));
+    this.ui = Object.fromEntries(['game-menu', 'game-prompt', 'game-toast', 'stamina-fill', 'drive-speed', 'drive-gear', 'drive-power', 'drive-nitro', 'drive-health', 'vehicle-name', 'game-keybar', 'play-button', 'mobile-interact', 'session-mode', 'menu-progress', 'intro-card'].map(id => [id, document.getElementById(id)]));
     document.body.dataset.gameState = this.state;
     document.body.classList.add('in-menu');
     this.updateKeybar();
@@ -511,10 +595,10 @@ export class Game {
     this.audio.setEnabled(this.audio.enabled);
     this.ui['play-button'].firstChild.textContent = 'REPRENDRE LA PARTIE ';
     if (first) {
-      if (!this.missionsDone.length) {
-        this.hud.say('', 'New York. Toute dette finit par se payer.', 4);
-        this.toast('Bienvenue, Sacha', 'Rejoignez le marqueur vert : Mireille a du travail pour vous.');
-      } else this.toast('Retour à Manhattan', `${this.missionsDone.length} mission(s) accomplie(s). Le marqueur vert indique la suite.`);
+      // the long opening for a new game, and once for each new build of the game; a short dive otherwise
+      let seen = null;
+      try { seen = localStorage.getItem(INTRO_KEY); localStorage.setItem(INTRO_KEY, BUILD); } catch { /* private window */ }
+      this.playIntro((!this.missionsDone.length && this.distance < 50) || seen !== BUILD);
     }
   }
 
@@ -2011,11 +2095,14 @@ export class Game {
       this.crime('carjack', car.position.x, car.position.z);
     }
     const person = this.person;
+    // in a hurry (still pushing forward, or wanted) the whole thing goes at 0.7 x the time
+    const hurry = Boolean(this.controllers.keys.forward || this.controllers.keys.run) || this.wanted.level > 0;
     this.controllers.resetInput();
     this.controllers.entities.car = car;
     const door = doorPosition(car);
     this.state = 'entering';
     this.transition = { time: 0, car, start: person.position.clone(), startHeading: person.heading, door, entering: true };
+    this.planTransition(this.transition, hurry);
     this.ui['game-prompt'].classList.remove('visible');
     document.body.dataset.gameState = this.state;
     person.rig.aim = null;
@@ -2069,18 +2156,33 @@ export class Game {
 
   beginExit() {
     const car = this.car;
-    let exit = null;
-    for (const side of [1, -1]) {
+    let exit = null, scripted = false;
+    const blocked = (point) => this.controllers.nearColliders(point.x, point.z, 2)
+      .some(c => point.x > c.minX - 0.35 && point.x < c.maxX + 0.35 && point.z > c.minZ - 0.35 && point.z < c.maxZ + 0.35 && (c.minY ?? 0) < point.y + 1.8 && c.maxY > point.y + 0.2);
+    // The driver's door, climbed out of (vehicle-entry.js): the step clear of the door must be free
+    if (this.choreographed(car)) {
+      const c = entryStations(carFrame(car.spec, car.cabin.layout, this.person.rig.s)).clear;
+      this.carWorld(car, c.x, 0, c.z, _v);
+      const point = new THREE.Vector3(_v.x, car.position.y, _v.z);
+      if (!blocked(point)) { exit = point; scripted = true; }
+    }
+    // Otherwise a slide out of whichever side is clear
+    if (!exit) for (const side of [1, -1]) {
       const door = doorPosition(car, side);
       const point = new THREE.Vector3(door.x + Math.cos(car.heading) * 0.35 * side, car.position.y, door.z - Math.sin(car.heading) * 0.35 * side);
-      const candidates = this.controllers.nearColliders(point.x, point.z, 2);
-      if (candidates.some(c => point.x > c.minX - 0.35 && point.x < c.maxX + 0.35 && point.z > c.minZ - 0.35 && point.z < c.maxZ + 0.35 && (c.minY ?? 0) < point.y + 1.8 && c.maxY > point.y + 0.2)) continue;
+      if (blocked(point)) continue;
       exit = point; break;
     }
     if (!exit) { this.toast('Sortie bloquée', 'Déplacez la voiture pour dégager une portière.'); return; }
+    const hurry = Boolean(this.controllers.keys.forward) || this.wanted.level > 0;
     this.controllers.resetInput(); car.speed = car.vx = car.vz = car.angularVel = 0;
     this.state = 'exiting';
     this.transition = { time: 0, car, exit, entering: false };
+    if (scripted) {
+      this.planTransition(this.transition, hurry);
+      // the car's chase framing eases to the walker's while the body climbs out, then it is given back
+      this.transition.camera = { distance: car.chaseDistance, height: car.chaseHeight, offsetY: car.cameraTargetOffset.y };
+    }
     document.body.dataset.gameState = this.state;
     this.radio?.setPlaying(false);
   }
@@ -2089,6 +2191,7 @@ export class Game {
     const t = this.transition;
     if (!t) return;
     t.time += dt;
+    if (t.plan) { this.updateChoreography(t); return; }
     const p = this.person, car = t.car;
     const duration = t.entering ? 1.45 : 1.1;
     const u = t.time / duration;
@@ -2112,32 +2215,153 @@ export class Game {
       p.position.y = this.controllers.getGroundHeight(p.position.x, p.position.z, 'person', car.position.y + 0.5);
       p.heading = car.heading;
     }
-    if (u >= 1) {
-      car.doorOpen = 0; p.speed = 0; p.verticalVel = 0;
-      if (t.entering) {
-        p.inVehicle = true;
-        car.fallen = false;
-        car.ridden = true;
-        this.state = 'driving'; this.onMode(car.mode || 'car');
-        if (!car.stolen) { car.stolen = true; this.stolen++; }
-        this.announce(car);
-        this.firstEntry = false;
-        this.camera.resetOrbit();
-        this.radio?.setPlaying(true);
-        this.showRadio();
-      } else {
-        p.inVehicle = false; p.position.copy(t.exit);
-        car.ridden = false;
-        p.position.y = this.controllers.getGroundHeight(p.position.x, p.position.z, 'person', car.position.y + 0.5);
-        p.footing = p.position.y;
-        this.state = 'onFoot'; this.camera.footYaw = car.heading;
-        this.onMode('person');
-      }
-      this.transition = null;
-      this.controllers.resetInput();
-      document.body.dataset.gameState = this.state;
-      this.updateKeybar(); this.save();
+    if (u >= 1) this.endTransition(t);
+  }
+
+  // The last frame of the way in or out: at the wheel, or back on the pavement
+  endTransition(t) {
+    const p = this.person, car = t.car;
+    car.doorOpen = 0; p.speed = 0; p.verticalVel = 0;
+    if (t.entering) {
+      p.inVehicle = true;
+      car.fallen = false;
+      car.ridden = true;
+      this.state = 'driving'; this.onMode(car.mode || 'car');
+      if (!car.stolen) { car.stolen = true; this.stolen++; }
+      this.announce(car);
+      this.firstEntry = false;
+      this.camera.resetOrbit();
+      this.radio?.setPlaying(true);
+      this.showRadio();
+    } else {
+      p.inVehicle = false; p.position.copy(t.exit);
+      car.ridden = false;
+      p.position.y = this.controllers.getGroundHeight(p.position.x, p.position.z, 'person', car.position.y + 0.5);
+      p.footing = p.position.y;
+      this.state = 'onFoot'; this.camera.footYaw = car.heading;
+      this.onMode('person');
     }
+    if (t.plan) this.releaseChoreography(t);
+    this.transition = null;
+    this.controllers.resetInput();
+    document.body.dataset.gameState = this.state;
+    this.updateKeybar(); this.save();
+  }
+
+  // ---- The way in and out of a car, as a person does it (vehicle-entry.js) ----------------------------------------------
+  // Only a car with a laid-out cabin and a hinged driver's door gets the choreography; bikes, boats, aircraft and the
+  // lite street cars keep the slide
+  choreographed(car) {
+    return Boolean(car?.cabin && car.door && car.bodyPivot && !car.moto && !car.boat && !car.air && !car.bicycle);
+  }
+
+  planTransition(t, hurry) {
+    const car = t.car, p = this.person;
+    if (!this.choreographed(car)) return false;
+    const frame = carFrame(car.spec, car.cabin.layout, p.rig.s);
+    const pace = hurry ? ENTRY_FAST : 1;
+    // the ground beside the door, in the car's frame
+    const at = t.entering ? t.door : t.exit;
+    const groundY = this.controllers.getGroundHeight(at.x, at.z, 'person', car.position.y + 0.5) - car.position.y;
+    if (t.entering) {
+      this.carLocal(car, p.position.x, p.position.z, _lp);
+      t.plan = planEntry(frame, { x: _lp.x, z: _lp.z }, { groundY, pace });
+    } else t.plan = planExit(frame, { groundY, pace });
+    t.frame = frame;
+    t.sample = this.entrySample ??= createSample();
+    this.entryOverlay ??= {
+      arms: 'hands', w: 1, head: 0,
+      handL: { x: 0, y: 0, z: 0, w: 0, px: 0, py: -1, pz: 0 }, handR: { x: 0, y: 0, z: 0, w: 0, px: 0, py: -1, pz: 0 },
+      feet: [{ x: 0, y: 0, z: 0, yaw: 0, w: 0, flat: 1 }, { x: 0, y: 0, z: 0, yaw: 0, w: 0, flat: 1 }]
+    };
+    return true;
+  }
+
+  // The car's frame: +X the driver's side, +Z forward, from its position and heading
+  carLocal(car, wx, wz, out) {
+    const h = car.heading, dx = wx - car.position.x, dz = wz - car.position.z, c = Math.cos(h), s = Math.sin(h);
+    return out.set(dx * c - dz * s, 0, dx * s + dz * c);
+  }
+
+  carWorld(car, lx, ly, lz, out) {
+    const h = car.heading, c = Math.cos(h), s = Math.sin(h);
+    return out.set(car.position.x + lx * c + lz * s, car.position.y + ly, car.position.z - lx * s + lz * c);
+  }
+
+  // Every frame of the choreography (before the controllers move anything): this instant's sample, the door's angle,
+  // where the person stands (walked there by their rig, or the ground under the scripted body), the hands and feet
+  // the body is asked to reach (BodyDriver.overlay, person-motion.js)
+  updateChoreography(t) {
+    const p = this.person, car = t.car, S = t.sample, rig = p.rig, o = this.entryOverlay, pivot = car.bodyPivot;
+    (t.entering ? sampleEntry : sampleExit)(t.plan, t.time, S);
+    car.doorOpen = S.door;
+    this.carWorld(car, S.x, 0, S.z, _v);
+    p.position.x = _v.x; p.position.z = _v.z;
+    p.position.y = this.controllers.getGroundHeight(_v.x, _v.z, 'person', car.position.y + 0.5);
+    p.footing = p.position.y; p.speed = 0; p.verticalVel = 0;
+    p.heading = car.heading + S.yaw;
+    // scripted, the walker is no longer the controllers' to pose: drawChoreography sits it on its seat point
+    p.inVehicle = S.pose;
+    rig.rideFade = t.entering ? 0.15 : 0;
+    rig.overlay = o;
+    for (let i = 0; i < 2; i++) {
+      const h = S.hands[i], oh = i === 0 ? o.handL : o.handR;
+      pivot.localToWorld(_v.set(h.x, h.y, h.z)); oh.x = _v.x; oh.y = _v.y; oh.z = _v.z; oh.w = h.w;
+      _v.set(h.px, h.py, h.pz).transformDirection(pivot.matrixWorld); oh.px = _v.x; oh.py = _v.y; oh.pz = _v.z;
+      const f = S.feet[i], of = o.feet[i];
+      pivot.localToWorld(_v.set(f.x, f.y, f.z)); of.x = _v.x; of.y = _v.y; of.z = _v.z;
+      of.yaw = car.heading + f.yaw; of.w = S.pose ? f.w : 0; of.flat = f.flat;
+    }
+    o.head = -S.duck;
+    if (S.done) this.endTransition(t);
+  }
+
+  // Once the car's matrices are current (update): the walker's chase framing eased into the car's on the way in, the
+  // car's into the walker's on the way out; the scripted body sat on its seat point under the car's body, the real
+  // wheel and pedals blended in from where hanging hands and standing feet would be as it sits down
+  drawChoreography(dt) {
+    const t = this.transition, S = t.sample, car = t.car, p = this.person, rig = p.rig, s = rig.s, f = t.frame, k = S.camera;
+    if (t.entering) {
+      p.chaseDistance = lerp(4.3, car.chaseDistance / Math.cos(0.09), k);
+      p.chaseHeight = lerp(1.95, car.chaseHeight - Math.sin(0.09) * car.chaseDistance * 0.85, k);
+      p.cameraTargetOffset.y = lerp(this.footCameraY, car.cameraTargetOffset.y + 0.34, k);
+      this.camera.footYaw += angleDelta(this.camera.footYaw, car.heading) * (1 - Math.exp(-dt * 3));
+    } else if (t.camera) {
+      car.chaseDistance = lerp(4.3 * Math.cos(0.09), t.camera.distance, k);
+      car.chaseHeight = lerp(1.95 + Math.sin(0.09) * 4.3 * 0.85, t.camera.height, k);
+      car.cameraTargetOffset.y = lerp(this.footCameraY - 0.34, t.camera.offsetY, k);
+    }
+    if (!S.pose || this.camera.activePresetId === 'pov') return;
+    const root = _entryRoot, pivot = car.bodyPivot;
+    if (root.parent !== pivot) pivot.add(root);
+    root.position.set(S.pelvis.x, S.pelvis.y, S.pelvis.z);
+    root.rotation.set(0, S.bodyYaw, 0);
+    const pose = _entryPose, seated = S.seated;
+    pose.seat.set(0, 0, 0);
+    pose.wheel.set(0, REST_WHEEL.y * s, REST_WHEEL.z * s + REST_WHEEL.zFixed).lerp(this.toSeat(S, f.wheel[0], f.wheel[1], f.wheel[2], _v), seated);
+    restPedals(s, pose.pedals).lerp(this.toSeat(S, f.pedals[0], f.pedals[1], f.pedals[2], _v), seated);
+    pose.radius = lerp(REST_WHEEL.radius * s, f.radius, seated);
+    pose.tilt = f.tilt;
+    pose.turn = clamp(car.cabin.turn, -1.15, 1.15) * seated;
+    pose.recline = S.recline; pose.look = S.look;
+    rig.drive(root, pose);
+    this.hero.setWeapon(null);
+    this.hero.update(true, 0, dt);
+  }
+
+  // A point of the car's frame in the seat point's frame (at S.pelvis, turned by S.bodyYaw)
+  toSeat(S, x, y, z, out) {
+    const dx = x - S.pelvis.x, dy = y - S.pelvis.y, dz = z - S.pelvis.z, c = Math.cos(S.bodyYaw), sn = Math.sin(S.bodyYaw);
+    return out.set(dx * c - dz * sn, dy, dx * sn + dz * c);
+  }
+
+  // The rig is the controllers' again, the car's framing its own
+  releaseChoreography(t) {
+    const rig = this.person.rig, car = t.car;
+    if (rig.overlay === this.entryOverlay) rig.overlay = null;
+    rig.rideFade = 0;
+    _entryRoot.removeFromParent();
+    if (t.camera) { car.chaseDistance = t.camera.distance; car.chaseHeight = t.camera.height; car.cameraTargetOffset.y = t.camera.offsetY; }
   }
 
   announce(car) {
@@ -2153,6 +2377,13 @@ export class Game {
     this.camera.lookDX = this.camera.lookDY = 0;
     this.camera.flightView = null;
     if (!this.active) { this.controllers.resetInput(); this.lookDX = this.lookDY = 0; return; }
+    if (this.intro) {
+      // the opening flight: no control yet; any key or click cuts it short
+      if (this.controllers._pressedCodes?.size || this.fireHeld || this.aimHeld) this.endIntro();
+      this.controllers.resetInput();
+      this.fireHeld = this.firePressed = this.aimHeld = false;
+      this.lookDX = this.lookDY = 0;
+    }
     // Slow motion breathes in and out on real time, not on its own
     if (this.slowMo > 0) {
       this.slowMo = Math.max(0, this.slowMo - dt / Math.max(this.timeScale, 0.05));
@@ -2298,8 +2529,13 @@ export class Game {
       if (vehicle.moto) poseMotorbike(vehicle, dt, vehicle === car && this.state === 'driving' && this.controllers.keys.sprint);
       vehicle.mesh.updateMatrixWorld();
     }
+    // Getting in or out of a car the scripted way (vehicle-entry.js): the body on its seat point, the camera eased over
+    const choreography = this.transition?.plan ? this.transition : null;
+    if (choreography) this.drawChoreography(dt);
+    else if (person.rig.overlay && person.rig.overlay === this.entryOverlay) this.releaseChoreography({ car }); // cut short (death, arrest)
     // On two wheels the protagonist stays in view, posed on the seat
-    if (person.inVehicle && (car.moto || car.boat)) {
+    if (choreography) { /* posed above */ }
+    else if (person.inVehicle && (car.moto || car.boat)) {
       person.rig.ride(car.chassisPivot, 1.1, { seat: car.seat, bars: car.bars, gripHalf: 0.33, bracket: car.pegs, crankLength: 0.02 });
       this.hero.setWeapon(null);
       this.hero.update(true, 0, dt);
@@ -2316,7 +2552,7 @@ export class Game {
     // The glass of the car the player drives clears to show them; every other car keeps its tint
     for (const vehicle of this.allCars) {
       const clear = vehicle.glassMaterial?.userData.clear;
-      if (clear) clear.value = vehicle === car && person.inVehicle && this.camera.activePresetId !== 'pov' ? 1 : 0;
+      if (clear) clear.value = vehicle === car && person.inVehicle && this.camera.activePresetId !== 'pov' ? (choreography ? choreography.sample.glass : 1) : 0;
     }
     this.vertical.draw(dt);
     this.skyRings.update();

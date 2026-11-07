@@ -132,6 +132,14 @@ seule et relevé partiel conservé après interruption. L'outil et ses contrôle
 faux positifs et le coût par correction utile sur des séances
 longues, puis isoler davantage les écritures de l'atelier si plusieurs auteurs travaillent en même temps.
 
+## 0.9.7 « Curb Appeal » — l'image
+
+Un jeu se juge dans sa première minute, et la première minute, c'est l'image. La règle de cette version : la lumière
+d'abord (le rapport soleil/ciel, l'exposition qui s'adapte à l'ombre, l'occlusion ambiante, les rayons), puis ce que la
+caméra montre en premier (le menu depuis le ciel, le vol d'ouverture, le point de départ), puis ce qu'on regarde tout le
+temps (le héros, l'entrée en voiture, les accessoires de chantier). Chaque choix se vérifie en caméra de jeu, de jour, sur
+des captures avant/après.
+
 ## 0.9.6 « Footfall » — la vie
 
 Une ville se juge à ce qui s'y passe quand on ne fait rien. La vie a trois couches, et la 0.9.6 les construit sur les deux
@@ -251,5 +259,6 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.3** | **Main Street** | Rez-de-chaussée refaits : 25 000 boutiques réelles en relief, enseignes uniques, vrais intérieurs, la rue de nuit |
 | **0.9.4** | **Momentum** | Conduite au clavier refaite (volant progressif, stabilité, frein à main), voitures solides, reflets de la rue, conducteur et habitacle, vue intérieure ; immeubles Bricks & Mortar (types réels, gradins, corniches et fenêtres en relief) |
 | **0.9.5** | **Due Diligence** | Personnages lisibles de nuit ; Architecte 2.2 local : prospection continue, trajets repris, statuts réconciliés, suivi des sessions et voix coupée par défaut |
+| **0.9.7** | **Curb Appeal** | L'image : lumière refaite (soleil/ciel, œil adaptatif, occlusion ambiante, rayons du soleil, étalonnage, affûtage), menu et vol d'ouverture, nouveau Sacha, entrée en voiture jouée, chantiers de rue |
 | **0.9.6** | **Footfall** | La vie : 108 000 voitures garées sur des chaussées redécoupées, le trottoir new-yorkais d'après les registres et les règles de la rue, la foule par quartier et heure avec ses postes et ses portes, bus, taxis et livreurs, pigeons, mouettes et rats, nappe sonore, événements ambiants |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |

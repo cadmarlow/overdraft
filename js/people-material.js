@@ -13,7 +13,7 @@ function createPersonMaterials(person) {
     m.side = hair ? THREE.DoubleSide : THREE.FrontSide;
     if (hair) m.alphaTest = 0.45;
     m.roughnessNode = hair ? float(0.92) : specular ? mix(float(0.92), float(name === 'head' ? 0.62 : 0.42), texture(specular, uv()).r) : float(0.8);
-    return lightAsPerson(m);
+    return lightAsPerson(m, { skin: name === 'head' });
   });
 }
 

@@ -3,7 +3,11 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.6 — Footfall** : la ville prend vie. 108 000 voitures garées le long de bordures redécoupées (voie de
+Version **0.9.7 — Curb Appeal** : l'image. La lumière refaite (soleil contre ciel, œil qui s'ouvre à l'ombre, occlusion
+ambiante, rayons du soleil entre les tours, étalonnage photographique et affûtage), un menu et un vol d'ouverture depuis le
+ciel jusqu'au dos de Sacha, un nouveau Sacha, l'entrée en voiture jouée par le corps, et les chantiers de rue refaits.
+
+La **0.9.6 — Footfall** : la ville prend vie. 108 000 voitures garées le long de bordures redécoupées (voie de
 stationnement, piste cyclable protégée, stationnement alterné), toutes volables et poussables ; le trottoir new-yorkais
 d'après les registres de la ville (bouches d'incendie, arrêts et abris de bus, kiosques, arceaux et vélos, bancs,
 bornes, parcmètres, 2 600 échafaudages, terrasses sur chaussée) et d'après les règles de la rue (panneaux, paniers,

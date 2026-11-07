@@ -90,8 +90,80 @@ class CameraSystem {
     this.speedFov = 0;
     this.lookBack = 0;
     this.rumble = 0;
+    // A scripted flight (playCinematic): the camera rides a spline, then the follow camera picks up where it lands
+    this.cinematic = null;
+    this._cinePos = new THREE.Vector3();
+    this._cineLook = new THREE.Vector3();
 
     this.bindPointerControls();
+  }
+
+  // ---- Cinematics -----------------------------------------------------------------------------------------------------
+  /**
+   * The title menu's view: a slow aerial pass from `a` to `b` (and back, over `period` seconds), looking at `look`;
+   * the 'drone' preset flies it while set. Cleared by the first cinematic (gameplay.js playIntro).
+   */
+  setMenuView(a, b, look, period = 70) {
+    this.menuDolly = { ax: a.x, ay: a.y, az: a.z, bx: b.x, by: b.y, bz: b.z, lx: look.x, ly: look.y, lz: look.z, period, t0: 0 };
+    this.setCameraPreset('drone', true);
+  }
+  /**
+   * Flies the camera through `keys` ([{ pos: Vector3, look: Vector3, fov? }], at least two) over `duration` seconds,
+   * eased at both ends, along a Catmull-Rom spline through the positions (and the look-at points). When it lands, the
+   * follow camera glides on from there. `onDone` is called once, at the end or when skip() cuts it short.
+   */
+  playCinematic(keys, duration, onDone = null) {
+    if (!keys || keys.length < 2) return;
+    this.cinematic = { keys, duration: Math.max(0.1, duration), t: 0, onDone };
+    this.initialized = true;
+  }
+
+  // Cuts a cinematic short: the camera jumps to its last key and the follow camera takes over
+  skipCinematic() {
+    const c = this.cinematic;
+    if (!c) return;
+    c.t = c.duration;
+    this.updateCinematic(0);
+  }
+
+  // Catmull-Rom through the keys' `field` at u in [0, 1] (the ends are clamped)
+  _spline(keys, field, u, out) {
+    const n = keys.length - 1;
+    if (u >= 1) return out.copy(keys[n][field]);
+    const s = Math.min(n - 1e-6, Math.max(0, u * n));
+    const i = Math.floor(s), t = s - i;
+    const P = (k) => keys[Math.min(n, Math.max(0, k))][field];
+    const p0 = P(i - 1), p1 = P(i), p2 = P(i + 1), p3 = P(i + 2);
+    const t2 = t * t, t3 = t2 * t;
+    const w0 = -0.5 * t3 + t2 - 0.5 * t, w1 = 1.5 * t3 - 2.5 * t2 + 1, w2 = -1.5 * t3 + 2 * t2 + 0.5 * t, w3 = 0.5 * t3 - 0.5 * t2;
+    return out.set(
+      p0.x * w0 + p1.x * w1 + p2.x * w2 + p3.x * w3,
+      p0.y * w0 + p1.y * w1 + p2.y * w2 + p3.y * w3,
+      p0.z * w0 + p1.z * w1 + p2.z * w2 + p3.z * w3
+    );
+  }
+
+  updateCinematic(dt) {
+    const c = this.cinematic;
+    c.t = Math.min(c.duration, c.t + dt);
+    const x = c.t / c.duration;
+    // slow out of the first key, a long glide, a soft landing
+    const u = x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+    const pos = this._spline(c.keys, 'pos', u, this._cinePos);
+    const look = this._spline(c.keys, 'look', u, this._cineLook);
+    const first = c.keys[0], last = c.keys[c.keys.length - 1];
+    const fov = (first.fov ?? this.camera.fov) * (1 - u) + (last.fov ?? this.camera.fov) * u;
+    this.camera.position.copy(pos);
+    this.camera.lookAt(look);
+    if (Math.abs(this.camera.fov - fov) > 0.05) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
+    this.currentPos.copy(pos);
+    this.currentLookAt.copy(look);
+    this.followEntity = null; // the chase framing picks up from here
+    this.aimBlend = 0;
+    if (c.t >= c.duration) {
+      this.cinematic = null;
+      c.onDone?.();
+    }
   }
 
   bindPointerControls() {
@@ -231,6 +303,7 @@ class CameraSystem {
   update(dt, elapsed) {
     // Someone else's body when the Architect holds the camera (architect.js), else the player's
     const entity = this.spectate?.() || this.controllerManager.getActiveEntity();
+    if (this.cinematic) { this.updateCinematic(dt); return; }
     if (this.flightView && (this.activePresetId === 'chase' || this.activePresetId === 'action')) { this.updateFlight(dt, entity); return; }
     this.flying = false;
     const desiredPos = this._desiredPos;
@@ -394,6 +467,14 @@ class CameraSystem {
       }
 
       case 'drone': {
+        const d = this.menuDolly;
+        if (d) {
+          // The title menu: a slow pass in the air down the avenue towards the landmark the player will see first
+          const u = 0.5 - 0.5 * Math.cos((elapsed - d.t0) * Math.PI / d.period);
+          desiredPos.set(d.ax + (d.bx - d.ax) * u, d.ay + (d.by - d.ay) * u, d.az + (d.bz - d.az) * u);
+          desiredLook.set(d.lx, d.ly, d.lz);
+          break;
+        }
         const angle = elapsed * 0.07 + 0.65;
         const radius = 720.0 + Math.sin(elapsed * 0.23) * 140.0;
         const alt = 330.0 + Math.cos(elapsed * 0.19) * 90.0;

@@ -1,5 +1,71 @@
 # Changelog
 
+## 0.9.7 — Curb Appeal — 7 novembre 2026
+
+L'image. Le jeu avait une ville réelle, des voitures réelles, des gens réels, et une image de 2004 : un éclairage plat
+où l'ombre valait le soleil, rien ne touchait le sol, un héros maladroit qui glissait dans sa voiture, un départ sous un
+échafaudage. Cette version refait la lumière de bout en bout, la première minute, le héros, l'entrée en voiture et les
+accessoires de chantier qu'on voyait en premier.
+
+### La lumière
+- **Le soleil contre le ciel** (`js/lighting.js`) : le soleil monte (7,6 à 8,2 au lieu de 5,8 à 6,4), le ciel et le rebond
+  redescendent (1,4 à 1,5 au lieu de 2,3 à 2,5). Une rue à l'ombre de ses immeubles est à l'ombre, une façade au soleil
+  brûle. Les ombres portées ont un bord filtré plus large.
+- **L'œil** (`js/atmosphere.js`, `adapt()`) : trois sondes (la caméra, le joueur, la rue devant) suivent le soleil à travers
+  les colliders des immeubles toutes les quatre images ; à l'ombre, l'exposition s'ouvre jusqu'à ×1,6 en une seconde
+  (et se referme en une demi-seconde au soleil), comme au cinéma : on expose pour l'ombre et le bout de l'avenue éclate.
+  Rien la nuit, peu sous les nuages.
+- **Occlusion ambiante** (`GTAONode` de three.js r187, en demi-résolution, débruitée en demi-résolution) sur les qualités
+  HAUTE et ÉQUILIBRÉE : le dessous des voitures, le pied des murs, l'entre-deux des voitures garées, les corps posés sur
+  le trottoir. L'image cesse de flotter.
+- **Rayons du soleil** (`js/post-processing.js`) : le ciel autour du soleil, avec les immeubles découpés dedans par la
+  profondeur, étiré vers le soleil au quart de la résolution. En fin de journée la lumière passe entre les tours en
+  faisceaux ; rien quand le soleil est dans le dos, sous l'horizon ou derrière les nuages.
+- **L'étalonnage** : contraste plus ferme autour du gris moyen, ombres plus froides, hautes lumières plus chaudes, vibrance,
+  vignettage ; une frange chromatique latérale aux coins ; un affûtage borné au voisinage (sans halo) après l'étalonnage,
+  qui rend ce que l'échelle de rendu dynamique et le multi-échantillonnage adoucissent.
+
+### La première minute
+- **Le menu** regarde la 5e Avenue depuis le ciel, dans une lente passe au-dessus du joueur vers l'Empire State Building.
+- **Le vol d'ouverture** (`cameras.js` `playCinematic`, `gameplay.js` `playIntro`) : au clic, la caméra plonge du menu
+  jusqu'au dos de Sacha en neuf secondes et demie, le long d'une spline par le dessus de l'avenue, bandes noires et carton
+  « Midtown · 5e Avenue · heure ». Une touche ou un clic l'écourte. Une fois par nouvelle partie et une fois par nouvelle
+  version ; sinon une plongée de quatre secondes à la reprise.
+- **Le départ** : le trottoir ouest de la 5e Avenue sous la 37e Rue, face au centre-ville, ses trois voitures le long de
+  la bordure ; plus d'échafaudage ni de toilette de chantier dans la première image.
+
+### Le héros
+- **Sacha a changé de visage** : avatar Rocketbox `Male_Adult_07` (blazer gris sur henley, jean, cheveux courts), importé
+  par `tools/people` en 2048 px, à la place du sweat à capuche.
+- **La peau** (`js/person-lighting.js`) : la lumière directe s'enroule au-delà du terminateur et revient rougie, comme
+  le sang sous une peau fine ; un visage au soleil a un bord doux là où la pierre en a un dur.
+
+### Les voitures
+- Toutes les voitures, trafic et stationnement compris, portent la peinture physique de la voiture du joueur : couleur
+  sous vernis (clearcoat), métal réduit. Les reflets de la rue font le reste.
+
+### L'entrée en voiture (`js/vehicle-entry.js`)
+- Le héros ne glisse plus dans sa voiture : il marche jusqu'à la portière conducteur, la main droite va à la poignée, la
+  portière s'ouvre jusqu'à sa sangle, un pas dans l'ouverture, le corps descend sur le siège en baissant la tête sous le
+  toit, une jambe puis l'autre, la main gauche tire la portière, les mains reviennent au volant ; le miroir en sortant.
+  Tout est une fonction pure du temps dans le repère de la voiture (testée : continuité des cibles, durées, portière
+  fermée au début et à la fin), que `gameplay.js` pose sur le corps par les nouvelles cibles de mains et de pieds de
+  `person-motion.js` (`overlay.arms = 'hands'`, `overlay.feet`, fondu `rideFade`). Plus vite quand on est pressé ou
+  recherché ; motos, vélos, bateaux et aéronefs gardent leur embarquement.
+
+### Les chantiers de rue (`js/sidewalk-kit.js`, `js/sidewalk-furniture.js`)
+- **Un bug de 0.9.6 corrigé** : les planches des échafaudages de trottoir (platelage, garde-corps) et les bennes étaient
+  posées à 90° de travers, en dalles vertes de 36 m qui traversaient la 5e Avenue à 4 m de haut et en bennes de 6 m en
+  travers des voies. Tout est désormais le long des façades, et la toilette tourne sa porte vers le trottoir.
+- **L'atlas du mobilier passe de 1024 à 2048 px** (8 × 8 tuiles) avec des tuiles peintes, déterministes : contreplaqué
+  « hunter green » usé (feuilles de 2,44 × 1,22 m, clous, joints, une feuille sur six plus claire, tranches en bois brut),
+  tôle de conteneur nervurée en trois couleurs avec coulures de rouille, bandeaux « GRÉVILLE CARTING » et « BRISANT
+  CONTAINER » (numéros fictifs), béton de barrière Jersey, cône à deux colliers réfléchissants, plastique nervuré de
+  toilette de chantier en deux teintes, gravats.
+- **Géométries** : benne à panneaux, rails, galets, portes à charnières et barres de verrouillage, cadre à crochet ;
+  toilette à socle, corps nervuré, toit translucide, évent ; Jersey au vrai profil ; terrasse de rue en bois et planches.
+  Deux matériaux de plus, créés au chargement ; aucun coût mesurable sur le nombre d'images par seconde.
+
 ## 0.9.6 — Footfall — 7 novembre 2026
 
 La ville prend vie. Avant, les trottoirs étaient nus (six objets tirés au hasard sur les avenues seulement), aucune

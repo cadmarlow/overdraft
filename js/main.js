@@ -1,6 +1,8 @@
 import * as THREE from 'three/webgpu';
-import { pass, mrt, output, normalView, positionView, metalness, roughness, vec2, vec3, smoothstep } from 'three/tsl';
+import { pass, mrt, output, normalView, positionView, metalness, roughness, vec2, vec3, smoothstep, convertToTexture, rtt } from 'three/tsl';
 import { ssr } from 'three/addons/tsl/display/SSRNode.js';
+import GTAONode from 'three/addons/tsl/display/GTAONode.js';
+import DenoiseNode from 'three/addons/tsl/display/DenoiseNode.js';
 import { createPostProcessing } from './post-processing.js';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
 import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js';
@@ -336,7 +338,32 @@ async function initApp() {
       for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m?.mrtNode) m.mrtNode = null;
     });
   }
-  const colorGrade = createPostProcessing(renderer, scenePassColor, reflections, scenePassColor);
+  // Ambient occlusion: horizon-based (GTAO) at half resolution over the depth (and the normals when the reflections'
+  // MRT carries them), then a depth-aware blur so it never grains. What it buys is the ground under every car and
+  // body, the foot of every wall, the dark between parked cars: the image stops floating.
+  // ?ao=0 and ?fx=0 (no sun shafts, fringe or sharpening) leave the effects out, to measure them or to spare a weak GPU
+  const urlParams = new URLSearchParams(location.search);
+  let aoNode = null, aoPass = null;
+  if (renderer.backend.isWebGPUBackend && quality.ao && urlParams.get('ao') !== '0') {
+    const depth = scenePass.getTextureNode('depth');
+    aoPass = new GTAONode(depth, sceneMRT ? scenePass.getTextureNode('normal') : null, cameraSystem.camera);
+    aoPass.resolutionScale = 0.5;
+    aoPass.radius.value = 1.3;
+    aoPass.thickness.value = 1.6;
+    aoPass.distanceExponent.value = 1.0;
+    aoPass.distanceFallOff.value = 0.6;
+    aoPass.scale.value = 1.15;
+    aoPass.samples.value = quality.aoSamples || 8;
+    const smoothed = new DenoiseNode(convertToTexture(aoPass.getTextureNode()), depth, null, cameraSystem.camera);
+    smoothed.radius.value = 4;
+    smoothed.lumaPhi.value = 8;
+    smoothed.depthPhi.value = 4;
+    smoothed.normalPhi.value = 4;
+    // the blur runs at half resolution too (its taps are the dear part), and the final pass samples it bilinearly
+    aoNode = rtt(smoothed, null, null, { resolutionScale: 0.5 });
+  }
+  const lensFx = urlParams.get('fx') !== '0';
+  const colorGrade = createPostProcessing(renderer, scenePassColor, reflections, lensFx ? scenePassColor : null, aoNode, lensFx && renderer.backend.isWebGPUBackend ? scenePass.getTextureNode('depth') : null);
   const renderPipeline = new THREE.RenderPipeline(renderer, colorGrade.outputNode);
 
   // 6. Wire UI Controls (Strictly using safe DOM APIs: textContent, classList, addEventListener)
@@ -808,7 +835,7 @@ async function initApp() {
     camera.updateMatrixWorld();
   };
   if (new URLSearchParams(location.search).has('qa')) {
-    window.__render = { renderer, scene, lightingSystem, cameraSystem, pacer, THREE, highwayTraffic, streetDetails, storefronts, facadeKit, cityBlocks, parking, furniture, streetLife, birds,
+    window.__render = { renderer, scene, lightingSystem, cameraSystem, pacer, THREE, highwayTraffic, streetDetails, storefronts, facadeKit, cityBlocks, parking, furniture, streetLife, birds, colorGrade, aoPass, aoNode,
       // Inspection: the camera goes where it is told, whatever the game does
       view(x, y, z, tx, ty, tz, fov) {
         if (x === undefined) {

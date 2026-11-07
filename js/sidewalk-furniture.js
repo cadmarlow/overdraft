@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { blockAt, districtAt, nearestRoads } from './city-config.js';
 import { polygonContains } from './building-collision.js';
-import { createKitMaterials, createKitParts, TILES } from './sidewalk-kit.js';
+import { createKitMaterials, createKitParts, TILES, SITE } from './sidewalk-kit.js';
 import { zoneOf, ZONE, slotHash as hash } from './parking-plan.js';
 import { SHOP_TYPES } from './storefront-types.js';
 
@@ -134,7 +134,8 @@ function createSidewalkFurniture(scene, o) {
   };
   const counts = {};
   // Places part `name` at (x, y, z) turned by ry about y, scaled (sx, sy, sz), in `colour` (hex) or the part's own;
-  // `attr` fills the part's per-instance attribute (signs: their plates). Returns { cell, name, index }.
+  // `attr` fills the part's per-instance attribute (signs: their plates; site parts: their colours), or the scale does
+  // for parts that ask for it (shed boards). Returns { cell, name, index }.
   function place(name, x, y, z, ry = 0, colour = null, sx = 1, sy = 1, sz = 1, attr = null) {
     const part = parts[name];
     const cell = cellOf(x, z, !!part.far);
@@ -147,7 +148,7 @@ function createSidewalkFurniture(scene, o) {
     list.m.push(..._m.elements);
     const c = new THREE.Color(colour ?? part.colour ?? 0xffffff);
     list.c.push(c.r, c.g, c.b);
-    if (part.attr) list.a.push(...(attr || new Array(part.attr.size).fill(0)));
+    if (part.attr) list.a.push(...(attr || (part.attr.scale ? [sx, sy, sz] : new Array(part.attr.size).fill(0))));
     counts[name] = (counts[name] || 0) + 1;
     return { cell, name, index: list.m.length / 16 - 1 };
   }
@@ -507,15 +508,17 @@ function createSidewalkFurniture(scene, o) {
     const bays = Math.max(1, Math.round(run / 2.4)), bay = run / bays;
     const mid = inner + depth / 2;
     const cx = w.ax + w.ux * (start + run / 2) + w.nx * mid, cz = w.az + w.uz * (start + run / 2) + w.nz * mid;
-    const ry = Math.atan2(w.ux, w.uz); // local x along the wall (unit cubes), local z out from the wall
-    // the kit bay's posts stand at z = ±1.7 across and its brace reaches x = +2.4 along: scaled to this shed's
-    // depth and bay; placed with the posts across the sidewalk, so turned a quarter from `ry`
+    const ry = Math.atan2(w.ux, w.uz);
+    // a part turned by `along` has its local x along the wall and its local z across the sidewalk: the kit bay's posts
+    // stand at z = ±1.7 across and its brace reaches x = +2.4 along, scaled to this shed's depth and bay; the boards
+    // (unit cubes) run along the wall and span the sidewalk; the container lies along the curb
+    const along = ry + Math.PI / 2, out = Math.atan2(w.nx, w.nz);
     for (let i = 0; i < bays; i++) {
       const t = start + i * bay;
-      place('shedBay', w.ax + w.ux * t + w.nx * mid, 0.22, w.az + w.uz * t + w.nz * mid, ry + Math.PI / 2, 0x3a3d3a, bay / 2.4, 1, depth / 3.4);
+      place('shedBay', w.ax + w.ux * t + w.nx * mid, 0.22, w.az + w.uz * t + w.nz * mid, along, 0x3a3d3a, bay / 2.4, 1, depth / 3.4);
     }
     // the last pair of posts (no brace beyond it)
-    place('shedBay', w.ax + w.ux * end + w.nx * mid, 0.22, w.az + w.uz * end + w.nz * mid, ry + Math.PI / 2, 0x3a3d3a, 0.01, 1, depth / 3.4);
+    place('shedBay', w.ax + w.ux * end + w.nx * mid, 0.22, w.az + w.uz * end + w.nz * mid, along, 0x3a3d3a, 0.01, 1, depth / 3.4);
     for (let i = 0; i <= bays; i++) {
       const t = start + i * bay;
       for (const d of [inner, outer]) {
@@ -524,12 +527,12 @@ function createSidewalkFurniture(scene, o) {
         solid(round(q.x, q.z, 0.07, 3.75, 'pole'));
       }
     }
-    place('shedBoard', cx, 0.22 + 3.75, cz, ry, null, run + 0.6, 0.16, depth + 0.5);
+    place('shedBoard', cx, 0.22 + 3.75, cz, along, null, run + 0.6, 0.16, depth + 0.5);
     const ox = w.ax + w.ux * (start + run / 2) + w.nx * (outer + 0.2), oz = w.az + w.uz * (start + run / 2) + w.nz * (outer + 0.2);
-    place('shedBoard', ox, 0.22 + 3.91, oz, ry, null, run + 0.6, 1.0, 0.05);
+    place('shedBoard', ox, 0.22 + 3.91, oz, along, null, run + 0.6, 1.0, 0.05);
     for (const t of [start - 0.3, end + 0.3]) {
       const q = { x: w.ax + w.ux * t + w.nx * mid, z: w.az + w.uz * t + w.nz * mid };
-      place('shedBoard', q.x, 0.22 + 3.91, q.z, ry, null, 0.05, 1.0, depth + 0.5);
+      place('shedBoard', q.x, 0.22 + 3.91, q.z, along, null, 0.05, 1.0, depth + 0.5);
     }
     for (let t = start + 1.2; t < end; t += 2.4) {
       place('shedLight', w.ax + w.ux * t + w.nx * mid, 0.22 + 3.5, w.az + w.uz * t + w.nz * mid, 0, 0xfff0c8);
@@ -543,8 +546,9 @@ function createSidewalkFurniture(scene, o) {
       const t = start + run * (0.3 + h(31 + wi) * 0.4), d = w.width + 1.3;
       const q = { x: w.ax + w.ux * t + w.nx * d, z: w.az + w.uz * t + w.nz * d };
       if (!blockAt(q.x, q.z) && !blockAt(q.x + w.nx * 1.0, q.z + w.nz * 1.0)) {
-        place('dumpster', q.x, 0, q.z, ry);
-        solid(boxCollider(q.x, q.z, 6.0, 2.2, ry, 1.6, 'dumpster'));
+        const steel = SITE.dumpster[Math.floor(h(35 + wi) * SITE.dumpster.length)], band = SITE.band[h(36 + wi) < 0.5 ? 0 : 1];
+        place('dumpster', q.x, 0, q.z, along, null, 1, 1, 1, [...steel, ...band]);
+        solid(boxCollider(q.x, q.z, 6.0, 2.2, along, 1.6, 'dumpster'));
         addFootprint(q.x, q.z, Math.abs(w.ux) * 6.2 + Math.abs(w.nx) * 2.4, Math.abs(w.uz) * 6.2 + Math.abs(w.nz) * 2.4, false);
         roadBlocks.push({ x: q.x, z: q.z, r: 4.2 });
         for (const [dt, dd] of [[-3.6, 0.2], [3.6, 0.2], [-3.9, 1.3], [3.9, 1.3]]) {
@@ -557,7 +561,7 @@ function createSidewalkFurniture(scene, o) {
     if (h(33 + wi) < 0.22 && run > 10) {
       const q = { x: w.ax + w.ux * (end - 1.2) + w.nx * (inner + 0.75), z: w.az + w.uz * (end - 1.2) + w.nz * (inner + 0.75) };
       if (!insideBuilding(q.x, q.z)) {
-        place('portaloo', q.x, 0.22, q.z, ry + Math.PI / 2);
+        place('portaloo', q.x, 0.22, q.z, out, null, 1, 1, 1, [...SITE.portaloo[h(37 + wi) < 0.5 ? 0 : 1], 0, 0]); // the door onto the sidewalk
         solid(boxCollider(q.x, q.z, 1.1, 1.1, ry, 2.3, 'portaloo'));
         addFootprint(q.x, q.z, 1.2, 1.2, true);
       }
