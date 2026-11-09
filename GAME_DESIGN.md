@@ -132,6 +132,28 @@ seule et relevé partiel conservé après interruption. L'outil et ses contrôle
 faux positifs et le coût par correction utile sur des séances
 longues, puis isoler davantage les écritures de l'atelier si plusieurs auteurs travaillent en même temps.
 
+## 0.9.11 « Short Squeeze » — les armes sur le corps
+
+Référence : le maniement d'armes de Red Dead Redemption 2 et de GTA V. Ce qui fait croire à une arme dans ces jeux
+tient moins au tir qu'à tout ce qui l'entoure : où elle est quand on ne s'en sert pas, comment elle arrive dans la
+main, comment on la tient selon ce qui se passe.
+
+- **L'arme existe quand on ne tire pas.** Tout ce que Sacha possède est sur lui, à une place fixe : étui de cuisse,
+  bandoulière dans le dos, veste. La caméra de jeu étant derrière lui, c'est ce qu'on voit le plus : son dos dit ce qu'il
+  peut faire. Les armes longues passent par-dessus l'épaule gauche pour laisser l'épaule droite à la caméra de visée.
+- **Une arme se prend.** Dégainer est un geste, court (un tiers de seconde au pistolet, une demi-seconde pour une arme
+  longue), pendant lequel on ne tire pas. Le clic donné pendant le geste n'est pas perdu.
+- **La tenue raconte la situation.** Une main, deux mains, en joue : le joueur lit le danger sur son personnage avant de
+  le lire sur l'écran. Le réticule ne s'affiche qu'en visée ou en tirant.
+- **Le pavé tactile est une manette, pas une souris.** La visée assistée fait le premier geste (lever l'arme = accrocher
+  l'ennemi le plus proche de l'axe), le joueur fait le reste. Relever l'arme change de cible. Elle ne résiste jamais à la
+  main.
+- **Choisir une arme ne coupe pas l'action.** La roue ralentit le monde au lieu de l'arrêter.
+
+Les postures sont des poses calculées (cinématique inverse sur les points de prise de chaque modèle), pas de la
+capture de mouvements : la bibliothèque de captures du jeu n'a aucun mouvement d'arme. Suite logique : se mettre à
+couvert, s'accroupir, tirer à l'aveugle, réactions des ennemis blessés, sons de tir enregistrés.
+
 ## 0.9.10 « Price Action » — tir et conduite
 
 ### Tir à la troisième personne
@@ -327,4 +349,5 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.8** | **Revaluation** | Lumière locale calculée sur les volumes réels, reflets des immeubles hors écran sur les voitures détaillées, encadrements et bandeaux en relief, pierre et halls des monuments, mobilier et stationnement optimisés, ombres cadencées et récupération de netteté |
 | **0.9.9** | **Break Even** | Correctif : ancrage des animations au sol, appuis du héros aux bordures, foulée selon la taille, reflets coûteux réservés à HAUTE et résolution adaptative prudente |
 | **0.9.10** | **Price Action** | Tir TPS : cadrage et changement d’épaule, arsenal original articulé, précision et recul, rechargement, douilles et impacts. Refonte des quinze voitures : pneus, direction, transmission, freins, cockpit, son, caméra et garage |
+| **0.9.11** | **Short Squeeze** | Les armes sur le corps : quatre vrais modèles, étui de cuisse, bandoulières, dégainer et rengainer joués, trois tenues, cadrage de visée refait, visée assistée, roue des armes au ralenti |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |

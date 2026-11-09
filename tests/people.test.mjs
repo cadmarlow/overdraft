@@ -63,10 +63,6 @@ for (const name of CROWD) {
   });
 }
 
-test('every gun comes with its maps', () => {
-  for (const gun of ['pistol', 'smg', 'shotgun', 'rifle']) for (const f of [`gun-${gun}.bin`, `gun-${gun}_c.webp`, `gun-${gun}_n.webp`, `gun-${gun}_s.webp`]) assert.ok(existsSync(new URL(f, dir)), f);
-});
-
 test('motion capture: gaits rise in speed, loop on their first frame and rotations stay unit length', () => {
   const { header, buffer, start } = sections('mocap.bin');
   const clips = new Map(header.clips.map((c) => [c.name, c]));

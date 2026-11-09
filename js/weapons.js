@@ -195,7 +195,8 @@ function rayBox(ox, oy, oz, dx, dy, dz, cx, cz, yaw, hw, hl, y0, y1, maxDist) {
  */
 function castShot(world, ox, oy, oz, dx, dy, dz, maxDist, ignore = null) {
   const { controllers, traffic, cars = [], actors = [], player = null } = world;
-  const hit = { t: maxDist, x: 0, y: 0, z: 0, nx: 0, ny: 1, nz: 0, kind: 'none', target: null };
+  // dx, dy, dz: the direction the shot travelled, for whatever it does to what it strikes (effects lean with it)
+  const hit = { t: maxDist, x: 0, y: 0, z: 0, nx: 0, ny: 1, nz: 0, dx, dy, dz, kind: 'none', target: null };
   const normal = {};
   // Parked cars have movement colliders as well as damageable hitboxes. Test them once, as vehicles.
   const tb = raycastBuildings(controllers, ox, oy, oz, dx, dy, dz, maxDist, normal, !world.parking);

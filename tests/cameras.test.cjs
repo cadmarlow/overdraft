@@ -315,15 +315,21 @@ test('combat framing brings the weapon-side shoulder into view and aiming closes
   const { camera } = footHarness();
   camera.combatMode = true;
   settle(camera);
-  assert.ok(camera.camera.position.x < -0.45);
-  assert.ok(camera.camera.position.z > -3.1 && camera.camera.position.z < -3);
+  assert.ok(camera.camera.position.x < -0.43);
+  assert.ok(camera.camera.position.z > -3.25 && camera.camera.position.z < -3.15);
   const readyDistance = -camera.camera.position.z;
   camera.aimMode = true;
   settle(camera);
-  assert.ok(camera.camera.position.x < -0.89);
-  assert.ok(-camera.camera.position.z < readyDistance - 1);
-  assert.ok(Math.abs(camera.camera.position.z + 1.75) < 0.01);
-  assert.ok(Math.abs(camera.camera.fov - 50) < 0.06);
+  // Aimed, the body stands in the left third: far enough aside to clear the sight, far enough back to keep the hands
+  assert.ok(camera.camera.position.x < -0.67 && camera.camera.position.x > -0.72);
+  assert.ok(-camera.camera.position.z < readyDistance - 0.9);
+  assert.ok(Math.abs(camera.camera.position.z + 2.25) < 0.01);
+  assert.ok(Math.abs(camera.camera.fov - 44) < 0.06);
+  // a rifle closes the lens further without moving the boom
+  camera.aimFov = 40;
+  settle(camera, 0.5);
+  assert.ok(Math.abs(camera.camera.fov - 40) < 0.06);
+  assert.ok(Math.abs(camera.camera.position.z + 2.25) < 0.01);
   close(camera.camera.near, 0.12);
   // The centre ray stays parallel to the intended aim, rather than converging on the character's head.
   assert.ok(Math.abs(camera.camera.target.x - camera.camera.position.x) < 1e-4);
@@ -339,7 +345,7 @@ test('shoulder switching crosses smoothly and restores exactly the same aiming d
   camera.update(1 / 60, 1);
   assert.ok(camera.camera.position.x > start && camera.camera.position.x < 0);
   settle(camera);
-  assert.ok(camera.camera.position.x > 0.89);
+  assert.ok(camera.camera.position.x > 0.67);
   assert.ok(Math.abs(camera.camera.target.x - camera.camera.position.x) < 1e-4);
   assert.equal(camera.swapShoulder(), 1);
   settle(camera);
@@ -419,7 +425,28 @@ test('the live camera compresses at walls and eases back out without requiring a
   camera.update(1 / 60, 1.01);
   assert.ok(camera.camera.position.z < compressed && camera.camera.position.z > -1);
   settle(camera);
-  assert.ok(Math.abs(camera.camera.position.z + 1.75) < 0.01);
+  assert.ok(Math.abs(camera.camera.position.z + 2.25) < 0.01);
+});
+
+test('a van pulling up behind someone on foot shortens the boom instead of swallowing the eye', () => {
+  const { camera } = footHarness();
+  camera.combatMode = true;
+  camera.controllerManager.nearColliders = () => [];
+  settle(camera);
+  assert.ok(camera.camera.position.z < -3.1);
+  // an oriented box across the street two metres behind the player, as gameplay reports moving vehicles
+  camera.vehicleObstacles = () => [{ minY: 0.1, maxY: 1.9, obb: { cx: 0, cz: -3, cs: 1, sn: 0, hx: 3, hz: 1 } }];
+  camera.update(1 / 60, 2);
+  assert.ok(camera.camera.position.z > -2, 'the camera stays on this side of the van');
+  assert.ok(camera.camera.position.z < -0.6, 'and is never pulled into the head');
+  camera.vehicleObstacles = null;
+  settle(camera);
+  assert.ok(camera.camera.position.z < -3.1);
+});
+
+test('the view holds still while the pointer steers the weapon wheel', () => {
+  const { camera } = footHarness();
+  assert.equal(camera.lookLocked, false);
 });
 
 test('a wall against the back slides the camera along the shoulder instead of inside the body', () => {

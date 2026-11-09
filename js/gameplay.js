@@ -3,7 +3,9 @@ import { ISLAND_BOUNDS, getIslandBoundsAtZ, streetZ, isTypingInField, districtAt
 import { angleDelta, doorPosition, smooth, clamp, canInteract, validPosition } from './interaction-state.js';
 import { CharacterModel, LOOKS } from './characters.js';
 import { EffectsSystem } from './fx.js';
-import { WEAPONS, WEAPON_ORDER, HANDLING, gunSpread, gunDamage, sightOrigin, muzzleObstruction, stockArsenal, castShot, spreadDirection } from './weapons.js';
+import { WEAPONS, WEAPON_ORDER, HANDLING, gunSpread, gunDamage, sightOrigin, muzzleObstruction, stockArsenal, castShot, spreadDirection, lineOfSight, raycastBuildings } from './weapons.js';
+import { AimAssist } from './aim-assist.js';
+import { createWeaponModel } from './weapon-models.js';
 import { Vertical } from './vertical.js';
 import { RoofPolice } from './roof-police.js';
 import { SkyRings } from './missions-sky.js';
@@ -43,7 +45,7 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.10';
+const BUILD = '0.9.11';
 const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
 // The neighbourhoods as the opening card names them (city-config.js districtAt)
 const DISTRICT_NAMES = {
@@ -123,6 +125,16 @@ const _aim = new THREE.Vector3();
 const _dir = new THREE.Vector3();
 const _muzzle = new THREE.Vector3();
 const _camDir = new THREE.Vector3();
+// what a shot hands to the effects, reused from one shot to the next
+const _port = new THREE.Vector3();
+const _gunRight = new THREE.Vector3();
+const _gunUp = new THREE.Vector3();
+const _barrel = new THREE.Vector3();
+const _flashOpts = { id: 'player', vx: 0, vy: 0, vz: 0 };
+const _casingOpts = { port: _port, right: _gunRight, up: _gunUp };
+const _hitOpts = { dir: { x: 0, y: 0, z: 0 } };
+const _wallHit = {};
+const _noDecal = { decal: false }; // an impact on something that moves or falls leaves no mark hanging in the air
 const bodyA = {}, bodyB = {}, hit = {};
 
 export class Game {
@@ -141,13 +153,14 @@ export class Game {
     this.missionsDone = [];
     this.stats = { kills: 0, shots: 0, cops: 0, cars: 0, explosions: 0, deaths: 0, busted: 0 };
     this.fireHeld = false; this.firePressed = false; this.aimHeld = false;
-    this.aimToggle = false; this.triggerBuffer = 0; this.bloom = 0; this.combatReadyT = 0;
+    this.aimToggle = false; this.triggerBuffer = 0; this.bloom = 0; this.combatReadyT = 0; this.hipT = 0; this.strafeT = 0; this.threatT = 0; this.threatNear = false;
     this.autoReloadT = 0; this.shotsInBurst = 0; this.lastGunShot = -10;
     this.cooldown = 0; this.reloadT = 0; this.punchT = 0; this.punchHit = false;
     this.spread = 0; this.lastCrimeShot = -10; this.stateT = 0; this.invulnerable = 0;
     this.allCars = [];
     this.timeScale = 1;
     this.slowMo = 0;
+    this.wheelSlow = 0;
     this.slowAgain = 0;
     this.frames = 0;
     this.player = { x: 0, y: 0, z: 0, heading: 0, speed: 0, vx: 0, vz: 0, inVehicle: false, onFoot: true, alive: true, threat: false };
@@ -219,9 +232,8 @@ export class Game {
 
     this.spawnFleet();
     this.restore();
-    const unarmed = Object.keys(this.weapons).length === 1;
+    // A new game opens with empty hands: everything he owns is on him, in view, and TAB brings it out
     stockArsenal(this.weapons);
-    if (unarmed) this.weaponId = 'pistol';
     // The garage's own car and motorbike, built now so that summoning them never stalls a frame
     for (const [kind, paint] of [...CAR_CATALOG.map(c => [c.kind, c.paint]), ['moto', 0xc81e2a], ['boat', 0x0c1f33]]) {
       const car = this.makeCar(kind, paint, new THREE.Vector3(), 0, true, false, true);
@@ -236,6 +248,31 @@ export class Game {
     this.hud.setMoney(this.money, true);
     this.bind();
     this.hero = new CharacterModel(scene, controllers.entities.person.rig, LOOKS.hero, 'Protagonist');
+    this.syncLoadout();
+    // Vehicles as the on-foot camera sees them: boxes it must stay out of
+    const pool = [], boxes = [];
+    this.camera.vehicleObstacles = (origin, range) => {
+      boxes.length = 0;
+      const box = (x, z, yaw, hw, hl, y0, y1) => {
+        if (Math.hypot(x - origin.x, z - origin.z) > range + hl) return;
+        const b = pool[boxes.length] ??= { obb: {} };
+        boxes.push(b);
+        b.minY = y0; b.maxY = y1;
+        const o = b.obb; o.cx = x; o.cz = z; o.cs = Math.cos(yaw); o.sn = Math.sin(yaw); o.hx = hw; o.hz = hl;
+      };
+      for (const v of this.traffic.vehicles) if (v.edge) box(v.x, v.z, v.yaw + v.yawOffset, v.halfWidth, v.halfL ?? v.half, 0.1, v.bus ? 3.1 : 1.6);
+      for (const c of this.allCars) if (c.mesh.visible && !c.bicycle && !c.moto) box(c.position.x, c.position.z, c.heading, c.halfW ?? 0.9, c.halfL ?? 2.2, (c.position.y || 0) + 0.1, (c.position.y || 0) + 1.6);
+      return boxes;
+    };
+    // smoke and dust are lit by the sun where it reaches them
+    this.fx.sunlit = (x, y, z) => this.atmosphere.sunReaches(x, y, z, this.atmosphere.params.sunDir);
+    // brass on the pavement: the first bounces of each case are heard
+    this.fx.onCasingBounce = (x, y, z, kind, speed) => {
+      if (speed > 0.7) this.audio.sfx('impactMetal', x, y, z, { intensity: Math.min(0.22, speed * 0.07), rate: (kind === 'shotgun' ? 1.5 : 2.5) + Math.random() * 0.7 });
+    };
+    this.aimAssist = new AimAssist();
+    try { this.aimAssist.enabled = localStorage.getItem('overdraft:aimAssist') !== '0'; } catch { /* storage optional */ }
+    this.assistTargets = [];
     this.vertical = new Vertical(this);
     this.roofPolice = new RoofPolice(this);
     this.skyRings = new SkyRings(scene);
@@ -393,7 +430,7 @@ export class Game {
   buildInterface() {
     document.body.insertAdjacentHTML('beforeend', `
       <div id="game-vignette" aria-hidden="true"></div>
-      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · PRICE ACTION</small></span></div>
+      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · SHORT SQUEEZE</small></span></div>
       <div id="session-badge"><i></i><span>MANHATTAN</span><b id="session-mode">LIBRE</b><button id="pause-button" aria-label="Ouvrir le menu pause">Ⅱ</button></div>
       <div id="game-prompt" role="status" aria-live="polite"><kbd>F</kbd><span>Voler la voiture<small>VÉHICULE</small></span></div>
       <div id="game-toast" role="status" aria-live="polite"></div>
@@ -422,7 +459,7 @@ export class Game {
         <div class="menu-bottom"><span>MANHATTAN, NY<span class="coordinates">40°45′ N — 73°59′ W</span></span><button id="credits-button">CRÉDITS ↗</button><span class="menu-description">MISSIONS · COURSES · PRIMES<br>COMBAT · POURSUITES · 5 ÉTOILES</span></div>
         <div id="menu-options"><span>HEURE &amp; MÉTÉO</span><button data-game-time="golden">Soleil bas</button><button data-game-time="midday">Midi</button><button data-game-time="twilight">Crépuscule</button><button data-game-time="midnight">Nuit</button><button id="weather-toggle">MÉTÉO : AUTO</button><button id="sound-toggle">SON ACTIVÉ</button><button id="quality-toggle">QUALITÉ : HAUTE</button></div>
       </div>
-      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Price Action</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap. Mobilier urbain : registres publics de la ville et de la MTA (bouches d’incendie, arrêts et abris de bus, kiosques, arceaux, bancs, bornes, parcmètres, échafaudages, terrasses).</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : Comrade1280, Daniel Zhabotinsky (Sketchfab, CC BY 4.0), Eric Chadwick / DGG (Khronos, CC BY 4.0). Modifiées pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
+      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Short Squeeze</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap. Mobilier urbain : registres publics de la ville et de la MTA (bouches d’incendie, arrêts et abris de bus, kiosques, arceaux, bancs, bornes, parcmètres, échafaudages, terrasses).</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : Comrade1280, Daniel Zhabotinsky (Sketchfab, CC BY 4.0), Eric Chadwick / DGG (Khronos, CC BY 4.0). Modifiées pour le jeu.</p><p>Armes : « Service Pistol » de Mateusz Sadek (Poly Haven, CC0) ; « AK-12 » et « Remington 870 with Magpul furniture » de rwroclav, « MP7 » de Harry / habbottcapps, « M67 Fragmentation Grenade » de FJH (Sketchfab, CC BY 4.0). Réorientées, découpées en pièces mobiles et débarrassées de leurs marquages pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
       <button id="mobile-interact" class="touch-interact" hidden>F <span>VÉHICULE</span></button>
     `);
     this.driveInstruments = new DriveInstruments(document.getElementById('drive-gauge'));
@@ -484,11 +521,16 @@ export class Game {
       if (!this.active) return;
       if (e.code === 'KeyG') this.garage.toggle();
       if (e.code === 'KeyE') this.vertical.toggleGrapple();
-      if (e.code === 'Tab') { e.preventDefault(); this.arsenal.toggle(); }
-      if (e.code === 'KeyX' && this.state === 'onFoot' && HANDLING[this.weaponId]) {
+      if (e.code === 'KeyX' && this.state === 'onFoot' && (HANDLING[this.weaponId] || this.drawForAim())) {
         this.aimToggle = !this.aimToggle;
       }
       if (e.code === 'KeyC' && this.state === 'onFoot' && HANDLING[this.weaponId]) this.camera.swapShoulder();
+      if (e.code === 'KeyY' && this.state === 'onFoot') {
+        const on = this.aimAssist.enabled = !this.aimAssist.enabled;
+        try { localStorage.setItem('overdraft:aimAssist', on ? '1' : '0'); } catch { /* storage optional */ }
+        this.audio.ui(on ? 'shop' : 'deny');
+        this.toast(on ? 'Visée assistée : activée' : 'Visée assistée : coupée', on ? 'Viser près d’un ennemi amène le viseur sur lui' : 'Visée libre · Y pour la remettre');
+      }
       if (e.code === 'KeyR') {
         if (this.state === 'driving' && Math.abs(this.car.speed) < 1.5) {
           const car = this.car;
@@ -536,7 +578,7 @@ export class Game {
         Promise.resolve(canvas.requestPointerLock?.()).catch(() => {}).finally(() => { this.locking = false; });
       }
       if (pressed & 1) { this.fireHeld = true; this.firePressed = true; }
-      if (pressed & 2) { this.aimHeld = true; this.aimToggle = false; }
+      if (pressed & 2) { this.aimHeld = true; this.aimToggle = false; this.drawForAim(); }
     };
     for (const type of ['pointerdown', 'pointermove', 'pointerup']) window.addEventListener(type, buttons, true);
     window.addEventListener('blur', () => { mask = 0; this.fireHeld = this.firePressed = this.aimHeld = this.aimToggle = false; this.triggerBuffer = 0; });
@@ -644,8 +686,8 @@ export class Game {
       : this.state === 'driving' && this.car.boat ? [k(['ZQSD'], 'Piloter'), k(['F'], 'Quitter le bord'), k(['T'], 'Radio'), ...end].join('')
       : this.state === 'driving' && this.car.bicycle ? [k(['ZQSD'], 'Pédaler'), k(['F'], 'Descendre'), k(['T'], 'Radio'), ...end].join('')
       : this.state === 'driving' ? [k(['ZQSD'], 'Conduire'), k(['ESPACE'], 'Frein à main'), k(['MAJ'], this.car.moto ? 'Wheeling' : 'Nitro'), this.car.moto ? '' : k(['C'], 'Regarder derrière'), armed && this.weaponId !== 'shotgun' ? k(['CLIC D.', 'CLIC'], 'Tirer par la vitre') : '', k(['B'], 'Klaxon'), k(['T'], 'Radio'), k(['F'], 'Descendre'), ...end].join('')
-      : [k(['ZQSD'], 'Se déplacer'), k(['ESPACE'], 'Courir'), k(['MAJ'], 'Sauter'), k(['CLIC'], this.weaponId === 'grapple' ? 'Grappin' : armed ? 'Tirer' : 'Frapper'), armed ? k(['CLIC D.'], 'Viser') : '', HANDLING[this.weaponId] ? k(['X'], 'Visée fixe') + k(['C'], 'Épaule') : '',
-        armed && this.weaponId !== 'grapple' ? k(['R'], 'Recharger') : '', k(['E'], this.weaponId === 'grapple' ? 'Ranger le grappin' : 'Grappin'), k(['TAB', '1-7'], 'Armes'), k(['F'], 'Véhicule'), k(['G'], 'Garage'), k(['P'], 'Téléphone'), k(['M'], 'Carte'), k(['ÉCHAP'], 'Menu')].join('');
+      : [k(['ZQSD'], 'Se déplacer'), k(['ESPACE'], 'Courir'), k(['MAJ'], 'Sauter'), k(['CLIC'], this.weaponId === 'grapple' ? 'Grappin' : armed ? 'Tirer' : 'Frapper'), k(['CLIC D.'], armed ? 'Viser' : 'Dégainer'), HANDLING[this.weaponId] ? k(['X'], 'Visée fixe') + k(['C'], 'Épaule') + k(['Y'], 'Visée assistée') : '',
+        armed && this.weaponId !== 'grapple' ? k(['R'], 'Recharger') : '', k(['E'], this.weaponId === 'grapple' ? 'Ranger le grappin' : 'Grappin'), k(['TAB'], 'Roue des armes'), k(['F'], 'Véhicule'), k(['G'], 'Garage'), k(['P'], 'Téléphone'), k(['M'], 'Carte'), k(['ÉCHAP'], 'Menu')].join('');
   }
 
   // ---- Radio ---------------------------------------------------------------------------------------------------------
@@ -691,6 +733,13 @@ export class Game {
       let seen = false;
       try { seen = localStorage.getItem('overdraft:tip:grapple') === '1'; localStorage.setItem('overdraft:tip:grapple', '1'); } catch { /* storage optional */ }
       if (!seen && this.state === 'onFoot' && !this.director.current) this.toast('Nouveau : le grappin LEVIER (7 ou E)', 'Clic droit pour viser une façade, clic pour tirer : il vous hisse jusqu’au toit. En l’air, Espace : wingsuit.');
+    }
+    // 0.9.11: the weapons he wears, once per browser, as soon as the opening flight has landed
+    if ((this.wheelTipT = (this.wheelTipT ?? 2.5) - dt) <= 0 && !this.wheelTipped && !this.intro) {
+      this.wheelTipped = true;
+      let seen = false;
+      try { seen = localStorage.getItem('overdraft:tip:wheel') === '1'; localStorage.setItem('overdraft:tip:wheel', '1'); } catch { /* storage optional */ }
+      if (!seen && this.state === 'onFoot') this.toast('Vos armes sont sur vous', 'Clic droit ou X : dégainer et viser · TAB maintenu : la roue des armes · TAB bref : arme précédente');
     }
     if ((this.tipT = (this.tipT ?? 26) - dt) > 0 || this.tipped) return;
     this.tipped = true;
@@ -929,7 +978,7 @@ export class Game {
     const speed = Math.abs(car.speed);
     const y = prop.obstacle === 'hydrant' ? 0.5 : 0.9;
     const sin = Math.sin(car.heading), cos = Math.cos(car.heading);
-    this.fx.impact(prop.cx, y, prop.cz, sin, 0.4, cos, prop.soft ? 'concrete' : 'metal');
+    this.fx.impact(prop.cx, y, prop.cz, sin, 0.4, cos, prop.soft ? 'concrete' : 'metal', _noDecal);
     if (!prop.soft) this.audio.crash({ a: car, b: prop, kind: 'building', x: prop.cx, y, z: prop.cz, nx: sin, ny: 0, nz: cos, speed: Math.min(9, speed * 0.5) });
     if (prop.obstacle === 'hydrant') this.jets.push({ x: prop.cx, y: 0.3, z: prop.cz, life: 40 });
   }
@@ -1028,7 +1077,7 @@ export class Game {
     const speed = aiming ? 2.6 : sprint ? 7.8 : 3.9;
     p.speed += (amount * speed - p.speed) * (1 - Math.exp(-dt * (amount ? 9 : 14)));
     const yaw = this.camera.footYaw;
-    if (aiming || this.combatReadyT > 0 && !sprint || this.cooldown > this.weapon.interval * 0.5 && this.weaponId !== 'fists') {
+    if (aiming || this.strafeT > 0 && !sprint || this.cooldown > this.weapon.interval * 0.5 && this.weaponId !== 'fists') {
       p.heading += angleDelta(p.heading, yaw) * (1 - Math.exp(-dt * 25));
     } else if (amount > 0) {
       const desired = yaw + Math.atan2(-x, z);
@@ -1211,11 +1260,11 @@ export class Game {
 
   cancelWeaponActions() {
     this.fireHeld = this.firePressed = this.aimHeld = this.aimToggle = false;
-    this.reloadT = this.autoReloadT = this.triggerBuffer = this.combatReadyT = this.bloom = this.cooldown = 0;
+    this.reloadT = this.autoReloadT = this.triggerBuffer = this.combatReadyT = this.hipT = this.strafeT = this.bloom = this.cooldown = 0;
     this.camera.aimMode = this.camera.combatMode = false;
     this.person.rig.aim = null;
     this.person.rig.reloading = -1;
-    this.person.rig.combatReady = false;
+    this.person.rig.gunReady = false;
   }
 
   knockDown(heading) {
@@ -1241,18 +1290,40 @@ export class Game {
       const take = Math.min(w.mag - slot.mag, slot.ammo);
       slot.mag += take; slot.ammo -= take;
     }
-    if (fresh) this.selectWeapon(id);
+    if (fresh) { this.syncLoadout(); this.selectWeapon(id); }
     this.updateKeybar();
+  }
+
+  // What Sacha wears on him: every firearm he owns, each in its place (thigh, back, under the jacket)
+  syncLoadout() {
+    this.hero?.setLoadout(['pistol', 'smg', 'shotgun', 'rifle'].filter((id) => this.weapons[id]));
+  }
+
+  // Raising empty hands to aim takes out the firearm held last, the pistol if there was none
+  drawForAim() {
+    if (this.state !== 'onFoot' || this.weaponId !== 'fists') return false;
+    const last = this.arsenal.previous;
+    const id = last && HANDLING[last] && this.weapons[last] ? last : this.weapons.pistol ? 'pistol' : null;
+    if (id) this.selectWeapon(id);
+    return !!id;
+  }
+
+  // The object the hands hold for a weapon id: the grapple has its own launcher, fists nothing
+  heldKind(id = this.weaponId) {
+    const w = WEAPONS[id];
+    return !w || w.melee ? null : w.gadget ? 'grapple' : id;
   }
 
   selectWeapon(id) {
     if (!this.weapons[id] || id === this.weaponId) return;
     this.weaponId = id;
     this.reloadT = 0;
-    this.autoReloadT = this.triggerBuffer = this.bloom = this.shotsInBurst = this.combatReadyT = 0;
+    this.autoReloadT = this.triggerBuffer = this.bloom = this.shotsInBurst = this.hipT = 0;
     if (!HANDLING[id]) this.aimToggle = false;
-    this.cooldown = 0.25;
-    this.hero?.setWeapon(WEAPONS[id].melee ? null : WEAPONS[id].gadget ? 'pistol' : id);
+    // drawn into both hands, then lowered if nothing happens; firing waits for the hands (hero.armed)
+    this.combatReadyT = HANDLING[id] ? 1.8 : 0;
+    this.cooldown = 0;
+    this.hero?.setWeapon(this.heldKind(id));
     this.audio.sfx('reload', this.player.x, this.player.y + 1.2, this.player.z, { intensity: 0.4, rate: 1.4 });
     this.updateKeybar();
   }
@@ -1272,14 +1343,28 @@ export class Game {
     this.cooldown = Math.max(w.auto && this.fireHeld ? -Math.min(dt, 0.05) : 0, this.cooldown - dt);
     this.triggerBuffer = this.firePressed && handling ? 0.14 : Math.max(0, this.triggerBuffer - dt);
     this.combatReadyT = Math.max(0, this.combatReadyT - dt);
+    this.hipT = Math.max(0, this.hipT - dt);
+    this.strafeT = Math.max(0, this.strafeT - dt);
+    if (this.pumpEjectT > 0 && (this.pumpEjectT -= dt) <= 0) this.ejectBrass('shotgun', false);
     this.bloom *= Math.exp(-dt * (handling?.recovery || 8));
     const person = this.person;
     const rig = person.rig;
     const onFoot = this.state === 'onFoot' || this.state === 'surfing';
     const aiming = this.isAiming();
+    // Someone awake and hostile close by keeps both hands on the weapon
+    this.threatT -= dt;
+    if (this.threatT <= 0) {
+      this.threatT = 0.4;
+      this.threatNear = this.wanted.level > 0 || this.actors.actors.some((a) => !a.dead && a.hostile && a.alert && Math.hypot(a.x - this.player.x, a.z - this.player.z) < 55);
+    }
+    const sprinting = this.controllers.keys.run && person.speed > 4.6;
+    // In the hands and steady. A weapon still on its way out of the holster cannot fire; the press is kept for it.
+    const drawn = w.melee || this.hero.armed;
+    rig.gunReady = onFoot && !!handling && !sprinting && (aiming || this.combatReadyT > 0 || this.reloadT > 0 || this.threatNear);
+    this.assistAim(dt, aiming && onFoot && !!handling);
     this.camera.aimMode = aiming;
-    this.camera.combatMode = onFoot && !!handling;
-    rig.combatReady = onFoot && !!handling && !(this.controllers.keys.run && person.speed > 3);
+    this.camera.aimFov = w.id === 'rifle' ? 40 : w.id === 'shotgun' ? 46 : 44;
+    this.camera.combatMode = onFoot && !!handling && (rig.gunReady || this.hipT > 0);
     if (!onFoot) this.aimToggle = false;
     if (this.autoReloadT > 0) {
       this.autoReloadT = Math.max(0, this.autoReloadT - dt);
@@ -1304,7 +1389,8 @@ export class Game {
       if (!this.punchHit && this.punchT < 0.24) { this.punchHit = true; this.meleeHit(); }
     } else rig.punch = 0;
 
-    const shooting = onFoot && (w.auto ? this.fireHeld : handling ? this.triggerBuffer > 0 : this.firePressed);
+    if (this.firePressed && !drawn && handling) this.triggerBuffer = 0.5;
+    const shooting = onFoot && !this.arsenal.open && (w.auto ? this.fireHeld : handling ? this.triggerBuffer > 0 : this.firePressed);
     // Drive-by: aim out of the driver's window with a one-handed or compact weapon
     const driveBy = this.state === 'driving' && !this.car.bicycle && !this.car.air && this.aimHeld && !w.melee && !w.throwable && !w.gadget && w.id !== 'shotgun' && w.id !== 'rifle' && !!slot;
     this.world.ignoreCar = this.state === 'driving' ? this.car : null;
@@ -1316,7 +1402,7 @@ export class Game {
       }
     }
     // Arms: raised while aiming or just after a shot
-    const raised = onFoot && !w.melee && !w.throwable && (aiming || this.combatReadyT > 0 || shooting || this.reloadT > 0);
+    const raised = onFoot && !w.melee && !w.throwable && (aiming || this.hipT > 0 || shooting && !!handling);
     rig.reloading = this.reloadT > 0 ? 1 - this.reloadT / w.reload : -1;
     // Sacha looks where the player looks
     if (onFoot) rig.lookTarget = clamp(angleDelta(rig.yaw, this.camera.footYaw), -1.1, 1.1);
@@ -1338,14 +1424,17 @@ export class Game {
     // the grapple's sight shows while aiming, and all the time in the air where it is the only thing in hand
     const hookSight = w.gadget && (aiming || this.state === 'falling' || (this.vertical.owns(this.state) && this.state !== 'climbing' && this.state !== 'surfing'));
     this.muzzleBlocked = false;
-    if (onFoot && handling && (aiming || this.combatReadyT > 0)) {
+    // smoke stays on a hot muzzle as it moves
+    if (onFoot && handling && drawn) this.fx.trackMuzzle('player', this.hero.muzzle(_muzzle), this.hero.barrel(_dir));
+    if (onFoot && handling && drawn && (aiming || this.hipT > 0)) {
       this.hero.muzzle(_muzzle);
       this.muzzleBlocked = !!muzzleObstruction(this.world, this.player, _muzzle);
     }
-    if (!driveBy) this.hud.setCrosshair(hookSight || (onFoot && !w.melee && !w.gadget && (aiming || !!handling || this.fireHeld)),
-      w.gadget ? 0.01 : gunSpread(w, aiming, person.speed, this.bloom), { aiming, shotgun: w.id === 'shotgun', blocked: this.muzzleBlocked });
+    if (!driveBy) this.hud.setCrosshair(hookSight || (onFoot && !w.melee && !w.gadget && (aiming || this.hipT > 0 || this.fireHeld)),
+      w.gadget ? 0.01 : gunSpread(w, aiming, person.speed, this.bloom), { aiming, shotgun: w.id === 'shotgun', blocked: this.muzzleBlocked,
+        hostile: raised && this.sightHit?.kind === 'actor' && !!this.sightHit.target?.hostile, locked: this.locked });
 
-    if (shooting && this.cooldown <= 0 && (this.state === 'onFoot' || this.state === 'surfing')) {
+    if (shooting && drawn && this.cooldown <= 0 && (this.state === 'onFoot' || this.state === 'surfing')) {
       if (w.melee) {
         this.cooldown = w.interval;
         this.punchT = 0.38;
@@ -1374,6 +1463,22 @@ export class Game {
     this.updateGrenades(dt);
   }
 
+  // Assisted aim: raising the sights near someone hostile brings them onto his chest, follows a moment and lets go
+  assistAim(dt, aiming) {
+    const cam = this.camera, eye = cam.camera.position, list = this.assistTargets;
+    list.length = 0;
+    if (aiming && this.aimAssist.enabled) {
+      for (const a of this.actors.actors) {
+        if (a.dead || !a.hostile || Math.hypot(a.x - eye.x, a.z - eye.z) > 80) continue;
+        list.push({ ref: a, x: a.x, y: a.y + (a.height ?? 1.85) * 0.72, z: a.z, dead: a.dead });
+      }
+    }
+    const to = this.aimAssist.update(dt, aiming, eye, cam.footYaw, cam.orbitPitchOffset, list,
+      (c) => lineOfSight(this.controllers, eye.x, eye.y, eye.z, c.x, c.y, c.z));
+    if (to) { cam.footYaw = to.yaw; cam.orbitPitchOffset = clamp(to.pitch, -0.95, 1.05); }
+    this.locked = !!to;
+  }
+
   // Grenades: thrown along the view with an arc, bouncing off the street and walls, exploding when the fuse runs out
   throwGrenade(w, slot) {
     slot.mag--;
@@ -1389,9 +1494,8 @@ export class Game {
     const speed = 15;
     const vel = new THREE.Vector3(_camDir.x / flat * speed * Math.cos(pitch), 4.5 + pitch * 12, _camDir.z / flat * speed * Math.cos(pitch));
     if (!this.grenadePool) {
-      const geo = new THREE.SphereGeometry(0.06, 10, 8).scale(1, 1.25, 1);
-      const mat = new THREE.MeshStandardNodeMaterial({ color: 0x2c3328, roughness: 0.6, metalness: 0.4 });
-      this.grenadePool = Array.from({ length: 8 }, () => { const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.visible = false; this.scene.add(m); return m; });
+      // the grenade that was in the hand, tumbling: same model, shaders already compiled behind the loading screen
+      this.grenadePool = Array.from({ length: 8 }, () => { const m = createWeaponModel('grenade'); m.matrixAutoUpdate = true; m.visible = false; this.scene.add(m); return m; });
       this.grenades = [];
     }
     const mesh = this.grenadePool.find((m) => !m.visible) || this.grenadePool[0];
@@ -1453,7 +1557,7 @@ export class Game {
     slot.mag--;
     this.cooldown = Math.max(-0.05, this.cooldown) + w.interval * (fromCar ? 1.25 : 1);
     this.triggerBuffer = 0;
-    this.combatReadyT = 1.15;
+    this.combatReadyT = 3.4; this.hipT = 0.55; this.strafeT = 1.3;
     if (this.clock - this.lastGunShot > Math.max(0.28, w.interval * 1.7)) this.shotsInBurst = 0;
     this.lastGunShot = this.clock;
     this.stats.shots++;
@@ -1479,7 +1583,7 @@ export class Game {
     for (let i = 0; i < pellets; i++) {
       spreadDirection(_dir.x, _dir.y, _dir.z, spread, _v);
       const h = obstruction || castShot(this.world, _muzzle.x, _muzzle.y, _muzzle.z, _v.x, _v.y, _v.z, w.range, this.player);
-      if (i === 0 || i % 3 === 0) this.fx.tracer(_muzzle, h);
+      if (i === 0 || i % 3 === 0) this.fx.tracer(_muzzle, h, pellets > 1 ? 'shotgun' : undefined);
       const r = this.applyShot(h, gunDamage(w, h.t), 'player');
       landed ||= r.hit; killed ||= r.kill;
       headshot ||= r.headshot;
@@ -1488,9 +1592,20 @@ export class Game {
       this.hud.hit(killed, headshot);
       this.audio.ui(killed ? 'killConfirm' : headshot ? 'headshot' : 'hitConfirm');
     }
+    // The last man of a fight falls in slow motion: the street holds its breath, then the noise comes back
+    if (killed && !fromCar && this.clock > (this.slowAgain ?? 0) && !this.slowMo
+      && !this.actors.actors.some((a) => !a.dead && a.hostile && a.alert && Math.hypot(a.x - this.player.x, a.z - this.player.z) < 70)) {
+      this.slowMo = 0.7;
+      this.slowAgain = this.clock + 8;
+    }
     this.hud.shot(w.id === 'shotgun' ? 1.6 : w.id === 'pistol' ? 1 : 0.65);
-    this.fx.muzzleFlash(_muzzle, _dir, w.id);
-    this.fx.ejectCasing(_muzzle, _dir, w.id, person.position.y);
+    // the smoke of a shot from a moving car is left behind it
+    _flashOpts.vx = fromCar ? Math.sin(this.car.heading) * this.car.speed : 0;
+    _flashOpts.vz = fromCar ? Math.cos(this.car.heading) * this.car.speed : 0;
+    this.fx.muzzleFlash(_muzzle, _dir, w.id, _flashOpts);
+    // A pump keeps its hull until the fore-end comes back; self-loaders throw theirs at once
+    if (w.id === 'shotgun' && !fromCar) this.pumpEjectT = 0.3;
+    else this.ejectBrass(w.id, fromCar);
     this.audio.sfx(w.sound, _muzzle.x, _muzzle.y, _muzzle.z);
     this.birds?.scatter(_muzzle.x, _muzzle.z, 45);
     const handling = HANDLING[w.id];
@@ -1505,6 +1620,33 @@ export class Game {
       if (panicked > 0 || this.policeNear(90) || this.wanted.level > 0) this.crime('shots', this.player.x, this.player.z);
     }
     if (slot.mag === 0 && slot.ammo > 0) this.autoReloadT = 0.18;
+  }
+
+  // A spent case leaves the weapon in hand by its own port (the driver's window from a car)
+  ejectBrass(kind, fromCar) {
+    const person = this.person;
+    if (fromCar || !this.hero.ejection(_port, _gunRight, _gunUp)) { this.fx.ejectCasing(_muzzle, _dir, kind, fromCar ? 0 : person.position.y); return; }
+    this.fx.ejectCasing(this.hero.muzzle(_v), this.hero.barrel(_barrel), kind, person.position.y, _casingOpts);
+  }
+
+  // Blood leaves a body the way the bullet was going: on the wall behind if there is one within reach
+  bleed(h, groundY, killed) {
+    _hitOpts.dir.x = h.dx ?? -h.nx; _hitOpts.dir.y = h.dy ?? -h.ny; _hitOpts.dir.z = h.dz ?? -h.nz;
+    _hitOpts.decal = undefined;
+    this.fx.impact(h.x, h.y, h.z, h.nx, h.ny, h.nz, 'flesh', _hitOpts);
+    const d = _hitOpts.dir;
+    const t = raycastBuildings(this.controllers, h.x, h.y, h.z, d.x, d.y, d.z, 2.4, _wallHit, false);
+    if (t < 2.4 && Math.abs(_wallHit.ny) < 0.5) this.fx.bloodSplatter(h.x + d.x * t + _wallHit.nx * 0.01, h.y + d.y * t, h.z + d.z * t + _wallHit.nz * 0.01, _wallHit.nx, _wallHit.ny, _wallHit.nz, 0.35 + Math.random() * 0.3);
+    if (killed) this.fx.bloodStain(h.x + d.x * 0.5, groundY, h.z + d.z * 0.5, 0.5 + Math.random() * 0.35);
+  }
+
+  // What a bullet finds when it strikes the city: the roadway, the sidewalk, a trunk, a pole, a wall
+  surfaceOf(h) {
+    if (h.kind === 'ground') return h.y > 0.12 ? 'concrete' : 'asphalt';
+    const c = h.target;
+    if (c?.obstacle === 'tree') return 'wood';
+    if (c?.round) return c.obstacle === 'table' ? 'wood' : 'metal';
+    return 'concrete';
   }
 
   meleeHit() {
@@ -1548,7 +1690,7 @@ export class Game {
         const groundY = p.node ? 0.012 : 0.22;
         const mult = head(h.y, groundY) ? 3 : 1;
         p.hp = (p.hp ?? 100) - damage * mult;
-        this.fx.impact(h.x, h.y, h.z, h.nx, h.ny, h.nz, 'flesh');
+        this.bleed(h, groundY, p.hp <= 0);
         if (p.hp <= 0) {
           this.killPed(p, Math.atan2(dir.x, dir.z), 0.8, byPlayer ? 'player' : 'npc');
           return { hit: true, kill: true, headshot: mult > 1 };
@@ -1560,10 +1702,11 @@ export class Game {
       case 'actor': {
         const a = h.target;
         if (shooter && shooter.team && shooter.team === a.team) return { hit: false };
-        const mult = head(h.y, a.y) ? 2.6 : 1;
-        this.fx.impact(h.x, h.y, h.z, h.nx, h.ny, h.nz, 'flesh');
+        // a bare head does not take a bullet; a helmet or a vest (armour) still turns one
+        const mult = head(h.y, a.y) ? (a.armor > 0 ? 2.6 : 4) : 1;
         const wasAlive = !a.dead;
         this.actors.damage(a, damage * mult, dir.x, dir.z, 'shot');
+        this.bleed(h, a.y, wasAlive && a.dead);
         if (byPlayer) {
           this.actors.alertTeam(a.team, a.x, a.z, 70);
           if (a.team === 'police') this.crime(a.dead ? 'copKilled' : 'copHurt', a.x, a.z);
@@ -1608,7 +1751,10 @@ export class Game {
       }
       case 'building':
       case 'ground':
-        this.fx.impact(h.x, h.y, h.z, h.nx, h.ny, h.nz, 'concrete');
+        _hitOpts.dir.x = h.dx ?? -h.nx; _hitOpts.dir.y = h.dy ?? -h.ny; _hitOpts.dir.z = h.dz ?? -h.nz;
+        // a pole is metal that stays where it is: it keeps its holes, unlike a car
+        _hitOpts.decal = h.kind === 'building' && this.surfaceOf(h) === 'metal' && !h.target?.breakable ? true : undefined;
+        this.fx.impact(h.x, h.y, h.z, h.nx, h.ny, h.nz, this.surfaceOf(h), _hitOpts);
         if (Math.random() < 0.5) this.audio.sfx('impact', h.x, h.y, h.z);
         return { hit: false };
       default:
@@ -2447,6 +2593,9 @@ export class Game {
       this.slowMo = Math.max(0, this.slowMo - dt / Math.max(this.timeScale, 0.05));
       this.timeScale = this.slowMo > 0.5 ? 0.3 : 1 - 0.7 * this.slowMo / 0.5;
     } else this.timeScale = 1;
+    // The weapon wheel holds the street almost still while a weapon is chosen
+    this.wheelSlow += ((this.arsenal.open ? 1 : 0) - this.wheelSlow) * Math.min(1, dt / Math.max(this.timeScale, 0.05) * 14);
+    if (this.wheelSlow > 0.01) this.timeScale = Math.min(this.timeScale, 1 - 0.88 * this.wheelSlow);
     this.clock += dt;
     this.invulnerable = Math.max(0, this.invulnerable - dt);
     // Wounds close slowly up to half health once out of harm's way
@@ -2499,7 +2648,9 @@ export class Game {
     pl.alive = this.state !== 'dead' && this.state !== 'busted';
 
     // the grapple's launcher is held like the pistol
-    this.hero.setWeapon(this.weapon.melee || !pl.onFoot ? null : this.weapon.gadget ? 'pistol' : this.weaponId);
+    this.hero.setWeapon(pl.onFoot ? this.heldKind() : null);
+    // Slung long guns have no room between a back and a car seat: they are out of sight in a closed cabin
+    this.hero.showCarried = !(person.inVehicle && this.car?.cabin && !this.car.moto && !this.car.bicycle);
     // In a fully confined corner, hide intersecting geometry while continuing the pose and muzzle simulation.
     this.hero.cameraOccluded = !!this.camera.bodyOccluded;
     for (const m of person.crowd.meshes) m.visible = false;

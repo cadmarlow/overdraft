@@ -1,5 +1,73 @@
 # Changelog
 
+## 0.9.11 — Short Squeeze — 9 novembre 2026
+
+Le tir à la troisième personne refait autour de quatre choses : de vraies armes, un corps qui sait les porter, une
+caméra qui les montre et un viseur qu'on peut tenir au pavé tactile.
+
+### Les armes
+
+- **Quatre modèles réalistes** remplacent les armes en blocs de la 0.9.10 : Calypso 9 (pistolet acier et noyer),
+  Hornet (pistolet-mitrailleur compact), Breaker 12 (pompe à garnitures sable), Sentinel (fusil d'assaut à viseur point
+  rouge). Textures de couleur, de relief et de métal ; culasse, chargeurs et pompe mobiles. Sources libres (CC0 et
+  CC BY 4.0), créditées dans `CREDITS.md` et `assets/weapons/LICENSE-weapons.md` ; marquages de fabricants effacés.
+- **Chaîne d'import** `tools/weapons` : orientation automatique d'un modèle posé de travers, mise à l'échelle réelle,
+  découpe des pièces mobiles, effacement des marquages, textures recomposées. Planche de mesure au centimètre
+  (`tools/gun-preview.html`) et studio des postures (`tools/gun-studio.html`).
+- **La grenade ÉCLAT** est une vraie grenade à main, en main comme en vol.
+- **Le grappin LEVIER** a son propre lanceur orange : il ne ressemble plus au pistolet.
+
+### Porter, ranger, dégainer
+
+- **Les armes vivent sur le corps.** Le pistolet dans un étui de cuir bas sur la cuisse droite, le fusil d'assaut et le
+  fusil à pompe en bandoulière dans le dos, canons au-dessus de l'épaule gauche, le pistolet-mitrailleur sous la veste.
+  L'épaule droite reste dégagée : c'est par là que la caméra regarde en visée.
+- **L'arme reste en main pendant un saut**, et les armes longues ne traversent plus le siège en voiture.
+- **Dégainer et rengainer sont joués.** La main va chercher l'arme là où elle est rangée et l'amène ; changer d'arme
+  range la première avant de sortir la seconde ; on ne tire pas tant que l'arme n'est pas en main, et un clic donné trop
+  tôt part dès qu'elle y est.
+- **Viser les mains vides** (clic droit ou X) dégaine la dernière arme tenue, le pistolet par défaut. Une nouvelle
+  partie commence les mains vides, tout l'arsenal sur le dos.
+- **Trois tenues.** Portée à une main le long de la jambe quand la rue est calme, canon vers le sol quel que soit le
+  balancement du bras ; prête, à deux mains, canon bas, dès qu'il y a du danger (visée, tir récent, rechargement, avis de
+  recherche, ennemi éveillé à moins de 55 m) ; en joue, crosse à l'épaule et joue sur la crosse, ou bras tendus au
+  pistolet.
+- **Les détails.** L'index reste le long de la carcasse tant qu'on ne vise pas, le pouce se referme sur l'arme, la main
+  gauche suit la pompe, le canon traîne un instant derrière un coup de caméra, l'arme vit avec la marche et la
+  respiration. Le recul passe par un ressort propre à chaque arme et secoue le buste ; il revient toujours sur la visée.
+- **Les policiers** gardent le pistolet à l'étui tant qu'ils n'ont rien vu et le sortent en vous voyant.
+
+### Viser et tirer
+
+- **Cadrage de visée refait** : le héros dans le tiers gauche, l'arme et les mains dans l'image, le viseur à hauteur
+  d'œil à côté de la tête ; l'objectif se resserre (44°, 40° au fusil d'assaut, 46° à la pompe). Arme simplement portée,
+  la caméra reste derrière le marcheur. À pied, elle ne rentre plus dans les véhicules qui s'arrêtent derrière vous.
+- **Visée assistée** (touche **Y** pour la couper) : lever l'arme près d'un ennemi amène le viseur sur son torse, le suit
+  une seconde et lâche ; baisser et relever passe au suivant. Un mouvement volontaire de la souris ou du pavé reprend la
+  main tout de suite. Le réticule rougit sur un ennemi et s'entoure d'un anneau pendant l'accroche.
+- **Le réticule n'apparaît qu'en visée ou en tirant.** Tirer sans viser lève l'arme à la ligne de mire, puis elle
+  redescend.
+- **Une balle en pleine tête tue** quiconque n'a ni casque ni gilet. Le dernier ennemi d'une fusillade tombe au ralenti.
+
+### Le feu
+
+- **Flammes de bouche par arme** : étoile du cache-flamme au fusil d'assaut, boule déchirée et gerbe de poudre à la
+  pompe, éclat court au pistolet et au pistolet-mitrailleur. Jamais deux fois la même d'affilée, 42 ms, lisibles en
+  plein soleil comme de nuit ; elles éclairent les mains et le mur voisin le temps d'une image.
+- **Fumée** : un filet à chaque tir, puis le canon qui fume après une rafale et que la fumée suit quand on bouge.
+- **Douilles** : laiton de pistolet, laiton à collet du fusil, étui rouge à culot laiton de la pompe. Elles sortent par
+  la fenêtre d'éjection de l'arme (au réarmement pour la pompe), tournent, rebondissent, tintent et restent au sol.
+- **Impacts selon la surface** : chaussée, trottoir, mur, tronc, poteau, carrosserie, chair. Poussière qui part dans
+  l'axe du tir, éclats, ricochets sur les tirs rasants, trous qui restent (200 au plus, les plus vieux s'effacent).
+- **Sang** : une balle laisse une projection sur le mur derrière la victime et une flaque sous un corps.
+- **Balles traçantes** plus fines, qui partent de la bouche du canon et s'arrêtent à l'impact.
+
+### La roue des armes
+
+- **TAB maintenu** ouvre une roue : la rue ralentit presque à l'arrêt, la souris ou le pavé désigne une arme, relâcher
+  la prend. **TAB bref** revient à l'arme précédente. Le bouton de l'écran ouvre la même roue, qui reste ouverte jusqu'au
+  clic. Chaque arme à feu y montre son portrait, rendu depuis son modèle.
+
 ## 0.9.10 — Price Action — 8 novembre 2026
 
 Refonte du tir à la troisième personne et de la conduite des quinze voitures.

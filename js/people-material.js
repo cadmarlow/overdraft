@@ -17,10 +17,4 @@ function createPersonMaterials(person) {
   });
 }
 
-function createGunMaterial({ color, normal, specular }) {
-  const m = new THREE.MeshStandardNodeMaterial({ map: color, normalMap: normal, metalness: 0.55 });
-  m.roughnessNode = specular ? mix(float(0.75), float(0.28), texture(specular, uv()).r) : float(0.5);
-  return m;
-}
-
-export { createPersonMaterials, createGunMaterial };
+export { createPersonMaterials };

@@ -79,31 +79,4 @@ async function loadCrowdBody(id) {
   return { geometry, atlas };
 }
 
-// A gun lifted off an avatar: rigid, with its own painted maps
-async function loadGun(id) {
-  const buffer = await fetchBuffer(`gun-${id}.bin`);
-  const headLength = new DataView(buffer).getUint32(0, true);
-  const header = JSON.parse(new TextDecoder().decode(new Uint8Array(buffer, 4, headLength)));
-  const align = (n) => (n + 3) & ~3;
-  let o = align(4 + headLength);
-  const take = (Type, bytes) => {
-    const a = new Type(buffer, o, bytes / Type.BYTES_PER_ELEMENT);
-    o = align(o + bytes);
-    return a;
-  };
-  const [pBytes, nBytes, uvBytes, fBytes] = header.sections;
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(take(Float32Array, pBytes), 3));
-  geometry.setAttribute('normal', new THREE.BufferAttribute(take(Float32Array, nBytes), 3));
-  geometry.setAttribute('uv', new THREE.BufferAttribute(take(Float32Array, uvBytes), 2));
-  geometry.setIndex(new THREE.BufferAttribute(take(Uint32Array, fBytes), 1));
-  geometry.computeBoundingSphere();
-  const [color, normal, specular] = await Promise.all([
-    loadTexture(`gun-${id}_c.webp`, THREE.SRGBColorSpace),
-    loadTexture(`gun-${id}_n.webp`, THREE.NoColorSpace),
-    loadTexture(`gun-${id}_s.webp`, THREE.NoColorSpace)
-  ]);
-  return { geometry, color, normal, specular };
-}
-
-export { loadPerson, loadCrowdBody, loadGun, parsePerson, fetchBuffer };
+export { loadPerson, loadCrowdBody, parsePerson, fetchBuffer };

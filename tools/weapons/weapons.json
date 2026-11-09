@@ -1,0 +1,193 @@
+{
+  "weapons": {
+    "pistol": {
+      "name": "Calypso 9",
+      "source": "pistol-polyhaven-service-pistol/service_pistol_2k.gltf",
+      "barrel": "+x",
+      "up": "+y",
+      "parts": {
+        "body": [
+          "service_pistol_pistol_a$",
+          "service_pistol_hammer_a$",
+          "service_pistol_trigger_a$"
+        ],
+        "action": [
+          "service_pistol_slide_a$"
+        ],
+        "magazine": {
+          "nodes": [
+            "service_pistol_magazine_empty$"
+          ],
+          "move": [
+            0.088,
+            -0.15,
+            0
+          ]
+        }
+      },
+      "texture": 1024,
+      "travel": {
+        "action": 0.03
+      }
+    },
+    "rifle": {
+      "name": "Sentinel",
+      "source": "rifle-rwroclav-ak12/f78ad7ae10ad4335b3ad81be3ec15bb0.glb",
+      "orient": "pca",
+      "length": 0.94,
+      "parts": {
+        "magazine": {
+          "nodes": [
+            "^Object_[34]$"
+          ],
+          "box": [
+            -0.03,
+            -0.17,
+            -0.097,
+            0.03,
+            0.012,
+            0.07
+          ]
+        },
+        "body": [
+          "^Object_[34]$"
+        ]
+      },
+      "texture": 1024,
+      "flip": [
+        "y"
+      ],
+      "pitch": 5.4,
+      "shift": [
+        0.012,
+        0,
+        0
+      ],
+      "erase": [
+        {
+          "material": 0,
+          "rects": [
+            [
+              0.119,
+              0.196,
+              0.135,
+              0.249,
+              0,
+              -0.058
+            ],
+            [
+              0.097,
+              0.281,
+              0.119,
+              0.317,
+              0,
+              -0.037
+            ]
+          ]
+        }
+      ],
+      "unmark": [
+        {
+          "box": [
+            -0.08,
+            0.1,
+            -0.16,
+            0.08,
+            0.17,
+            -0.05
+          ],
+          "side": true,
+          "threshold": 14
+        }
+      ]
+    },
+    "shotgun": {
+      "name": "Breaker 12",
+      "source": "shotgun-rwroclav-rem870-magpul/7e9700e7ae63461f9cfcdd741dfe1bb4.glb",
+      "orient": "pca",
+      "length": 0.98,
+      "parts": {
+        "action": {
+          "nodes": [
+            "^Plane003_low_0"
+          ],
+          "box": [
+            -0.1,
+            -0.005,
+            0.135,
+            0.1,
+            0.09,
+            0.345
+          ]
+        },
+        "body": [
+          "^Plane00[23]_low_0",
+          "^Object003_low_0"
+        ]
+      },
+      "texture": 1024,
+      "pitch": 3.3,
+      "travel": {
+        "action": 0.08
+      }
+    },
+    "smg": {
+      "name": "Hornet",
+      "source": "smg-habbottcapps-mp7/efaa5259f1c44261a27de328d508e239.glb",
+      "orient": "pca",
+      "length": 0.64,
+      "parts": {
+        "magazine": {
+          "nodes": [
+            "defaultMaterial"
+          ],
+          "box": [
+            -0.03,
+            -0.2,
+            -0.04,
+            0.03,
+            -0.066,
+            0.07
+          ]
+        },
+        "body": [
+          "defaultMaterial"
+        ]
+      },
+      "texture": 1024,
+      "drop": [
+        [
+          -0.1,
+          0.02,
+          0.14,
+          0.1,
+          0.055,
+          0.22
+        ]
+      ],
+      "shift": [
+        0.011,
+        0,
+        0
+      ]
+    },
+    "grenade": {
+      "name": "Éclat",
+      "source": "grenade-fjh-m67/26eda181849f4d188f69105302fd7b65.glb",
+      "barrel": "+z",
+      "up": "+y",
+      "scale": 0.01107,
+      "origin": [
+        0.0557,
+        -0.0126,
+        0.0007
+      ],
+      "parts": {
+        "body": [
+          "_lowTris__0$"
+        ]
+      },
+      "texture": 512
+    }
+  }
+}

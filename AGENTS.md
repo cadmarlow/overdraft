@@ -44,7 +44,8 @@ loin : plus fou, plus inventif, plus généreux. Le niveau de référence est un
 
 Les versions portent des noms de la finance : 0.2 Opening Bell, 0.3 Margin Call, 0.4 Human Capital, 0.5 Hard Assets,
 0.6 Prime Real Estate, 0.7 Bull Run, 0.8 Hostile Takeover, 0.9 Leverage, 0.9.3 Main Street, 0.9.4 Momentum, 0.9.5 Due Diligence,
-0.9.6 Footfall, 0.9.7 Curb Appeal. Prochaine : 1.0 Closing Bell (voir `GAME_DESIGN.md`).
+0.9.6 Footfall, 0.9.7 Curb Appeal, 0.9.8 Revaluation, 0.9.9 Break Even, 0.9.10 Price Action, 0.9.11 Short Squeeze.
+Prochaine : 1.0 Closing Bell (voir `GAME_DESIGN.md`).
 
 Une nouvelle version met à jour, ensemble :
 - `BUILD` et le nom affiché dans `js/gameplay.js`, `version` dans `package.json`, le titre de `index.html` ;
@@ -101,6 +102,9 @@ Paramètres d'adresse : `?stats=1` (images par seconde et coût de chaque systè
 - Une animation CSS plein écran qui change autre chose que `opacity` ou `transform` redessine toute la page à chaque image :
   c'est elle qui faisait tomber les poursuites à 8 images par seconde.
 - WebP jette les couleurs sous les pixels transparents : un masque ne doit pas vivre dans l'alpha.
+- Une touche maintenue se répète trente fois par seconde. Un `preventDefault()` placé après `if (e.repeat) return` laisse
+  passer ces répétitions : TAB maintenu promenait le focus sur tous les boutons de la page, lâchait la souris et mettait
+  en pause. Tester les touches maintenues avec de vraies répétitions (`autoRepeat: true` en CDP).
 - Le dossier personnel `/Users/ulik` est lui-même un dépôt Git : une session Claude Code lancée au-dessus de ce dépôt
   partage sa mémoire avec d'autres projets. Travailler depuis ce dossier.
 

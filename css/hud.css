@@ -28,6 +28,9 @@
 .gh-hitmarker i:nth-child(1){transform:translate(5px,5px) rotate(45deg)}.gh-hitmarker i:nth-child(2){transform:translate(-14px,5px) rotate(-45deg)}
 .gh-hitmarker i:nth-child(3){transform:translate(5px,-7px) rotate(-45deg)}.gh-hitmarker i:nth-child(4){transform:translate(-14px,-7px) rotate(45deg)}
 .gh-crosshair.aiming i{opacity:.65}.gh-crosshair.shotgun i{border-radius:2px}.gh-crosshair.blocked:after{background:#ffb66d;box-shadow:0 0 0 4px #ffb66d44}.gh-crosshair.blocked i{background:#ffb66d}
+.gh-crosshair.hostile i,.gh-crosshair.hostile:after{background:#ff5a4d}.gh-crosshair.hostile:after{box-shadow:0 0 0 1px #0008,0 0 7px #ff5a4d}
+.gh-crosshair:before{content:'';position:absolute;width:26px;height:26px;left:-13px;top:-13px;border:1px solid #ff5a4d;border-radius:50%;opacity:0;transform:scale(1.7);transition:opacity .1s,transform .14s}
+.gh-crosshair.locked:before{opacity:.85;transform:none}
 .gh-hitmarker.headshot i{background:#ffd595}.gh-hit-caption{position:absolute;top:26px;left:0;transform:translateX(-50%);color:#fff4df;font-size:8px;font-weight:800;letter-spacing:.13em;white-space:nowrap;text-shadow:0 1px 5px #000}
 .gh-reload-sight{position:absolute;left:calc(50% - 21px);top:calc(50% + 25px);width:42px;height:2px;background:#fff3;opacity:0;transition:opacity .1s}.gh-reload-sight.show{opacity:1}.gh-reload-sight i{display:block;height:100%;background:var(--lime);transform-origin:left}
 .gh-combat{position:absolute;right:34px;bottom:92px;min-width:158px;padding:14px 17px 13px;border-right:2px solid #f5f1dfaa;background:linear-gradient(90deg,transparent,#0c130fbd 45%);text-align:right;opacity:0;transform:translateY(6px);transition:opacity .15s,transform .15s;text-shadow:0 1px 5px #0009;font-variant-numeric:tabular-nums}
@@ -154,3 +157,27 @@ body[data-game-state=driving] #drive-gauge{display:grid}
 #garage-panel[hidden]{display:none}#garage-panel>button{width:100%;height:70px;gap:5px;border:1px solid #ffffff0e;background:#ffffff04}#garage-panel>button.sel{color:#132018;background:var(--lime)}#garage-panel>button .icon{width:23px;height:23px}#garage-panel>button span{font-size:8px;letter-spacing:.06em}#garage-panel>button small{font-size:6px;color:inherit;opacity:.6}
 .garage-spec{grid-column:1/-1;display:grid;gap:5px;padding:3px 6px 12px;margin-bottom:3px;border-bottom:1px solid #ffffff26}.garage-spec>span{font-size:7px;letter-spacing:.2em;color:var(--lime)}.garage-spec>strong{font-size:19px;font-weight:500;letter-spacing:-.015em;color:#f3f0e6}.garage-spec>small{font-size:8px;letter-spacing:.07em;color:#b9c5c4;min-height:10px}
 @media(max-width:760px){#drive-gauge{right:18px;bottom:34px;transform:scale(.76);transform-origin:bottom right}#vehicle-name{bottom:180px;right:20px}#vehicle-name>strong{font-size:21px}#stunt-feed{bottom:250px;right:20px}#garage-panel{left:12px;right:12px;top:158px;bottom:auto;width:auto;grid-template-columns:repeat(4,1fr);max-height:calc(100vh - 178px)}#garage-panel>button{height:62px}.garage-spec>small{font-size:7px}}
+/* The weapon wheel (js/arsenal.js): only opacity and transform move, the street keeps rendering behind it */
+#weapon-wheel{position:fixed;inset:0;z-index:28;display:grid;place-items:center;pointer-events:none;opacity:0;transition:opacity .11s;background:radial-gradient(circle at 50% 50%,#05080699 0,#050806b8 30%,#05080680 62%,#05080640 100%);font-family:Arial,Helvetica,sans-serif}
+#weapon-wheel[hidden]{display:none}#weapon-wheel.show{opacity:1}
+#weapon-wheel svg{grid-area:1/1;width:min(520px,84vmin);height:min(520px,84vmin);overflow:visible;transform:scale(.93);transition:transform .17s cubic-bezier(.2,.8,.2,1)}
+#weapon-wheel.show svg{transform:none}
+#weapon-wheel.sticky .wedge{pointer-events:auto;cursor:pointer}
+#weapon-wheel .wedge path{fill:#0d140fe0;stroke:#ffffff24;stroke-width:1}
+#weapon-wheel .wedge use{color:#d5ddcb;fill:none;stroke:currentColor;stroke-width:1.15;stroke-linejoin:round;stroke-linecap:round}
+#weapon-wheel .wedge text{fill:#d5ddcb;text-anchor:middle;font-weight:800;letter-spacing:.09em}
+#weapon-wheel .wedge .name{font-size:10px}#weapon-wheel .wedge .count{font-size:10px;font-weight:700;letter-spacing:.02em;opacity:.7;font-variant-numeric:tabular-nums}
+#weapon-wheel .wedge .key{font-size:8px;opacity:.4}
+#weapon-wheel .wedge.active path{stroke:#e1f3a0aa;stroke-width:1.5}
+#weapon-wheel .wedge.sel path{fill:var(--lime);stroke:var(--lime)}
+#weapon-wheel .wedge.sel use{color:#141b12}#weapon-wheel .wedge.sel text{fill:#141b12}
+#weapon-wheel .wedge.locked use,#weapon-wheel .wedge.locked text{opacity:.38}
+#weapon-wheel .wedge.locked.sel path{fill:#a9b39f;stroke:#a9b39f}#weapon-wheel .wedge.locked.sel use,#weapon-wheel .wedge.locked.sel text{opacity:.8}
+#weapon-wheel .dot{fill:var(--lime);opacity:.9}
+#weapon-wheel .hub{grid-area:1/1;display:flex;flex-direction:column;align-items:center;gap:5px;width:170px;text-align:center;color:var(--paper);text-shadow:0 1px 6px #000}
+#weapon-wheel .hub small{font-size:9px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:#e6e7d8a8}
+#weapon-wheel .hub strong{font-size:21px;font-weight:800;letter-spacing:.04em;line-height:1}
+#weapon-wheel .hub span{font-size:13px;font-weight:700;font-variant-numeric:tabular-nums;color:var(--lime);min-height:15px}
+#weapon-wheel .hub em{font-size:8px;font-style:normal;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#e6e7d880;margin-top:4px}
+body.in-menu #weapon-wheel{display:none}
+#weapon-wheel .wedge image{pointer-events:none}#weapon-wheel .wedge.locked image{opacity:.3}

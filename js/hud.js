@@ -213,11 +213,13 @@ class GameHud {
     this.mission.classList.toggle('show', !!text);
   }
 
-  setCrosshair(visible, spread = 0, { aiming = false, shotgun = false, blocked = false } = {}) {
+  setCrosshair(visible, spread = 0, { aiming = false, shotgun = false, blocked = false, hostile = false, locked = false } = {}) {
     this.crosshair.classList.toggle('show', visible);
     this.crosshair.classList.toggle('aiming', aiming);
     this.crosshair.classList.toggle('shotgun', shotgun);
     this.crosshair.classList.toggle('blocked', blocked);
+    this.crosshair.classList.toggle('hostile', hostile && !blocked);
+    this.crosshair.classList.toggle('locked', locked);
     this.reticleSpread = Math.min(42, (aiming ? 3 : 6) + Math.max(0, spread) * 260);
     if (visible) this.crosshair.style.setProperty('--spread', `${this.reticleSpread + this.reticleKick}px`);
   }

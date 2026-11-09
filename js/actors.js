@@ -37,8 +37,10 @@ class ActorSystem {
       const rig = new PersonRig({ seed: 1 });
       rig.reset(20000, 20000, 0, () => -100);
       const model = new CharacterModel(scene, rig, look, 'Warmup');
-      model.setWeapon(['pistol', 'smg', 'shotgun', 'rifle', 'rifle', 'pistol', 'pistol'][i]);
+      model.setWeapon(['pistol', 'smg', 'shotgun', 'rifle', 'rifle', 'pistol', 'pistol'][i], true);
       model.update(true);
+      // and every weapon, the holster, the grenade and the grapple launcher: none may compile at its first draw
+      if (i === 0) model.warm(['pistol', 'smg', 'shotgun', 'rifle', 'grenade', 'grapple']);
       return model;
     });
   }
@@ -65,7 +67,7 @@ class ActorSystem {
       cover, lastX: x, lastZ: z, strafe: Math.random() < 0.5 ? 1 : -1, strafeT: 0, punchT: 0, born: performance.now()
     };
     rig.reset(x, z, heading, groundOf(actor), this.controllers);
-    model.setWeapon(WEAPONS[weapon]?.melee ? null : weapon);
+    model.setWeapon(WEAPONS[weapon]?.melee ? null : weapon, true);
     this.actors.push(actor);
     return actor;
   }
@@ -231,12 +233,15 @@ class ActorSystem {
 
     // Shooting
     a.rig.aim = aiming ? { x: target.x, y: target.y + (target.inVehicle ? 0.9 : 1.25), z: target.z, twoHanded: !weapon.melee, stance: weapon.hands === 2 ? 'rifle' : 'pistol' } : null;
+    // Both hands on the weapon once they know; an officer who has seen nothing keeps the pistol in its holster
+    a.rig.gunReady = a.alert;
+    if (weapon.id === 'pistol') a.model.setWeapon(a.alert || aiming ? 'pistol' : null);
     a.height = 1.85 - a.rig.crouch * 0.72; // what a bullet can find of them
     a.rig.reloading = a.reloadT > 0 ? 1 - a.reloadT / (weapon.reload * 1.3) : -1;
     if (a.reloadT > 0) {
       a.reloadT -= dt;
       if (a.reloadT <= 0) a.mag = weapon.mag;
-    } else if (aiming && (behavior === 'combat' || behavior === 'sniper') && a.cooldown <= 0 && a.flinch <= 0) {
+    } else if (aiming && (behavior === 'combat' || behavior === 'sniper') && a.cooldown <= 0 && a.flinch <= 0 && (a.model.armed || !a.model.visible)) {
       if (a.mag <= 0) {
         a.reloadT = weapon.reload * 1.3;
         this.audio?.sfx('reload', a.x, a.y + 1.2, a.z);
@@ -339,10 +344,10 @@ class ActorSystem {
     for (let i = 0; i < pellets; i++) {
       spreadDirection(dx, dy, dz, spread + (pellets > 1 ? weapon.spread : 0), this.dir);
       const hit = castShot(ctx.world, this.muzzle.x, this.muzzle.y, this.muzzle.z, this.dir.x, this.dir.y, this.dir.z, weapon.range, a);
-      if (i === 0 || Math.random() < 0.3) this.fx.tracer(this.muzzle, hit);
+      if (i === 0 || Math.random() < 0.3) this.fx.tracer(this.muzzle, hit, pellets > 1 ? 'shotgun' : undefined);
       this.onShot?.(hit, weapon.damage * (a.team === 'police' ? 0.42 : 0.38), a);
     }
-    this.fx.muzzleFlash(this.muzzle, this.dir, weapon.id === 'shotgun');
+    this.fx.muzzleFlash(this.muzzle, this.dir, weapon.id, { id: a, vx: a.vx, vy: 0, vz: a.vz });
     this.audio?.sfx(weapon.sound, this.muzzle.x, this.muzzle.y, this.muzzle.z);
   }
 }

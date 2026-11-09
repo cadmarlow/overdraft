@@ -101,6 +101,9 @@ class CameraSystem {
 
     // Shooter controls (gameplay.js): mouse look under pointer lock, an over-the-shoulder aim, impact shake
     this.aimMode = false;
+    this.aimFov = 44; // the lens behind the sights (degrees): gameplay sets it per weapon
+    this.lookLocked = false; // the pointer is steering something else (the weapon wheel): the view holds still
+    this.vehicleObstacles = null; // (origin, range) → oriented boxes of the vehicles around a person on foot (gameplay.js)
     this.aimBlend = 0;
     this.combatMode = false;
     this.combatBlend = 0;
@@ -240,6 +243,7 @@ class CameraSystem {
       const pointer = pointers.get(e.pointerId);
       if (!pointer) return;
       e.preventDefault();
+      if (this.lookLocked) { pointer.x = e.clientX; pointer.y = e.clientY; return; }
       const dx = e.clientX - pointer.x;
       const dy = e.clientY - pointer.y;
       const pair = pointers.size === 2 ? [...pointers.values()] : null;
@@ -282,7 +286,7 @@ class CameraSystem {
 
     // Pointer lock: relative mouse motion turns the view (on foot the walking frame, in a car the orbit)
     document.addEventListener('mousemove', (e) => {
-      if (document.pointerLockElement !== canvas) return;
+      if (document.pointerLockElement !== canvas || this.lookLocked) return;
       const k = this.mouseSensitivity * (this.aimMode ? 0.6 : 1);
       const dx = Math.max(-200, Math.min(200, e.movementX || 0));
       const dy = Math.max(-200, Math.min(200, e.movementY || 0));
@@ -610,6 +614,12 @@ class CameraSystem {
         for (const collider of colliders) {
           distance = Math.min(distance, cameraCollisionDistance(origin, direction, distance, collider, footFollow ? 0.24 : 0.4));
         }
+        // On foot, a van pulling up behind must not swallow the eye: moving vehicles shorten the boom like walls do
+        if (footFollow && this.vehicleObstacles) {
+          for (const collider of this.vehicleObstacles(origin, length + 4)) {
+            distance = Math.min(distance, Math.max(0.7, cameraCollisionDistance(origin, direction, distance, collider, 0.2)));
+          }
+        }
         // Pull in immediately; emerge softly once the wall is gone. The collision distance is never eased outward
         // through solid geometry, and unlike a minimum boom of 55 cm this also works with a wall at one's shoulder.
         if (distance < this._cameraBoom || !Number.isFinite(this._cameraBoom)) this._cameraBoom = distance;
@@ -682,7 +692,7 @@ class CameraSystem {
     const near = entity.type === 'person' ? 0.12 : 0.35;
     if (this.camera.near !== near) { this.camera.near = near; this.camera.updateProjectionMatrix(); }
     if (this.activePresetId === 'chase' || this.activePresetId === 'action') {
-      const fov = this.getActivePreset().fov - 2 * this.combatBlend - 4 * this.aimBlend + this.speedFov;
+      const fov = this.getActivePreset().fov - 3 * this.combatBlend - (this.getActivePreset().fov - 3 - this.aimFov) * this.aimBlend + this.speedFov;
       if (Math.abs(this.camera.fov - fov) > 0.05) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
     }
   }
@@ -804,10 +814,13 @@ class CameraSystem {
   aimFrame(entity) {
     const yaw = this.footYaw, pitch = this.orbitPitchOffset;
     const lx = Math.sin(yaw) * Math.cos(pitch), ly = -Math.sin(pitch), lz = Math.cos(yaw) * Math.cos(pitch);
-    const side = (0.48 + 0.42 * this.aimBlend) * this.shoulderBlend;
-    const distance = 3.05 - 1.3 * this.aimBlend;
+    // Armed, the body stands left of centre and the street ahead is clear; aimed, the lens closes in (see the FOV
+    // below) from a little further back than the body is wide, so shoulders, hands and weapon stay in the frame and
+    // the sight sits at eye height beside the head
+    const side = (0.44 + 0.24 * this.aimBlend) * this.shoulderBlend;
+    const distance = 3.2 - 0.95 * this.aimBlend;
     const px = entity.position.x - Math.cos(yaw) * side;
-    const py = entity.position.y + 1.55 - 0.07 * this.aimBlend;
+    const py = entity.position.y + 1.56 + 0.06 * this.aimBlend;
     const pz = entity.position.z + Math.sin(yaw) * side;
     this._aimPos.set(px - lx * distance, py - ly * distance, pz - lz * distance);
     this._aimLook.set(px + lx * 60, py + ly * 60, pz + lz * 60);

@@ -3,10 +3,16 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.10 — Price Action**. Le tir à la troisième personne a été refondu. Caméra à l’épaule rapprochée,
-changement d’épaule, quatre armes originales avec mécanismes mobiles, recul amorti, dispersion qui récupère entre
-les rafales, douilles et impacts persistants. Le canon et le réticule convergent vers la même cible ; un canon qui
-dépasse d’un mur ne permet plus de tirer à travers.
+Version **0.9.11 — Short Squeeze**. Les armes sont de vrais modèles, et Sacha sait les porter : pistolet à l'étui sur
+la cuisse, fusil d'assaut et fusil à pompe en bandoulière dans le dos, pistolet-mitrailleur sous la veste. Il les dégaine
+et les rengaine, les tient à une main quand la rue est calme, à deux quand ça chauffe, et les épaule pour viser.
+
+Pour essayer : **clic droit** ou **X** dégaine et vise, **clic** tire. **TAB maintenu** ouvre la roue des armes (la rue
+ralentit, on désigne, on relâche), **TAB bref** revient à l'arme précédente. Ensuite **R** pour recharger, **C** pour changer
+d'épaule. La visée assistée amène le viseur sur l'ennemi le plus proche de l'axe quand on lève l'arme (**Y** la coupe).
+
+La **0.9.10 — Price Action** avait posé le tir à l'épaule : recul amorti, dispersion qui récupère entre les rafales,
+douilles et impacts persistants, canon et réticule qui convergent, pas de tir à travers un mur.
 
 Les quinze voitures ont désormais une direction à géométrie Ackermann, des pneus progressifs, un freinage ABS et
 une boîte adaptative. Peintures, freins, habitacles instrumentés, caméra et son ont été revus.

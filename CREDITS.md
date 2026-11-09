@@ -12,11 +12,17 @@ See the upstream README for source datasets and their individual terms.
 
 The original MIT copyright and license are preserved in LICENSE.
 
-The people of the game (avatars, textures), the pistol, submachine gun and shotgun, and all motion capture come from the
+The people of the game (avatars, textures) and all motion capture come from the
 Microsoft Rocketbox Avatar Library (MIT): https://github.com/microsoft/Microsoft-Rocketbox
 Its license is reproduced in assets/people/LICENSE-Rocketbox.md.
 
-The assault rifle is "M4A1 Assault Rifle" by nisu, public domain (CC0): https://opengameart.org/content/m4a1-assault-rifle
+The weapons (since 0.9.11) are, modified for the game: "Service Pistol" by Mateusz Sadek for Poly Haven (CC0),
+https://polyhaven.com/a/service_pistol ; "MP7" by Harry (habbottcapps), https://sketchfab.com/3d-models/mp7-efaa5259f1c44261a27de328d508e239 ;
+"Remington 870 with Magpul furniture" and "AK-12" by rwroclav,
+https://sketchfab.com/3d-models/remington-870-with-magpul-furniture-7e9700e7ae63461f9cfcdd741dfe1bb4 and
+https://sketchfab.com/3d-models/ak-12-f78ad7ae10ad4335b3ad81be3ec15bb0 ; "M67 Fragmentation Grenade" by FJH,
+https://sketchfab.com/3d-models/m67-fragmentation-grenade-26eda181849f4d188f69105302fd7b65 (the last four under CC BY 4.0,
+https://creativecommons.org/licenses/by/4.0/). What was changed is listed in assets/weapons/LICENSE-weapons.md.
 
 Leaves and turf are from ambientCG (CC0): https://ambientcg.com (LeafSet010, LeafSet013, LeafSet014, LeafSet016, Grass001, Grass005).
 Bark is from Poly Haven (CC0): https://polyhaven.com (japanese_zelkova_bark and jolcham_oak_bark_01 by Charlotte Baglioni,
@@ -102,12 +108,13 @@ https://github.com/anthropics/anthropic-sdk-typescript. Sa licence est fournie a
 Le format, son lecteur et son générateur sont fournis avec le projet. La pierre et les pelouses réutilisent les textures
 CC0 de Poly Haven et ambientCG déjà créditées ci-dessus. Les nouveaux encadrements et shaders sont créés pour le jeu.
 
-## Arsenal original — 0.9.10
+## Arsenal — 0.9.11
 
-Les modèles Calypso 9, Hornet, Breaker 12 et Sentinel sont construits pour OVERDRAFT dans
-`js/weapon-models.js` : géométrie, matériaux et mécanismes procéduraux originaux, sans ressource externe ajoutée.
-Ils remplacent les armes Rocketbox à l’affichage ; les personnages et captures conservent leurs crédits ci-dessus.
-Les nouveaux sons de tir, mécanismes et confirmations sont synthétisés dans `js/audio-combat.js`.
+Les armes procédurales de la 0.9.10 et les armes Rocketbox sont remplacées par cinq modèles réalistes (quatre armes à feu et une grenade), importés par
+`tools/weapons` dans `assets/weapons` : voir le paragraphe « The weapons » en tête de ce fichier et
+`assets/weapons/LICENSE-weapons.md` (auteurs, licences CC0 et CC BY 4.0, modifications). Le jeu les montre sous des noms
+inventés (Calypso 9, Hornet, Breaker 12, Sentinel) et sans les marquages de leurs fabricants. L'étui, le lanceur du
+grappin et la roue des armes sont créés pour le jeu. Les sons de tir restent synthétisés dans `js/audio-combat.js`.
 
 ## Capital Gains — finitions automobiles originales
 

@@ -6,8 +6,9 @@
 <script type="importmap">{"imports":{"three":"../vendor/three/build/three.webgpu.js","three/webgpu":"../vendor/three/build/three.webgpu.js","three/tsl":"../vendor/three/build/three.tsl.js","three/addons/":"../vendor/three/examples/jsm/"}}</script>
 <script type="module">
 import * as THREE from 'three/webgpu';
-import { loadPerson, loadGun } from '../js/people-assets.js';
-import { createPersonMaterials, createGunMaterial } from '../js/people-material.js';
+import { loadPerson } from '../js/people-assets.js';
+import { createPersonMaterials } from '../js/people-material.js';
+import { loadWeapon } from '../js/weapon-models.js';
 import { loadMocap } from '../js/mocap.js';
 import { Skeleton } from '../js/person-body.js';
 import { BodyDriver, HOLD } from '../js/person-motion.js';
@@ -45,11 +46,14 @@ for (const [i, [kind, aim, speed, face]] of setups.entries()) {
   const x = (i - (setups.length - 1) / 2) * (+(q.get('gap') || 1.6));
   const yaw = +(q.get('yaw') || 0) + +(face || 0);
   const rig = {
-    x, z: 0, yaw, speed: +speed, vx: Math.sin(yaw) * speed, vz: Math.cos(yaw) * speed, s: 0.9717, pelvisY: 1, standingHeight: STAND, bank: 0, crouch: +(q.get('crouch') || 0), handsUp: 0, punch: 0,
+    x, z: 0, groundY: 0, surfaceAt: () => 0, yaw, speed: +speed, vx: Math.sin(yaw) * speed, vz: Math.cos(yaw) * speed, s: 0.9717, pelvisY: 1, standingHeight: STAND, bank: 0, crouch: +(q.get('crouch') || 0), handsUp: 0, punch: 0,
     reloading: +(q.get('reload') || -1), lookTurn: 0, punchSide: 1, aim: aim === '1' ? { x: x + Math.sin(yaw) * 20, y: 1.4, z: Math.cos(yaw) * 20 } : null, pose: new Float32Array(47 * 4)
   };
   const driver = new BodyDriver(skeleton, q.get('female') === '1', i * 0.13);
   const k = kind === '-' ? null : kind;
+  // in hand at once, both hands on it (tools/gun-studio.html shows the carrying, drawing and stowing)
+  driver.snapWeapon(k);
+  rig.gunReady = true;
   for (let f = 0; f < +(q.get('frames') || 90); f++) driver.update(1 / 60, rig, k);
   const mesh = new THREE.SkinnedMesh(person.geometry, materials);
   mesh.frustumCulled = false;
@@ -62,12 +66,11 @@ for (const [i, [kind, aim, speed, face]] of setups.entries()) {
   driver.body.write(bones);
   sk.update();
   if (k) {
-    const gun = await loadGun(k);
-    const w = new THREE.Mesh(gun.geometry, createGunMaterial(gun));
+    const w = await loadWeapon(k);
     w.matrixAutoUpdate = false;
     w.matrix.compose(driver.gunP, driver.gunQ, new THREE.Vector3(1, 1, 1));
-    w.matrixWorld.copy(w.matrix);
     scene.add(w);
+    w.updateMatrixWorld(true);
   }
 }
 const W = innerWidth, H = innerHeight;

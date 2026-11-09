@@ -1,39 +1,95 @@
 <!doctype html>
 <meta charset="utf-8"><title>Armes</title>
-<style>html,body{margin:0;height:100%;background:#20242a}canvas{display:block}</style>
+<style>html,body{margin:0;height:100%;background:#20242a;overflow:hidden}canvas{display:block;position:absolute;left:0;top:0}</style>
 <script type="importmap">{"imports":{"three":"../vendor/three/build/three.webgpu.js","three/webgpu":"../vendor/three/build/three.webgpu.js","three/tsl":"../vendor/three/build/three.tsl.js","three/addons/":"../vendor/three/examples/jsm/"}}</script>
+<canvas id="grid"></canvas>
 <script type="module">
+// The weapons of assets/weapons on a measured grid, to read off where the hands go (tools/weapons/README.md).
+// ?names=pistol,rifle  &view=side|other|top|rear  &span=0.5 (metres across the picture)  &parts=1 (moving parts pulled out)
+// &beauty=1 drops the grid and lights the weapon for a portrait (used to make the wheel's icons: &bg=000000 / ffffff)
+// Lines every centimetre, heavier every 5 and 10; the origin is the red cross. The title becomes "done" when drawn.
 import * as THREE from 'three/webgpu';
-import { loadGun } from '../js/people-assets.js';
+import { color, normalWorld, mix, smoothstep } from 'three/tsl';
+import { loadWeapon } from '../js/weapon-models.js';
 const q = new URLSearchParams(location.search);
+const names = (q.get('names') || 'pistol').split(',');
+const view = q.get('view') || 'side';
+const beauty = q.get('beauty') === '1';
+const W = innerWidth, H = innerHeight, rows = names.length, ch = H / rows;
+const span = +(q.get('span') || 1), scale = W / span; // pixels per metre
 const renderer = new THREE.WebGPURenderer({ antialias: true });
-renderer.setSize(innerWidth, innerHeight);
-document.body.append(renderer.domElement);
-await renderer.init();
+renderer.setSize(W, H);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.prepend(renderer.domElement);
+await renderer.init();
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0xb0bac8);
-const sun = new THREE.DirectionalLight(0xffffff, 3); sun.position.set(1, 3, 2); scene.add(sun);
-scene.add(new THREE.HemisphereLight(0xffffff, 0x888888, 1.6));
-const names = (q.get('names') || 'pistol,smg,shotgun,rifle').split(',');
-for (const [i, n] of names.entries()) {
-  const g = await loadGun(n);
-  for (const [j, ry] of [[0, Math.PI / 2], [1, -Math.PI / 2]]) {
-    const m = new THREE.Mesh(g.geometry, new THREE.MeshStandardNodeMaterial({ map: g.color, normalMap: g.normal, roughness: 0.5, metalness: 0.3 }));
-    m.position.set(j ? 0.5 : -0.5, 0.45 - i * 0.3, 0);
-    m.rotation.y = ry;
-    scene.add(m);
-    // a mark every 10 cm around the origin
-    for (let a = -6; a <= 7; a++) for (let b = -2; b <= 2; b++) {
-      const dot = new THREE.Mesh(new THREE.SphereGeometry(a === 0 && b === 0 ? 0.0055 : 0.003), new THREE.MeshBasicNodeMaterial({ color: a === 0 && b === 0 ? 0xff0000 : 0xffee00 }));
-      dot.position.copy(m.position).add(new THREE.Vector3(a * 0.1 * (j ? -1 : 1), b * 0.05, 0.1)); scene.add(dot);
+scene.background = new THREE.Color(parseInt(q.get('bg') || (beauty ? '14181c' : 'b4bcc8'), 16));
+const sun = new THREE.DirectionalLight(0xfff4e6, 3.2); sun.position.set(1.5, 3, 2.5); scene.add(sun);
+const rim = new THREE.DirectionalLight(0xbdd4ff, 1.4); rim.position.set(-2, 1.2, -2.5); scene.add(rim);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x777777, 1.1));
+{
+  const dome = new THREE.Scene();
+  const sky = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide });
+  const up = normalWorld.y.negate();
+  sky.colorNode = mix(mix(color(0x8f8a82), color(0xdfe6ee), smoothstep(-0.05, 0.12, up)), color(0x6f9bd6), smoothstep(0.1, 0.9, up)).mul(1.2);
+  dome.add(new THREE.Mesh(new THREE.SphereGeometry(30, 32, 16), sky));
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(4, 16, 8), new THREE.MeshBasicNodeMaterial());
+  lamp.material.colorNode = color(0xfff4e0).mul(12);
+  lamp.position.set(11, 21, 15);
+  dome.add(lamp);
+  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(dome, 0.02).texture;
+}
+const guns = await Promise.all(names.map((n) => loadWeapon(n)));
+// where the camera stands for each view, and which weapon axes run across and up the picture
+const VIEWS = { side: { eye: [-1, 0, 0], right: 'z', up: 'y', sx: 1 }, other: { eye: [1, 0, 0], right: 'z', up: 'y', sx: -1 }, top: { eye: [0, 1, 0], right: 'z', up: 'x', sx: 1 }, rear: { eye: [0, 0, -1], right: 'x', up: 'y', sx: -1 } };
+const v = VIEWS[view];
+const centre = (q.get('centre') || '0,0,0.1').split(',').map(Number);
+guns.forEach((g, i) => {
+  if (q.get('parts') === '1') { const a = g.getObjectByName('action'), m = g.getObjectByName('magazine'); if (a) a.position.z = -0.04; if (m) m.position.y = -0.12; }
+  g.position.set(0, -i * 10, 0);
+  scene.add(g);
+});
+scene.updateMatrixWorld(true);
+const cam = new THREE.OrthographicCamera(-W / 2 / scale, W / 2 / scale, ch / 2 / scale, -ch / 2 / scale, 0.01, 20);
+renderer.autoClear = false;
+renderer.setScissorTest(true);
+const draw = async () => {
+  for (let i = 0; i < rows; i++) {
+    cam.position.set(centre[0] + v.eye[0] * 5, centre[1] - i * 10 + v.eye[1] * 5, centre[2] + v.eye[2] * 5);
+    cam.up.set(view === 'top' ? -1 : 0, view === 'top' ? 0 : 1, 0);
+    cam.lookAt(centre[0], centre[1] - i * 10, centre[2]);
+    cam.updateMatrixWorld();
+    renderer.setViewport(0, i * ch, W, ch);
+    renderer.setScissor(0, i * ch, W, ch);
+    await renderer.renderAsync(scene, cam);
+  }
+};
+await draw();
+await new Promise((r) => setTimeout(r, 500));
+renderer.setScissorTest(false); renderer.setViewport(0, 0, W, H); await renderer.clearAsync();
+renderer.setScissorTest(true);
+await draw();
+if (!beauty) {
+  const grid = document.getElementById('grid');
+  grid.width = W; grid.height = H;
+  const c = grid.getContext('2d');
+  c.font = '10px ui-monospace, monospace';
+  const cr = centre[{ x: 0, y: 1, z: 2 }[v.right]], cu = centre[{ x: 0, y: 1, z: 2 }[v.up]];
+  for (let i = 0; i < rows; i++) {
+    const ox = W / 2, oy = i * ch + ch / 2;
+    const X = (m) => ox + (m - cr) * scale * v.sx * (view === 'side' ? -1 : 1) * -1, Y = (m) => oy - (m - cu) * scale * (view === 'top' ? -1 : 1) * (view === 'top' ? -1 : 1);
+    for (let k = -100; k <= 100; k++) {
+      const m = k / 100, heavy = k % 10 === 0, mid = k % 5 === 0;
+      c.strokeStyle = heavy ? '#0008' : mid ? '#0004' : '#0001';
+      c.lineWidth = heavy ? 1 : 0.5;
+      const x = X(m), y = Y(m);
+      if (x > 0 && x < W) { c.beginPath(); c.moveTo(x, i * ch); c.lineTo(x, (i + 1) * ch); c.stroke(); if (mid) { c.fillStyle = '#000b'; c.fillText(m.toFixed(2), x + 2, i * ch + 22); } }
+      if (y > i * ch && y < (i + 1) * ch) { c.beginPath(); c.moveTo(0, y); c.lineTo(W, y); c.stroke(); if (mid) { c.fillStyle = '#000b'; c.fillText(m.toFixed(2), 4, y - 2); } }
     }
+    c.strokeStyle = '#e00'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(X(0) - 8, Y(0)); c.lineTo(X(0) + 8, Y(0)); c.moveTo(X(0), Y(0) - 8); c.lineTo(X(0), Y(0) + 8); c.stroke();
+    c.fillStyle = '#000'; c.fillText(`${names[i]} · ${view} · across: ${v.right}, up: ${v.up}`, 6, i * ch + 11);
   }
 }
-const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 20);
-cam.position.set(0, 0, 3.0);
-await renderer.renderAsync(scene, cam);
-await new Promise((r) => setTimeout(r, 300));
-await renderer.renderAsync(scene, cam);
 document.title = 'done';
 </script>
