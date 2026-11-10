@@ -1,5 +1,22 @@
 # Changelog
 
+## Non publié — Sol, trottoirs et murs des parcs
+
+- Les pieds et les roues prennent appui sur les surfaces réellement construites : trottoirs, places, pelouses,
+  allées de Central Park et leurs accotements. Les trottoirs des parcs n'ont plus un sol physique 22 à 26 cm trop bas.
+- Les murs de soutènement de Central Park et de la pelouse de Bryant Park ont des collisions suivant leur contour.
+  Les anciennes rampes physiques invisibles à leur emplacement sont supprimées.
+- La circulation respecte les contours dessinés des trottoirs, y compris les îlots irréguliers et les grands parcs.
+  Chaque voie et chaque virage sont contrôlés après le placement final des carrefours ; une sortie impossible est
+  retirée au lieu d'autoriser un trajet sur le trottoir. Les voies restantes gardent une sortie valide.
+- Régressions couvertes : hauteurs et normales du sol, jonctions des morceaux de mur, collisions du simulateur
+  automobile jusqu'à 108 km/h à 30 et 60 pas par seconde, voies et virages sur la géographie de Manhattan.
+- Vérifié dans un Chrome isolé, WebGPU, qualité HAUTE, de jour, avec de vraies touches : marche et conduite sur le
+  trottoir de Central Park, quatre pneus en appui, arrêt contre son mur. Contrôle des hauteurs dans six parcs.
+  Le réseau chargé conserve 5 055 tronçons et 12 892 liaisons de virage, sans point contrôlé sur un trottoir.
+- Limites : les autres murs décoratifs de Manhattan n'ont pas fait l'objet d'un audit exhaustif ; les performances
+  globales et les missions n'ont pas été requalifiées par ce correctif.
+
 ## 0.9.17 — Stop Loss — 10 novembre 2026
 
 Version de correctifs.

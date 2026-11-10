@@ -142,7 +142,7 @@ async function initApp() {
   const boroughs = buildBoroughs(scene, { sidewalks: cityGrid.sidewalks });
   markInit('boroughs');
   await showLoadingStage('Préparation de Manhattan…');
-  const { colliders: landmarkColliders } = buildLandmarks(scene);
+  const { colliders: landmarkColliders } = buildLandmarks(scene, { groundSurfaces: cityGrid.groundSurfaces });
   markInit('landmarks');
   await showLoadingStage('Préparation des bâtiments…');
   const cityBlocks = buildCityBlocks(scene, landmarkColliders);
@@ -170,7 +170,7 @@ async function initApp() {
     ...cityGrid.footprints,
     ...streetDetails.footprints,
     ...allColliders.filter((c) => !c.obb && (c.minY ?? 0) < 3.5)
-  ], streetDetails.signalIntersections);
+  ], streetDetails.signalIntersections, cityGrid.curbs);
   markInit('roads');
   await showLoadingStage('Préparation des trottoirs…');
   const footprintsBefore = streetDetails.footprints.length;
@@ -212,6 +212,7 @@ async function initApp() {
   const jumpRamps = buildRamps(scene);
   const controllerManager = new ThirdPersonControllerManager(scene, [...allColliders, ...streetDetails.obstacles, ...jumpRamps.colliders]);
   controllerManager.landAt = boroughLandAt;
+  controllerManager.groundSurfaces = cityGrid.groundSurfaces;
   parking.attach(controllerManager);
   // Pigeons on the sidewalks, gulls over the rivers, rats at night (birds.js); made before the shaders compile
   const toXZ = (list, key) => Float32Array.from(list.map((p) => p[key]));

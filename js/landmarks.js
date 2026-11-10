@@ -11,12 +11,13 @@ import {
 } from './tsl-materials.js';
 import { createGroundLawnMaterial } from './park-materials.js';
 import { batchStaticGroupMeshes } from './city-grid.js';
+import { groundBoundaryColliders } from './ground-surfaces.js';
 
 let bryantParkLawn;
 
 // Custom architectural 3D models for Midtown Manhattan's iconic landmarks
 
-function buildLandmarks(scene) {
+function buildLandmarks(scene, { groundSurfaces } = {}) {
   const group = new THREE.Group();
   group.name = 'ManhattanLandmarks';
   const colliders = [];
@@ -687,6 +688,12 @@ function buildLandmarks(scene) {
     bpGroup.updateMatrixWorld(true);
     const lb = new THREE.Box3().setFromObject(lawn);
     bryantParkLawn = { minX: lb.min.x, maxX: lb.max.x, minZ: lb.min.z, maxZ: lb.max.z, top: lb.max.y };
+    const wb = new THREE.Box3().setFromObject(lawnWall);
+    const ring = box => [{ x: box.min.x, z: box.min.z }, { x: box.max.x, z: box.min.z },
+      { x: box.max.x, z: box.max.z }, { x: box.min.x, z: box.max.z }];
+    groundSurfaces?.add(ring(wb), wb.max.y);
+    groundSurfaces?.add(ring(lb), lb.max.y, { grip: 0.62, rough: 0.02, curb: false });
+    colliders.push(...groundBoundaryColliders(ring(wb), ring(lb), wb.min.y, wb.max.y));
   }
 
   // =========================================================================
