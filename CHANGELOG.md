@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.9.20 — Slippage — 10 novembre 2026
+
+- Xbox : **A maintenu serre le frein à main**, **RB active la nitro ou le wheeling**. LT reste le frein normal puis
+  la marche arrière. L’aide en conduite, le menu Commandes et l’annonce du véhicule affichent les nouvelles touches.
+  Freiner avec A ne passe plus les répliques d’une mission en cours.
+- Léger sifflement de transmission pendant la marche arrière ; crissement, traces et fumée plus perceptibles
+  lorsque les roues se bloquent au frein à main. Aucun son de glissement à l’arrêt ni pour une roue en l’air.
+- Aucun changement de physique ni de sauvegarde.
+- Vérification : 967 tests, 966 réussis, un ignoré, aucun échec ; build réussi. Dans un Chrome isolé en WebGPU HAUTE,
+  manette Xbox simulée sur le chemin réel de lecture : LT recule avec le son de transmission actif, A bloque les
+  roues arrière avec crissement et deux traces sans nitro, RB active la nitro, déconnexion sans frein bloqué.
+  Aucun contrôle physique de la manette ni écoute sur les haut-parleurs de l'utilisateur.
+
 ## 0.9.19 — Growth Equity — 10 novembre 2026
 
 La refonte des arbres et les corrections du sol rejoignent les armureries CALIBRE de la 0.9.18.

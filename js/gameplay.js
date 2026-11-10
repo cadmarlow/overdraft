@@ -46,8 +46,8 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.19';
-const BUILD_NAME = 'Growth Equity';
+const BUILD = '0.9.20';
+const BUILD_NAME = 'Slippage';
 const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
 // The neighbourhoods as the opening card names them (city-config.js districtAt)
 const DISTRICT_NAMES = {
@@ -632,7 +632,7 @@ export class Game {
         const car = this.car;
         hints = car.air ? [k(['LS'], 'Piloter'), k(['RT', 'LT'], car.mode === 'plane' ? 'Gaz + / −' : 'Monter / descendre'), k(['Y'], 'Quitter'), k(['←', '→'], 'Radio')]
           : [k(['LS'], 'Diriger'), k(['RT', 'LT'], 'Gaz / frein'), k(['Y'], 'Descendre'),
-            ...(!car.boat ? [k(['RB'], 'Frein à main')] : []),
+            ...(!car.boat ? [k(['A'], 'Frein à main'), ...(!car.bicycle ? [k(['RB'], car.moto ? 'Wheeling' : 'Nitro')] : [])] : []),
             ...(!car.bicycle ? [k(['X', 'RT'], 'Tir embarqué'), wheel] : []), k(['←', '→'], 'Radio')];
       } else if (this.state === 'swimming') hints = [k(['LS'], 'Nager'), k(['A'], 'Crawl'), k(['Y'], 'Monter à bord')];
       else if (this.state === 'surfing') hints = [aim, k(['X'], 'Sauter'), interact, grapple];
@@ -2725,7 +2725,7 @@ export class Game {
     const [brand, model] = CAR_NAMES[car.kind] || ['', 'VÉHICULE'];
     const pad = this.gamepad?.using;
     const radio = pad ? '← → : radio' : 'T : radio';
-    const drive = pad ? 'A : nitro · RB : frein à main' : 'Maj : nitro · Espace : frein à main';
+    const drive = pad ? 'A : frein à main · RB : nitro' : 'Maj : nitro · Espace : frein à main';
     const hint = car.police ? 'Véhicule de police : ils ne vous lâcheront pas.' : car.mode === 'plane' ? 'Trop lent, il décroche : gardez de la vitesse.' : car.body ? `${drive} · ${radio}` : radio;
     this.toast(car.label2 || `${brand} ${model}`, hint);
   }

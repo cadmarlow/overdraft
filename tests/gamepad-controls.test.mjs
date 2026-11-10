@@ -123,6 +123,37 @@ test('held RT cannot carry out of a vehicle or start an automatic drive-by when 
   assert.equal(inputs.jump, false);
 });
 
+test('Xbox A holds the handbrake, RB boosts, and LT remains an independent brake/reverse trigger', () => {
+  const { game, controller, inputs, pad, button, step } = setup();
+  game.state = 'driving';
+  game.director.current = {};
+  controller.activeMode = 'car';
+  step();
+  button(0, 1);
+  step();
+  assert.equal(inputs.handbrake, true);
+  assert.equal(inputs.sprint, false, 'handbraking must not consume nitro');
+  assert.equal(game.director.skip, undefined, 'handbraking must not skip mission dialogue');
+  step();
+  assert.equal(inputs.handbrake, true, 'the brake stays held between frames');
+  button(0, 0);
+  button(5, 1);
+  step();
+  assert.equal(inputs.handbrake, false);
+  assert.equal(inputs.sprint, true);
+  button(5, 0);
+  button(6, 0.65);
+  step();
+  assert.equal(inputs.backward, 0.65);
+  assert.equal(inputs.handbrake, false);
+  button(0, 1);
+  step();
+  assert.equal(inputs.handbrake, true);
+  pad.connected = false;
+  step();
+  assert.equal(inputs.handbrake, undefined, 'disconnect releases the brake');
+});
+
 test('the map and phone consume their own controls and prevent an exit button from acting on the street', () => {
   const { game, inputs, calls, button, step } = setup();
   button(13, 1);

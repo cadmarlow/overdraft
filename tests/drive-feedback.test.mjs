@@ -77,6 +77,22 @@ test('wet asphalt emits white spray, loose ground emits dust, and airborne wheel
   assert.equal(air.particles.length, 0);
 });
 
+test('a slow handbrake turn leaves rear tyre traces without marking ordinary rolling or a parked car', () => {
+  const h = effectHarness();
+  h.car.body.vz = 2;
+  for (const w of h.car.body.wheels) { w.slip = 2; w.lock = false; }
+  h.run();
+  assert.equal(h.drive.skids.cursor, 0, 'ordinary rolling keeps its existing slip threshold');
+  for (const w of h.car.body.wheels.slice(2)) w.lock = true;
+  h.run();
+  assert.ok(h.drive.skids.cursor > 0, 'locked rear tyres leave light rubber at manoeuvring speed');
+  assert.ok(h.car.body.trails.slice(0, 2).every(t => t.x === undefined), 'front tyres keep rolling cleanly');
+  const cursor = h.drive.skids.cursor;
+  h.car.body.vz = 0;
+  h.run();
+  assert.equal(h.drive.skids.cursor, cursor, 'holding the handbrake at rest adds no traces');
+});
+
 function audioHarness() {
   const nodes = [], params = [];
   const parameter = value => {
@@ -139,6 +155,42 @@ test('audio uses actual tyre contacts, distinguishes rain from loose terrain and
   assert.equal(audio.tyreA.out.gain.target, 0);
   assert.equal(audio.dirt.out.gain.target, 0);
   assert.equal(audio.road.out.gain.target, 0);
+});
+
+test('reverse transmission whirr follows actual backward travel and fades at rest or in forward gear', () => {
+  const { audio, car } = audioHarness();
+  car.body.reversing = true; car.speed = -2;
+  audio.update(car, true);
+  assert.ok(audio.reverseGain.gain.target > 0);
+  const pitch = audio.reverse.frequency.target;
+  car.speed = -6; audio.update(car, true);
+  assert.ok(audio.reverse.frequency.target > pitch);
+  car.speed = 0; audio.update(car, true);
+  assert.equal(audio.reverseGain.gain.target, 0, 'reverse selected while stopped is silent');
+  car.speed = 2; audio.update(car, true);
+  assert.equal(audio.reverseGain.gain.target, 0, 'forward motion must not whine in reverse');
+  car.speed = -2; car.body.reversing = false; audio.update(car, true);
+  assert.equal(audio.reverseGain.gain.target, 0, 'rolling back in forward gear is not reverse transmission');
+});
+
+test('locked tyres are audible at manoeuvring speed but silent when parked, airborne or on loose earth', () => {
+  const { audio, car } = audioHarness();
+  car.body.vz = 2;
+  for (const w of car.body.wheels) { w.slip = 1.7; w.lock = false; }
+  audio.update(car, true);
+  assert.equal(audio.tyreA.out.gain.target, 0);
+  for (const w of car.body.wheels.slice(2)) w.lock = true;
+  audio.update(car, true);
+  assert.ok(audio.tyreA.out.gain.target > 0.08);
+  car.body.vz = 0; audio.update(car, true);
+  assert.equal(audio.tyreA.out.gain.target, 0);
+  car.body.vz = 2;
+  for (const w of car.body.wheels) { w.grip = 0.6; w.rough = 0.024; }
+  audio.update(car, true);
+  assert.equal(audio.tyreA.out.gain.target, 0);
+  for (const w of car.body.wheels) { w.grip = 1; w.rough = 0.0035; w.hasGround = false; }
+  car.body.grounded = 0; audio.update(car, true);
+  assert.equal(audio.tyreA.out.gain.target, 0);
 });
 
 test('all vehicle families reuse graphs, avoid duplicate target queues and release every source on disposal', () => {

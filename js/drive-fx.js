@@ -219,7 +219,8 @@ class DriveEffects {
       if (w.burst && dx > 6 && near && Math.random() < dt * 30) this.sparks(w.px, w.py + 0.05, w.pz, b.vx, b.vz, 0.4, 0.03);
       const slip = w.slip || 0, grass = w.grip < 0.7 && w.rough > 0.012;
       const load = Math.min(1.5, Math.max(0, (w.load ?? nominalLoad) / nominalLoad));
-      const heat = Math.max(0, slip - 2.8) * Math.sqrt(load);
+      // Slow handbrake turns leave a light rear-tyre trace; ordinary rolling still needs real slip.
+      const heat = Math.max(0, slip - (w.lock && dx > 0.7 ? 0.8 : 2.8)) * Math.sqrt(load);
       // Dust belongs to loose terrain. Rain lowers grip too, but wet asphalt must never emit beige grass dust.
       if (heat > 0.2 && !grass && this.wet < 0.85) {
         const sport = car.kind === 'sport' || car.kind === 'super';

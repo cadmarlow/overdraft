@@ -3,7 +3,11 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.19 — Growth Equity**. Les arbres sont refaits : huit essences, chacune jeune ou adulte, avec des
+Version **0.9.20 — Slippage**. À la manette Xbox : **A maintenu = frein à main**, **RB = nitro ou wheeling**,
+**LT = frein puis marche arrière**. Un léger sifflement accompagne la marche arrière ; les pneus bloqués au frein
+à main deviennent plus audibles et laissent plus tôt de petites traces et de la fumée.
+
+La **0.9.19 — Growth Equity** a réuni les fonctionnalités précédentes. Les arbres sont refaits : huit essences, chacune jeune ou adulte, avec des
 branches et un feuillage propres, l'espèce et le diamètre du recensement pour les arbres de rue, et le vent de la
 météo dans les cimes. Les pieds et les pneus prennent appui sur les trottoirs et les pelouses à leur vraie hauteur ;
 la circulation suit les contours des chaussées, et les murs de soutènement de Central Park et de Bryant Park
@@ -192,7 +196,7 @@ dans les menus. **A** valide, **B** revient, **LB / RB** changent d’onglet dan
 | Armes | LT dégainer et viser, RT tirer ou frapper, B recharger, LT + R3 changer d’épaule, L3 régler la visée assistée |
 | Arsenal | LB bref arme précédente, LB tenu roue. RS désigne une arme, relâcher LB valide, B annule |
 | Grappin et vol libre | RB sortir ou ranger le grappin, RT le tirer. X sauter, ouvrir la wingsuit en chute libre ou lâcher le grappin. Y ouvrir ou larguer le parapente, LS et RS dirigent |
-| Au volant | LS direction, RT accélérateur, LT frein puis marche arrière, RB frein à main, A nitro ou wheeling, L3 klaxon, R3 regarder derrière, B remettre le véhicule d’aplomb à l’arrêt, Y descendre |
+| Au volant | LS direction, RT accélérateur, LT frein puis marche arrière, A frein à main, RB nitro ou wheeling, L3 klaxon, R3 regarder derrière, B remettre le véhicule d’aplomb à l’arrêt, Y descendre |
 | Tir embarqué | Tenir X pour viser par la vitre, RT pour tirer, B pour recharger. X sort le pistolet si l’arme en main ne convient pas |
 | Avion / hélicoptère | LS piloter, RT / LT augmenter ou réduire les gaz / monter ou descendre, Y quitter |
 | Partout | ↑ téléphone, ↓ carte, View bref caméra, View tenu garage, Menu pause, A passer les séquences de mission |

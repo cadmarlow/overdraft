@@ -102,6 +102,13 @@ class DriveAudio {
     const band = this.filter('lowpass', 1800, 0.6);
     this.whine.connect(band).connect(this.whineGain).connect(bus);
     this.whine.start();
+    // Straight-cut reverse gears have a soft rising whirr, distinct from the engine and tyre squeal.
+    this.reverse = this.own(c.createOscillator(), true);
+    this.reverse.type = 'triangle';
+    this.reverse.frequency.value = 170;
+    this.reverseGain = this.gain();
+    this.reverse.connect(this.filter('lowpass', 1400, 0.6)).connect(this.reverseGain).connect(bus);
+    this.reverse.start();
   }
 
   // A class's engine: two recordings' worth of firings a few thousand revs apart, crossfaded, through an exhaust
@@ -233,22 +240,29 @@ class DriveAudio {
     }
 
     const speed = Math.hypot(b.vx, b.vz), grounded = b.grounded > 0;
-    let rough = 0, hardSlip = 0, looseSlip = 0, contacts = 0, loose = 0;
+    let rough = 0, hardSlip = 0, lockedSlip = 0, looseSlip = 0, contacts = 0, loose = 0;
     for (const wheel of b.wheels ?? []) {
       if (!wheel.hasGround) continue;
       contacts++;
       rough += wheel.rough || 0;
       if (wheel.grip < 0.7 && wheel.rough > 0.012) { loose++; looseSlip = Math.max(looseSlip, wheel.slip || 0); }
-      else hardSlip = Math.max(hardSlip, wheel.slip || 0);
+      else {
+        hardSlip = Math.max(hardSlip, wheel.slip || 0);
+        if (wheel.lock && speed > 0.7) lockedSlip = Math.max(lockedSlip, wheel.slip || 0);
+      }
     }
     rough /= Math.max(1, contacts);
     this.set(this.road.out.gain, grounded ? clamp(speed / 50, 0, 1) * 0.14 + clamp(rough * 2, 0, 0.25) * clamp(speed / 14, 0, 1) : 0, now, 0.07);
     this.set(this.road.filters[0].frequency, 180 + speed * 5, now, 0.1);
     this.set(this.wind.out.gain, 0.22 * clamp(speed / 80, 0, 1.3) ** 2, now, 0.1);
     this.set(this.wind.filters[0].frequency, 500 + speed * 14, now, 0.1);
+    const reverseSpeed = b.reversing && car.body ? Math.max(0, -(car.speed ?? b.speed ?? 0)) : 0;
+    this.set(this.reverse.frequency, 170 + reverseSpeed * 42, now, 0.06);
+    this.set(this.reverseGain.gain, clamp((reverseSpeed - 0.15) / 2, 0, 1) * (0.035 + load * 0.02), now, 0.08);
 
     // Contact patches, not global skid state: airborne wheels are silent, mixed surfaces keep both textures.
-    const skid = grounded ? clamp((hardSlip - 1.8) / 10, 0, 1) : 0;
+    // A locked rear tyre should be audible during a slow handbrake turn too, but never while parked.
+    const skid = grounded ? clamp(Math.max((hardSlip - 1.8) / 10, (lockedSlip - 0.7) / 7), 0, 1) : 0;
     const pitch = 1 + clamp(hardSlip / 35, 0, 0.42);
     this.set(this.tyreA.out.gain, Math.sqrt(skid) * 0.25, now, 0.045);
     this.set(this.tyreA.filters[0].frequency, 780 * pitch, now, 0.06);

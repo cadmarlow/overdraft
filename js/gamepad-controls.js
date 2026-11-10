@@ -220,7 +220,7 @@ class GamepadControls {
       this.viewHold = 0;
     }
     if (edge(Y)) { g.interact(); return; }
-    if (edge(A) && g.director.current) g.director.skip = true;
+    if (edge(A) && g.director.current && g.state !== 'driving') g.director.skip = true;
 
     const mode = this.controller.activeMode;
     const driving = mode === 'car' || mode === 'cyclist';
@@ -263,8 +263,8 @@ class GamepadControls {
     this.controller.setGamepadInput('up', jump || Math.max(0, vertical));
     this.controller.setGamepadInput('jump', jump);
     this.controller.setGamepadInput('run', mode === 'person' && held(A));
-    this.controller.setGamepadInput('sprint', driving && held(A));
-    this.controller.setGamepadInput('handbrake', driving && held(RB));
+    this.controller.setGamepadInput('sprint', driving && held(RB));
+    this.controller.setGamepadInput('handbrake', driving && held(A));
     this.controller.setGamepadInput('down', driving ? held(R3) : Math.max(0, -vertical));
     this.camera.applyGamepadInput(look.x, look.y, 0, dt);
   }
