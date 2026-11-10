@@ -1,8 +1,88 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { FramePacer, ShadowCadence } from '../js/quality.js';
+import { LEVELS, ORDER, currentLevel, setLevel, cycleLevel, FramePacer, ShadowCadence } from '../js/quality.js';
 
 globalThis.document ??= { hidden: false };
+
+function qualityEnvironment(t, { search = '', saved = null, readBlocked = false, writeBlocked = false, storageBlocked = false } = {}) {
+  const descriptors = new Map(['location', 'localStorage'].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]));
+  const values = new Map(saved === null ? [] : [['overdraft:quality', saved]]), writes = [], navigations = [];
+  let reads = 0;
+  const location = { search, reload: () => navigations.push('reload'), assign: () => navigations.push('assign'), replace: () => navigations.push('replace') };
+  Object.defineProperty(location, 'href', { get: () => `https://example.test/${search}`, set: (value) => navigations.push(value) });
+  Object.defineProperty(globalThis, 'location', { configurable: true, value: location });
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() {
+    if (storageBlocked) throw new Error('Storage access denied');
+    return {
+      getItem(key) { reads++; if (readBlocked) throw new Error('Storage read denied'); return values.get(key) ?? null; },
+      setItem(key, value) { if (writeBlocked) throw new Error('Storage write denied'); writes.push([key, value]); values.set(key, value); }
+    };
+  } });
+  t.after(() => { for (const [key, descriptor] of descriptors) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; } });
+  return { values, writes, navigations, location, reads: () => reads };
+}
+
+test('a direct quality choice is persisted without navigation or changes to the running profile', (t) => {
+  const env = qualityEnvironment(t, { saved: 'balanced' }), active = currentLevel(), profiles = structuredClone(LEVELS);
+  for (const id of ['fluid', 'high', 'balanced']) {
+    assert.equal(setLevel(id), id);
+    assert.equal(env.values.get('overdraft:quality'), id);
+    assert.equal(currentLevel().id, id);
+  }
+  assert.deepEqual(env.writes, ['fluid', 'high', 'balanced'].map((id) => ['overdraft:quality', id]));
+  assert.deepEqual(env.navigations, []); assert.equal(env.location.search, '');
+  assert.deepEqual(active, { id: 'balanced', ...profiles.balanced });
+  assert.deepEqual(LEVELS, profiles);
+  assert.deepEqual(ORDER, ['high', 'balanced', 'fluid']);
+});
+
+test('invalid direct choices are rejected before any preference read, write or navigation', (t) => {
+  const env = qualityEnvironment(t, { saved: 'high' }), profiles = structuredClone(LEVELS);
+  for (const id of ['', 'performance', 'HIGH', 'constructor', 'toString', '__proto__', null, undefined, {}, ['fluid'], 1, Symbol('high')]) {
+    assert.throws(() => setLevel(id), RangeError);
+  }
+  assert.equal(env.values.get('overdraft:quality'), 'high');
+  assert.equal(env.reads(), 0); assert.deepEqual(env.writes, []); assert.deepEqual(env.navigations, []);
+  assert.deepEqual(LEVELS, profiles);
+});
+
+for (const [query, saved, expected] of [
+  ['high', 'fluid', 'high'], ['balanced', 'high', 'balanced'], ['fluid', 'balanced', 'fluid'], ['performance', 'high', 'fluid'],
+  ['', 'high', 'high'], ['unknown', 'fluid', 'fluid'], ['constructor', 'high', 'high'], ['toString', null, 'balanced'],
+  [null, 'fluid', 'fluid'], [null, 'performance', 'balanced'], [null, '__proto__', 'balanced'], [null, null, 'balanced']
+]) test(`quality preference resolves URL ${query} and storage ${saved} to ${expected}`, (t) => {
+  const env = qualityEnvironment(t, { search: query === null ? '' : `?quality=${query}`, saved });
+  assert.deepEqual(currentLevel(), { id: expected, ...LEVELS[expected] });
+  assert.equal(env.reads(), ['high', 'balanced', 'fluid', 'performance'].includes(query) ? 0 : 1);
+  assert.deepEqual(env.writes, []);
+});
+
+test('an explicit URL keeps precedence after saving a pending direct choice', (t) => {
+  const env = qualityEnvironment(t, { search: '?quality=high', saved: 'balanced' });
+  assert.equal(setLevel('fluid'), 'fluid');
+  assert.equal(currentLevel().id, 'high');
+  assert.equal(env.values.get('overdraft:quality'), 'fluid');
+  assert.equal(env.location.search, '?quality=high');
+});
+
+for (const failure of ['readBlocked', 'writeBlocked', 'storageBlocked']) test(`quality selection remains usable with ${failure}`, (t) => {
+  const env = qualityEnvironment(t, { [failure]: true });
+  assert.equal(currentLevel().id, 'balanced');
+  assert.equal(setLevel('fluid'), 'fluid');
+  assert.equal(env.values.get('overdraft:quality'), failure === 'readBlocked' ? 'fluid' : undefined);
+  env.location.search = '?quality=performance';
+  assert.equal(currentLevel().id, 'fluid');
+  assert.deepEqual(env.navigations, []);
+});
+
+test('the legacy cycle retains its order and wraparound through the validated setter', (t) => {
+  const env = qualityEnvironment(t, { saved: 'high' });
+  for (const expected of ['balanced', 'fluid', 'high']) assert.equal(cycleLevel(), expected);
+  assert.deepEqual(env.writes, ['balanced', 'fluid', 'high'].map((id) => ['overdraft:quality', id]));
+  env.location.search = '?quality=performance';
+  assert.equal(cycleLevel(), 'high');
+  assert.deepEqual(env.navigations, []);
+});
 
 function setup(level = { scale: 1, minScale: 0.7 }) {
   const completions = [];

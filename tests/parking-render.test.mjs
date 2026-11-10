@@ -32,14 +32,19 @@ function fixture() {
 test('parking picks detail per car inside one cell and keeps pools stable through travel', () => {
   const { parking, camera, colliders, update } = fixture();
   const pool = parking.group.children.slice();
-  assert.equal(parking.stats().near, 1);
+  assert.equal(parking.stats().close, 1, 'a car five metres away gets the level made for walking past it');
+  assert.equal(parking.stats().near, 0);
   assert.equal(parking.stats().far, 1, 'the car 120 m away must not inherit the close car’s detailed mesh');
   assert.equal(parking.stats().drawn, 2, 'the car beyond 230 m is not submitted');
   assert.equal(colliders.size, 3, 'render distance does not delete nearby collision data');
+  // between the two: beyond a few car lengths, the traffic level
+  camera.position.set(60, 2, 0); update();
+  assert.deepEqual([parking.stats().close, parking.stats().near, parking.stats().far], [0, 2, 1]);
   camera.position.set(125, 2, 0); update();
-  assert.equal(parking.stats().near, 1);
+  assert.equal(parking.stats().close, 1);
+  assert.equal(parking.stats().near, 0);
   assert.equal(parking.stats().far, 2);
-  const close = pool.find(m => m.name.endsWith('_near'));
+  const close = pool.find(m => m.name.endsWith('_close'));
   assert.equal(close.instanceMatrix.array[12], 120);
   assert.equal(close.geometry.attributes.carState.array[3], 258, 'paint and style travel with their car after sorting');
   assert.deepEqual(parking.group.children, pool, 'driving creates no render objects, geometry or materials');
@@ -53,11 +58,11 @@ test('taking a parked car removes its drawing and collider, including after a de
   const car = parking.release(1);
   assert.equal(car.x, 120);
   assert.equal(parking.release(1), null, 'a slot cannot be taken twice');
-  const close = parking.group.children.find(m => m.name.endsWith('_near'));
+  const close = parking.group.children.find(m => m.name.endsWith('_close'));
   assert.equal(close.instanceMatrix.array[0], 0, 'the previous instance vanishes immediately');
   assert.equal(colliders.size, 2);
   update();
-  assert.equal(parking.stats().near, 0);
+  assert.equal(parking.stats().close, 0);
   assert.equal(parking.stats().drawn, 2);
   camera.position.x = 0; update();
   assert.equal(parking.stats().drawn, 1, 'driving back cannot respawn a taken car in a still-loaded cell');

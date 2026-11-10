@@ -15,7 +15,7 @@ function modelOf(id) {
   const info = manifest[id], bytes = fs.readFileSync(new URL(`../assets/cars/${id}.bin`, import.meta.url));
   const array = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
   const position = new THREE.BufferAttribute(new Float32Array(array, 0, info.vertices * 3), 3);
-  const indices = new Uint32Array(array, info.vertices * 21 + (4 - info.vertices % 4) % 4, info.indices);
+  const indices = new Uint32Array(array, info.vertices * (info.normalFormat === 'snorm16' ? 25 : 21) + (4 - info.vertices % 4) % 4, info.indices);
   const wheels = [0, 1, 2, 3].map((i) => {
     const g = new THREE.BufferGeometry();g.setAttribute('position', position);
     g.setIndex(new THREE.BufferAttribute(indices.subarray(info.ranges[6 + i * 2], info.ranges[6 + i * 2] + info.ranges[7 + i * 2]), 1));return g;
@@ -38,6 +38,16 @@ test('brakes fit behind every real wheel in the fifteen-model fleet', () => {
       assert.ok(L.radius > 0.25 && L.radius < 0.5, id);
       assert.ok(L.rotor * L.radius < L.radius * 0.7, `${id} disc stays inside the tyre`);
       assert.ok(L.offset > 0 && L.offset < 0.13, `${id} brake behind rim face`);
+      // and behind the spokes: the outer friction face stays inside the faces the wheel shows over the disc
+      const p = model.wheels[i].attributes.position, reach = L.rotor * L.radius, fronts = new Map();
+      for (const v of model.wheels[i].index.array) {
+        const r = Math.hypot(p.getY(v), p.getZ(v));
+        if (r > reach || r < reach * 0.45) continue;
+        const cell = Math.floor(p.getY(v) / reach * 10) * 100 + Math.floor(p.getZ(v) / reach * 10);
+        fronts.set(cell, Math.max(fronts.get(cell) ?? -Infinity, p.getX(v) * L.side));
+      }
+      const depths = [...fronts.values()].sort((a, b) => a - b);
+      if (depths.length > 40) assert.ok(L.offset + 0.039 * L.radius <= Math.max(0.018 + 0.039 * L.radius, depths[Math.floor(depths.length * 0.9)]), `${id} wheel ${i}: the disc does not stand in front of the spokes`);
       assert.equal(L.side, i % 2 ? -1 : 1);
     }
     const details = rig(model);

@@ -44,7 +44,8 @@ loin : plus fou, plus inventif, plus généreux. Le niveau de référence est un
 
 Les versions portent des noms de la finance : 0.2 Opening Bell, 0.3 Margin Call, 0.4 Human Capital, 0.5 Hard Assets,
 0.6 Prime Real Estate, 0.7 Bull Run, 0.8 Hostile Takeover, 0.9 Leverage, 0.9.3 Main Street, 0.9.4 Momentum, 0.9.5 Due Diligence,
-0.9.6 Footfall, 0.9.7 Curb Appeal, 0.9.8 Revaluation, 0.9.9 Break Even, 0.9.10 Price Action, 0.9.11 Short Squeeze.
+0.9.6 Footfall, 0.9.7 Curb Appeal, 0.9.8 Revaluation, 0.9.9 Break Even, 0.9.10 Price Action, 0.9.11 Short Squeeze,
+0.9.12 Blue Chips.
 Prochaine : 1.0 Closing Bell (voir `GAME_DESIGN.md`).
 
 Une nouvelle version met à jour, ensemble :
@@ -105,6 +106,12 @@ Paramètres d'adresse : `?stats=1` (images par seconde et coût de chaque systè
 - Une touche maintenue se répète trente fois par seconde. Un `preventDefault()` placé après `if (e.repeat) return` laisse
   passer ces répétitions : TAB maintenu promenait le focus sur tous les boutons de la page, lâchait la souris et mettait
   en pause. Tester les touches maintenues avec de vraies répétitions (`autoRepeat: true` en CDP).
+- Dans un objet instancié, `positionLocal` lu par les pixels est déjà passé par l'instance : il est dans la rue, plus
+  sur l'objet. Tout ce qui se place le long d'un modèle (plaques, côté d'un clignotant) doit lire la position d'origine
+  (`varying(attribute('position'))`). Les voitures de la rue n'avaient aucune plaque à cause de ça.
+- Une roue se juge sur trois choses que le nombre de triangles ne dit pas : ronde, d'équerre sur son essieu, jante
+  visible devant le disque. Trois sources arrivaient braquées, carrossées ou ovales, et tournaient en vacillant
+  (`tests/car-visual-contract.test.mjs` le vérifie maintenant).
 - Le dossier personnel `/Users/ulik` est lui-même un dépôt Git : une session Claude Code lancée au-dessus de ce dépôt
   partage sa mémoire avec d'autres projets. Travailler depuis ce dossier.
 

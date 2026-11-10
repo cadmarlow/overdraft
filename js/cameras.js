@@ -103,6 +103,7 @@ class CameraSystem {
     this.aimMode = false;
     this.aimFov = 44; // the lens behind the sights (degrees): gameplay sets it per weapon
     this.lookLocked = false; // the pointer is steering something else (the weapon wheel): the view holds still
+    this._vehicleLift = 0; // metres the eye is raised to look over a vehicle standing at the player's back
     this.vehicleObstacles = null; // (origin, range) → oriented boxes of the vehicles around a person on foot (gameplay.js)
     this.aimBlend = 0;
     this.combatMode = false;
@@ -353,6 +354,7 @@ class CameraSystem {
     this.followBaseY = 0;
     this._cameraBoom = Infinity;
     this._wallSlide = 0;
+    this._vehicleLift = 0;
     this.bodyOccluded = false;
     this.recoilPitch = this.recoilYaw = this.recoilPitchVelocity = this.recoilYawVelocity = 0;
     this.setCameraPreset('chase', true);
@@ -371,6 +373,12 @@ class CameraSystem {
     // Someone else's body when the Architect holds the camera (architect.js), else the player's
     const entity = this.spectate?.() || this.controllerManager.getActiveEntity();
     this.bodyOccluded = false;
+    // A real cabin surrounds the eye within centimetres. The exterior near plane cuts its roof and leaves
+    // isolated pillar ends; keep that trim intact in cockpit view and restore the usual plane on every exit.
+    const carCockpit = !this.cinematic && this.activePresetId === 'pov' && entity.type === 'car'
+      && !entity.moto && !entity.boat && !entity.bicycle;
+    const near = carCockpit ? 0.06 : entity.type === 'person' ? 0.12 : 0.35;
+    if (this.camera.near !== near) { this.camera.near = near; this.camera.updateProjectionMatrix(); }
     if (this.cinematic) { this.updateCinematic(dt); return; }
     if (this.flightView && (this.activePresetId === 'chase' || this.activePresetId === 'action')) { this.updateFlight(dt, entity); return; }
     this.flying = false;
@@ -614,12 +622,20 @@ class CameraSystem {
         for (const collider of colliders) {
           distance = Math.min(distance, cameraCollisionDistance(origin, direction, distance, collider, footFollow ? 0.24 : 0.4));
         }
-        // On foot, a van pulling up behind must not swallow the eye: moving vehicles shorten the boom like walls do
+        // On foot, a van pulling up behind must not swallow the eye: vehicles shorten the boom like walls do, down to
+        // arm's length. Closer than that the camera would sit on the back of the head, so it keeps that length and
+        // rises over the roof instead: standing in traffic, the player still sees the street.
+        let lift = 0;
         if (footFollow && this.vehicleObstacles) {
           for (const collider of this.vehicleObstacles(origin, length + 4)) {
-            distance = Math.min(distance, Math.max(0.7, cameraCollisionDistance(origin, direction, distance, collider, 0.2)));
+            const hit = cameraCollisionDistance(origin, direction, distance, collider, 0.2);
+            if (hit >= distance) continue;
+            if (hit >= 1.7) { distance = hit; continue; }
+            distance = Math.min(distance, 1.7);
+            lift = Math.max(lift, collider.maxY + 0.35 - (origin.y + direction.y * distance));
           }
         }
+        this._vehicleLift += (Math.max(0, lift) - this._vehicleLift) * (1 - Math.exp(-dt * 9));
         // Pull in immediately; emerge softly once the wall is gone. The collision distance is never eased outward
         // through solid geometry, and unlike a minimum boom of 55 cm this also works with a wall at one's shoulder.
         if (distance < this._cameraBoom || !Number.isFinite(this._cameraBoom)) this._cameraBoom = distance;
@@ -663,8 +679,9 @@ class CameraSystem {
         }
         if (footFollow) this.bodyOccluded = Math.hypot(this.currentPos.x - origin.x, this.currentPos.z - origin.z) < 0.6;
       }
-    } else { this._cameraBoom = Infinity; this._wallSlide = 0; }
+    } else { this._cameraBoom = Infinity; this._wallSlide = 0; this._vehicleLift = 0; }
     this.camera.position.copy(this.currentPos);
+    if (this._vehicleLift > 0.001) this.camera.position.y += this._vehicleLift;
     this.camera.lookAt(this.currentLookAt);
     if (this.activePresetId === 'chase' || this.activePresetId === 'action' || this.activePresetId === 'pov') {
       if (Math.abs(this.recoilPitch) > 1e-7) this.camera.rotateX(this.recoilPitch);
@@ -689,8 +706,6 @@ class CameraSystem {
       this.shake *= Math.exp(-dt * 6);
     }
     // A modest lens change keeps the muzzle in frame; magnifying the target must not swallow the player's shoulder.
-    const near = entity.type === 'person' ? 0.12 : 0.35;
-    if (this.camera.near !== near) { this.camera.near = near; this.camera.updateProjectionMatrix(); }
     if (this.activePresetId === 'chase' || this.activePresetId === 'action') {
       const fov = this.getActivePreset().fov - 3 * this.combatBlend - (this.getActivePreset().fov - 3 - this.aimFov) * this.aimBlend + this.speedFov;
       if (Math.abs(this.camera.fov - fov) > 0.05) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }

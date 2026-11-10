@@ -267,25 +267,34 @@ test('near instanced wheels match far proxy wheel shading across NYPD, blackout,
     `spoke styles 0 and 1 produce distinct spoke patterns: ${patternSamples}`);
 });
 
-test('renderCar writes per-car wheel styles to both front and rear wheel slots with dirty tracking', () => {
+test('renderCar hands each car its level of detail and the pose its material turns into wheels and lean', () => {
   const trafficSrc = readFileSync(join(__dirname, '../js/traffic.js'), 'utf8');
   const match = trafficSrc.match(/  function renderCar\(c\) \{[\s\S]*?\n  \}/);
   assert.ok(match, 'renderCar function present');
-  const carWheelStyles = { array: new Float32Array(8) };
-  const placed = [];
+  assert.doesNotMatch(match[0], /placeWheels|carWheel/, 'a car is one mesh, wheels included: no wheel instances to place');
   const makeInst = () => ({
     count: 0,
-    setMatrixAt() {},
+    placed: [],
+    setMatrixAt(slot, matrix) { this.placed[slot] = matrix.rotation; },
     geometry: {
       attributes: {
         paintColor: { array: new Float32Array(12) },
-        carState: { array: new Float32Array(16) }
+        carState: { array: new Float32Array(16) },
+        carPose: { array: new Float32Array(16) }
       }
     }
   });
+  const dummy = {
+    position: { set() {} },
+    rotation: { last: [0, 0, 0], set(x, y, z) { this.last = [x, y, z]; } },
+    scale: { set() {} },
+    updateMatrix() { this.matrix = { rotation: this.rotation.last.slice() }; },
+    matrix: null
+  };
   const ctx = {
     carSpecs: { sedan: { wheelRadius: 0.35, wheelX: 0.8, wheelZ: 1.4, wheelMid: 0 } },
     CAR_PROXY_DISTANCE: 90,
+    CAR_CLOSE_DISTANCE: 30,
     hasView: false,
     visible: () => true,
     focusX: 0,
@@ -298,51 +307,36 @@ test('renderCar writes per-car wheel styles to both front and rear wheel slots w
     MAX_LIGHT_DIST_SQ: 0,
     MAX_LIGHT_DIST: 0,
     clock: 0,
-    bodies: { sedan: { near: makeInst(), far: makeInst(), shadow: [2, 4.5, 0] } },
-    policeLightbars: {},
+    bodies: { sedan: { close: makeInst(), near: makeInst(), far: makeInst(), shadow: [2, 4.5, 0] } },
+    policeLightbars: { sedan: makeInst() },
     policeDrawn: { sedan: 0 },
     dirtyPaint: new Set(),
     dirtyState: new Set(),
-    dirtyWheelStyles: false,
-    carWheelStyles,
-    carWheelLeftInst: {},
-    carWheelRightInst: {},
     carShadowInst: { setMatrixAt() {} },
     litVehicles: [],
     litVehicleCount: 0,
     visibleCars: 0,
-    wheelCars: 0,
-    dummy: {
-      position: { set() {} },
-      rotation: { set() {} },
-      scale: { set() {} },
-      updateMatrix() {},
-      matrix: {}
-    },
-    placeWheels(c, idx) { placed.push(idx); }
+    dummy
   };
   const renderCar = vm.runInNewContext(`(${match[0].trim()})`, ctx);
-  const policeStyle = carStyleCode({ livery: 1, trim: 2, wheel: 3 });
-  const sportStyle = carStyleCode({ livery: 4, metallic: 1, trim: 2, wheel: 2 });
-  const c0 = { x: 10, z: 10, prevX: 10, prevZ: 10, yaw: 0, yawOffset: 0, pitch: 0, roll: 0, wheelSpin: 0,
-    bodyType: 'sedan', isPolice: false, paint: [1, 1, 1], style: policeStyle, blink: 0, blinkPhase: 0, acc: 0, speed: 5 };
-  const c1 = { ...c0, x: 20, style: sportStyle };
-  const c2 = { ...c0, x: 120, style: 99 }; // > 90 m -> far proxy, no separate wheels
+  const c0 = { x: 10, z: 10, prevX: 10, prevZ: 10, yaw: 0.5, yawOffset: 0, pitch: 0.05, roll: -0.04, wheelSpin: 1.25, steer: 0.3,
+    bodyType: 'sedan', isPolice: true, paint: [1, 1, 1], style: carStyleCode({ livery: 1, trim: 2, wheel: 3 }), blink: 0, blinkPhase: 0, acc: 0, speed: 5 };
+  const c1 = { ...c0, x: 20, prevX: 20, isPolice: false, steer: 0, pitch: 0, roll: 0, wheelSpin: 3 };
+  const c2 = { ...c1, x: 120, prevX: 120 }; // beyond 90 m: the far stand-in
 
   renderCar(c0);
   renderCar(c1);
   renderCar(c2);
-  assert.equal(ctx.wheelCars, 2);
-  assert.deepEqual(placed, [0, 1]);
-  assert.equal(ctx.dirtyWheelStyles, true);
-  assert.deepEqual([...carWheelStyles.array.slice(0, 4)], [policeStyle, policeStyle, sportStyle, sportStyle]);
-
-  // Second frame with identical near cars & styles must leave dirtyWheelStyles false (no GPU upload)
-  ctx.dirtyWheelStyles = false;
-  ctx.wheelCars = 0;
-  ctx.bodies.sedan.near.count = 0;
-  ctx.bodies.sedan.far.count = 0;
-  renderCar(c0);
-  renderCar(c1);
-  assert.equal(ctx.dirtyWheelStyles, false);
+  renderCar({ ...c1, x: 60, prevX: 60 });
+  const { close, near, far } = ctx.bodies.sedan;
+  // three distances, three levels of bodywork: within a few car lengths, further down the street, the far stand-in
+  assert.deepEqual([close.count, near.count, far.count], [2, 1, 1]);
+  // the instance only places the car: what leans and what turns is the material's business, so the wheels stay down
+  assert.deepEqual(close.placed[0], [0, 0.5, 0], 'the body instance carries the heading alone');
+  assert.deepEqual([...close.geometry.attributes.carPose.array.slice(0, 8)], [1.25, 0.3, 0.05, -0.04, 3, 0, 0, 0].map(Math.fround),
+    'spin, steering, pitch and roll travel with each car');
+  assert.deepEqual([...far.geometry.attributes.carPose.array.slice(0, 4)], [3, 0, 0, 0], 'every level shares the material, so every level is posed');
+  // a light bar is bolted to the roof: it leans with the body
+  assert.deepEqual(ctx.policeLightbars.sedan.placed[0], [0.05, 0.5, -0.04]);
+  assert.equal(ctx.policeDrawn.sedan, 1);
 });

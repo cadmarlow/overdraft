@@ -6,7 +6,7 @@ import { signalPhase, walkSignal } from './city-config.js';
 import { cityUniforms, createContactShadowMaterial, createCarFlareMaterial } from './tsl-materials.js';
 import { HEADLIGHTS, createVehicleHeadlight, placeVehicleHeadlight } from './vehicle-lights.js';
 import { BODY_SPECS, carStyleCode, buildLightbarGeometry, createLightbarMaterial } from './cars.js';
-import { carModels, carSpecs, createWheelMaterial, trafficMaterial, withWheels } from './car-assets.js';
+import { carModels, carSpecs, trafficMaterial, withWheels } from './car-assets.js';
 import { shuntBody } from './car-physics.js';
 import {
   BUS_SPEC,
@@ -249,13 +249,6 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
     };
   }
 
-  // Every body kind shares one 3D wheel model, instanced separately and scaled to the kind's wheel radius
-  const carWheelLeftGeo = carModels.sedan.wheels[1].clone();
-  const carWheelRightGeo = carModels.sedan.wheels[0].clone();
-  const carWheelStyles = new THREE.InstancedBufferAttribute(new Float32Array(NUM_CARS * 2), 1);
-  carWheelLeftGeo.setAttribute('wheelStyle', carWheelStyles);
-  carWheelRightGeo.setAttribute('wheelStyle', carWheelStyles);
-  const carWheelMat = createWheelMaterial(carModels.sedan);
 
   const taxiYellow = new THREE.Color(0xffbe14);
   const boroGreen = new THREE.Color(0x5cae3e);
@@ -305,8 +298,9 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
     cars.push(car);
   }
 
-  // Per body kind: the full model (with separately instanced spinning wheels near the camera) and, beyond
-  // CAR_PROXY_DISTANCE, the ~250-triangle stand-in, plus the contact shadow's footprint (width, length, centre z).
+  // Per body kind: the model on its own wheels at two levels of detail (within a few car lengths, further down the
+  // street) and, beyond CAR_PROXY_DISTANCE, the stand-in, plus the contact shadow's footprint (width, length, centre z).
+  // Each is one mesh, wheels included: the material spins and steers them and leans the body over them (carPose).
   // Instance slots are handed out every frame to the cars the camera can see (or whose shadow it may see), see
   // renderCar(). Per-instance paint & lamp / livery state the car material reads: brake lights, left (+x) & right (-x)
   // turn signals, livery (1 = NYPD).
@@ -315,23 +309,24 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
     const spec = carSpecs[kind];
     const n = Math.max(1, counts[kind]);
     const mat = trafficMaterial(kind);
-    const lodMesh = (source) => {
+    const lodMesh = (source, name) => {
       const g = source.clone();
       g.setAttribute('paintColor', new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3));
       g.setAttribute('carState', new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4));
-      return new THREE.InstancedMesh(g, mat, n);
+      g.setAttribute('carPose', new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4));
+      const mesh = new THREE.InstancedMesh(g, mat, n);
+      mesh.name = 'Traffic_' + kind + '_' + name;
+      return mesh;
     };
     bodies[kind] = {
-      near: lodMesh(carModels[kind].shell),
-      far: lodMesh(carModels[kind].far),
+      close: lodMesh(withWheels(carModels[kind], true), 'close'),
+      near: lodMesh(withWheels(carModels[kind]), 'near'),
+      far: lodMesh(carModels[kind].far, 'far'),
       shadow: [2 * spec.halfW + 0.33, spec.zFront - spec.zRear + 0.55, (spec.zFront + spec.zRear) / 2]
     };
   }
-  const bodyMeshes = Object.values(bodies).flatMap((b) => [b.near, b.far]);
+  const bodyMeshes = Object.values(bodies).flatMap((b) => [b.close, b.near, b.far]);
 
-  const carWheelLeftInst = new THREE.InstancedMesh(carWheelLeftGeo, carWheelMat, NUM_CARS * 2);
-  const carWheelRightInst = new THREE.InstancedMesh(carWheelRightGeo, carWheelMat, NUM_CARS * 2);
-  carWheelRightInst.userData.sharesPipelineWith = carWheelLeftInst;
 
   // 3D Collision Spark & Debris Particle Pool
   const MAX_SPARKS = 120;
@@ -376,13 +371,9 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
 
   for (const m of bodyMeshes) m.castShadow = m.receiveShadow = true;
   for (const m of policeLightbarMeshes) m.castShadow = true;
-  carWheelLeftInst.castShadow = carWheelLeftInst.receiveShadow = true;
-  carWheelRightInst.castShadow = carWheelRightInst.receiveShadow = true;
 
   group.add(
     ...bodyMeshes,
-    carWheelLeftInst,
-    carWheelRightInst,
     sparkInst,
     ...policeLightbarMeshes
   );
@@ -472,7 +463,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
   }
 
   // Nothing shows until it has been placed
-  const carInstances = [...bodyMeshes, carWheelLeftInst, carWheelRightInst, ...policeLightbarMeshes, carShadowInst];
+  const carInstances = [...bodyMeshes, ...policeLightbarMeshes, carShadowInst];
   const busInstances = [busBodyInst, busHeaderInst, busWheelLeftInst, busWheelRightInst, busShadowInst];
   for (const inst of [...carInstances, ...busInstances, sparkInst]) {
     inst.frustumCulled = false;
@@ -1680,12 +1671,12 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
   // body + 4 separate wheel instances; vehicles outside the view frustum (with a margin for cast shadows and headlight
   // cones) are skipped altogether.
   const CAR_PROXY_DISTANCE = 64;
+  // Within a few car lengths a car in traffic is drawn at the level a parked one gets there (parking.js)
+  const CAR_CLOSE_DISTANCE = 30;
   const dirtyPaint = new Set();
   const dirtyState = new Set();
-  let dirtyWheelStyles = false;
   const litVehicles = [];
   let litVehicleCount = 0;
-  let wheelCars = 0;
   let visibleCars = 0;
   const policeDrawn = { sedan: 0, suv: 0 };
   let visibleBuses = 0;
@@ -1736,21 +1727,34 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
     c.wheelSpin = (c.wheelSpin + Math.sign(rawStep) * Math.min(Math.abs(rawStep), 0.48)) % (Math.PI * 2);
     if (hasView && !visible(c.x, c.z, 18)) return;
 
-    const near = Math.hypot(c.x - focusX, c.z - focusZ) < CAR_PROXY_DISTANCE;
-    const bodyInst = near ? bodies[c.bodyType].near : bodies[c.bodyType].far;
+    const away = Math.hypot(c.x - focusX, c.z - focusZ);
+    const near = away < CAR_PROXY_DISTANCE;
+    const bodyInst = away < CAR_CLOSE_DISTANCE ? bodies[c.bodyType].close : near ? bodies[c.bodyType].near : bodies[c.bodyType].far;
     const slot = bodyInst.count++;
 
+    // The instance says where the car is and which way it points. How its body leans and its wheels turn goes to the
+    // material (carPose), which leans the bodywork over wheels that stay on the road. A light bar is part of the
+    // body: it leans with it.
     dummy.position.set(c.x, 0.0, c.z);
-    dummy.rotation.set(c.pitch, rotY, c.roll, 'YXZ');
     dummy.scale.set(1, 1, 1);
-    dummy.updateMatrix();
-    bodyInst.setMatrixAt(slot, dummy.matrix);
     if (c.isPolice) {
       const lb = policeLightbars[c.bodyType];
-      if (lb) lb.setMatrixAt(policeDrawn[c.bodyType]++, dummy.matrix);
+      if (lb) {
+        dummy.rotation.set(c.pitch, rotY, c.roll, 'YXZ');
+        dummy.updateMatrix();
+        lb.setMatrixAt(policeDrawn[c.bodyType]++, dummy.matrix);
+      }
     }
+    dummy.rotation.set(0, rotY, 0, 'YXZ');
+    dummy.updateMatrix();
+    bodyInst.setMatrixAt(slot, dummy.matrix);
 
     const attrs = bodyInst.geometry.attributes;
+    const pose = attrs.carPose.array;
+    pose[slot * 4] = c.wheelSpin;
+    pose[slot * 4 + 1] = c.steer || 0;
+    pose[slot * 4 + 2] = c.pitch;
+    pose[slot * 4 + 3] = c.roll;
     const paint = attrs.paintColor.array;
     const o3 = slot * 3;
     if (paint[o3] !== c.paint[0] || paint[o3 + 1] !== c.paint[1] || paint[o3 + 2] !== c.paint[2]) {
@@ -1798,16 +1802,6 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
         c._braking = b0;
         litVehicles[litVehicleCount++] = c;
       }
-    }
-
-    if (near) {
-      const wi = wheelCars * 2;
-      const ws = carWheelStyles.array;
-      if (ws[wi] !== c.style || ws[wi + 1] !== c.style) {
-        ws[wi] = ws[wi + 1] = c.style;
-        dirtyWheelStyles = true;
-      }
-      placeWheels(c, wheelCars++, rotY, c.roll, spec.wheelRadius, spec.wheelX, spec.wheelZ, carWheelLeftInst, carWheelRightInst, carSpecs.sedan.wheelRadius, spec.wheelMid);
     }
   }
 
@@ -2023,9 +2017,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
     }
     buildOccupancy();
     for (const m of bodyMeshes) m.count = 0;
-    dirtyWheelStyles = false;
     litVehicleCount = 0;
-    wheelCars = 0;
     visibleCars = 0;
     policeDrawn.sedan = 0;
     policeDrawn.suv = 0;
@@ -2082,6 +2074,7 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
         continue;
       }
       flagRange(m.instanceMatrix, n);
+      flagRange(m.geometry.attributes.carPose, n);
       if (dirtyPaint.has(m)) flagRange(m.geometry.attributes.paintColor, n);
       if (dirtyState.has(m)) flagRange(m.geometry.attributes.carState, n);
     }
@@ -2102,9 +2095,6 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
       inst.count = n;
       flagRange(inst.instanceMatrix, n);
     };
-    syncInst(carWheelLeftInst, wheelCars * 2);
-    syncInst(carWheelRightInst, wheelCars * 2);
-    if (dirtyWheelStyles && wheelCars > 0) flagRange(carWheelStyles, wheelCars * 2);
     syncInst(policeLightbars.sedan, policeDrawn.sedan);
     syncInst(policeLightbars.suv, policeDrawn.suv);
     syncInst(carShadowInst, visibleCars);
@@ -2314,6 +2304,7 @@ function createHighwayTraffic(scene, lanes, traffic) {
       const geo = (lod === 2 ? carModels[kind].far : lod === 1 ? carModels[kind].shell : withWheels(carModels[kind])).clone();
       geo.setAttribute('paintColor', new THREE.InstancedBufferAttribute(new Float32Array(n * 3), 3));
       geo.setAttribute('carState', new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4));
+      geo.setAttribute('carPose', new THREE.InstancedBufferAttribute(new Float32Array(n * 4), 4)); // level on the deck, wheels as modelled
       const mesh = new THREE.InstancedMesh(geo, trafficMaterial(kind), n);
       mesh.count = 0;
       mesh.frustumCulled = false;

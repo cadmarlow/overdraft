@@ -13,6 +13,7 @@ const LEVELS = {
 };
 const ORDER = ['high', 'balanced', 'fluid'];
 const DEFAULT_LEVEL = 'balanced';
+const isLevel = (id) => typeof id === 'string' && ORDER.includes(id);
 
 function storedLevel() {
   try { return localStorage.getItem(KEY); } catch { return null; }
@@ -21,15 +22,22 @@ function storedLevel() {
 // The address wins over the saved choice (?quality=high|balanced|fluid, and the old ?quality=performance)
 function currentLevel() {
   const asked = new URLSearchParams(location.search).get('quality');
-  const id = asked === 'performance' ? 'fluid' : LEVELS[asked] ? asked : LEVELS[storedLevel()] ? storedLevel() : DEFAULT_LEVEL;
+  const requested = asked === 'performance' ? 'fluid' : asked;
+  const saved = isLevel(requested) ? null : storedLevel();
+  const id = isLevel(requested) ? requested : isLevel(saved) ? saved : DEFAULT_LEVEL;
   return { id, ...LEVELS[id] };
 }
 
-// Remembers the next level; the caller reloads the page
+// Remember a validated choice without changing the running renderer. The caller applies it through navigation.
+function setLevel(id) {
+  if (!isLevel(id)) throw new RangeError('Graphics level must be high, balanced or fluid');
+  try { localStorage.setItem(KEY, id); } catch { /* private window: the caller can carry the choice in the address */ }
+  return id;
+}
+
+// Compatibility for callers that still cycle through the profiles.
 function cycleLevel() {
-  const next = ORDER[(ORDER.indexOf(currentLevel().id) + 1) % ORDER.length];
-  try { localStorage.setItem(KEY, next); } catch { /* private window: this session only, through the address */ }
-  return next;
+  return setLevel(ORDER[(ORDER.indexOf(currentLevel().id) + 1) % ORDER.length]);
 }
 
 const MAX_IN_FLIGHT = 2; // frames the GPU may still owe us: past this, input lag grows with every queued frame
@@ -143,4 +151,4 @@ class ShadowCadence {
   }
 }
 
-export { currentLevel, cycleLevel, FramePacer, ShadowCadence };
+export { LEVELS, ORDER, currentLevel, setLevel, cycleLevel, FramePacer, ShadowCadence };

@@ -16,7 +16,8 @@ const CELL = 128;
 const BUILD_RADIUS = 330; // cells are built this far from the camera...
 const DROP_RADIUS = 440; // ...and dropped again beyond this
 const DRAW_FAR = 230; // the coarse stand-in draws up to here
-const DRAW_NEAR = 76; // the full model with its wheels, casting shadows, within this
+const DRAW_NEAR = 76; // the traffic level with its wheels, casting shadows, within this
+const DRAW_CLOSE = 30; // and within this the level a car deserves when the player walks past it
 const REFRESH_BEYOND = DRAW_FAR + 25; // occupancy is only reconsidered out of sight
 const REFRESH_EVERY = 3; // seconds between two looks at the same far cell
 const BUILDS_PER_FRAME = 1;
@@ -27,7 +28,7 @@ const _q = new THREE.Quaternion();
 const _p = new THREE.Vector3();
 const _s = new THREE.Vector3(1, 1, 1);
 const _up = new THREE.Vector3(0, 1, 0);
-const POOL_NEAR = 256, POOL_FAR = 1024;
+const POOL_CLOSE = 48, POOL_NEAR = 256, POOL_FAR = 1024;
 const RESTREAM = 4;
 
 /**
@@ -157,7 +158,7 @@ function createParking(scene, network, { hydrants = [], footprints = [], storage
   // Per kind: the full body with its wheels and the coarse stand-in, their vertex buffers shared by every cell
   const shared = KINDS.map((k) => {
     const model = carModels[k] || carModels.sedan;
-    return { near: withWheels(model), far: model.far, material: trafficMaterial(carModels[k] ? k : 'sedan') };
+    return { close: withWheels(model, true), near: withWheels(model), far: model.far, material: trafficMaterial(carModels[k] ? k : 'sedan') };
   });
   const shareGeometry = (source, paint, carState) => {
     const g = new THREE.BufferGeometry();
@@ -165,6 +166,8 @@ function createParking(scene, network, { hydrants = [], footprints = [], storage
     g.setIndex(source.index);
     g.setAttribute('paintColor', paint);
     g.setAttribute('carState', carState);
+    // a parked car stands level on straight wheels: the pose the street's material reads stays at rest
+    g.setAttribute('carPose', new THREE.InstancedBufferAttribute(new Float32Array(paint.count * 4), 4));
     g.boundingSphere = source.boundingSphere;
     return g;
   };
@@ -185,7 +188,7 @@ function createParking(scene, network, { hydrants = [], footprints = [], storage
       mesh.count = 0;
       // Empty pools stay visible so the loading-time shader compiler prepares every variant, even on an empty curb.
       mesh.frustumCulled = false;
-      mesh.castShadow = name === 'near';
+      mesh.castShadow = name === 'near' || name === 'close';
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;
       if (shadow) mesh.renderOrder = 998;
@@ -193,8 +196,8 @@ function createParking(scene, network, { hydrants = [], footprints = [], storage
       mesh.updateMatrixWorld();
       return mesh;
     };
-    return { near: make(model.near, POOL_NEAR, 'near'), far: make(model.far, POOL_FAR, 'far'),
-      shadow: make(null, POOL_NEAR + POOL_FAR, 'contact', true) };
+    return { close: make(model.close, POOL_CLOSE, 'close'), near: make(model.near, POOL_NEAR, 'near'), far: make(model.far, POOL_FAR, 'far'),
+      shadow: make(null, POOL_CLOSE + POOL_NEAR + POOL_FAR, 'contact', true) };
   });
   const rendered = new Map();
   let dirty = true, lastX = Infinity, lastY = Infinity, lastZ = Infinity;
@@ -217,7 +220,8 @@ function createParking(scene, network, { hydrants = [], footprints = [], storage
     for (const pool of pools) for (const mesh of Object.values(pool)) mesh.count = 0;
     for (const { i, d } of candidates) {
       const k = plan.kind[i], pool = pools[k], sp = spec[k];
-      const mesh = d <= DRAW_NEAR && pool.near.count < POOL_NEAR ? pool.near : pool.far;
+      // candidates come nearest first, so a full pool hands the rest of its cars to the next level down
+      const mesh = d <= DRAW_CLOSE && pool.close.count < POOL_CLOSE ? pool.close : d <= DRAW_NEAR && pool.near.count < POOL_NEAR ? pool.near : pool.far;
       if (mesh.count >= mesh.instanceMatrix.count) continue;
       const j = mesh.count++, sj = pool.shadow.count++, style = paintOf(i);
       _q.setFromAxisAngle(_up, plan.yaw[i]);
@@ -449,7 +453,7 @@ function createParking(scene, network, { hydrants = [], footprints = [], storage
     let built = 0, drawn = 0;
     for (const cell of cells.values()) if (cell.built) { built++; drawn += cell.built.count; }
     return { slots: plan.count, cells: cells.size, built, occupied: drawn, drawn: rendered.size,
-      near: pools.reduce((n, p) => n + p.near.count, 0), far: pools.reduce((n, p) => n + p.far.count, 0) };
+      close: pools.reduce((n, p) => n + p.close.count, 0), near: pools.reduce((n, p) => n + p.near.count, 0), far: pools.reduce((n, p) => n + p.far.count, 0) };
   };
 
   return { group, plan, state, STATE, count: plan.count, attach, update, forEachNear, forEachAlong, info, release, vacateNear, ban, stats };

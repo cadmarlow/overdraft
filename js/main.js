@@ -239,6 +239,7 @@ async function initApp() {
     onStateChange: updateSoundButton
   });
   function updateSoundButton() {
+    gameplay?.pauseMenu?.syncWorld();
     if (!soundButton) return;
     soundButton.disabled = !audioSystem.supported;
     soundButton.setAttribute('aria-pressed', String(audioSystem.enabled));
@@ -389,7 +390,9 @@ async function initApp() {
     onCycleMode: () => gameplay?.interact(),
     onGrapple: () => gameplay?.vertical.fire(),
     onCycleCamera: cycleCamera,
-    onToggleMap: () => mapSystem.toggleFullMap(!mapSystem.isFullMapOpen),
+    onToggleMap: () => {
+      if (gameplay?.active || mapSystem.isFullMapOpen) mapSystem.toggleFullMap(!mapSystem.isFullMapOpen);
+    },
     onCloseMap: () => mapSystem.toggleFullMap(false)
   });
 
@@ -541,7 +544,7 @@ async function initApp() {
   // A mouse click mustn't leave the focus on a HUD button, or Space (jump / ascend) and Enter would press it again
   document.addEventListener('click', (e) => {
     const btn = e.target instanceof Element ? e.target.closest('button') : null;
-    if (btn && e.detail > 0) btn.blur();
+    if (btn && e.detail > 0 && !btn.closest('#game-menu, dialog')) btn.blur();
   });
 
   // Where you are: the place's name over its street corner, drawn as a pair of NYC street-name signs
@@ -610,8 +613,10 @@ async function initApp() {
     allBlocks: cityBlocks.allBlocks,
     onToggle: (open) => {
       controllerManager.resetInput();
-      touchControls.setEnabled(!open);
-      gamepadControls.setEnabled(!open);
+      const enabled = !open && !!gameplay?.active;
+      touchControls.setEnabled(enabled);
+      gamepadControls.setEnabled(enabled);
+      gameplay?.pauseMenu?.onMapToggle(open);
       const mapHint = document.getElementById('fullmap-hover-info');
       if (open && touchControls.available && mapHint) {
         mapHint.textContent = 'Tap to teleport · Drag to pan · Use + / − to zoom';

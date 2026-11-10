@@ -543,9 +543,12 @@ class NYCMapSystem {
     }
 
     window.addEventListener('keydown', (e) => {
+      if (e.defaultPrevented || e.repeat || e.ctrlKey || e.metaKey || e.altKey || document.querySelector('dialog[open]')) return;
       if (e.code === 'Escape' && this.isFullMapOpen) {
+        e.preventDefault();
         this.toggleFullMap(false);
-      } else if (e.code === 'KeyM' && !isTypingInField(e)) {
+      } else if (e.code === 'KeyM' && !isTypingInField(e) && (this.isFullMapOpen || !document.body.classList.contains('in-menu'))) {
+        e.preventDefault();
         this.toggleFullMap(!this.isFullMapOpen);
       }
     });

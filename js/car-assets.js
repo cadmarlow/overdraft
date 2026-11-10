@@ -5,6 +5,7 @@ import {
   atan,
   bumpMap,
   clamp,
+  cos,
   cross,
   dFdx,
   dFdy,
@@ -18,6 +19,7 @@ import {
   min,
   mix,
   normalize,
+  normalMap,
   normalLocal,
   normalView,
   normalWorld,
@@ -44,6 +46,7 @@ import {
 import { cityUniforms } from './tsl-materials.js';
 import { traceUrbanReflection } from './urban-light.js';
 import { cabinLayout } from './car-cabin.js';
+import { openCabinGeometry } from './car-cabin-clearance.js';
 
 // The real cars (tools/cars/import-cars.mjs): one atlas per model holding every part, the paint as a mask so the same model
 // takes any colour, wheels apart around their axles, and a coarse shell for far away. Bodies are deformed in the vertex
@@ -54,7 +57,8 @@ const DENTS = 6;
 const LAMPS_OFF = 256; // added to an instance's style code (carState.w): headlights and tail lamps dark
 const models = {};
 const carSpecs = {}; // what the game asks of a body kind: its size, axles, lamps, doors
-const FLAG = { HEAD: 1, BRAKE: 2, REVERSE: 3, BLINKER: 4, GLASS: 6 };
+// WHEEL + i: the four wheels of a car drawn as one mesh (withWheels), which the street's material turns on their axles
+const FLAG = { HEAD: 1, BRAKE: 2, REVERSE: 3, BLINKER: 4, GLASS: 6, WHEEL: 8 };
 // Pigment and varnish are separate layers. Commercial vehicles keep a softer solid finish, sports cars a fine metallic.
 const FINISH = {
   taxi: [0.27, 0.08, 0.075], van: [0.3, 0.06, 0.09], truck: [0.32, 0.04, 0.11], delivery: [0.3, 0.05, 0.1],
@@ -151,10 +155,12 @@ function identityPlacement(model) {
     return null;
   };
   const front = choose(1, (model.spec.head?.[1] ?? 0.7) * 0.72, 0.5, 0.172);
-  // The sports car's lower rear contains several open bumper steps: its factory recess is a smaller band above them.
-  const rear = model.id === 'sport' ? choose(-1, 0.575, 0.34, 0.117)
+  // Use the sport's continuous lower recess and the truck's tailgate, above its open chassis/bumper assembly.
+  const rear = model.id === 'sport' ? choose(-1, 0.5, 0.34, 0.117)
+    : model.id === 'truck' ? choose(-1, 1.2, 0.5, 0.172)
+    : model.id === 'wagon' ? choose(-1, 0.73, 0.5, 0.172)
     : choose(-1, (model.spec.tail?.[1] ?? 0.8) * 0.8, 0.5, 0.172);
-  let badge = rear ? choose(-1, model.id === 'sport' ? 0.721 : rear.y + 0.26, 0.55, 0.065) : null;
+  let badge = rear ? choose(-1, model.id === 'sport' ? 0.721 : model.id === 'wagon' ? 0.88 : rear.y + 0.26, 0.55, 0.065) : null;
   if (badge && badge.y - badge.height * 0.5 < rear.y + rear.height * 0.5 + 0.03) badge = null;
   return { front, rear, badge };
 }
@@ -168,14 +174,15 @@ function lampRange(model, flagValue) {
 
 async function loadModel(id) {
   const entry = manifest[id];
-  const [buffer, map, surface] = await Promise.all([
-    fetch(new URL(`${id}.bin`, base)).then((r) => r.arrayBuffer()), loadTexture(`${id}_c.webp`, true), loadTexture(`${id}_m.webp`, false)
+  const [buffer, map, surface, normalTexture] = await Promise.all([
+    fetch(new URL(`${id}.bin`, base)).then((r) => r.arrayBuffer()), loadTexture(`${id}_c.webp`, true), loadTexture(`${id}_m.webp`, false),
+    entry.normalTexture ? loadTexture(entry.normalTexture, false) : null
   ]);
   const n = entry.vertices;
   let at = 0;
   const take = (Type, count, pad = 0) => { const a = new Type(buffer, at, count); at += a.byteLength + pad; return a; };
   const position = new THREE.BufferAttribute(take(Float32Array, n * 3), 3);
-  const normal = new THREE.BufferAttribute(take(Int8Array, n * 4), 4, true);
+  const normal = new THREE.BufferAttribute(take(entry.normalFormat === 'snorm16' ? Int16Array : Int8Array, n * 4), 4, true);
   const uvs = new THREE.BufferAttribute(take(Uint16Array, n * 2), 2, true);
   // Flags widen to floats: a shader attribute cannot read single unnormalised bytes
   const flag = new THREE.BufferAttribute(Float32Array.from(take(Uint8Array, n, (4 - n % 4) % 4)), 1);
@@ -192,14 +199,29 @@ async function loadModel(id) {
   };
   const r = entry.ranges;
   const model = {
-    id, spec: entry.spec, glassAlpha: entry.glass.alpha, map, surface,
+    id, spec: entry.spec, glassAlpha: entry.glass.alpha, map, surface, normalTexture,
+    paintRoughness: entry.paintRoughness,
+    sourceInterior: entry.sourceInterior === true,
+    cabinLayout: entry.cabinLayout,
     body: part(r[0], r[1]), glass: part(r[2], r[3]), shell: part(r[0], r[1] + r[3]), far: part(r[4], r[5]),
     wheels: [0, 1, 2, 3].map((i) => part(r[6 + i * 2], r[7 + i * 2]))
   };
+  if (entry.calipers) model.calipers = entry.calipers.map(([start, count]) => count ? part(start, count) : null);
+  if (entry.trafficShell) model.shell = part(...entry.trafficShell);
+  if (entry.trafficWheels) model.trafficWheels = entry.trafficWheels.map(([start, count]) => part(start, count));
+  // The level between the two (tools/cars/build-lods.mjs): what stands or drives within a few car lengths
+  if (entry.midShell) {
+    model.mid = part(...entry.midShell);
+    model.midWheels = entry.midWheels.map(([start, count]) => part(start, count));
+  }
+  if (entry.steering) model.steering = {
+    geometry: part(...entry.steering.range), position: entry.steering.position, axis: entry.steering.axis
+  };
+  carSpecs[id] = describe(model, position);
+  if (!model.sourceInterior) model.body = openCabinGeometry(model.body, model.spec, carSpecs[id].cabin);
   model.identity = identityPlacement(model);
   model.lampRanges = { head: lampRange(model, FLAG.HEAD), tail: lampRange(model, FLAG.BRAKE) };
   models[id] = model;
-  carSpecs[id] = describe(model, position);
   return model;
 }
 
@@ -216,15 +238,20 @@ function describe(model, position) {
     doors: [s.wheelZf - s.wheelRadius * 1.3, s.wheelZf - s.wheelRadius * 1.3 - Math.min(1.25, (s.wheelZf - s.wheelZr) * 0.42)],
     headlight: [Math.abs(front[0]), front[1]], taillight: [Math.abs(rear[0]), rear[1]],
     lamps: [front[1], rear[1]], lampX: [Math.abs(front[0]), Math.abs(rear[0])],
-    cabin: cabinLayout(s, model.glass, position)
+    cabin: model.cabinLayout ?? cabinLayout(s, model.glass, position)
   };
 }
 
-// The body with its wheels in place: one mesh for cars seen from afar on the parkways
-function withWheels(model) {
-  if (model.full) return model.full;
+// The body with its wheels in place, as one mesh for instancing: the traffic level, or with `close` the level shown
+// within a few car lengths. Each wheel's vertices say which wheel they belong to (FLAG.WHEEL + i): one draw shows
+// a whole car, and its material still spins and steers the wheels (createBodyMaterial, carPose).
+function withWheels(model, close = false) {
+  const key = close ? 'close' : 'full';
+  if (model[key]) return model[key];
+  const shell = close ? model.mid ?? model.shell : model.shell;
+  const wheels = close ? model.midWheels ?? model.trafficWheels ?? model.wheels : model.trafficWheels ?? model.wheels;
   const positions = [], normals = [], uvs = [], flags = [], index = [];
-  const add = (g, ox, oy, oz) => {
+  const add = (g, ox, oy, oz, wheel = -1) => {
     const base = positions.length / 3, p = g.attributes.position, n = g.attributes.normal, t = g.attributes.uv, f = g.attributes.flag;
     const map = new Map();
     for (const i of g.index.array) {
@@ -233,13 +260,13 @@ function withWheels(model) {
         positions.push(p.getX(i) + ox, p.getY(i) + oy, p.getZ(i) + oz);
         normals.push(n.getX(i), n.getY(i), n.getZ(i));
         uvs.push(t.getX(i), t.getY(i));
-        flags.push(f.getX(i));
+        flags.push(wheel < 0 ? f.getX(i) : FLAG.WHEEL + wheel);
       }
       index.push(map.get(i));
     }
   };
-  add(model.shell, 0, 0, 0);
-  model.wheels.forEach((w, i) => add(w, ...model.spec.wheels[i]));
+  add(shell, 0, 0, 0);
+  wheels.forEach((w, i) => add(w, model.spec.wheels[i][0], model.spec.wheels[i][1], model.spec.wheels[i][2], i));
   const full = new THREE.BufferGeometry();
   full.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
   full.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
@@ -247,7 +274,7 @@ function withWheels(model) {
   full.setAttribute('flag', new THREE.Float32BufferAttribute(flags, 1));
   full.setIndex(index);
   full.computeBoundingSphere();
-  return (model.full = full);
+  return (model[key] = full);
 }
 
 async function loadCars(ids, options = {}) {
@@ -358,17 +385,26 @@ function createBodyMaterial(model, { paint = null, instanced = false, livery = 0
   // Separate scalar varyings exhausted that budget once local-space panel projections were added.
   const lampMasks = varying(vec4(isFlag(FLAG.HEAD), isFlag(FLAG.BRAKE), isFlag(FLAG.REVERSE), isFlag(FLAG.BLINKER)));
   const head = lampMasks.x, brake = lampMasks.y, reverse = lampMasks.z, blinker = lampMasks.w;
-  const side = positionLocal.x;
-  const alongCar = positionLocal.z;
+  // Where a point is on the car as modelled. By the time an instanced car reaches the pixels, `positionLocal` has been
+  // through its instance and stands in the street: plates, the blinking side and the door seams would be laid out
+  // along Manhattan instead of along the bodywork (and no street car wore a plate).
+  const local = instanced ? varying(attribute('position', 'vec3'), 'vCarLocal') : positionLocal;
+  const side = local.x;
+  const alongCar = local.z;
   const finish = FINISH[model.id] ?? FINISH.sedan;
 
   const surface = texture(model.surface, uv());
   const base = texture(model.map, uv());
+  // The source normal atlas shares the colour UVs. Tangent-space detail remains independent of the simulated body.
+  const atlasNormal = model.normalTexture ? normalMap(texture(model.normalTexture, uv()).rgb) : normalView;
+  // A filtered paint tile represents subpixel flakes through roughness, not a biased 8-bit "flat" normal.
+  const sourceNormal = model.paintRoughness ? normalize(mix(atlasNormal, normalView, surface.r)) : atlasNormal;
+  mat.normalNode = sourceNormal;
   // Lens colour separates the red brake chamber from the amber/white cells inside a shared imported lamp mesh.
   const redLens = brake.mul(smoothstep(0.18, 0.52, base.r.sub(base.g.mul(1.3)).div(base.r.max(0.01))));
   const hy = model.lampRanges?.head ?? [0, 1], ty = model.lampRanges?.tail ?? [0, 1];
   const lensBand = (range, level, width) => {
-    const v = positionLocal.y.sub(range[0]).div(range[1]), aa = fwidth(v).max(0.008);
+    const v = local.y.sub(range[0]).div(range[1]), aa = fwidth(v).max(0.008);
     return smoothstep(float(width).add(aa), float(width).sub(aa), v.sub(level).abs()).mul(smoothstep(0.4, 0.08, aa));
   };
   const runningBlade = lensBand(hy, 0.24, 0.065).mul(head);
@@ -398,15 +434,15 @@ function createBodyMaterial(model, { paint = null, instanced = false, livery = 0
     dentNode = clamp(varying(displaced.w).mul(5), 0, 1);
     // Crumpled metal catches the light in facets: the face's own normal where the panel moved
     const facet = normalize(cross(dFdx(positionView), dFdy(positionView)));
-    mat.normalNode = mix(normalView, facet, dentNode.mul(0.8));
+    mat.normalNode = normalize(mix(sourceNormal, facet, dentNode.mul(0.8)));
   }
 
   const identityIndex = Math.max(0, Object.keys(IDENTITIES).indexOf(model.id));
   const identityMap = carIdentityAtlas();
   const projectIdentity = (placement, badge = false) => {
     if (!placement) return vec4(0);
-    const u = positionLocal.x.mul(placement.side / placement.width).add(0.5);
-    const v = positionLocal.y.sub(placement.y).div(placement.height).add(0.5);
+    const u = local.x.mul(placement.side / placement.width).add(0.5);
+    const v = local.y.sub(placement.y).div(placement.height).add(0.5);
     const tileX = identityIndex % 2, tileY = Math.floor(identityIndex / 2);
     const atlasY = badge ? float(64).mul(v.oneMinus()) : float(76).add(float(180).mul(v.oneMinus()));
     const sample = texture(identityMap, vec2(clamp(u, 0, 1).add(tileX).mul(0.5), float(1).sub(atlasY.add(tileY * 256).div(2048))));
@@ -414,7 +450,7 @@ function createBodyMaterial(model, { paint = null, instanced = false, livery = 0
     // Registered bounds already locate the panel. Keep the print across its small bevels and shut-lines;
     // an aggressive facing gate cut a dark stripe straight through every plate at a bumper chamfer.
     const face = smoothstep(0.08, 0.28, normalLocal.z.mul(placement.side));
-    const depth = smoothstep(0.17, 0.12, positionLocal.z.sub(placement.z).abs());
+    const depth = smoothstep(0.17, 0.12, local.z.sub(placement.z).abs());
     return vec4(sample.rgb, sample.a.mul(bounds).mul(face).mul(depth).mul(inside.oneMinus()));
   };
   const plateFront = projectIdentity(model.identity?.front), plateRear = projectIdentity(model.identity?.rear);
@@ -447,7 +483,8 @@ function createBodyMaterial(model, { paint = null, instanced = false, livery = 0
   })();
   // A satin pigment below a polished dielectric coat gives a broad highlight under the sharper reflected skyline.
   // No stochastic sparkle: metallic flakes are integrated into roughness, so they cannot shimmer at traffic distance.
-  const gloss = float(finish[0]);
+  // Offline filtering can move unresolved normal-map variance into pigment roughness; the clear coat stays smooth.
+  const gloss = float(Math.max(finish[0], model.paintRoughness ?? 0));
   const optics = max(head, max(brake, max(reverse, blinker)));
   mat.roughnessNode = mix(mix(mix(mix(surface.g.max(0.2), gloss, mask).add(dentNode.mul(0.4)), float(0.12), optics), float(0.065), glassMask), float(0.9), inside);
   mat.metalnessNode = mix(mix(mix(surface.b, float(finish[1]), mask), float(0), optics), float(0.04), glassMask).mul(inside.oneMinus());
@@ -478,6 +515,29 @@ function createBodyMaterial(model, { paint = null, instanced = false, livery = 0
     if (!instanced) e.addAssign(vec3(0.9, 0.95, 1).mul(reverse).mul(state.w.mul(3)));
     return e.mul(inside.oneMinus());
   })();
+  if (instanced) {
+    // What moves on a street car, worked out in the vertex stage before the instance places the car: the wheels
+    // (FLAG.WHEEL + i) turn on their axles and the front pair steers, and the bodywork leans on its springs over
+    // them while they stay on the road. carPose: wheel spin, steering angle, pitch, roll (radians); the instance
+    // itself only carries where the car is and which way it points.
+    const pose = attribute('carPose', 'vec4');
+    const centres = model.spec.wheels.map(([x, y, z]) => vec3(x, y, z));
+    const wheel = flag.sub(FLAG.WHEEL);
+    const onWheel = step(-0.5, wheel);
+    const centre = mix(mix(centres[0], centres[1], step(0.5, wheel)), mix(centres[2], centres[3], step(2.5, wheel)), step(1.5, wheel));
+    const steer = pose.y.mul(step(wheel, 1.5));
+    const aboutX = (v, a) => { const c = cos(a), n = sin(a); return vec3(v.x, v.y.mul(c).sub(v.z.mul(n)), v.y.mul(n).add(v.z.mul(c))); };
+    const aboutY = (v, a) => { const c = cos(a), n = sin(a); return vec3(v.x.mul(c).add(v.z.mul(n)), v.y, v.z.mul(c).sub(v.x.mul(n))); };
+    const aboutZ = (v, a) => { const c = cos(a), n = sin(a); return vec3(v.x.mul(c).sub(v.y.mul(n)), v.x.mul(n).add(v.y.mul(c)), v.z); };
+    const turned = (v) => aboutY(aboutX(v, pose.x), steer);
+    const leaned = (v) => aboutX(aboutZ(v, pose.w), pose.z);
+    const setupPosition = mat.setupPosition;
+    mat.setupPosition = function (builder) {
+      positionLocal.assign(mix(leaned(positionLocal), centre.add(turned(positionLocal.sub(centre))), onWheel));
+      normalLocal.assign(mix(leaned(normalLocal), turned(normalLocal), onWheel));
+      return setupPosition.call(this, builder);
+    };
+  }
   mat.userData.carState = stateUniform;
   mat.userData.paint = paintUniform;
   mat.userData.dents = dents;
@@ -530,6 +590,25 @@ function trafficMaterial(id) {
   return instancedMaterials.get(id);
 }
 
+// Source mechanisms have their own local origin. Body dents, panel projections and back-face trim must not be
+// evaluated in that frame. Share this material across steering wheels and calipers, prepared during fleet warmup.
+const sourcePartMaterials = new Map();
+function createSourcePartMaterial(model) {
+  if (sourcePartMaterials.has(model.id)) return sourcePartMaterials.get(model.id);
+  const mat = new THREE.MeshStandardNodeMaterial();
+  const surface = texture(model.surface, uv());
+  mat.name = 'SourceMechanism';
+  mat.colorNode = texture(model.map, uv()).rgb;
+  mat.roughnessNode = surface.g.max(0.08);
+  mat.metalnessNode = surface.b;
+  mat.normalNode = model.normalTexture ? normalMap(texture(model.normalTexture, uv()).rgb) : normalView;
+  mat.side = THREE.DoubleSide;
+  mat.envMapIntensity = 1.05;
+  mat.userData.shared = true;
+  sourcePartMaterials.set(model.id, mat);
+  return mat;
+}
+
 // A wheel: rubber and alloy from the atlas
 const wheelMaterials = new Map();
 function createWheelMaterial(model) {
@@ -558,10 +637,11 @@ function createWheelMaterial(model) {
   mat.colorNode = mix(base, rubberColor, rubber).mul(float(1).sub(pattern.mul(0.45)));
   mat.roughnessNode = mix(surface.g.max(0.22), float(0.88), rubber).add(pattern.mul(0.08));
   mat.metalnessNode = surface.b.mul(rubber.oneMinus());
-  mat.normalNode = bumpMap(pattern.mul(-0.0007));
+  // Preserve the source tyre and alloy relief. The atlas is neutral on parts without a source normal map.
+  mat.normalNode = model.normalTexture ? normalMap(texture(model.normalTexture, uv()).rgb) : bumpMap(pattern.mul(-0.0007));
   mat.envMapIntensity = 1.05;
   mat.userData.shared = true;
   return mat;
 }
 
-export { DENTS, FINISH, FLAG, bodySurfaceAt, identityPlacement, LAMPS_OFF, carSpecs, createBodyMaterial, createGlassMaterial, createWheelMaterial, loadCars, models as carModels, trafficMaterial, withWheels };
+export { DENTS, FINISH, FLAG, bodySurfaceAt, identityPlacement, LAMPS_OFF, carSpecs, createBodyMaterial, createGlassMaterial, createSourcePartMaterial, createWheelMaterial, loadCars, models as carModels, trafficMaterial, withWheels };

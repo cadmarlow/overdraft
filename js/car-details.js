@@ -9,13 +9,39 @@ const dummy = new THREE.Object3D();
 const TAU = Math.PI * 2;
 const performanceCars = new Set(['sport', 'super', 'muscle', 'hatch']);
 
+// How far out the faces of a wheel's spokes stand, over the area a brake disc of this radius shows through: the
+// wheel's outermost point above each cell of that area, then a depth most cells reach (the gaps between spokes look
+// down the barrel, a centre cap stands proud: neither is the spokes).
+function spokeDepth(geometry, side, radius) {
+  const p = geometry.attributes.position, index = geometry.index.array, G = 20, front = new Float32Array(G * G).fill(-Infinity);
+  const mark = (x, y, z) => {
+    const r = Math.hypot(y, z);
+    if (r > radius || r < radius * 0.45) return;
+    const cell = Math.min(G - 1, Math.floor((y / radius + 1) * G / 2)) * G + Math.min(G - 1, Math.floor((z / radius + 1) * G / 2));
+    if (x * side > front[cell]) front[cell] = x * side;
+  };
+  for (let t = 0; t < index.length; t += 3) {
+    const a = index[t], b = index[t + 1], c = index[t + 2];
+    const ax = p.getX(a), ay = p.getY(a), az = p.getZ(a), bx = p.getX(b), by = p.getY(b), bz = p.getZ(b), cx = p.getX(c), cy = p.getY(c), cz = p.getZ(c);
+    mark(ax, ay, az); mark(bx, by, bz); mark(cx, cy, cz);
+    mark((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2); mark((bx + cx) / 2, (by + cy) / 2, (bz + cz) / 2); mark((cx + ax) / 2, (cy + ay) / 2, (cz + az) / 2);
+    mark((ax + bx + cx) / 3, (ay + by + cy) / 3, (az + bz + cz) / 3);
+  }
+  const cells = Array.from(front).filter((v) => v > -Infinity).sort((u, v) => u - v);
+  return cells.length ? cells[Math.floor(cells.length * 0.7)] : Infinity;
+}
+
 function brakeLayout(model, index) {
   const wheel = model.spec.wheels[index], geometry = model.wheels[index];
   const p = geometry.attributes.position;
   const side = index % 2 ? -1 : 1;
   let outer = 0;
   for (const i of geometry.index.array) outer = Math.max(outer, p.getX(i) * side);
-  return { side, radius: wheel[3], offset: Math.max(0.018, outer * 0.44), rotor: performanceCars.has(model.id) ? 0.65 : 0.57 };
+  const rotor = performanceCars.has(model.id) ? 0.65 : 0.57;
+  // Behind the spokes, whatever the wheel: a deep-dish rim keeps them well inside its face, and a disc placed by the
+  // width of the tyre alone stood in front of them (the taxi and the muscle car showed a bare disc for a wheel).
+  const behindSpokes = spokeDepth(geometry, side, rotor * wheel[3]) - 0.012 - 0.039 * wheel[3];
+  return { side, radius: wheel[3], offset: Math.max(0.018, Math.min(outer * 0.44, behindSpokes)), rotor };
 }
 
 function brakeGeometry(kind, rotor) {

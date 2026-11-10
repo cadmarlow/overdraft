@@ -1,5 +1,98 @@
 # Changelog
 
+## 0.9.12 — Blue Chips — 10 novembre 2026
+
+Les voitures. Quatorze carrosseries neuves, et surtout une rue à leur niveau : une voiture garée ou croisée dans la
+circulation n'est plus une version dégradée de celle qu'on conduit. Le menu pause est refait.
+Cette version réunit sur `main` la branche `codex/automotive-overhaul` (flotte, habitacles, menu pause) et le travail
+fait par-dessus sur les voitures de la rue.
+
+### La flotte
+
+- **Quatorze carrosseries remplacées** à partir de douze modèles libres (CC BY 4.0), crédités un par un dans
+  `CREDITS.md` et `assets/cars/LICENSE-cars.md` : berline, sportive, muscle, citadine, compacte, break, SUV, 4×4,
+  pick-up, monospace, taxi, deux fourgons et camion. La Zénith est restaurée (intérieur d'origine, volant animé,
+  étriers séparés des roues). Emblèmes, plaques et inscriptions des sources retirés ; les marques visibles en jeu
+  restent Valmont, Brisant, Gréville, Hauturier et Corsaire.
+- **La conduite ne change pas** : les quinze châssis, leurs dimensions physiques et leurs réglages sont ceux de la
+  0.9.10, vérifiés par un contrat de test.
+- **Habitacles** : intérieur d'origine pour Tempête, Marais, Falaise et Zénith ; cabines du jeu recalées sur les
+  nouveaux vitrages pour les onze autres. Le plan rapproché de la caméra s'adapte en vue cockpit.
+- **Import reproductible** (`tools/cars`) : recettes par famille, adaptation aux châssis verrouillés, registre de
+  provenance avec empreintes des fichiers.
+
+### Les voitures de la rue
+
+Le défaut de la branche : chaque voiture n'existait qu'en deux versions, la détaillée (celle qu'on conduit) et une
+réduction automatique à 6 000 triangles pour tout le reste, dont les panneaux se déchiraient. Il n'y avait rien entre
+les deux, et la circulation prêtait à toutes les voitures les roues de la berline.
+
+- **Un niveau pour les voitures proches.** À moins de 30 m, garée ou en circulation, une voiture est dessinée avec
+  jusqu'à 22 000 triangles de carrosserie et de vraies roues : la silhouette, les arêtes, les optiques et les jantes
+  du modèle détaillé. Plus loin (jusqu'à 64 m en circulation, 76 m en stationnement), un niveau reconstruit de 7 500
+  à 20 000 triangles remplace l'ancienne réduction. Au-delà, la doublure existante.
+- **Seulement ce qui se voit.** Ces niveaux ne gardent que la peau visible de l'extérieur, relevée depuis 49 points de
+  vue : sièges, tableau de bord, moteur et dessous de caisse ne coûtent rien à une voiture qu'on ne conduit pas. Les
+  panneaux modelés à l'envers dans les sources (le toit du pick-up disparaissait) sont retournés.
+- **Chaque voiture roule sur ses propres roues**, garée, en circulation ou bousculée. Elles tournent, les roues avant
+  braquent, et la caisse plonge au freinage ou penche après un choc sur des roues qui restent au sol. Caisse et roues
+  ne font qu'un seul objet par voiture : c'est le matériau qui les anime, sans appel de dessin supplémentaire.
+- **Les plaques et les badges** apparaissent enfin sur les voitures de la rue. Ils étaient projetés au mauvais
+  endroit (le long de Manhattan au lieu du long de la carrosserie) : aucune voiture garée ou en circulation n'en avait.
+- **Des roues rondes.** La berline arrivait sans jantes, avec des roues étirées en œuf (49 cm dans un sens, 26 dans
+  l'autre), et c'étaient elles que la circulation montait sur toutes les voitures. L'Écume roule désormais sur les
+  jantes du Récif, ramenées à son rayon. Les roues avant du Galet et de la Zénith étaient livrées braquées (12° et
+  26°), celles du Cab 7 carrossées de 6° : elles vacillaient à chaque tour, y compris sur la voiture conduite. Toutes
+  sont remises d'équerre sur leur essieu.
+- **Le taxi a retrouvé ses jantes** : son disque de frein se plaçait devant les rayons et les cachait. Les disques
+  se règlent maintenant sur la profondeur des rayons de chaque roue.
+- **Le modèle détaillé est plafonné** quand une source est plus lourde que nécessaire (60 000 triangles de caisse,
+  3 600 par roue, rien déplacé de plus de 3 mm) : le 4×4 passe de 246 000 à 98 000 triangles, la berline de 150 000
+  à 71 000. Les fichiers des voitures passent de 60 à 41 Mo (ils pesaient 7 Mo en 0.9.11, avant la nouvelle flotte).
+- **Outil** `tools/cars/build-lods.mjs` : reconstruit tous les niveaux à partir des fichiers livrés, sans les sources.
+
+### Menu pause
+
+- **Quatre onglets** : Partie, Graphismes, Ambiance et Commandes, avec de grandes zones de clic pour le pavé tactile.
+- **Qualité graphique** : trois cartes comparent HAUTE, ÉQUILIBRÉE et FLUIDE ; le choix ne s'applique qu'avec
+  **Appliquer**, qui sauvegarde puis recharge une seule fois.
+- **Ambiance** : son, heure, météo et écoulement du temps en choix directs.
+- **Clavier** : Tab et Maj+Tab parcourent, les flèches changent d'onglet, Échap reprend. Une nouvelle partie demande
+  confirmation.
+- **Commandes** à jour des armes de la 0.9.11 (roue des armes, visée fixe, épaule, visée assistée).
+
+### Aussi
+
+- **Caméra à pied** : une voiture arrêtée contre le dos du joueur ne s'installe plus dans l'image, la caméra passe
+  au-dessus de son toit.
+
+### Validation
+
+`npm test` : **861 tests, 859 réussis, 1 ignoré, un échec attendu** (`tree-geodata`, licence Xcode non acceptée sur
+cette machine). **Le build de production passe.**
+
+Dans un Chrome à part (WebGPU, sans fenêtre, touches réelles), sans erreur JavaScript ni WebGPU : voitures garées vues
+de près (roue, avant, arrière) puis prises ; circulation de jour et de nuit, de face et de dos ; berline, Zénith, taxi,
+Galet, monospace, SUV et muscle car conduites, roues en vue ; pose des roues et de la caisse contrôlée image par image.
+Le banc du menu pause passe ses **121 contrôles**. Le scénario de tir de la 0.9.11 et la roue des armes au TAB
+maintenu repassent sans changement.
+
+**Ce qui n'est pas vérifié ou reste faible :**
+
+- **Performances non mesurées proprement.** La machine était occupée pendant les essais (le jeu tournait dans un autre
+  Chrome). Avant le travail sur les roues, à résolution fixée, la version réunie donnait 51 à 58 images par seconde là
+  où la branche en donnait 55 à 61 ; depuis, la circulation dessine moins de triangles (ses roues en coûtaient 8 000
+  pièce). Les voitures de la rue pèsent environ 1,3 million de triangles par image, dont près de la moitié pour les
+  doublures lointaines (1 200 triangles chacune, 450 voitures) : c'est la prochaine économie à faire.
+- Les étriers de frein tournent avec la roue sur les voitures de la rue (ils font partie de la roue dans plusieurs
+  sources).
+- Les phares des voitures garées restent des aplats clairs de jour, sans volume.
+- Les conducteurs de la circulation ne sont pas visibles.
+- Les ombres des voitures de la rue ne suivent ni le braquage ni l'inclinaison de la caisse.
+- Les silhouettes viennent de modèles de voitures réelles : marques et inscriptions sont retirées, mais les lignes
+  restent reconnaissables.
+- Missions, poursuites longues et manette n'ont pas été rejouées pour cette version.
+
 ## 0.9.11 — Short Squeeze — 9 novembre 2026
 
 Le tir à la troisième personne refait autour de quatre choses : de vraies armes, un corps qui sait les porter, une

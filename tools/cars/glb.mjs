@@ -1,6 +1,5 @@
 // A glTF binary read into plain arrays: buffers decoded (EXT_meshopt_compression), accessors as floats, nodes with world matrices.
 import fs from 'node:fs';
-import { MeshoptDecoder } from 'meshoptimizer';
 
 const TYPES = { 5120: Int8Array, 5121: Uint8Array, 5122: Int16Array, 5123: Uint16Array, 5125: Uint32Array, 5126: Float32Array };
 const SIZE = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };
@@ -16,11 +15,17 @@ function nodeMatrix(n) {
 }
 
 export async function readGlb(file) {
-  await MeshoptDecoder.ready;
   const raw = fs.readFileSync(file);
+  if (raw.length < 28 || raw.readUInt32LE(0) !== 0x46546c67 || raw.readUInt32LE(4) !== 2 || raw.readUInt32LE(8) !== raw.length) throw new Error(`Invalid glTF binary: ${file}`);
   const length = raw.readUInt32LE(12);
+  if (raw.readUInt32LE(16) !== 0x4e4f534a) throw new Error(`Missing JSON chunk: ${file}`);
   const gltf = JSON.parse(raw.subarray(20, 20 + length).toString());
   const bin = raw.subarray(20 + length + 8);
+  let MeshoptDecoder;
+  if (gltf.bufferViews.some((v) => v.extensions?.EXT_meshopt_compression)) {
+    ({ MeshoptDecoder } = await import('meshoptimizer'));
+    await MeshoptDecoder.ready;
+  }
   const views = gltf.bufferViews.map((v) => {
     const e = v.extensions?.EXT_meshopt_compression;
     if (!e) return bin.subarray(v.byteOffset ?? 0, (v.byteOffset ?? 0) + v.byteLength);
@@ -38,7 +43,7 @@ export async function readGlb(file) {
     const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
     const read = { 5120: 'getInt8', 5121: 'getUint8', 5122: 'getInt16', 5123: 'getUint16', 5125: 'getUint32', 5126: 'getFloat32' }[a.componentType];
     const scale = normalise && a.normalized ? 1 / NORMALIZE[a.componentType] : 1;
-    for (let k = 0; k < a.count; k++) for (let c = 0; c < n; c++) out[k * n + c] = dv[read]((a.byteOffset ?? 0) + k * stride + c * T.BYTES_PER_ELEMENT, true) * scale;
+    for (let k = 0; k < a.count; k++) for (let c = 0; c < n; c++) out[k * n + c] = Math.max(normalise && a.normalized ? -1 : -Infinity, dv[read]((a.byteOffset ?? 0) + k * stride + c * T.BYTES_PER_ELEMENT, true) * scale);
     return out;
   }
   const image = (i) => { const im = gltf.images[i]; return views[im.bufferView]; };
@@ -56,14 +61,49 @@ export async function readGlb(file) {
   return { gltf, accessor, image, items };
 }
 
+// Filtering faces must also discard their now-unused vertices: otherwise a removed antenna or emblem still changes
+// bounds, wheel clustering, UV footprints and the replacement's fitted height.
+export function compactPrimitiveData(data) {
+  const count = data.pos.length / 3, used = new Map();
+  for (const index of data.index) if (!used.has(index)) used.set(index, used.size);
+  if (used.size === count) return data;
+  const result = { ...data, index: Uint32Array.from(data.index, index => used.get(index)) };
+  for (const [name, size] of [['pos', 3], ['nor', 3], ['uv', 2]]) {
+    const source = data[name]; if (!source) continue;
+    const array = new source.constructor(used.size * size);
+    for (const [from, to] of used) for (let c = 0; c < size; c++) array[to * size + c] = source[from * size + c];
+    result[name] = array;
+  }
+  return result;
+}
+
 // Positions, normals and uvs of a primitive in world space
 export function primitiveData(glb, item) {
   const { primitive: p, matrix: m } = item;
+  if (p.mode !== undefined && p.mode !== 4) throw new Error(`Unsupported non-triangle primitive: ${item.node}`);
   const uvSet = p.attributes.TEXCOORD_0;
-  const P = glb.accessor(p.attributes.POSITION), N = p.attributes.NORMAL !== undefined ? glb.accessor(p.attributes.NORMAL) : null;
+  const P = glb.accessor(p.attributes.POSITION);
+  let N = p.attributes.NORMAL !== undefined ? glb.accessor(p.attributes.NORMAL) : null;
   const T = uvSet !== undefined ? glb.accessor(uvSet) : null;
   const I = p.indices !== undefined ? glb.accessor(p.indices) : Float64Array.from({ length: P.length / 3 }, (_, i) => i);
   const count = P.length / 3;
+  const hasNormals = !!N;
+  if (!N) {
+    N = new Float64Array(P.length);
+    for (let i = 0; i < I.length; i += 3) {
+      const a = I[i] * 3, b = I[i + 1] * 3, c = I[i + 2] * 3;
+      const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
+      const vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+      for (const at of [a, b, c]) { N[at] += nx; N[at + 1] += ny; N[at + 2] += nz; }
+    }
+  }
+  // Normals are covectors: a nonuniform or mirrored node needs the inverse transpose, not its position matrix.
+  const cof = [m[5] * m[10] - m[9] * m[6], m[9] * m[2] - m[1] * m[10], m[1] * m[6] - m[5] * m[2],
+    m[8] * m[6] - m[4] * m[10], m[0] * m[10] - m[8] * m[2], m[4] * m[2] - m[0] * m[6],
+    m[4] * m[9] - m[8] * m[5], m[8] * m[1] - m[0] * m[9], m[0] * m[5] - m[4] * m[1]];
+  const det = m[0] * cof[0] + m[4] * cof[1] + m[8] * cof[2];
+  if (Math.abs(det) < 1e-12) throw new Error(`Singular node transform: ${item.node}`);
   const pos = new Float64Array(count * 3), nor = new Float64Array(count * 3), uv = new Float64Array(count * 2);
   for (let v = 0; v < count; v++) {
     const x = P[v * 3], y = P[v * 3 + 1], z = P[v * 3 + 2];
@@ -72,11 +112,10 @@ export function primitiveData(glb, item) {
     pos[v * 3 + 2] = m[2] * x + m[6] * y + m[10] * z + m[14];
     if (N) {
       const a = N[v * 3], b = N[v * 3 + 1], c = N[v * 3 + 2];
-      const nx = m[0] * a + m[4] * b + m[8] * c, ny = m[1] * a + m[5] * b + m[9] * c, nz = m[2] * a + m[6] * b + m[10] * c, l = Math.hypot(nx, ny, nz) || 1;
+      const nx = (cof[0] * a + cof[1] * b + cof[2] * c) / det, ny = (cof[3] * a + cof[4] * b + cof[5] * c) / det, nz = (cof[6] * a + cof[7] * b + cof[8] * c) / det, l = Math.hypot(nx, ny, nz) || 1;
       nor[v * 3] = nx / l; nor[v * 3 + 1] = ny / l; nor[v * 3 + 2] = nz / l;
     }
     if (T) { uv[v * 2] = T[v * 2]; uv[v * 2 + 1] = T[v * 2 + 1]; }
   }
-  const det = m[0] * (m[5] * m[10] - m[6] * m[9]) - m[4] * (m[1] * m[10] - m[2] * m[9]) + m[8] * (m[1] * m[6] - m[2] * m[5]);
-  return { pos, nor, uv, index: Array.from(I), flipped: det < 0, hasNormals: !!N };
+  return { pos, nor, uv, index: Array.from(I), flipped: det < 0, hasNormals };
 }

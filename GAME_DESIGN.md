@@ -132,6 +132,24 @@ seule et relevé partiel conservé après interruption. L'outil et ses contrôle
 faux positifs et le coût par correction utile sur des séances
 longues, puis isoler davantage les écritures de l'atelier si plusieurs auteurs travaillent en même temps.
 
+## 0.9.12 « Blue Chips » — la rue au niveau de la voiture qu'on conduit
+
+Référence : la circulation de GTA V et de Forza Horizon. Dans ces jeux une voiture n'a pas deux visages : celle qu'on
+croise est celle qu'on conduira, vue de plus loin.
+
+- **Une voiture, quatre distances.** Détaillée quand on la conduit, complète à quelques pas (moins de 30 m), allégée
+  au bout de la rue, doublure au-delà. Chaque niveau est tiré du précédent, jamais redessiné : mêmes lignes, mêmes
+  jantes, mêmes plaques.
+- **Ne dessiner que ce qui se voit.** Les niveaux de la rue ne gardent que la peau visible de l'extérieur : sièges,
+  moteur et dessous de caisse ne coûtent rien à une voiture qu'on ne conduit pas, et tous les triangles vont aux
+  panneaux.
+- **Un seul dessin par voiture.** Caisse et roues forment un seul objet ; c'est le matériau qui fait tourner et
+  braquer les roues et pencher la caisse. La rue ne paie ni objets ni appels de dessin supplémentaires pour vivre.
+- **Prendre une voiture ne la change pas.** Garée, bousculée ou conduite, elle garde ses roues et son allure.
+
+Suite logique : phares et feux en volume sur les niveaux de la rue, conducteurs visibles dans la circulation,
+doublure lointaine plus légère (elle pèse encore la moitié des triangles des voitures), portières qui s'ouvrent.
+
 ## 0.9.11 « Short Squeeze » — les armes sur le corps
 
 Référence : le maniement d'armes de Red Dead Redemption 2 et de GTA V. Ce qui fait croire à une arme dans ces jeux
@@ -350,4 +368,5 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.9** | **Break Even** | Correctif : ancrage des animations au sol, appuis du héros aux bordures, foulée selon la taille, reflets coûteux réservés à HAUTE et résolution adaptative prudente |
 | **0.9.10** | **Price Action** | Tir TPS : cadrage et changement d’épaule, arsenal original articulé, précision et recul, rechargement, douilles et impacts. Refonte des quinze voitures : pneus, direction, transmission, freins, cockpit, son, caméra et garage |
 | **0.9.11** | **Short Squeeze** | Les armes sur le corps : quatre vrais modèles, étui de cuisse, bandoulières, dégainer et rengainer joués, trois tenues, cadrage de visée refait, visée assistée, roue des armes au ralenti |
+| **0.9.12** | **Blue Chips** | Quatorze nouvelles carrosseries, Zénith restaurée, habitacles ; les voitures de la rue au niveau de celle qu'on conduit (niveaux de détail, vraies roues qui tournent, plaques) ; menu pause en quatre onglets |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |

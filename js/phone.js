@@ -142,6 +142,7 @@ class Phone {
   }
 
   key(e) {
+    if (this.game.paused || document.querySelector('dialog[open]')) return;
     if (!this.open) {
       if (e.code === 'KeyP' && !e.repeat && !e.ctrlKey && !e.metaKey && !/INPUT|TEXTAREA/.test(e.target?.tagName ?? '')) this.toggle();
       return;

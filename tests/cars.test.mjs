@@ -28,7 +28,7 @@ test('models are real-world sized, front wheels ahead, sitting on the ground', (
 test('the binary holds exactly what the manifest promises', () => {
   for (const id of ids) {
     const m = models[id], n = m.vertices;
-    const size = n * 12 + n * 4 + n * 4 + n + (4 - n % 4) % 4 + m.indices * 4;
+    const size = n * 12 + n * (m.normalFormat === 'snorm16' ? 8 : 4) + n * 4 + n + (4 - n % 4) % 4 + m.indices * 4;
     assert.equal(fs.statSync(new URL(`../assets/cars/${id}.bin`, import.meta.url)).size, size, id);
     assert.equal(m.ranges.length, 14, id);
   }

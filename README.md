@@ -3,9 +3,17 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.11 — Short Squeeze**. Les armes sont de vrais modèles, et Sacha sait les porter : pistolet à l'étui sur
-la cuisse, fusil d'assaut et fusil à pompe en bandoulière dans le dos, pistolet-mitrailleur sous la veste. Il les dégaine
-et les rengaine, les tient à une main quand la rue est calme, à deux quand ça chauffe, et les épaule pour viser.
+Version **0.9.12 — Blue Chips**. Quatorze des quinze voitures ont une nouvelle carrosserie, et la rue est enfin à leur
+niveau : une voiture garée ou croisée dans la circulation garde la silhouette, les jantes, les plaques et les badges de
+celle qu'on conduit. Les roues tournent et braquent, la caisse plonge au freinage sur des roues qui restent au sol.
+Le menu pause est refait en quatre onglets (Partie, Graphismes, Ambiance, Commandes).
+
+Pour voir la différence : longer une file de voitures garées, regarder passer la circulation de la 5e Avenue, puis
+monter dans une voiture garée (**F**). **Échap** ouvre le nouveau menu.
+
+La **0.9.11 — Short Squeeze** a mis les armes sur le corps : de vrais modèles, que Sacha sait porter. Pistolet à l'étui
+sur la cuisse, fusil d'assaut et fusil à pompe en bandoulière dans le dos, pistolet-mitrailleur sous la veste. Il les
+dégaine et les rengaine, les tient à une main quand la rue est calme, à deux quand ça chauffe, et les épaule pour viser.
 
 Pour essayer : **clic droit** ou **X** dégaine et vise, **clic** tire. **TAB maintenu** ouvre la roue des armes (la rue
 ralentit, on désigne, on relâche), **TAB bref** revient à l'arme précédente. Ensuite **R** pour recharger, **C** pour changer

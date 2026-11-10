@@ -18,12 +18,19 @@ class Vector3 {
   length() { return Math.hypot(this.x, this.y, this.z); }
   divideScalar(s) { return this.set(this.x / s, this.y / s, this.z / s); }
   addScaledVector(v, s) { return this.set(this.x + v.x * s, this.y + v.y * s, this.z + v.z * s); }
+  applyQuaternion(q) {
+    const x = this.x, y = this.y, z = this.z;
+    const tx = 2 * (q.y * z - q.z * y), ty = 2 * (q.z * x - q.x * z), tz = 2 * (q.x * y - q.y * x);
+    return this.set(x + q.w * tx + q.y * tz - q.z * ty, y + q.w * ty + q.z * tx - q.x * tz, z + q.w * tz + q.x * ty - q.y * tx);
+  }
 }
 
 class PerspectiveCamera {
-  constructor(fov, aspect) {
+  constructor(fov, aspect, near, far) {
     this.fov = fov;
     this.aspect = aspect;
+    this.near = near;
+    this.far = far;
     this.position = new Vector3();
     this.target = new Vector3();
     this.rotation = { x: 0, y: 0, z: 0 };
@@ -561,4 +568,69 @@ test('action driving view shares progressive corner anticipation with a restrain
   assert.ok(Math.abs(camera.carRoll) <= 0.0181);
   assert.ok(camera.camera.fov > 61 && camera.camera.fov < 70);
   assert.ok(camera.currentPos.y > 1 && camera.currentPos.y < 1.5);
+});
+
+test('all fifteen car cockpits retain nearby trim and restore the exterior plane when leaving the view', () => {
+  const manifest = JSON.parse(readFileSync(join(__dirname, '../assets/cars/models.json'), 'utf8'));
+  for (const kind of Object.keys(manifest)) {
+    const { camera, entity } = cameraHarness();
+    entity.bodyPivot = entity.chassisPivot = { quaternion: { x: 0, y: 0, z: 0, w: 1 } };
+    entity.cabin = { sourceInterior: !!manifest[kind].sourceInterior,
+      layout: manifest[kind].cabinLayout ?? { seat: [0.36, 0.4, -0.3], recline: 0.42 } };
+    camera.setCameraPreset('pov', true);
+    camera.update(1 / 60, 0);
+    close(camera.camera.near, 0.06);
+    close(camera.camera.position.x, entity.cabin.layout.seat[0]);
+    close(camera.camera.position.y, entity.cabin.layout.seat[1] + 0.74 * Math.cos(entity.cabin.layout.recline));
+    for (const preset of ['chase', 'action', 'drone']) {
+      camera.setCameraPreset(preset, true);
+      camera.update(1 / 60, 1);
+      close(camera.camera.near, 0.35);
+      camera.setCameraPreset('pov', true);
+      camera.update(1 / 60, 2);
+      close(camera.camera.near, 0.06);
+    }
+    entity.cabin = null;
+    camera.update(1 / 60, 3);
+    close(camera.camera.near, 0.06);
+    // Boats and bikes share the controller's 'car' type, but their visible riders need the existing framing.
+    for (const field of ['moto', 'boat', 'bicycle']) {
+      entity[field] = true;
+      camera.update(1 / 60, 3);
+      close(camera.camera.near, 0.35);
+      delete entity[field];
+    }
+    entity.type = 'person';
+    camera.update(1 / 60, 4);
+    close(camera.camera.near, 0.12);
+  }
+});
+
+test('a cinematic started from a source cockpit does not inherit its short near plane', () => {
+  const { camera, entity } = cameraHarness();
+  entity.bodyPivot = entity.chassisPivot = { quaternion: { x: 0, y: 0, z: 0, w: 1 } };
+  entity.cabin = { sourceInterior: true, layout: { seat: [0.28, 0.42, -0.24], recline: 0.42 } };
+  camera.setCameraPreset('pov', true);
+  camera.update(1 / 60, 0);
+  close(camera.camera.near, 0.06);
+  camera.playCinematic([{ pos: new Vector3(0, 50, 0), look: new Vector3() }, { pos: new Vector3(0, 20, 0), look: new Vector3() }], 4);
+  camera.update(1 / 60, 1);
+  close(camera.camera.near, 0.35);
+});
+
+test('a car stopped against the player’s back lifts the camera over its roof rather than onto the back of the head', () => {
+  const { camera } = footHarness();
+  camera.combatMode = true;
+  camera.controllerManager.nearColliders = () => [];
+  settle(camera);
+  const open = camera.camera.position.y;
+  // a car across the street, its side 0.6 m behind the player
+  camera.vehicleObstacles = () => [{ minY: 0.1, maxY: 1.6, obb: { cx: 0, cz: -1.5, cs: 1, sn: 0, hx: 3, hz: 0.9 } }];
+  settle(camera);
+  assert.ok(Math.hypot(camera.camera.position.x, camera.camera.position.z) > 1.5, 'the boom keeps arm’s length');
+  assert.ok(camera.camera.position.y > 1.6 + 0.3, 'and the eye clears the roof (' + camera.camera.position.y.toFixed(2) + ')');
+  assert.ok(camera.camera.position.y > open);
+  camera.vehicleObstacles = () => [];
+  settle(camera);
+  assert.ok(Math.abs(camera.camera.position.y - open) < 0.01, 'it comes back down when the car has gone');
 });

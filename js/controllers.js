@@ -10,7 +10,7 @@ import {
   streetZ
 } from './city-config.js';
 import { cityUniforms, createCarPaintMaterial, createContactShadowMaterial, createPersonContactShadowMaterial } from './tsl-materials.js';
-import { carModels, carSpecs, createBodyMaterial, createGlassMaterial, createWheelMaterial, trafficMaterial } from './car-assets.js';
+import { carModels, carSpecs, createBodyMaterial, createGlassMaterial, createSourcePartMaterial, createWheelMaterial, trafficMaterial } from './car-assets.js';
 import { createBody, impactBody, makeTune, settleBody, stepCar } from './car-physics.js';
 import { buildCabin, poseCabin } from './car-cabin.js';
 import {
@@ -562,14 +562,18 @@ class ThirdPersonControllerManager {
     const id = carModels[kind] ? kind : 'sedan';
     const model = carModels[id], spec = carSpecs[id];
     const paintMaterial = lite ? trafficMaterial(id) : createBodyMaterial(model, { paint, livery });
+    const mechanismMaterial = !lite && (model.steering || model.calipers?.some(Boolean)) ? createSourcePartMaterial(model) : null;
     let carBodyMesh, glassMaterial = null, cabin = null;
     if (lite) {
       const shell = new THREE.BufferGeometry();
-      for (const name of ['position', 'normal', 'uv', 'flag']) shell.setAttribute(name, model.shell.attributes[name]);
-      shell.setIndex(model.shell.index);
+      // a car knocked loose is always close by: it keeps the level it had in traffic there
+      const level = model.mid ?? model.shell;
+      for (const name of ['position', 'normal', 'uv', 'flag']) shell.setAttribute(name, level.attributes[name]);
+      shell.setIndex(level.index);
       const colour = new THREE.Color(paint);
       shell.setAttribute('paintColor', new THREE.InstancedBufferAttribute(Float32Array.of(colour.r, colour.g, colour.b), 3));
       shell.setAttribute('carState', new THREE.InstancedBufferAttribute(new Float32Array(4), 4));
+      shell.setAttribute('carPose', new THREE.InstancedBufferAttribute(new Float32Array(4), 4));
       carBodyMesh = new THREE.InstancedMesh(shell, paintMaterial, 1);
       carBodyMesh.setMatrixAt(0, new THREE.Matrix4());
       carBodyMesh.frustumCulled = false;
@@ -578,7 +582,9 @@ class ThirdPersonControllerManager {
       carBodyMesh = new THREE.Mesh(model.body, paintMaterial);
       glassMaterial = createGlassMaterial(model, paintMaterial);
       bodyPivot.add(carBodyMesh, new THREE.Mesh(model.glass, glassMaterial));
-      if (spec.cabin) cabin = buildCabin(spec.cabin, bodyPivot, id);
+      if (spec.cabin) cabin = buildCabin(spec.cabin, bodyPivot, id, {
+        sourceInterior: model.sourceInterior, steering: model.steering, material: mechanismMaterial
+      });
     }
     carBodyMesh.castShadow = true;
     carBodyMesh.receiveShadow = true;
@@ -586,20 +592,28 @@ class ThirdPersonControllerManager {
 
     // The wheels hang from the chassis: they lean with it and travel on their own springs
     const wheels = [];
-    const wheelModel = lite ? carModels.sedan : model;
-    const wheelMaterial = createWheelMaterial(wheelModel);
+    // A car knocked loose keeps its own wheels (at the level it wore in the street). Their material is the model's
+    // own, compiled behind the loading screen with the garage's cars: every model has one waiting there.
+    const wheelMaterial = createWheelMaterial(model);
     spec.wheels.forEach(([x, y, z], i) => {
       const steerPivot = new THREE.Group();
       steerPivot.position.set(x, y, z);
-      if (lite) steerPivot.scale.setScalar(spec.wheelRadius / carSpecs.sedan.wheelRadius);
-      const tire = new THREE.Mesh(wheelModel.wheels[i], wheelMaterial);
+      const tire = new THREE.Mesh(lite ? (model.midWheels ?? model.wheels)[i] : model.wheels[i], wheelMaterial);
       tire.castShadow = true;
       tire.receiveShadow = true;
       steerPivot.add(tire);
+      // Source calipers follow the steering knuckle, while the wheel and its brake rotor spin independently.
+      if (!lite && model.calipers?.[i]) {
+        const caliper = new THREE.Mesh(model.calipers[i], mechanismMaterial);
+        caliper.name = 'SourceBrakeCaliper';
+        caliper.castShadow = true;
+        caliper.receiveShadow = true;
+        steerPivot.add(caliper);
+      }
       chassisPivot.add(steerPivot);
       wheels.push({ steerPivot, tire, isFront: i < 2, restY: y, spin: 0 });
     });
-    const details = lite ? null : buildCarDetails(model, chassisPivot, wheels);
+    const details = lite || model.calipers?.some(Boolean) ? null : buildCarDetails(model, chassisPivot, wheels);
     const tune = makeTune(handling, {
       halfW: spec.halfW, halfL: Math.max(spec.zFront, -spec.zRear), height: spec.height, sill: spec.sill,
       wheelX: (spec.wheelX + spec.wheelXr) / 2, wheelZf: spec.wheelZf, wheelZr: spec.wheelZr, wheelRadius: spec.wheelRadius

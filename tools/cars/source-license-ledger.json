@@ -1,0 +1,307 @@
+{
+  "schemaVersion": 1,
+  "description": "Primary-source license evidence for the 14 replacement vehicle families. URLs identify the original artists; manufacturer names are not runtime game identities.",
+  "sources": [
+    {
+      "id": "audi-a7",
+      "title": "Audi A7 Sportback 2018",
+      "author": "KiW",
+      "authorUrl": "https://sketchfab.com/QlER5",
+      "sourceUrl": "https://sketchfab.com/3d-models/audi-a7-sportback-2018-95700e5a98904b3591c6a03a4b67787b",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/",
+      "primaryApi": "https://api.sketchfab.com/v3/models/95700e5a98904b3591c6a03a4b67787b",
+      "downloadUrl": "https://raw.githubusercontent.com/pedrosoandre/carros/main/assets/audi-a7.glb",
+      "sourceSha256": "361a8442d5a4b1c344ec6fc811f4bf16b9c88f25d3516768a1cd97a76a34591a",
+      "verifiedOn": "2026-11-09",
+      "sourceTriangles": 294262,
+      "roles": [
+        "sedan"
+      ],
+      "modifications": [
+        "Original game identities; manufacturer emblems and registration marks removed.",
+        "Geometry fitted to the existing physical rig without changing handling.",
+        "Textures, materials, interior pieces and traffic LOD adapted for the game."
+      ],
+      "additionalCredits": [],
+      "provenanceSummary": "The artist describes this as their second personally created car model."
+    },
+    {
+      "id": "audi-q7",
+      "title": "2015 Audi Q7",
+      "author": "razor24",
+      "authorUrl": "https://sketchfab.com/razor24",
+      "sourceUrl": "https://sketchfab.com/3d-models/2015-audi-q7-65917c52e0b24f1289126128600ed7aa",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/",
+      "primaryApi": "https://api.sketchfab.com/v3/models/65917c52e0b24f1289126128600ed7aa",
+      "downloadUrl": "https://raw.githubusercontent.com/pedrosoandre/carros/main/assets/audi-q7.glb",
+      "sourceSha256": "8f40bd0d2fc6028c8e20dc7ad23cb39084ecf97ac2d730262b95cd9518e87ec9",
+      "verifiedOn": "2026-11-09",
+      "sourceTriangles": 39184,
+      "roles": [
+        "suv"
+      ],
+      "modifications": [
+        "Original game identities; manufacturer emblems and registration marks removed.",
+        "Geometry fitted to the existing physical rig without changing handling.",
+        "Textures, materials, interior pieces and traffic LOD adapted for the game."
+      ],
+      "additionalCredits": [],
+      "provenanceSummary": "The artist identifies Blender 2.79 as the creation tool."
+    },
+    {
+      "id": "land-rover-defender-110",
+      "title": "Land Rover Defender 110",
+      "author": "meeww",
+      "authorUrl": "https://sketchfab.com/meeww",
+      "sourceUrl": "https://sketchfab.com/3d-models/land-rover-defender-110-5773ec04488b46148816b5f7a9f3f44f",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/",
+      "primaryApi": "https://api.sketchfab.com/v3/models/5773ec04488b46148816b5f7a9f3f44f",
+      "downloadUrl": "https://raw.githubusercontent.com/pedrosoandre/carros/main/assets/land-rover-defender-110.glb",
+      "sourceSha256": "3e90ec557c2248c1d84e20ba625a3e440009ebb4e86d251285351aa112185caf",
+      "verifiedOn": "2026-11-09",
+      "sourceTriangles": 501978,
+      "roles": [
+        "pickup",
+        "offroad"
+      ],
+      "modifications": [
+        "Original game identities; manufacturer emblems and registration marks removed.",
+        "Geometry fitted to the existing physical rig without changing handling.",
+        "Textures, materials, interior pieces and traffic LOD adapted for the game.",
+        "Pickup variant adds an original open bed and rear cab wall while retaining the licensed front cab."
+      ],
+      "additionalCredits": [],
+      "provenanceSummary": "The artist describes personally modelling and texturing this vehicle in Blender."
+    },
+    {
+      "id": "citroen-picasso",
+      "title": "Citroen PICASSO  3D model",
+      "author": "ziedarchi",
+      "authorUrl": "https://sketchfab.com/ziedjemai83",
+      "sourceUrl": "https://sketchfab.com/3d-models/citroen-picasso-3d-model-2fbf653e4e6c438b95a290928137cf9d",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/",
+      "primaryApi": "https://api.sketchfab.com/v3/models/2fbf653e4e6c438b95a290928137cf9d",
+      "downloadUrl": "https://raw.githubusercontent.com/pedrosoandre/carros/main/assets/citroen-picasso.glb",
+      "sourceSha256": "a6d51afc250d812c06ce336c87d3644e287f3e410857bf68c42a70a3bc1de1ec",
+      "verifiedOn": "2026-11-09",
+      "sourceTriangles": 70913,
+      "roles": [
+        "minivan"
+      ],
+      "modifications": [
+        "Original game identities; manufacturer emblems and registration marks removed.",
+        "Geometry fitted to the existing physical rig without changing handling.",
+        "Textures, materials, interior pieces and traffic LOD adapted for the game."
+      ],
+      "additionalCredits": [],
+      "provenanceSummary": "The model page describes a 3ds Max 2014 and V-Ray asset prepared for architectural visualization."
+    },
+    {
+      "id": "fiat-147",
+      "title": "Fiat_147",
+      "author": "lael.eugenio",
+      "authorUrl": "https://sketchfab.com/lael.eugenio",
+      "sourceUrl": "https://sketchfab.com/3d-models/fiat-147-6c643d284d144dcb8db46ab11285ec0b",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/",
+      "primaryApi": "https://api.sketchfab.com/v3/models/6c643d284d144dcb8db46ab11285ec0b",
+      "downloadUrl": "https://raw.githubusercontent.com/pedrosoandre/carros/main/assets/fiat-147.glb",
+      "sourceSha256": "957429985b5e29fc3d4a84af72ade3f11f7b5db65c0cdb26a49fe982de1ecc95",
+      "verifiedOn": "2026-11-09",
+      "sourceTriangles": 60941,
+      "roles": [
+        "hatch"
+      ],
+      "modifications": [
+        "Original game identities; manufacturer emblems and registration marks removed.",
+        "Geometry fitted to the existing physical rig without changing handling.",
+        "Textures, materials, interior pieces and traffic LOD adapted for the game."
+      ],
+      "additionalCredits": [],
+      "provenanceSummary": "The artist explicitly claims the complete modelling work."
+    },
+    {
+      "id": "mini-cooper",
+      "title": "Mini Cooper S",
+      "author": "cenobyte",
+      "authorUrl": "https://sketchfab.com/cenobyte",
+      "sourceUrl": "https://sketchfab.com/3d-models/mini-cooper-s-b262744901a04cda823f17289d1a4847",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/",
+      "primaryApi": "https://api.sketchfab.com/v3/models/b262744901a04cda823f17289d1a4847",
+      "downloadUrl": "https://raw.githubusercontent.com/pedrosoandre/carros/main/assets/mini-cooper.glb",
+      "sourceSha256": "900cdc45768c5d8cb3231c0d8d17d3e20f46d957eff4ab39ef57f5bd3705e739",
+      "verifiedOn": "2026-11-09",
+      "sourceTriangles": 15545,
+      "roles": [
+        "compact"
+      ],
+      "modifications": [
+        "Original game identities; manufacturer emblems and registration marks removed.",
+        "Geometry fitted to the existing physical rig without changing handling.",
+        "Textures, materials, interior pieces and traffic LOD adapted for the game.",
+        "Original rusty paint and dent normals replaced with clean materials; wheel/brake detail preserved; long roof antenna shortened."
+      ],
+      "additionalCredits": [],
+      "provenanceSummary": "The artist describes their modelling in 3ds Max and texturing in Photoshop and Substance Painter."
+    },
+    {
+      "id": "audi-a4",
+      "title": "Audi A4 B5.5 Avant",
+      "author": "Tomaso",
+      "authorUrl": "https://sketchfab.com/Tomasoo",
+      "sourceUrl": "https://sketchfab.com/3d-models/audi-a4-b55-avant-2f6aea1435bd4ad093146c019c8e0fb6",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/",
+      "primaryApi": "https://api.sketchfab.com/v3/models/2f6aea1435bd4ad093146c019c8e0fb6",
+      "downloadUrl": "https://raw.githubusercontent.com/pedrosoandre/carros/main/assets/audi-a4.glb",
+      "sourceSha256": "97a6e9167cf7f0c21350f79efed41a576e529744460d68dcf0503bc4c7fe7cb1",
+      "verifiedOn": "2026-11-09",
+      "sourceTriangles": 13194,
+      "roles": [
+        "wagon"
+      ],
+      "modifications": [
+        "Original game identities; manufacturer emblems and registration marks removed.",
+        "Geometry fitted to the existing physical rig without changing handling.",
+        "Textures, materials, interior pieces and traffic LOD adapted for the game.",
+        "Front/rear rings removed from geometry; registration and wheel emblems erased in colour, surface and normal maps; navy paint made recolourable."
+      ],
+      "additionalCredits": [],
+      "provenanceSummary": "The artist describes modelling their own car in Blender and texturing it in Substance Painter."
+    },
+    {
+      "id": "ford-mustang",
+      "title": "Ford Mustang Shelby GT500",
+      "author": "Jiaxing",
+      "authorUrl": "https://sketchfab.com/saitoyang",
+      "sourceUrl": "https://sketchfab.com/3d-models/ford-mustang-shelby-gt500-0eaa7a16796540f29461ddae05ecdeb3",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/",
+      "primaryApi": "https://api.sketchfab.com/v3/models/0eaa7a16796540f29461ddae05ecdeb3",
+      "downloadUrl": "https://raw.githubusercontent.com/pedrosoandre/carros/main/assets/ford-mustang.glb",
+      "sourceSha256": "0a0632a2da8429c416d0500a96a790a6efdced04da48713e5489c9305640ac28",
+      "verifiedOn": "2026-11-09",
+      "sourceTriangles": 174017,
+      "roles": [
+        "muscle"
+      ],
+      "modifications": [
+        "Original game identities; manufacturer emblems and registration marks removed.",
+        "Geometry fitted to the existing physical rig without changing handling.",
+        "Textures, materials, interior pieces and traffic LOD adapted for the game."
+      ],
+      "additionalCredits": [],
+      "provenanceSummary": "The artist describes their Maya modelling work, including engine and chassis, and notes incomplete interior textures."
+    },
+    {
+      "id": "honda-nsx",
+      "title": "Honda NSX 1990",
+      "author": "Lexyc16",
+      "authorUrl": "https://sketchfab.com/Lexyc16",
+      "sourceUrl": "https://sketchfab.com/3d-models/honda-nsx-1990-1cc15628a00a4739a6b6c01128927c8d",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/",
+      "primaryApi": "https://api.sketchfab.com/v3/models/1cc15628a00a4739a6b6c01128927c8d",
+      "downloadUrl": "https://raw.githubusercontent.com/pedrosoandre/carros/main/assets/honda-nsx.glb",
+      "sourceSha256": "23c6ffa73b82a686a83239b3560ca3b1be22836629798c2cd99a5f492e37487e",
+      "verifiedOn": "2026-11-09",
+      "sourceTriangles": 40495,
+      "roles": [
+        "sport"
+      ],
+      "modifications": [
+        "Original game identities; manufacturer emblems and registration marks removed.",
+        "Geometry fitted to the existing physical rig without changing handling.",
+        "Textures, materials, interior pieces and traffic LOD adapted for the game."
+      ],
+      "additionalCredits": [],
+      "provenanceSummary": "The artist identifies Blender 2.90 as the creation tool."
+    },
+    {
+      "id": "bmw-e34",
+      "title": "BMW E34 [stance style]",
+      "author": "Myedsu",
+      "authorUrl": "https://sketchfab.com/myedsu",
+      "sourceUrl": "https://sketchfab.com/3d-models/bmw-e34-stance-style-ffe1a3a1bcb34e0bb80f1aa41c9edb46",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/",
+      "primaryApi": "https://api.sketchfab.com/v3/models/ffe1a3a1bcb34e0bb80f1aa41c9edb46",
+      "downloadUrl": "https://raw.githubusercontent.com/pedrosoandre/carros/main/assets/bmw-e34.glb",
+      "sourceSha256": "50e5ae89e35c2b82e548c5efbbf7d6cd156ce4033baee52e7c923a760fef9da1",
+      "verifiedOn": "2026-11-09",
+      "sourceTriangles": 61664,
+      "roles": [
+        "taxi"
+      ],
+      "modifications": [
+        "Original game identities; manufacturer emblems and registration marks removed.",
+        "Geometry fitted to the existing physical rig without changing handling.",
+        "Textures, materials, interior pieces and traffic LOD adapted for the game."
+      ],
+      "additionalCredits": [
+        {
+          "author": "Lexyc16",
+          "title": "BBS LM",
+          "sourceUrl": "https://sketchfab.com/3d-models/bbs-lm-93fbcf56ebab4be99f00b8b1246b6010",
+          "license": "CC-BY-4.0"
+        }
+      ],
+      "provenanceSummary": "The artist describes their Blender 2.92 model and separately credits the licensed wheel model by Lexyc16."
+    },
+    {
+      "id": "fiat-ducato",
+      "title": "2014 Fiat Ducato",
+      "author": "razor24",
+      "authorUrl": "https://sketchfab.com/razor24",
+      "sourceUrl": "https://sketchfab.com/3d-models/2014-fiat-ducato-8a651ad182414bb0a8b6c6d8d5bd7c01",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/",
+      "primaryApi": "https://api.sketchfab.com/v3/models/8a651ad182414bb0a8b6c6d8d5bd7c01",
+      "downloadUrl": "https://raw.githubusercontent.com/pedrosoandre/carros/main/assets/fiat-ducato.glb",
+      "sourceSha256": "d16b2ffa214f0cb0ca7628b796137525f632d035bda9f178fbbfc4df1b534818",
+      "verifiedOn": "2026-11-09",
+      "sourceTriangles": 35486,
+      "roles": [
+        "van",
+        "delivery"
+      ],
+      "modifications": [
+        "Original game identities; manufacturer emblems and registration marks removed.",
+        "Geometry fitted to the existing physical rig without changing handling.",
+        "Textures, materials, interior pieces and traffic LOD adapted for the game."
+      ],
+      "additionalCredits": [],
+      "provenanceSummary": "The artist identifies Blender 2.79 as the creation tool."
+    },
+    {
+      "id": "mazda-titan-92",
+      "title": "Mazda Titan 92 Lowpoly",
+      "author": "kekomag",
+      "authorUrl": "https://sketchfab.com/kekomag",
+      "sourceUrl": "https://sketchfab.com/3d-models/mazda-titan-92-lowpoly-d1496fb911e749f89f07ec1e9e7e2445",
+      "license": "CC-BY-4.0",
+      "licenseUrl": "http://creativecommons.org/licenses/by/4.0/",
+      "primaryApi": "https://api.sketchfab.com/v3/models/d1496fb911e749f89f07ec1e9e7e2445",
+      "downloadUrl": "https://raw.githubusercontent.com/pedrosoandre/carros/main/assets/mazda-titan-92.glb",
+      "sourceSha256": "9b9e6d22c5a6ba14763a020f718df03ecd6e333f55e6ae8d59ea92615d3a83fc",
+      "verifiedOn": "2026-11-09",
+      "sourceTriangles": 22859,
+      "roles": [
+        "truck"
+      ],
+      "modifications": [
+        "Original game identities; manufacturer emblems and registration marks removed.",
+        "Geometry fitted to the existing physical rig without changing handling.",
+        "Textures, materials, interior pieces and traffic LOD adapted for the game.",
+        "Manufacturer lettering and its dark backing removed as geometry."
+      ],
+      "additionalCredits": [],
+      "provenanceSummary": "The primary model page grants CC BY 4.0; it does not describe a detailed modelling workflow."
+    }
+  ]
+}

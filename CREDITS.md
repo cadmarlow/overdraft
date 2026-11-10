@@ -33,12 +33,46 @@ Rob Tuytel, brick_wall_09 by Rob Tuytel and Matterfield, concrete_floor_worn_001
 Street props are from Poly Haven (CC0): fire_hydrant by Gonçalo Felício, metal_trash_can by GurJas Studios, trashbag by
 Benny Weimer, planter_box_01 and utility_box_01 by James Ray Cock, concrete_road_barrier by Amal Kumar.
 
-Cars, all CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Rescaled, split into body, glass and wheels, retextured on
-one atlas with a paint mask, simplified and renamed for the game. Per-model credits are in assets/cars/LICENSE-cars.md.
-"Generic passenger car pack" by Comrade1280: https://sketchfab.com/3d-models/20f9af9b8a404d5cb022ac6fe87f21f5
-"Fairheaven LT '80", "Shvan '92", "LCT 3000 '95" and "French delivery van" by Daniel Zhabotinsky: https://sketchfab.com/DanielZhabotinsky
-"Car Concept" by Eric Chadwick, Darmstadt Graphics Group GmbH: https://github.com/KhronosGroup/glTF-Sample-Assets (logos removed).
-Obtained through the catalogue of https://github.com/pedrosoandre/carros.
+Voitures de **Blue Chips (0.9.12)** : douze œuvres sous [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)
+pour les quatorze modèles remplacés. Les titres ci-dessous sont ceux des œuvres sources, conservés pour l'attribution ;
+les noms, badges et plaques visibles dans le jeu sont les identités originales OVERDRAFT.
+
+| Véhicule dans OVERDRAFT | Œuvre source | Auteur |
+|---|---|---|
+| Valmont Écume | [Audi A7 Sportback 2018](https://sketchfab.com/3d-models/audi-a7-sportback-2018-95700e5a98904b3591c6a03a4b67787b) | [KiW](https://sketchfab.com/QlER5) |
+| Brisant Récif | [2015 Audi Q7](https://sketchfab.com/3d-models/2015-audi-q7-65917c52e0b24f1289126128600ed7aa) | [razor24](https://sketchfab.com/razor24) |
+| Gréville Falaise, Brisant Marais | [Land Rover Defender 110](https://sketchfab.com/3d-models/land-rover-defender-110-5773ec04488b46148816b5f7a9f3f44f) | [meeww](https://sketchfab.com/meeww) |
+| Gréville Escale | [Citroen PICASSO  3D model](https://sketchfab.com/3d-models/citroen-picasso-3d-model-2fbf653e4e6c438b95a290928137cf9d) | [ziedarchi](https://sketchfab.com/ziedjemai83) |
+| Valmont Ressac | [Fiat_147](https://sketchfab.com/3d-models/fiat-147-6c643d284d144dcb8db46ab11285ec0b) | [lael.eugenio](https://sketchfab.com/lael.eugenio) |
+| Gréville Galet | [Mini Cooper S](https://sketchfab.com/3d-models/mini-cooper-s-b262744901a04cda823f17289d1a4847) | [cenobyte](https://sketchfab.com/cenobyte) |
+| Valmont Sillage | [Audi A4 B5.5 Avant](https://sketchfab.com/3d-models/audi-a4-b55-avant-2f6aea1435bd4ad093146c019c8e0fb6) | [Tomaso](https://sketchfab.com/Tomasoo) |
+| Brisant Tempête | [Ford Mustang Shelby GT500](https://sketchfab.com/3d-models/ford-mustang-shelby-gt500-0eaa7a16796540f29461ddae05ecdeb3) | [Jiaxing](https://sketchfab.com/saitoyang) |
+| Corsaire Foudre | [Honda NSX 1990](https://sketchfab.com/3d-models/honda-nsx-1990-1cc15628a00a4739a6b6c01128927c8d) | [Lexyc16](https://sketchfab.com/Lexyc16) |
+| Valmont Cab 7 | [BMW E34 [stance style]](https://sketchfab.com/3d-models/bmw-e34-stance-style-ffe1a3a1bcb34e0bb80f1aa41c9edb46) | [Myedsu](https://sketchfab.com/myedsu) |
+| Hauturier Cargo, Hauturier Tournée | [2014 Fiat Ducato](https://sketchfab.com/3d-models/2014-fiat-ducato-8a651ad182414bb0a8b6c6d8d5bd7c01) | [razor24](https://sketchfab.com/razor24) |
+| Hauturier Fret | [Mazda Titan 92 Lowpoly](https://sketchfab.com/3d-models/mazda-titan-92-lowpoly-d1496fb911e749f89f07ec1e9e7e2445) | [kekomag](https://sketchfab.com/kekomag) |
+
+Les jantes de la source BMW E34 sont [BBS LM](https://sketchfab.com/3d-models/bbs-lm-93fbcf56ebab4be99f00b8b1246b6010), par [Lexyc16](https://sketchfab.com/Lexyc16), également sous CC BY 4.0.
+La Corsaire Zénith conserve [Car Concept](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/CarConcept), par Eric Chadwick et Darmstadt Graphics Group GmbH, sous CC BY 4.0.
+Les GLB de la nouvelle flotte ont été obtenus via [pedrosoandre/carros](https://github.com/pedrosoandre/carros) ;
+les auteurs et licences ont été vérifiés sur les pages primaires le 9 novembre 2026. Le
+[registre de provenance](tools/cars/source-license-ledger.json) conserve URLs, identifiants, dates et empreintes SHA-256.
+
+Modifications : orientation, changement d'échelle et adaptation aux châssis du jeu ; séparation des roues, vitres et
+pièces mobiles ; suppression des emblèmes, plaques et inscriptions de marque dans les maillages et textures ;
+matériaux et atlas adaptés ; niveaux de détail de la rue reconstruits (`tools/cars/build-lods.mjs`) ; roues remises
+sur leur essieu quand la source les livrait braquées ou carrossées. La source de la Valmont Écume ne fournissant pas
+de jantes exploitables, l'Écume roule sur celles de la source Audi Q7 de razor24, ramenées à son rayon. Le relief des inscriptions est aussi retiré
+lorsqu'il figure dans les cartes de normales. La benne, le dos de cabine et la lunette de Falaise sont des créations
+OVERDRAFT ajoutées à la base Defender 110. Les cabines génériques, instruments, badges et plaques fictives sont
+créés pour le jeu. Tempête, Marais et Falaise conservent leur intérieur source ; les deux fourgons Cargo/Tournée
+partagent la source Ducato adaptée à leurs deux gabarits. Ces adaptations ne suggèrent aucune approbation des auteurs.
+Attribution détaillée et historique : [assets/cars/LICENSE-cars.md](assets/cars/LICENSE-cars.md).
+
+Les versions jusqu'à Fair Value utilisaient aussi « Generic passenger car pack » par
+[Comrade1280](https://sketchfab.com/3d-models/20f9af9b8a404d5cb022ac6fe87f21f5), ainsi que « Fairheaven LT '80 »,
+« Shvan '92 », « LCT 3000 '95 » et « French delivery van » par
+[Daniel Zhabotinsky](https://sketchfab.com/DanielZhabotinsky), tous sous CC BY 4.0. Ces modèles sont remplacés dans Blue Chips.
 
 Objects carried by passers-by are sculpted by `tools/build-humans.mjs`.
 
@@ -119,3 +153,11 @@ grappin et la roue des armes sont créés pour le jeu. Les sons de tir restent s
 ## Capital Gains — finitions automobiles originales
 
 Plaques fictives OVERDRAFT, badges Valmont/Brisant/Gréville/Hauturier/Corsaire, cadrans, détails de freinage et sculptures procédurales des pneus : créations du projet, générées localement au chargement. Aucune nouvelle ressource externe. Les quinze modèles conservent les licences et attributions décrites dans `assets/cars/LICENSE-cars.md`.
+
+## Fair Value — restauration des sources automobiles
+
+Les géométries et textures réimportées proviennent des mêmes modèles CC BY 4.0 détaillés dans
+`assets/cars/LICENSE-cars.md`. Les atlas de normales `super_n.webp`, `taxi_n.webp` et `delivery_n.webp` dérivent
+des textures fournies avec ces œuvres. Le modèle Car Concept d'Eric Chadwick et Darmstadt Graphics Group GmbH
+fournit également son intérieur, son volant et ses freins ; les marques Khronos et 3D Commerce ont été retirées
+des couleurs et du relief des pneus. Les autres habitacles et leurs instruments restent des créations du projet.

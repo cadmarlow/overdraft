@@ -22,7 +22,7 @@ import { RadioSystem, STATIONS } from './radio.js';
 import { Atmosphere } from './atmosphere.js';
 import { ShopSystem } from './shops.js';
 import { createMotorbike, poseMotorbike } from './motorbike.js';
-import { currentLevel, cycleLevel } from './quality.js';
+import { PauseMenu, pauseMenuMarkup } from './pause-menu.js';
 import { stepPlane } from './flight.js';
 import { Garage } from './garage.js';
 import { collapse } from './ragdoll.js';
@@ -45,7 +45,7 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.11';
+const BUILD = '0.9.12';
 const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
 // The neighbourhoods as the opening card names them (city-config.js districtAt)
 const DISTRICT_NAMES = {
@@ -430,7 +430,7 @@ export class Game {
   buildInterface() {
     document.body.insertAdjacentHTML('beforeend', `
       <div id="game-vignette" aria-hidden="true"></div>
-      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · SHORT SQUEEZE</small></span></div>
+      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · BLUE CHIPS</small></span></div>
       <div id="session-badge"><i></i><span>MANHATTAN</span><b id="session-mode">LIBRE</b><button id="pause-button" aria-label="Ouvrir le menu pause">Ⅱ</button></div>
       <div id="game-prompt" role="status" aria-live="polite"><kbd>F</kbd><span>Voler la voiture<small>VÉHICULE</small></span></div>
       <div id="game-toast" role="status" aria-live="polite"></div>
@@ -440,30 +440,13 @@ export class Game {
       <div id="game-keybar"></div>
       <div id="intro-bars" aria-hidden="true"><i></i><i></i></div>
       <div id="intro-card" aria-hidden="true"><span>MANHATTAN · NEW YORK</span><strong>Midtown</strong><em>5e Avenue</em></div>
-      <div id="game-menu" class="game-menu">
-        <div class="menu-top">
-          <span class="edition-label">EVERY DEBT GETS PAID.</span>
-          <div class="menu-top-actions">
-            <span class="build-label">BUILD ${BUILD}</span>
-            <button id="fullscreen-toggle" type="button" hidden>
-              <svg class="icon icon-sm" aria-hidden="true"><use href="#i-fit"/></svg><span>Plein écran</span>
-            </button>
-            <span id="fullscreen-status" role="status"></span>
-          </div>
-        </div>
-        <div class="menu-body"><div class="menu-eyebrow"><span></span> <b id="menu-act">ACTE I — LA DETTE</b></div><h1>OVER<span>DRAFT<span class="title-dot">.</span></span></h1>
-          <p class="menu-copy">Sacha Roux est arrivé à New York avec une dette qui ne lui appartient pas.<br>Deux cent cinquante mille dollars. Une ville entière pour les trouver.</p>
-          <button id="play-button" class="primary-play">ENTRER DANS LA VILLE <span>↗</span></button>
-          <div class="menu-secondary"><button id="new-session">Nouvelle partie</button><span id="menu-progress">CLAVIER + SOURIS / MANETTE</span></div>
-        </div>
-        <div class="menu-bottom"><span>MANHATTAN, NY<span class="coordinates">40°45′ N — 73°59′ W</span></span><button id="credits-button">CRÉDITS ↗</button><span class="menu-description">MISSIONS · COURSES · PRIMES<br>COMBAT · POURSUITES · 5 ÉTOILES</span></div>
-        <div id="menu-options"><span>HEURE &amp; MÉTÉO</span><button data-game-time="golden">Soleil bas</button><button data-game-time="midday">Midi</button><button data-game-time="twilight">Crépuscule</button><button data-game-time="midnight">Nuit</button><button id="weather-toggle">MÉTÉO : AUTO</button><button id="sound-toggle">SON ACTIVÉ</button><button id="quality-toggle">QUALITÉ : HAUTE</button></div>
-      </div>
-      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Short Squeeze</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap. Mobilier urbain : registres publics de la ville et de la MTA (bouches d’incendie, arrêts et abris de bus, kiosques, arceaux, bancs, bornes, parcmètres, échafaudages, terrasses).</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : Comrade1280, Daniel Zhabotinsky (Sketchfab, CC BY 4.0), Eric Chadwick / DGG (Khronos, CC BY 4.0). Modifiées pour le jeu.</p><p>Armes : « Service Pistol » de Mateusz Sadek (Poly Haven, CC0) ; « AK-12 » et « Remington 870 with Magpul furniture » de rwroclav, « MP7 » de Harry / habbottcapps, « M67 Fragmentation Grenade » de FJH (Sketchfab, CC BY 4.0). Réorientées, découpées en pièces mobiles et débarrassées de leurs marquages pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
+      ${pauseMenuMarkup(BUILD)}
+      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Blue Chips</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap. Mobilier urbain : registres publics de la ville et de la MTA (bouches d’incendie, arrêts et abris de bus, kiosques, arceaux, bancs, bornes, parcmètres, échafaudages, terrasses).</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : KiW, razor24, meeww, ziedarchi, lael.eugenio, cenobyte, Tomaso, Jiaxing, Lexyc16, Myedsu, kekomag et Eric Chadwick / DGG. Modèles sous CC BY 4.0, modifiés pour OVERDRAFT.</p><p>Armes : « Service Pistol » de Mateusz Sadek (Poly Haven, CC0) ; « AK-12 » et « Remington 870 with Magpul furniture » de rwroclav, « MP7 » de Harry / habbottcapps, « M67 Fragmentation Grenade » de FJH (Sketchfab, CC BY 4.0). Réorientées, découpées en pièces mobiles et débarrassées de leurs marquages pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
       <button id="mobile-interact" class="touch-interact" hidden>F <span>VÉHICULE</span></button>
     `);
     this.driveInstruments = new DriveInstruments(document.getElementById('drive-gauge'));
     this.ui = Object.fromEntries(['game-menu', 'game-prompt', 'game-toast', 'stamina-fill', 'vehicle-name', 'game-keybar', 'play-button', 'mobile-interact', 'session-mode', 'menu-progress', 'intro-card'].map(id => [id, document.getElementById(id)]));
+    this.pauseMenu = new PauseMenu(this, this.ui['game-menu']);
     document.body.dataset.gameState = this.state;
     document.body.classList.add('in-menu');
     this.updateKeybar();
@@ -481,34 +464,8 @@ export class Game {
     document.getElementById('play-button').addEventListener('click', () => this.start());
     document.getElementById('pause-button').addEventListener('click', () => this.setPaused(true));
     this.bindFullscreen();
-    document.getElementById('new-session').addEventListener('click', () => this.reset());
     document.getElementById('credits-button').addEventListener('click', () => document.getElementById('credits-dialog').showModal());
     document.getElementById('close-credits').addEventListener('click', () => document.getElementById('credits-dialog').close());
-    document.getElementById('sound-toggle').addEventListener('click', e => {
-      this.audio.setEnabled(!this.audio.enabled);
-      e.currentTarget.textContent = this.audio.enabled ? 'SON ACTIVÉ' : 'SON COUPÉ';
-    });
-    document.getElementById('quality-toggle').addEventListener('click', () => {
-      this.save();
-      const url = new URL(location.href);
-      url.searchParams.set('quality', cycleLevel());
-      location.href = url.href;
-    });
-    document.getElementById('quality-toggle').textContent = `QUALITÉ : ${currentLevel().label}`;
-    // The day runs on its own; these jump the clock
-    const hours = { golden: 18, midday: 13, twilight: 20, midnight: 0.5 };
-    document.querySelectorAll('[data-game-time]').forEach(button => button.addEventListener('click', () => {
-      this.atmosphere.setHour(hours[button.dataset.gameTime]);
-      document.querySelectorAll('[data-game-time]').forEach(b => b.classList.toggle('selected', b === button));
-    }));
-    const weathers = ['auto', 'clear', 'cloudy', 'rain', 'storm'];
-    const weatherNames = { auto: 'AUTO', clear: 'DÉGAGÉ', cloudy: 'NUAGEUX', rain: 'PLUIE', storm: 'ORAGE' };
-    document.getElementById('weather-toggle').addEventListener('click', (e) => {
-      this.weatherMode = weathers[(weathers.indexOf(this.weatherMode || 'auto') + 1) % weathers.length];
-      if (this.weatherMode !== 'auto') this.atmosphere.setWeather(this.weatherMode);
-      this.atmosphere.lockWeather = this.weatherMode !== 'auto';
-      e.currentTarget.textContent = `MÉTÉO : ${weatherNames[this.weatherMode]}`;
-    });
     window.addEventListener('keydown', e => {
       if (e.defaultPrevented || this.modal || isTypingInField(e) || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.repeat) return;
@@ -660,6 +617,7 @@ export class Game {
     this.radio?.setMuffled(paused ? 1 : 0);
     if (paused) { this.save(); this.releasePointer(); this.updateMenuProgress(); }
     else this.camera.domElement.focus();
+    this.pauseMenu?.onPauseChanged(paused || !this.playing);
   }
 
   toast(title, subtitle = '') {
@@ -2820,7 +2778,7 @@ export class Game {
 
   // ---- Saving ------------------------------------------------------------------------------------------------------
   save() {
-    if (this.resetting || this.transition || this.state === 'dead' || this.state === 'busted' || this.architect?.lab?.running) return;
+    if (this.resetting || this.transition || this.state === 'dead' || this.state === 'busted' || this.architect?.lab?.running) return false;
     try {
       const p = this.person;
       const fleet = this.fleet.filter((c) => !c.mission && !c.destroyed && !c.mode && !c.pooled);
@@ -2837,7 +2795,8 @@ export class Game {
         fleet: fleet.map(car => ({ kind: car.kind, paint: car.paint, position: { x: car.position.x, y: car.position.y, z: car.position.z }, heading: car.heading, stolen: car.stolen, hp: car.hp }))
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(data));
-    } catch { /* Private browsing must not prevent playing. */ }
+      return true;
+    } catch { return false; /* Private browsing must not prevent playing. */ }
   }
 
   restore() {
