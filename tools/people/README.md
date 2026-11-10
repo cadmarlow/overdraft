@@ -14,6 +14,7 @@ npm install
 | --- | --- |
 | Télécharger des avatars | `node fetch.mjs <dossier> Adults/Male_Adult_07 Professions/Police_Male_03` (`COLOR_ONLY=1` pour la foule) |
 | Un personnage complet | `node import-avatar.mjs hero <dossier>/Male_Adult_07/Male_Adult_07.fbx <dossier>/Male_Adult_07 --size 2048 --normal 1024 --hair 0.5` |
+| L'armurier de CALIBRE (`clerk`) | `node fetch.mjs <dossier> Adults/Male_Adult_05` puis `node import-avatar.mjs clerk <dossier>/Male_Adult_05/Male_Adult_05.fbx <dossier>/Male_Adult_05 --size 1024 --normal 512` (sans `--hair` : assombrir ses mèches dessine une grille sur son crâne) |
 | Un piéton | `node import-crowd.mjs m01 <fichier.fbx> <textures> m`, la liste est dans `crowd-list.txt` |
 | La motion capture | `node import-clips.mjs <dossier de .fbx>`, liste de clips : `Assets/Animations` du dépôt Rocketbox |
 | Ce que les passants tiennent en main | `node import-held.mjs <Male_Adult_08.fbx> <Female_Adult_08.fbx>` |

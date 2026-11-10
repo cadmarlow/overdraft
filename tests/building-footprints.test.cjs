@@ -41,9 +41,10 @@ const THREE = {
 };
 const collision = loadModule(readFileSync(join(__dirname, '../js/building-collision.js'), 'utf8'));
 const plan = loadModule(readFileSync(join(__dirname, '../js/storefront-plan.js'), 'utf8'));
+const calibre = loadModule(readFileSync(join(__dirname, '../js/calibre-plan.js'), 'utf8'), { imports: { './building-collision.js': collision, './storefront-plan.js': plan } });
 const { createBuildingFootprints } = loadModule(readFileSync(join(__dirname, '../js/building-footprints.js'), 'utf8'), {
   imports: { 'three/webgpu': THREE, './tsl-materials.js': { WALL_KINDS: { shop: 0, front: 1, rear: 2, lotLine: 3 } },
-    './building-collision.js': collision, './storefront-plan.js': plan }
+    './building-collision.js': collision, './storefront-plan.js': plan, './calibre-plan.js': calibre }
 });
 const p = (x, z) => ({ x, z });
 const square = (x = 0) => [p(x, 0), p(x + 10, 0), p(x + 10, 10), p(x, 10)];

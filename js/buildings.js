@@ -28,6 +28,7 @@ import {
   ALL_AVENUES,
   CENTRAL_PARK_BOUNDS,
   ISLAND_BOUNDS,
+  getIslandBoundsAtZ,
   LANDMARK_SITES,
   streetZ,
   avenueX
@@ -47,6 +48,7 @@ import { createBuildingFootprints } from './building-footprints.js';
 import { STOREFRONTS } from './storefront-geodata.js';
 import { SHOP_TYPES } from './storefront-types.js';
 import { planStorefronts } from './storefront-plan.js';
+import { planCalibre, carveCalibreColliders } from './calibre-plan.js';
 import { polygonContains, polygonBoxOverlaps } from './building-collision.js';
 import { pavedPlazaRects, parkTreeSites, sidewalkBlocks } from './city-grid.js';
 
@@ -371,6 +373,8 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   // Every registered storefront on the wall of its building that faces its street
   const plan = planStorefronts(records, STOREFRONTS, SHOP_TYPES);
   for (const [record, walls] of plan.wallsByRecord) record.shopWalls = walls;
+  const calibreSites = planCalibre(plan.shops, records, 48, { ...ISLAND_BOUNDS, shoreAt: getIslandBoundsAtZ });
+  carveCalibreColliders(colliders, calibreSites);
   // Reserve every fire escape before placing scaffolding on neighbouring buildings.
   for (const { b, detail, masonry, rand } of detailsToPlace) {
     const neighbours = nearbyReserves(b, 6);
@@ -852,6 +856,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     allBlocks,
     update,
     shops: plan.shops,
+    calibreSites,
     records
   };
 }

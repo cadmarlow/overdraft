@@ -3,7 +3,15 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.17 — Stop Loss**, une version de correctifs : les fumées de tir, de moteur et de pneus ne sortent plus en
+Version **0.9.18 — Dry Powder**. CALIBRE ouvre **48 armureries où l'on entre** : une vraie boutique dans un vrai
+immeuble, un armurier derrière son comptoir, un mur d'armes sous un néon, et un stand de tir au fond. **F** devant le
+comptoir : la caméra se pose sur la pièce présentée, avec sa fiche, ses munitions, ses **améliorations** (chargeur
+étendu, silencieux, poignée, point rouge ou lunette, étrangleur) et ses **finitions**, visibles sur l'arme avant
+d'acheter. Au stand, **F** à un pas de tir lance un parcours de six épreuves : les médailles paient une prime et font
+baisser tous les prix. Menacer l'armurier est une mauvaise idée. La première succursale est sur la **5e Avenue, au coin
+de la 37e Rue**, près du départ ; **P → Contacts → CALIBRE** guide vers la plus proche.
+
+La **0.9.17 — Stop Loss** était une version de correctifs : les fumées de tir, de moteur et de pneus ne sortent plus en
 carrés noirs en qualité HAUTE, et un véhicule qui explose laisse la carcasse de son propre modèle, bus compris.
 
 La **0.9.16 — Green Shoots** a refait les parcs. Central Park a ses 70 km de sentiers réels, ses 110
@@ -187,7 +195,9 @@ dans les menus. **A** valide, **B** revient, **LB / RB** changent d’onglet dan
 - **Marqueurs verts** : missions d'histoire. **Orange** : courses, convoyages, primes.
 - Près du départ, sur la 5e Avenue : la **Course des toits** (39e Rue), la **Descente** en wingsuit (42e Rue) et,
   sur la 6e Avenue, le contrat **Effet de levier** de Jules.
-- **Violet** : armurerie *Calibre* (armes, munitions, gilets, grenades) et carrosserie *Éclair*
+- **Pastille au pistolet** (laiton sur vert) : les 48 armureries *Calibre* (munitions, améliorations, finitions,
+  grenades, gilets, stand de tir).
+  On y entre à pied ; **F** au comptoir, **F** à un pas de tir. **Violet** : carrosserie *Éclair*
   (réparation et peinture ; une nouvelle couleur fait perdre la police si elle ne vous voit pas entrer).
 - **Vert** : planques. Achetez-les, dormez-y (8 heures passent, santé complète) et sauvegardez.
 - L'heure tourne (une journée dure environ 32 minutes) et la météo change : la pluie mouille les
@@ -254,7 +264,11 @@ défauts inconnus à l'échelle de toute la ville reste à mesurer sur des séan
 | `js/missions-sky.js` | Course des toits, Descente, contrat Effet de levier, anneaux |
 | `js/ai-driver.js` | Pilote IA (itinéraire, poursuite pure, virages, évitement) pour la police et les missions |
 | `js/atmosphere.js` | Heure du jour, météo, pluie, éclairs et tonnerre |
-| `js/shops.js` | Armureries, carrosseries, planques |
+| `js/shops.js` | Carrosseries, planques, ouverture du comptoir des armureries |
+| `js/calibre-plan.js`, `js/calibre.js` | CALIBRE : implantation des 48 succursales dans les immeubles, plan d'une succursale, personnel, alarme |
+| `js/calibre-room.js`, `js/calibre-build.js`, `js/calibre-prints.js`, `js/calibre-kit.js` | La succursale : décor, lampes, affiches et enseignes, objets numérisés (`assets/calibre`) |
+| `js/calibre-counter.js`, `js/calibre-range.js` | Le comptoir (fiches, achats) et le stand de tir (épreuves, médailles, remises) |
+| `js/weapon-mods.js`, `js/weapon-attachments.js` | Améliorations et finitions des armes : effets, accessoires visibles |
 | `js/motorbike.js` | Motos (modèle, inclinaison, wheeling) |
 | `js/quick-strip.js` | Bouton et bandeau communs au garage et au sélecteur d'armes |
 | `js/garage.js`, `js/arsenal.js` | Garage rapide, sélecteur d'armes |

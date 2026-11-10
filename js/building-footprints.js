@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { WALL_KINDS } from './tsl-materials.js';
 import { polygonContains } from './building-collision.js';
 import { wallKey } from './storefront-plan.js';
+import { calibreWallPanels } from './calibre-plan.js';
 
 function partyWallHeight(record, a, b, neighbours) {
   const dx = b.x - a.x, dz = b.y - a.y, length = Math.hypot(dx, dz);
@@ -67,7 +68,6 @@ function createBuildingFootprints(material, records, getNeighbours, wallSink = n
             const a = ring[j], b = ring[(j + 1) % ring.length];
             const dx = b.x - a.x, dz = b.y - a.y, width = Math.hypot(dx, dz);
             if (width === 0) continue;
-            const offset = cell.positions.length / 3;
             const adjacentHeight = footprint && !i && neighbours.length ? partyWallHeight(record, a, b, neighbours) : 0;
             // Shop walls are the ones storefront-plan.js gave shops to (the painted shopfronts stand in for them far away)
             const kind = i ? WALL_KINDS.rear : adjacentHeight ? WALL_KINDS.lotLine
@@ -78,15 +78,18 @@ function createBuildingFootprints(material, records, getNeighbours, wallSink = n
             const exposedHeight = adjacentHeight ? Math.max(0, top - adjacentHeight) : wallTop - bottom;
             // Match the positive-world-axis tangent used by the shared interior-map view ray.
             const reverse = (Math.abs(dz) >= Math.abs(dx) ? dz : dx) < 0;
-            cell.positions.push(a.x, bottom, a.y, b.x, bottom, b.y, a.x, wallTop, a.y, b.x, wallTop, b.y);
-            for (let k = 0; k < 4; k++) {
-              cell.normals.push(-dz / width, 0, dx / width);
-              // Footprint walls use the box's unused depth for the exposed height above adjoining roofs.
-              cell.boxes.push(width, height + lip, exposedHeight, seed);
-              cell.walls.push(reverse ? 1 - k % 2 : k % 2, k < 2 ? wallTop - bottom : 0, kind);
-              cell.styles.push(...wallStyle);
+            for (const [lo, hi, y0, y1] of calibreWallPanels(record, a.x, a.y, b.x, b.y, bottom, wallTop)) {
+              const start = cell.positions.length / 3;
+              for (let k = 0; k < 4; k++) {
+                const u = k % 2 ? hi / width : lo / width, y = k < 2 ? y0 : y1;
+                cell.positions.push(a.x + dx * u, y, a.y + dz * u);
+                cell.normals.push(-dz / width, 0, dx / width);
+                cell.boxes.push(width, height + lip, exposedHeight, seed);
+                cell.walls.push(reverse ? 1 - u : u, wallTop - y, kind);
+                cell.styles.push(...wallStyle);
+              }
+              cell.indices.push(start, start + 1, start + 2, start + 2, start + 1, start + 3);
             }
-            cell.indices.push(offset, offset + 1, offset + 2, offset + 2, offset + 1, offset + 3);
             // Street and side walls with windows, for the window dressings built near the camera (facade-kit.js)
             if (wallSink && !i && !adjacentHeight) {
               if (!wallSink.has(record)) wallSink.set(record, []);

@@ -10,6 +10,8 @@
 // camera. ?set=pistol:aim,rifle:carry:3.9,shotgun:draw@0.5 (kind:state:speed) &cams=180:10:2.6,90:5:2.2 (azimuth from the
 // front in degrees : elevation : distance) &look=hero &carry=pistol,shotgun,rifle &ty=1.1 &fov=32 &pitch=0
 // States: stow, carry, ready, aim, fire, reload@0..1, draw@0..1, holster@0..1. The page title becomes "done" when drawn.
+// &mods=mag,suppressor,grip,sight,choke &finish=or dresses every weapon with what fits it (weapon-mods.js), as the
+// protagonist's are in the game
 import * as THREE from 'three/webgpu';
 import { CharacterModel, LOOKS, loadCharacters } from '../js/characters.js';
 import { PersonRig } from '../js/pedestrians.js';
@@ -65,12 +67,15 @@ const cams = (q.get('cams') || '180:8:2.7,115:6:2.5,35:6:2.5').split(',').map((s
 const pitch = +(q.get('pitch') || 0);
 const flat = () => 0;
 const cast = [];
+const worn = { ...Object.fromEntries((q.get('mods') || '').split(',').filter(Boolean).map((m) => [m, 1])), finish: q.get('finish') || undefined };
+const dressed = q.has('mods') || q.has('finish') ? Object.fromEntries(['pistol', 'smg', 'shotgun', 'rifle'].map((k) => [k, worn])) : null;
 const dt = 1 / 60;
 for (const [i, [kind, state = 'carry', speed = '0']] of setups.entries()) {
   const x = i * 16, v = +speed, z0 = i * 16;
   const rig = new PersonRig({ seed: 3 });
   rig.reset(x, z0, 0, flat);
   const model = new CharacterModel(scene, rig, look, 'Studio');
+  if (dressed) model.setMods(dressed);
   model.setLoadout(carry);
   const [name, at] = state.split('@');
   const k = kind === '-' ? null : kind;
@@ -144,6 +149,8 @@ for (const [r, c] of cast.entries()) for (const [k, cam] of cams.entries()) {
   labels.append(tag);
 }
 await draw();
+// dressed weapons take their place once a frame has drawn them (characters.js warmGun)
+for (const c of cast) c.model.update(true, 0, 0);
 await new Promise((r) => setTimeout(r, 400));
 renderer.setScissorTest(false);
 renderer.setViewport(0, 0, W, H);

@@ -1,0 +1,245 @@
+<!doctype html>
+<meta charset="utf-8"><title>Kit CALIBRE</title>
+<style>
+  html,body{margin:0;height:100%;background:#20242a;overflow:hidden;font:12px/1.2 -apple-system,Helvetica,Arial,sans-serif;color:#fff}
+  canvas{display:block;position:absolute;left:0;top:0}
+  .label{position:absolute;transform:translate(-50%,0);white-space:nowrap;padding:1px 5px;border-radius:3px;background:rgba(0,0,0,.62);pointer-events:none}
+  .label small{opacity:.7}
+  .cell{transform:none}
+  #help{position:absolute;left:8px;bottom:8px;opacity:.7;max-width:60ch}
+</style>
+<script type="importmap">{"imports":{"three":"../../vendor/three/build/three.webgpu.js","three/webgpu":"../../vendor/three/build/three.webgpu.js","three/tsl":"../../vendor/three/build/three.tsl.js","three/addons/":"../../vendor/three/examples/jsm/"}}</script>
+<div id="labels"></div>
+<div id="help"></div>
+<script type="module">
+// Every prop and surface of assets/calibre (tools/calibre/build-kit.mjs), through the game's own loader (js/calibre-kit.js).
+//   (default)   the showroom: every prop on a 1 m grid (merged into one mesh, as the room does), wall props on a panel,
+//               ceiling props under an outlined tile; behind them the surfaces at their real scale, a sphere and a
+//               2 m panel each. Drag to turn, wheel to zoom, right-drag (or shift) to pan. Names show when the camera
+//               is near (&labels=all, or a distance in metres). ?az=22&el=30&dist=17&target=x,y,z place the camera.
+//   ?sheet=1    one cell per prop, each framed to fit: &az=35&el=18 (camera), &cols=6, &only=a,b,c, &page=0&per=24.
+//               The square under, behind or above a prop is its anchor plane (floor y = 0, wall z = 0, ceiling y = 0);
+//               the yellow dots are its lights.
+//   ?flat=1     no normal map, ?white=1 no colour map (to read the shapes), ?env=0 no environment
+//   ?side=double draws both faces. The default is front faces only, as the room's material does: a prop that then
+//               shows holes is an open sheet that needs `inside` in build-kit.mjs
+//   ?ny=-1      turns the green of the normal maps over again (the pyramids of the foam are then lit from below:
+//               that is how an OpenGL map looks in this renderer, and why the tool turns the green over)
+// The title becomes "done" when the first picture is drawn. For scripted screenshots: window.KIT, window.__scene and,
+// in the showroom, window.__view({ az, el, dist, target }) (degrees, metres), which resolves once the picture is drawn.
+import * as THREE from 'three/webgpu';
+import { color, normalWorld, mix, smoothstep } from 'three/tsl';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { KIT, loadCalibreKit, kitProp } from '../../js/calibre-kit.js';
+
+const q = new URLSearchParams(location.search);
+const num = (k, d) => (q.has(k) ? +q.get(k) : d);
+const W = innerWidth, H = innerHeight;
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.setSize(W, H);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.prepend(renderer.domElement);
+await renderer.init();
+await loadCalibreKit();
+window.KIT = KIT;
+
+const scene = new THREE.Scene();
+window.__scene = scene;
+scene.background = new THREE.Color(0x2a2f36);
+const sun = new THREE.DirectionalLight(0xfff4e6, 2.6); sun.position.set(3, 6, 5); scene.add(sun);
+const fill = new THREE.DirectionalLight(0xbdd4ff, 0.9); fill.position.set(-4, 2.5, -5); scene.add(fill);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x666666, 0.9));
+if (q.get('env') !== '0') {
+  const dome = new THREE.Scene();
+  const sky = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide });
+  const up = normalWorld.y.negate();
+  sky.colorNode = mix(mix(color(0x8f8a82), color(0xdfe6ee), smoothstep(-0.05, 0.12, up)), color(0x8fa9cc), smoothstep(0.1, 0.9, up)).mul(1.1);
+  dome.add(new THREE.Mesh(new THREE.SphereGeometry(30, 32, 16), sky));
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(4, 16, 8), new THREE.MeshBasicNodeMaterial());
+  lamp.material.colorNode = color(0xfff4e0).mul(10);
+  lamp.position.set(11, 21, 15);
+  dome.add(lamp);
+  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(dome, 0.02).texture;
+}
+
+// One material for the whole kit, as the room does
+const kit = new THREE.MeshStandardNodeMaterial({
+  map: q.get('white') === '1' ? null : KIT.maps.color, normalMap: q.get('flat') === '1' ? null : KIT.maps.normal,
+  roughnessMap: KIT.maps.orm, metalnessMap: KIT.maps.orm, aoMap: KIT.maps.orm, roughness: 1, metalness: 1,
+  emissiveMap: KIT.maps.emissive, emissive: 0xffffff, emissiveIntensity: 2, side: q.get('side') === 'double' ? THREE.DoubleSide : THREE.FrontSide
+});
+if (q.has('ny')) kit.normalScale.set(1, +q.get('ny'));
+const plane = new THREE.MeshStandardNodeMaterial({ color: 0x59606a, roughness: 0.9, side: THREE.DoubleSide });
+const dot = new THREE.MeshBasicNodeMaterial({ color: 0xffd400 });
+const labels = document.getElementById('labels');
+const names = (q.get('only')?.split(',') ?? Object.keys(KIT.props)).filter((n) => KIT.props[n]);
+
+function propObject(name, anchorSize = 0, withMesh = true) {
+  const p = KIT.props[name];
+  const group = new THREE.Group();
+  group.name = name;
+  if (withMesh) group.add(new THREE.Mesh(kitProp(name), kit));
+  for (const light of p.lights) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.012, 8, 6), dot); m.position.set(...light.at); group.add(m); }
+  if (anchorSize) {
+    // the plane the prop is anchored to
+    const s = anchorSize, g = new THREE.PlaneGeometry(s, s);
+    if (p.anchor === 'floor') g.rotateX(-Math.PI / 2).translate(0, -0.002, 0);
+    else if (p.anchor === 'ceiling') g.rotateX(Math.PI / 2).translate(0, 0.002, 0);
+    else g.translate(0, 0, -0.002);
+    group.add(new THREE.Mesh(g, plane));
+  }
+  return group;
+}
+const text = (p, name) => `${name} <small>${p.size.map((v) => v.toFixed(2)).join(' × ')} m · ${p.triangles} tri · ${p.anchor}</small>`;
+
+if (q.get('sheet') === '1') {
+  // ---- contact sheet -----------------------------------------------------------------------------------------------
+  const per = num('per', 48), page = num('page', 0);
+  const shown = names.slice(page * per, page * per + per);
+  const cols = num('cols', Math.ceil(Math.sqrt(shown.length * W / H)));
+  const rows = Math.ceil(shown.length / cols), cw = W / cols, ch = H / rows;
+  const az = num('az', 35) * Math.PI / 180, el = num('el', 18) * Math.PI / 180;
+  const cam = new THREE.PerspectiveCamera(24, cw / ch, 0.01, 100);
+  const objects = shown.map((name) => {
+    const p = KIT.props[name];
+    const o = propObject(name, q.get('anchor') === '0' ? 0 : Math.max(p.size[0], p.anchor === 'wall' ? p.size[1] : p.size[2]) * 1.15);
+    o.visible = false;
+    scene.add(o);
+    return o;
+  });
+  shown.forEach((name, i) => {
+    const d = document.createElement('div');
+    d.className = 'label cell';
+    d.innerHTML = text(KIT.props[name], name);
+    d.style.left = `${(i % cols) * cw + 4}px`;
+    d.style.top = `${Math.floor(i / cols) * ch + 4}px`;
+    labels.append(d);
+  });
+  scene.updateMatrixWorld(true);
+  renderer.autoClear = false;
+  renderer.setScissorTest(true);
+  const draw = async () => {
+    renderer.setScissor(0, 0, W, H); renderer.setViewport(0, 0, W, H);
+    renderer.clear();
+    for (const [i, o] of objects.entries()) {
+      const p = KIT.props[o.name];
+      const centre = new THREE.Vector3((p.min[0] + p.max[0]) / 2, (p.min[1] + p.max[1]) / 2, (p.min[2] + p.max[2]) / 2);
+      const radius = Math.hypot(...p.size) / 2;
+      const distance = radius / Math.sin(Math.min(cam.fov, cam.fov * cam.aspect) * Math.PI / 360) * 1.02;
+      // what hangs from a ceiling is looked at from below
+      const tilt = p.anchor === 'ceiling' ? -Math.abs(el) : el;
+      cam.position.set(centre.x + Math.sin(az) * Math.cos(tilt) * distance, centre.y + Math.sin(tilt) * distance, centre.z + Math.cos(az) * Math.cos(tilt) * distance);
+      cam.near = distance / 50; cam.far = distance * 4;
+      cam.lookAt(centre); cam.updateProjectionMatrix(); cam.updateMatrixWorld(true);
+      const x = (i % cols) * cw, y = Math.floor(i / cols) * ch;
+      renderer.setViewport(x, y, cw, ch); renderer.setScissor(x, y, cw, ch);
+      o.visible = true;
+      await renderer.renderAsync(scene, cam);
+      o.visible = false;
+    }
+  };
+  await draw();
+  await draw();
+} else {
+  // ---- showroom ----------------------------------------------------------------------------------------------------
+  // The surfaces stand at the back as a wall of 2 m panels; the props stand in rows in front of it, the tallest
+  // behind, then what hangs on a wall (each on its own panel) and what hangs from a ceiling (under an outlined tile).
+  const ROW = 13; // metres across before a new row
+  const spots = [];
+  const entries = Object.entries(KIT.surfaces);
+  entries.forEach(([name, s], i) => {
+    const material = new THREE.MeshStandardNodeMaterial({ map: s.color, normalMap: s.normal, roughnessMap: s.rough, roughness: 1, metalness: name === 'plate' ? 0.6 : 0 });
+    if (q.has('ny')) material.normalScale.set(1, +q.get('ny'));
+    const sphere = new THREE.SphereGeometry(0.4, 48, 32), panel = new THREE.PlaneGeometry(2, 2.6);
+    const scaleUv = (g, k) => { const t = g.attributes.uv; for (let v = 0; v < t.count; v++) t.setXY(v, t.getX(v) * k[0], t.getY(v) * k[1]); return g; };
+    scaleUv(sphere, [0.8 * Math.PI / s.metres, 0.4 * Math.PI / s.metres]); scaleUv(panel, [2 / s.metres, 2.6 / s.metres]);
+    const ball = new THREE.Mesh(sphere, material), wall = new THREE.Mesh(panel, material);
+    const cx = (ROW - entries.length * 2.1) / 2 + i * 2.1 + 1.05;
+    wall.position.set(cx, 1.3, -2); ball.position.set(cx, 0.4, -1.2);
+    scene.add(wall, ball);
+    spots.push({ name, html: `${name} <small>${s.metres} m</small>`, at: new THREE.Vector3(cx, 2.75, -2), far: true });
+  });
+  let x = 0, z = 0, depth = 0;
+  const place = (width, deep) => {
+    const w = Math.max(1, Math.ceil(width + 0.3));
+    if (x + w > ROW) { x = 0; z += Math.max(1.5, Math.ceil((depth + 0.6) * 2) / 2); depth = 0; }
+    const at = [x + w / 2, z];
+    x += w; depth = Math.max(depth, deep);
+    return at;
+  };
+  const order = [...names].sort((a, b) => {
+    const pa = KIT.props[a], pb = KIT.props[b], rank = { floor: 0, wall: 1, ceiling: 2 };
+    return rank[pa.anchor] - rank[pb.anchor] || pb.size[1] - pa.size[1];
+  });
+  const outline = new THREE.LineBasicNodeMaterial({ color: 0x9aa6b8 });
+  const moved = []; // every prop in place, merged into one mesh below: what the room does with them
+  let last = 'floor';
+  for (const name of order) {
+    const p = KIT.props[name];
+    if (p.anchor !== last) { x = ROW; last = p.anchor; } // a new row for each kind of anchor
+    const [cx, cz] = place(p.size[0], p.size[2]);
+    const o = propObject(name, p.anchor === 'wall' ? Math.max(p.size[0], p.size[1]) + 0.3 : 0, false);
+    o.position.set(cx, p.anchor === 'wall' ? 1.4 : p.anchor === 'ceiling' ? 2.4 : 0, cz);
+    if (p.anchor === 'ceiling') {
+      // the ceiling it hangs from, as an outline: the showroom is looked at from above
+      const h = Math.max(p.size[0], p.size[2]) / 2 + 0.15;
+      o.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints([[-h, -h], [h, -h], [h, h], [-h, h], [-h, -h]].map(([px, pz]) => new THREE.Vector3(px, 0, pz))), outline));
+    }
+    scene.add(o);
+    moved.push(kitProp(name).translate(o.position.x, o.position.y, o.position.z));
+    spots.push({ name, html: text(p, name), at: new THREE.Vector3(cx, 0, cz + Math.max(p.max[2], 0) + 0.2) });
+  }
+  const merged = mergeGeometries(moved);
+  if (!merged) throw new Error('the props do not merge: their attributes differ');
+  scene.add(new THREE.Mesh(merged, kit));
+  const grid = new THREE.GridHelper(40, 40, 0x8a94a3, 0x4a515c);
+  grid.position.set(Math.round(ROW / 2), 0, Math.round(z / 2));
+  scene.add(grid);
+  for (const s of spots) { s.div = document.createElement('div'); s.div.className = 'label'; s.div.innerHTML = s.html; labels.append(s.div); }
+  document.getElementById('help').textContent = 'Glisser : tourner · molette : zoom · clic droit ou maj : déplacer · les noms apparaissent en s’approchant · ?sheet=1 : une case par objet';
+
+  const cam = new THREE.PerspectiveCamera(40, W / H, 0.05, 200);
+  const target = new THREE.Vector3(...(q.get('target')?.split(',').map(Number) ?? [ROW / 2, 0.9, z / 2 - 0.5]));
+  const view = { az: num('az', 22) * Math.PI / 180, el: num('el', 30) * Math.PI / 180, dist: num('dist', 17) };
+  const reach = q.get('labels') === 'all' ? Infinity : num('labels', 7); // names show within this many metres
+  scene.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  let wanted = true;
+  const draw = async () => {
+    cam.position.set(target.x + Math.sin(view.az) * Math.cos(view.el) * view.dist, target.y + Math.sin(view.el) * view.dist, target.z + Math.cos(view.az) * Math.cos(view.el) * view.dist);
+    cam.lookAt(target); cam.updateMatrixWorld(true);
+    await renderer.renderAsync(scene, cam);
+    for (const s of spots) {
+      v.copy(s.at).project(cam);
+      const on = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 && (s.far || s.at.distanceTo(cam.position) < reach);
+      s.div.style.display = on ? '' : 'none';
+      if (on) { s.div.style.left = `${(v.x + 1) / 2 * W}px`; s.div.style.top = `${(1 - v.y) / 2 * H}px`; }
+    }
+  };
+  const loop = async () => { if (wanted) { wanted = false; await draw(); } requestAnimationFrame(loop); };
+  window.__view = (o) => { Object.assign(view, o.az !== undefined ? { az: o.az * Math.PI / 180 } : {}, o.el !== undefined ? { el: o.el * Math.PI / 180 } : {}, o.dist !== undefined ? { dist: o.dist } : {}); if (o.target) target.set(...o.target); return draw(); };
+  const el = renderer.domElement;
+  let drag = null;
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+  el.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey }; el.setPointerCapture(e.pointerId); });
+  el.addEventListener('pointerup', () => { drag = null; });
+  el.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    drag.x = e.clientX; drag.y = e.clientY;
+    if (drag.pan) {
+      const k = view.dist / H;
+      target.x -= (Math.cos(view.az) * dx + Math.sin(view.az) * Math.sin(view.el) * dy) * k;
+      target.z += (Math.sin(view.az) * dx - Math.cos(view.az) * Math.sin(view.el) * dy) * k;
+      target.y += Math.cos(view.el) * dy * k;
+    } else { view.az -= dx * 0.006; view.el = Math.min(1.5, Math.max(-0.3, view.el + dy * 0.006)); }
+    wanted = true;
+  });
+  el.addEventListener('wheel', (e) => { e.preventDefault(); view.dist = Math.min(80, Math.max(0.3, view.dist * Math.exp(e.deltaY * 0.001))); wanted = true; }, { passive: false });
+  await draw();
+  await draw();
+  loop();
+}
+document.title = 'done';
+</script>

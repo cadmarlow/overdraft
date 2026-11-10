@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import * as THREE from '../vendor/three/build/three.core.js';
+import * as TSL from '../vendor/three/build/three.tsl.js';
+import * as mods from '../js/weapon-mods.js';
 import { loadModule } from './helpers/module.cjs';
 
 // The weapons the hands hold are real models prepared by tools/weapons into assets/weapons. These tests read the
@@ -10,7 +12,8 @@ import { loadModule } from './helpers/module.cjs';
 const dir = new URL('../assets/weapons/', import.meta.url);
 const source = readFileSync(new URL('../js/weapon-models.js', import.meta.url), 'utf8').replaceAll('import.meta.url', '"file:///js/weapon-models.js"');
 const models = loadModule(source, {
-  imports: { 'three/webgpu': { ...THREE, MeshStandardNodeMaterial: THREE.MeshStandardMaterial }, 'three/addons/utils/BufferGeometryUtils.js': { mergeGeometries: () => new THREE.BufferGeometry() } },
+  imports: { 'three/webgpu': { ...THREE, MeshStandardNodeMaterial: THREE.MeshStandardMaterial }, 'three/tsl': TSL, './weapon-mods.js': mods,
+    './weapon-attachments.js': { buildAttachments: () => ({}) }, 'three/addons/utils/BufferGeometryUtils.js': { mergeGeometries: () => new THREE.BufferGeometry() } },
   globals: { URL, TextDecoder, DataView, Uint8Array, Uint16Array, Uint32Array, Float32Array, console: { warn() {}, log() {} } }, filename: 'weapon-models.js'
 });
 const read = (id) => {

@@ -49,7 +49,7 @@ const UP = new THREE.Vector3(0, 1, 0);
  * @param {object[]} [o.colliders] - the controllers' colliders (shed decks go here, walkable)
  */
 function createSidewalkFurniture(scene, o) {
-  const { network, records = [], shops = [], trunks = [], street = null, isOnSidewalk, isClearOfPoles, addPole, addFootprint, obstacles, colliders = [] } = o;
+  const { network, records = [], shops = [], trunks = [], street = null, isOnSidewalk, isClearOfPoles, addPole, addFootprint, obstacles, colliders = [], entrances = [] } = o;
   const t0 = performance.now();
   const group = new THREE.Group();
   group.name = 'SidewalkFurniture';
@@ -86,8 +86,13 @@ function createSidewalkFurniture(scene, o) {
     }
     return false;
   };
+  const reserved = (x, z, pad = 0) => entrances.some(c => {
+    if (x < c.minX - pad || x > c.maxX + pad || z < c.minZ - pad || z > c.maxZ + pad) return false;
+    const o = c.obb, dx = x - o.cx, dz = z - o.cz;
+    return Math.abs(dx * o.cs - dz * o.sn) < o.hx + pad && Math.abs(dx * o.sn + dz * o.cs) < o.hz + pad;
+  });
   // Ground that can take furniture: a sidewalk, no building, nothing standing there yet
-  const free = (x, z, pad = 0.5, poles = 0.9) => isOnSidewalk(x, z, pad) && !insideBuilding(x, z) && (poles <= 0 || isClearOfPoles(x, z, poles));
+  const free = (x, z, pad = 0.5, poles = 0.9) => !reserved(x, z, pad) && isOnSidewalk(x, z, pad) && !insideBuilding(x, z) && (poles <= 0 || isClearOfPoles(x, z, poles));
 
   // ---- Edges by cell: the curb nearest to a surveyed point ------------------------------------------------------------
   const edges = (network.edges || []).filter((e) => e.len >= 6);
@@ -501,6 +506,10 @@ function createSidewalkFurniture(scene, o) {
   // you can stand on), green parapet boards along the curb and the ends, string lights underneath; a dumpster at the
   // curb with its cones and a portable toilet for some
   function buildShed(w, h, wi) {
+    // A playable storefront keeps its whole entrance and sign clear of scaffold bays and overhead decks.
+    for (let t = 0; t <= w.len; t += 0.5) {
+      if (reserved(w.ax + w.ux * t + w.nx * 0.35, w.az + w.uz * t + w.nz * 0.35, 0.5)) return;
+    }
     const depth = Math.min(3.6, w.width - 0.5);
     const inner = 0.35, outer = inner + depth;
     const start = 0.3, end = w.len - 0.3, run = end - start;

@@ -72,10 +72,12 @@ class MarkerSystem {
   }
 
   // `y`: stands at that height (a roof) instead of on the street
-  add(x, z, { kind = 'objective', radius = 2.2, height = 3.2, follow = null, label = '', blip = true, y = null } = {}) {
-    const m = this.markers.find((k) => !k.used);
+  add(x, z, { kind = 'objective', radius = 2.2, height = 3.2, follow = null, label = '', blip = true, y = null, mapOnly = false } = {}) {
+    let m = this.markers.find(k => !k.used && !!k.mapOnly === mapOnly);
+    if (!m && mapOnly) { m = { mapOnly: true }; this.markers.push(m); }
     if (!m) return null;
     Object.assign(m, { used: true, x, z, y, radius, height, follow, kind, label, blip });
+    if (mapOnly) return m;
     const color = new THREE.Color(MARKER_COLORS[kind] ?? MARKER_COLORS.objective);
     m.colMat.color.copy(color);
     m.ringMat.color.copy(color);
@@ -87,7 +89,7 @@ class MarkerSystem {
     if (!m) return;
     m.used = false;
     m.follow = null;
-    m.group.visible = false;
+    if (m.group) m.group.visible = false;
   }
 
   clear() { for (const m of this.markers) this.remove(m); }
@@ -95,6 +97,7 @@ class MarkerSystem {
   update(ground) {
     this.frames++;
     for (const m of this.markers) {
+      if (m.mapOnly) continue;
       if (!m.used) { if (this.frames > 4) m.group.visible = false; continue; }
       if (m.follow) { m.x = m.follow.position ? m.follow.position.x : m.follow.x; m.z = m.follow.position ? m.follow.position.z : m.follow.z; }
       const y = m.y ?? ground(m.x, m.z);

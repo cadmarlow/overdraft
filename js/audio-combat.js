@@ -35,7 +35,9 @@ function onePole(ctx, frequency) {
   return (x) => (y += (x - y) * k);
 }
 
-function gunshot(ctx, seed, { body = 110, crack = 1, length = 0.55, weight = 1, mechanism = 0.06 } = {}) {
+// `muffle` (0..1) is a suppressor: the gas leaves slowly, so the mid-band blast and what the street throws back of it
+// go, and the working of the action is what is left to hear. At 0 the report is the unsuppressed one, sample for sample.
+function gunshot(ctx, seed, { body = 110, crack = 1, length = 0.55, weight = 1, mechanism = 0.06, muffle = 0 } = {}) {
   const random = rng(seed);
   const low = onePole(ctx, 180 * weight + 60), mid = onePole(ctx, 2400), high = onePole(ctx, 6500);
   return makeBuffer(ctx, length, (t) => {
@@ -53,7 +55,8 @@ function gunshot(ctx, seed, { body = 110, crack = 1, length = 0.55, weight = 1, 
     const echo1 = t - 0.052, echo2 = t - 0.097;
     const reflected = (m - l) * ((echo1 > 0 ? Math.exp(-echo1 / (0.022 * weight)) * 0.2 : 0)
       + (echo2 > 0 ? Math.exp(-echo2 / (0.022 * weight)) * 0.11 : 0));
-    return Math.tanh((h - m) * snap * 2.5 + (m - l) * blast * 1.8 + l * (blast + tail) * 2.1 + thump + bolt + reflected);
+    return Math.tanh((h - m) * snap * 2.5 + (m - l) * blast * 1.8 * (1 - 0.6 * muffle) + l * (blast + tail) * 2.1 + thump + bolt * (1 + 0.4 * muffle)
+      + reflected * (1 - 0.85 * muffle));
   }, 0.88);
 }
 
@@ -199,6 +202,10 @@ export function createCombatResources(ctx) {
     smg: [1, 2, 3].map((s) => gunshot(ctx, 720 + s, { body: 150, crack: 1.2, length: 0.32, weight: 0.7 })),
     shotgun: [1, 2].map((s) => gunshot(ctx, 740 + s, { body: 78, crack: 0.85, length: 0.72, weight: 1.75, mechanism: 0.33 })),
     rifle: [1, 2, 3].map((s) => gunshot(ctx, 750 + s, { body: 105, crack: 1.4, length: 0.6, weight: 1.1 })),
+    // Suppressed (weapon-mods.js): the same recipes with the crack almost gone, a shorter and lighter body, no street
+    pistolSuppressed: [1, 2, 3].map((s) => gunshot(ctx, 704 + s, { body: 96, crack: 0.2, length: 0.24, weight: 0.6, mechanism: 0.045, muffle: 1 })),
+    smgSuppressed: [1, 2, 3].map((s) => gunshot(ctx, 724 + s, { body: 118, crack: 0.24, length: 0.2, weight: 0.5, mechanism: 0.04, muffle: 1 })),
+    rifleSuppressed: [1, 2, 3].map((s) => gunshot(ctx, 754 + s, { body: 88, crack: 0.34, length: 0.3, weight: 0.72, mechanism: 0.055, muffle: 1 })),
     throw: [clickClack(ctx, 812, [0.01, 0.06])],
     explosion: [1, 2].map((s) => explosion(ctx, 760 + s)),
     impact: [1, 2, 3, 4].map((s) => impact(ctx, 780 + s)),
@@ -231,6 +238,9 @@ export const COMBAT_SOUNDS = {
   smg: { level: 0.75, range: 300, ref: 11 },
   shotgun: { level: 1, range: 360, ref: 14 },
   rifle: { level: 0.95, range: 380, ref: 13 },
+  pistolSuppressed: { level: 0.34, range: 65, ref: 5 },
+  smgSuppressed: { level: 0.3, range: 60, ref: 5 },
+  rifleSuppressed: { level: 0.4, range: 80, ref: 6 },
   throw: { level: 0.4, range: 25, ref: 2 },
   explosion: { level: 1, range: 900, ref: 40 },
   impact: { level: 0.35, range: 60, ref: 3 },

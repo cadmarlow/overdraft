@@ -4,6 +4,7 @@ import { angleDelta, doorPosition, smooth, clamp, canInteract, validPosition } f
 import { CharacterModel, LOOKS } from './characters.js';
 import { EffectsSystem } from './fx.js';
 import { WEAPONS, WEAPON_ORDER, HANDLING, gunSpread, gunDamage, sightOrigin, muzzleObstruction, stockArsenal, castShot, spreadDirection, lineOfSight, raycastBuildings } from './weapons.js';
+import { MOD_GUNS, effectiveWeapon, withMod, fits, finishById, sanitizeMods } from './weapon-mods.js';
 import { AimAssist } from './aim-assist.js';
 import { createWeaponModel } from './weapon-models.js';
 import { Vertical } from './vertical.js';
@@ -45,8 +46,8 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.17';
-const BUILD_NAME = 'Stop Loss';
+const BUILD = '0.9.18';
+const BUILD_NAME = 'Dry Powder';
 const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
 // The neighbourhoods as the opening card names them (city-config.js districtAt)
 const DISTRICT_NAMES = {
@@ -133,6 +134,8 @@ const _gunRight = new THREE.Vector3();
 const _gunUp = new THREE.Vector3();
 const _barrel = new THREE.Vector3();
 const _flashOpts = { id: 'player', vx: 0, vy: 0, vz: 0 };
+// CALIBRE on the maps: a pistol seen from the side, in a 24-unit box (the trigger guard is cut out by the even-odd rule)
+const GUN_BLIP = typeof Path2D === 'function' ? new Path2D('M2 6h18.5v1H22v2.6h-1.5v1h-6.8a3 3 0 0 1-3 3H9.1L7.9 19H2.3l1.1-6.4L2 10.6zM10.3 11v1.4h1.1a1.5 1.5 0 0 0 1.5-1.4z') : null;
 const _casingOpts = { port: _port, right: _gunRight, up: _gunUp };
 const _hitOpts = { dir: { x: 0, y: 0, z: 0 } };
 const _wallHit = {};
@@ -152,6 +155,8 @@ export class Game {
     this.health = 100; this.armor = 0; this.money = 0;
     this.weapons = { fists: { mag: 0, ammo: 0 } };
     this.weaponId = 'fists';
+    this.mods = {}; // upgrades and finishes bought at CALIBRE, per weapon (weapon-mods.js)
+    this.range = { medals: {}, best: {} }; // CALIBRE's shooting range, per weapon: medals 0..3, best score (calibre-range.js)
     this.missionsDone = [];
     this.stats = { kills: 0, shots: 0, cops: 0, cars: 0, explosions: 0, deaths: 0, busted: 0 };
     this.fireHeld = false; this.firePressed = false; this.aimHeld = false;
@@ -225,9 +230,9 @@ export class Game {
     for (const kind of this.wreckKinds) this.makeWreck(kind);
 
     this.spawnFleet();
-    this.restore();
-    // A new game opens with empty hands: everything he owns is on him, in view, and TAB brings it out
+    // Keep the sandbox starter kit, but a saved inventory replaces it without refilling purchased ammunition.
     stockArsenal(this.weapons);
+    this.restore();
     // The garage's own car and motorbike, built now so that summoning them never stalls a frame
     for (const [kind, paint] of [...CAR_CATALOG.map(c => [c.kind, c.paint]), ['moto', 0xc81e2a], ['boat', 0x0c1f33]]) {
       const car = this.makeCar(kind, paint, new THREE.Vector3(), 0, true, false, true);
@@ -350,7 +355,8 @@ export class Game {
   get active() { return this.playing && !this.paused && !this.modal && !this.map.isFullMapOpen; }
   get person() { return this.controllers.entities.person; }
   get car() { return this.controllers.entities.car; }
-  get weapon() { return WEAPONS[this.weaponId] || WEAPONS.fists; }
+  // The weapon in hand as it fires with what is fitted on it (weapon-mods.js)
+  get weapon() { return effectiveWeapon(this.weaponId, this.mods[this.weaponId]); }
 
   // ---- Vehicles ---------------------------------------------------------------------------------------------------
   makeCar(kind, paint, position, heading = 0, stolen = false, lite = false, pooled = false) {
@@ -718,6 +724,13 @@ export class Game {
       try { seen = localStorage.getItem('overdraft:tip:wheel') === '1'; localStorage.setItem('overdraft:tip:wheel', '1'); } catch { /* storage optional */ }
       if (!seen && this.state === 'onFoot') this.toast('Vos armes sont sur vous', 'Clic droit ou X : dégainer et viser · TAB maintenu : la roue des armes · TAB bref : arme précédente');
     }
+    // 0.9.18: the gun shops, once per browser, a little after the others
+    if ((this.shopTipT = (this.shopTipT ?? 15) - dt) <= 0 && !this.shopTipped) {
+      this.shopTipped = true;
+      let seen = false;
+      try { seen = localStorage.getItem('overdraft:tip:calibre') === '1'; localStorage.setItem('overdraft:tip:calibre', '1'); } catch { /* storage optional */ }
+      if (!seen && this.state === 'onFoot' && !this.director.current && !this.calibre?.inside) this.toast('Nouveau : les armureries CALIBRE', 'On y entre : améliorations d’armes au comptoir, stand de tir au fond. Repères laiton sur la carte, ou P → Contacts → CALIBRE.');
+    }
     if ((this.tipT = (this.tipT ?? 26) - dt) > 0 || this.tipped) return;
     this.tipped = true;
     this.phone.text('NADIA', 'On m’a parlé de toi. J’ai du travail pour quelqu’un qui sait conduire. Regarde tes contrats (P).');
@@ -795,18 +808,54 @@ export class Game {
       ctx.fillStyle = a.team === 'police' ? '#7fb2ff' : a.hostile ? '#ff5a5a' : '#ffd54a';
       ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
     }
-    // Markers & contacts
-    for (const m of this.markers.markers) {
-      if (!m.used || m.blip === false) continue;
+    // Markers & contacts. The gun shops go down first: missions and their names are read over them
+    for (let pass = 0; pass < 2; pass++) for (const m of this.markers.markers) {
+      if (!m.used || m.blip === false || (m.kind === 'guns') !== (pass === 0)) continue;
       let x = toX(m.x), y = toY(m.z);
-      const color = { objective: '#ffd54a', destination: '#5ec8ff', contact: '#e1f3a0', target: '#ff4d4d', race: '#ff9a3c', shop: '#c99bff', home: '#7ee08a', homeSale: '#3e8a4a' }[m.kind] || '#fff';
-      const pinned = m.kind !== 'shop' && m.kind !== 'home' && m.kind !== 'homeSale';
+      const color = { objective: '#ffd54a', destination: '#5ec8ff', contact: '#e1f3a0', target: '#ff4d4d', race: '#ff9a3c', guns: '#e1c492', shop: '#c99bff', home: '#7ee08a', homeSale: '#3e8a4a' }[m.kind] || '#fff';
+      const pinned = m.kind !== 'guns' && m.kind !== 'shop' && m.kind !== 'home' && m.kind !== 'homeSale';
       if (mini && !pinned && (Math.abs(x) > w * 0.5 - 6 || Math.abs(y) > h * 0.5 - 6)) continue;
       if (mini) {
         // pin markers to the radar's edge
         const r = Math.min(w, h) * 0.5 - 8;
         const d = Math.hypot(x, y);
         if (Math.abs(x) > w * 0.5 - 8 || Math.abs(y) > h * 0.5 - 8) { x = x / d * r; y = y / d * r; }
+      }
+      if (m.kind === 'guns') {
+        // A gun shop: a brass pistol on a bottle-green badge, twice the size of a dot so it reads at a glance; on the
+        // full map it shrinks with the zoom, and is named once the map is close enough for names not to pile up
+        const r = mini ? 10.5 : Math.max(8, Math.min(11.5, 6.5 + 22 * scale));
+        // a mission's marker on the same doorstep: the badge steps aside, so that both are read
+        for (const o of this.markers.markers) {
+          if (!o.used || o.blip === false || o.kind === 'guns') continue;
+          const dx = x - toX(o.x), dy = y - toY(o.z), d = Math.hypot(dx, dy);
+          if (d > r + 7) continue;
+          const ux = d > 0.5 ? dx / d : 1, uy = d > 0.5 ? dy / d : 0;
+          x += ux * (r + 8 - d); y += uy * (r + 8 - d);
+          break;
+        }
+        ctx.fillStyle = '#000b';
+        ctx.beginPath(); ctx.arc(x, y, r + 2, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#16261f';
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.stroke();
+        if (GUN_BLIP) {
+          const k = r * 1.46 / 24;
+          ctx.save();
+          ctx.translate(x - 12 * k, y - 12.4 * k); ctx.scale(k, k);
+          ctx.fillStyle = '#f3dda6';
+          ctx.fill(GUN_BLIP, 'evenodd');
+          ctx.restore();
+        }
+        if (!mini && m.label && 100 * scale > 20) {
+          // under the badge, out of the way of the names written to the right of the other markers
+          ctx.font = '700 10px Arial';
+          ctx.textAlign = 'center';
+          ctx.fillStyle = '#000b'; ctx.fillText(m.label, x + 1, y + r + 13);
+          ctx.fillStyle = '#f3dda6'; ctx.fillText(m.label, x, y + r + 12);
+          ctx.textAlign = 'start';
+        }
+        continue;
       }
       ctx.fillStyle = '#000a';
       ctx.beginPath(); ctx.arc(x, y, 6.5, 0, Math.PI * 2); ctx.fill();
@@ -1270,8 +1319,8 @@ export class Game {
 
   // ---- Weapons -----------------------------------------------------------------------------------------------------
   giveWeapon(id, ammo = 0) {
-    const w = WEAPONS[id];
-    if (!w) return;
+    if (!WEAPONS[id]) return;
+    const w = effectiveWeapon(id, this.mods[id]);
     const fresh = !this.weapons[id];
     if (fresh) this.weapons[id] = { mag: 0, ammo: 0 };
     const slot = this.weapons[id];
@@ -1287,7 +1336,70 @@ export class Game {
 
   // What Sacha wears on him: every firearm he owns, each in its place (thigh, back, under the jacket)
   syncLoadout() {
+    this.hero?.setMods(this.mods);
     this.hero?.setLoadout(['pistol', 'smg', 'shotgun', 'rifle'].filter((id) => this.weapons[id]));
+  }
+
+  // ---- Upgrades and finishes (weapon-mods.js): CALIBRE sells them; the counter debits and saves ---------------------
+  // 'none' (not owned), 'fitted', or 'stowed' (owned, taken off)
+  modState(weaponId, modId) {
+    const value = this.mods[weaponId]?.[modId];
+    return value === 1 ? 'fitted' : value === 0 ? 'stowed' : 'none';
+  }
+
+  // Bought: owned from now on and fitted at once. False when it does not fit that weapon or is already owned
+  buyMod(weaponId, modId) {
+    if (!fits(weaponId, modId) || this.modState(weaponId, modId) !== 'none') return false;
+    this.mods[weaponId] = withMod(this.mods[weaponId], modId, true);
+    this.refitWeapon(weaponId, modId === 'mag');
+    return true;
+  }
+
+  // An owned upgrade comes off or goes back on, free, as often as wanted. False when it is not owned
+  toggleMod(weaponId, modId) {
+    const state = this.modState(weaponId, modId);
+    if (state === 'none') return false;
+    this.mods[weaponId] = withMod(this.mods[weaponId], modId, state !== 'fitted');
+    this.refitWeapon(weaponId, modId === 'mag');
+    return true;
+  }
+
+  // The finish a weapon wears ('stock' when none was ever chosen)
+  finishOf(weaponId) {
+    const id = this.mods[weaponId]?.finish;
+    return id && finishById(id).id === id ? id : 'stock';
+  }
+
+  ownsFinish(weaponId, finishId) {
+    if (finishId === 'stock') return true;
+    return !!this.mods[weaponId]?.finishes?.includes(finishId);
+  }
+
+  // Wear a finish; one never worn before is owned from now on. False for an unknown finish or what takes none
+  setFinish(weaponId, finishId) {
+    if (!MOD_GUNS.includes(weaponId) || finishById(finishId).id !== finishId) return false;
+    const state = { ...this.mods[weaponId] };
+    if (finishId === 'stock') delete state.finish;
+    else {
+      state.finish = finishId;
+      if (!state.finishes?.includes(finishId)) state.finishes = [...(state.finishes ?? []), finishId];
+    }
+    this.mods[weaponId] = state;
+    this.refitWeapon(weaponId);
+    return true;
+  }
+
+  // What changed on a weapon counts and shows at once: its magazine holds no more than the weapon now takes (the
+  // surplus returns to the reserve; a longer magazine just fitted, `fill`, is loaded from it) and the gun Sacha
+  // carries is dressed again
+  refitWeapon(weaponId, fill = false) {
+    const slot = this.weapons[weaponId], w = effectiveWeapon(weaponId, this.mods[weaponId]);
+    if (slot && w.handling && (fill || slot.mag > w.mag)) {
+      const move = Math.min(w.mag - slot.mag, slot.ammo);
+      slot.mag += move; slot.ammo -= move;
+    }
+    this.hero?.setMods(this.mods);
+    this.updateKeybar();
   }
 
   // Raising empty hands to aim takes out the firearm held last, the pistol if there was none
@@ -1329,7 +1441,7 @@ export class Game {
 
   updateWeapons(dt) {
     const w = this.weapon, slot = this.weapons[this.weaponId];
-    const handling = HANDLING[w.id];
+    const handling = w.handling;
     const fireHeld = this.fireHeld || Boolean(this.gamepad?.fire);
     const firePressed = this.firePressed || Boolean(this.gamepad?.firePressed);
     if (firePressed && this.gamepad) this.gamepad.bufferedShot = !this.firePressed && !!handling;
@@ -1357,7 +1469,7 @@ export class Game {
     rig.gunReady = onFoot && !!handling && !sprinting && (aiming || this.combatReadyT > 0 || this.reloadT > 0 || this.threatNear);
     this.assistAim(dt, aiming && onFoot && !!handling);
     this.camera.aimMode = aiming;
-    this.camera.aimFov = w.id === 'rifle' ? 40 : w.id === 'shotgun' ? 46 : 44;
+    this.camera.aimFov = w.aimFov;
     this.camera.combatMode = onFoot && !!handling && (rig.gunReady || this.hipT > 0);
     if (!onFoot) this.aimToggle = false;
     if (this.autoReloadT > 0) {
@@ -1544,7 +1656,10 @@ export class Game {
     sightOrigin(cam.position, _camDir, this.player, _aim);
     const h = castShot(this.world, _aim.x, _aim.y, _aim.z, _camDir.x, _camDir.y, _camDir.z, this.weapon.range || 220, this.player);
     this.sightHit = h;
-    _aim.set(h.x, h.y, h.z);
+    // a paper target of CALIBRE's range under the sights: the bullet is sent to the sheet, not to the wall behind it
+    const paper = this.calibre?.muffled ? this.calibre.sight(_aim, _camDir, Number.isFinite(h.t) ? h.t : 220) : -1;
+    if (paper > 0) _aim.addScaledVector(_camDir, paper);
+    else _aim.set(h.x, h.y, h.z);
     return _aim;
   }
 
@@ -1574,15 +1689,20 @@ export class Game {
     // Flash and tracer start on this side of cover when the visual barrel extends through it.
     if (obstruction) _muzzle.set(obstruction.x + obstruction.nx * 0.025, obstruction.y + obstruction.ny * 0.025, obstruction.z + obstruction.nz * 0.025);
     const pellets = w.pellets || 1;
+    // On CALIBRE's range the walls keep the noise in: the paper is shot at, nobody runs, nobody calls the police
+    const ranged = !fromCar && !!this.calibre?.muffled;
     let landed = false, killed = false, headshot = false;
     for (let i = 0; i < pellets; i++) {
       spreadDirection(_dir.x, _dir.y, _dir.z, spread, _v);
       const h = obstruction || castShot(this.world, _muzzle.x, _muzzle.y, _muzzle.z, _v.x, _v.y, _v.z, w.range, this.player);
+      // through a paper target of CALIBRE's range on its way (calibre.js)
+      if (ranged) this.calibre.shot(_muzzle, _v, Number.isFinite(h.t) ? h.t : w.range);
       if (i === 0 || i % 3 === 0) this.fx.tracer(_muzzle, h, pellets > 1 ? 'shotgun' : undefined);
       const r = this.applyShot(h, gunDamage(w, h.t), 'player');
       landed ||= r.hit; killed ||= r.kill;
       headshot ||= r.headshot;
     }
+    if (ranged) this.calibre.range.fired();
     if (landed) {
       this.hud.hit(killed, headshot);
       this.audio.ui(killed ? 'killConfirm' : headshot ? 'headshot' : 'hitConfirm');
@@ -1597,22 +1717,25 @@ export class Game {
     // the smoke of a shot from a moving car is left behind it
     _flashOpts.vx = fromCar ? Math.sin(this.car.heading) * this.car.speed : 0;
     _flashOpts.vz = fromCar ? Math.cos(this.car.heading) * this.car.speed : 0;
+    _flashOpts.scale = w.flash; // a suppressor leaves a spark where there was a flame
     this.fx.muzzleFlash(_muzzle, _dir, w.id, _flashOpts);
     // A pump keeps its hull until the fore-end comes back; self-loaders throw theirs at once
     if (w.id === 'shotgun' && !fromCar) this.pumpEjectT = 0.3;
     else this.ejectBrass(w.id, fromCar);
     this.audio.sfx(w.sound, _muzzle.x, _muzzle.y, _muzzle.z);
-    this.birds?.scatter(_muzzle.x, _muzzle.z, 45);
-    const handling = HANDLING[w.id];
+    if (!ranged) this.birds?.scatter(_muzzle.x, _muzzle.z, w.noise.birds);
+    const handling = w.handling;
     this.bloom = Math.min(handling.maxBloom, this.bloom + handling.bloom);
     const side = Math.sin(++this.shotsInBurst * 2.4) * w.recoil * 0.2;
     this.camera.addRecoil(w.recoil * (this.isAiming() ? 0.9 : 1.15), side);
-    // Gunfire empties the street and calls the police if anyone notices
-    const panicked = this.traffic.pedestrians.panic(this.player.x, this.player.z, 45, 12);
-    this.traffic.flee(this.player.x, this.player.z, 40, 7);
-    if (this.clock - this.lastCrimeShot > 1.5) {
+    // Gunfire empties the street and calls the police if anyone notices. A suppressed shot carries a few metres:
+    // those who run from it saw the gun, nobody further heard it, and only an officer close by makes it a crime
+    const noise = w.noise;
+    const panicked = ranged ? 0 : this.traffic.pedestrians.panic(this.player.x, this.player.z, noise.panic, 12);
+    if (!ranged) this.traffic.flee(this.player.x, this.player.z, noise.flee, 7);
+    if (!ranged && this.clock - this.lastCrimeShot > 1.5) {
       this.lastCrimeShot = this.clock;
-      if (panicked > 0 || this.policeNear(90) || this.wanted.level > 0) this.crime('shots', this.player.x, this.player.z);
+      if ((noise.witnesses && panicked > 0) || this.policeNear(noise.police) || this.wanted.level > 0) this.crime('shots', this.player.x, this.player.z);
     }
     if (slot.mag === 0 && slot.ammo > 0) this.autoReloadT = 0.18;
   }
@@ -1666,6 +1789,7 @@ export class Game {
       landed = true;
       this.actors.damage(a, 26, fx, fz, 'melee');
       if (a.team === 'police') this.crime(a.dead ? 'copKilled' : 'copHurt', a.x, a.z);
+      else if (a.team === 'calibre') this.crime(a.dead ? 'pedKilled' : 'pedHit', a.x, a.z);
       break;
     }
     if (landed) {
@@ -1704,8 +1828,9 @@ export class Game {
         this.actors.damage(a, damage * mult, dir.x, dir.z, 'shot');
         this.bleed(h, a.y, wasAlive && a.dead);
         if (byPlayer) {
-          this.actors.alertTeam(a.team, a.x, a.z, 70);
+          this.actors.alertTeam(a.team, a.x, a.z, this.weapon.noise.alert);
           if (a.team === 'police') this.crime(a.dead ? 'copKilled' : 'copHurt', a.x, a.z);
+          else if (a.team === 'calibre') this.crime(a.dead ? 'pedKilled' : 'pedHit', a.x, a.z);
         }
         return { hit: true, kill: wasAlive && a.dead, headshot: mult > 1 };
       }
@@ -2127,7 +2252,7 @@ export class Game {
   // Back on the street with every weapon, ready to fire; a gun shot dry comes back with one magazine
   rearm() {
     for (const [id, slot] of Object.entries(this.weapons)) {
-      const w = WEAPONS[id];
+      const w = effectiveWeapon(id, this.mods[id]);
       if (w.melee || w.throwable || w.gadget) continue;
       if (slot.mag + slot.ammo === 0) slot.mag = w.mag;
       else { const take = Math.min(w.mag - slot.mag, slot.ammo); slot.mag += take; slot.ammo -= take; }
@@ -2294,6 +2419,7 @@ export class Game {
     // a jump only when there is air under the aircraft: set down on a roof, it is an ordinary exit
     const air = this.car.position;
     if (this.active && this.state === 'driving' && this.car.air && air.y - this.controllers.getGroundHeight(air.x, air.z, 'helicopter', air.y) > 3) { this.bailOut(); return; }
+    if (this.active && this.calibre?.interact()) return;
     if (this.active && this.vertical.interact()) return;
     if (!this.active || !canInteract(this.state, this.car.speed)) {
       if (this.state === 'driving') this.toast('Ralentissez', 'Arrêtez le véhicule pour descendre.');
@@ -2610,7 +2736,10 @@ export class Game {
     this.lookDX = this.camera.lookDX; this.lookDY = this.camera.lookDY;
     this.camera.lookDX = this.camera.lookDY = 0;
     this.camera.flightView = null;
-    if (!this.active) { this.controllers.resetInput(); this.lookDX = this.lookDY = 0; return; }
+    if (!this.active) {
+      this.controllers.resetInput(); this.lookDX = this.lookDY = 0;
+      if (!(dt > 0 && this.shops?.open?.calibre)) return;
+    }
     if (this.intro) {
       // the opening flight: no control yet; any key or click cuts it short
       if (this.controllers._pressedCodes?.size || this.fireHeld || this.aimHeld) this.endIntro();
@@ -2658,7 +2787,7 @@ export class Game {
     }
     const falling = this.state === 'falling';
     const walker = this.person;
-    walker.chaseDistance = falling ? 13 : 4.3;
+    walker.chaseDistance = falling ? 13 : this.calibre?.inside ? 2.4 : 4.3;
     walker.chaseHeight = falling ? 1.4 : 1.95;
     walker.cameraTargetOffset.y = falling ? 3.4 : this.footCameraY;
     this.vertical.frame(walker);
@@ -2675,6 +2804,7 @@ export class Game {
     pl.vx = inVehicle ? Math.sin(car.heading) * car.speed + (car.vx || 0) : 0;
     pl.vz = inVehicle ? Math.cos(car.heading) * car.speed + (car.vz || 0) : 0;
     pl.onFoot = this.state === 'onFoot' || this.state === 'down' || this.state === 'surfing';
+    this.calibre?.update(dt);
     pl.alive = this.state !== 'dead' && this.state !== 'busted';
 
     // the grapple's launcher is held like the pistol
@@ -2693,7 +2823,7 @@ export class Game {
         if (jet.life <= 0) this.jets.splice(i, 1);
         else if (Math.hypot(jet.x - pl.x, jet.z - pl.z) < 120) this.fx.jet(jet.x, jet.y, jet.z, dt);
       }
-      this.updateWeapons(dt);
+      if (!this.shops.open?.calibre) this.updateWeapons(dt);
       this.hero.update(!person.inVehicle, 0, dt);
       if (this.state === 'driving' && car.crashed) this.destroyCar(car);
       // Loose cars (parked, pushed, abandoned) roll to a stop under physics; then every gameplay car pair collides
@@ -2812,6 +2942,14 @@ export class Game {
     const car = this.car;
     this.candidate = this.state === 'onFoot' && this.active ? this.findCandidate() : null;
     const prompt = this.ui['game-prompt'];
+    const offer = this.active && this.calibre?.prompt();
+    if (offer) {
+      prompt.classList.add('visible');
+      const span = prompt.querySelector('span');
+      span.textContent = offer.text;
+      const small = document.createElement('small'); small.textContent = offer.sub; span.append(small);
+      return;
+    }
     const airborne = this.state === 'driving' && car.air && car.position.y > 3;
     const showExit = this.state === 'driving' && this.active && (airborne || Math.abs(car.speed) < 1.5);
     prompt.classList.toggle('visible', Boolean(this.candidate || showExit));
@@ -2861,7 +2999,7 @@ export class Game {
         version: 2, state: this.state === 'driving' && fleet.includes(this.car) ? 'driving' : 'onFoot',
         player: { x: spot.x, y: spot === p.position ? p.position.y : this.controllers.getGroundHeight(spot.x, spot.z, 'person'), z: spot.z, heading: p.heading },
         active: fleet.indexOf(this.car), stolen: this.stolen, distance: this.distance, firstEntry: this.firstEntry,
-        money: this.money, debt: this.debt, held: [...this.gangs.held], health: this.health, armor: this.armor, weapons: this.weapons, weaponId: this.weaponId,
+        money: this.money, debt: this.debt, held: [...this.gangs.held], health: this.health, armor: this.armor, weapons: this.weapons, weaponId: this.weaponId, mods: this.mods, range: this.range,
         missionsDone: this.missionsDone, stats: this.stats, radio: this.radio?.stationIndex ?? this.radioIndex,
         atmosphere: this.atmosphere.serialize(), safehouses: this.shops?.serialize(), worldBikes: !!this.worldBikesPlaced,
         fleet: fleet.map(car => ({ kind: car.kind, paint: car.paint, position: { x: car.position.x, y: car.position.y, z: car.position.z }, heading: car.heading, stolen: car.stolen, hp: car.hp }))
@@ -2900,10 +3038,18 @@ export class Game {
         if (Array.isArray(data.held)) this.gangs.held = new Set(data.held.filter((id) => typeof id === 'string'));
         this.health = Number.isFinite(data.health) ? clamp(data.health, 20, 100) : 100;
         this.armor = Number.isFinite(data.armor) ? clamp(data.armor, 0, 100) : 0;
+        this.mods = sanitizeMods(data.mods);
+        for (const id of MOD_GUNS) {
+          const medal = data.range?.medals?.[id], best = data.range?.best?.[id];
+          if (Number.isInteger(medal) && medal > 0 && medal <= 3) this.range.medals[id] = medal;
+          if (Number.isFinite(best) && best > 0) this.range.best[id] = Math.round(best);
+        }
         if (data.weapons && typeof data.weapons === 'object') {
+          this.weapons = { fists: { mag: 0, ammo: 0 } };
           for (const [id, slot] of Object.entries(data.weapons)) {
             if (WEAPONS[id] && slot && Number.isFinite(slot.mag) && Number.isFinite(slot.ammo)) {
-              this.weapons[id] = { mag: clamp(slot.mag | 0, 0, WEAPONS[id].mag || 0), ammo: clamp(slot.ammo | 0, 0, 9999) };
+              // a magazine holds what the weapon takes with what is fitted on it
+              this.weapons[id] = { mag: clamp(slot.mag | 0, 0, effectiveWeapon(id, this.mods[id]).mag || 0), ammo: clamp(slot.ammo | 0, 0, 9999) };
             }
           }
         }

@@ -4,7 +4,8 @@ import { createPersonMaterials } from './people-material.js';
 import { loadMocap } from './mocap.js';
 import { Skeleton } from './person-body.js';
 import { BodyDriver, HOLD, SLOTS } from './person-motion.js';
-import { loadWeaponModels, createWeaponModel, animateWeapon } from './weapon-models.js';
+import { loadWeaponModels, createWeaponModel, dressWeapon, stowWeapon, showEverything, animateWeapon } from './weapon-models.js';
+import { dressedHold } from './weapon-attachments.js';
 
 // Individually drawn people (the protagonist, police officers, crews, mission targets): real avatars wearing captured
 // motion, moved around by a PersonRig. Bodies and materials are shared between characters of the same look, so a new
@@ -21,7 +22,8 @@ const LOOKS = {
   swat: { person: 'swat' },
   crew: { person: 'crew' },
   suit: { person: 'suit' },
-  guard: { person: 'guard' }
+  guard: { person: 'guard' },
+  clerk: { person: 'clerk' }
 };
 
 const people = new Map();
@@ -96,6 +98,7 @@ class CharacterModel {
     scene.add(this.mesh);
     this.weaponKind = null; // what the hands are asked to hold
     this.guns = new Map(); // kind → its object, for everything this body has on it
+    this.mods = null; // weapon-mods.js states by kind, once this body's guns are dressed (setMods: the protagonist's)
     this.carried = []; // kinds stowed on the body when not in hand, each in its slot
     this.holster = null;
     this.showCarried = true; // false where stowed weapons cannot be worn (a car seat)
@@ -105,13 +108,61 @@ class CharacterModel {
   gun(kind) {
     let gun = this.guns.get(kind);
     if (!gun) {
-      gun = createWeaponModel(kind);
+      gun = createWeaponModel(kind, { dress: !!this.mods });
       if (!gun) return null;
       gun.visible = false;
       this.scene.add(gun);
       this.guns.set(kind, gun);
+      if (gun.userData.dress) this.warmGun(kind, gun);
     }
     return gun;
+  }
+
+  // What is fitted on this body's guns and the finish each wears (weapon-mods.js: one state per kind). From the first
+  // call on, the guns this body takes out are dressed ones; call it again whenever a state changes.
+  setMods(mods) {
+    this.mods = mods;
+    for (const [kind, gun] of this.guns) this.dressGun(kind, gun);
+  }
+
+  dressGun(kind, gun) {
+    if (!gun.userData.dress) return;
+    dressWeapon(gun, this.mods[kind]);
+    if (gun.userData.warming !== undefined) showEverything(gun);
+    // the hands and the muzzle follow what is on the weapon: a suppressor lengthens it, a foregrip is held
+    (this.driver.holds ??= {})[kind] = dressedHold(kind, HOLD[kind], gun.userData.dress.fitted);
+  }
+
+  // A dressed gun is first drawn tiny inside the body with everything it can ever wear: its own materials and every
+  // attachment compile behind the loading screen, and nothing is left to compile the day an upgrade is bought. It
+  // takes its place on the body once a frame has drawn it in colour and in the shadow maps (the shader warm-up of
+  // main.js draws colour only: the first real frame is the one that counts).
+  warmGun(kind, gun) {
+    const drawn = gun.userData.warming = { colour: false, shadow: false, updates: 0 };
+    this.dressGun(kind, gun);
+    gun.visible = true;
+    gun.traverse((o) => {
+      if (!o.isMesh) return;
+      o.frustumCulled = false;
+      o.onAfterRender = (renderer, scene, camera, geometry, material) => { drawn[material === o.material ? 'colour' : 'shadow'] = true; };
+    });
+    gun.matrix.makeScale(0.02, 0.02, 0.02).setPosition(this.rig.x, this.rig.groundY + 1.1, this.rig.z);
+    gun.updateMatrixWorld(true);
+  }
+
+  // Still waiting for its first frame (true), or drawn: back to what it really wears. Where nothing casts a shadow,
+  // two frames in colour are enough.
+  warming(kind, gun) {
+    const drawn = gun.userData.warming;
+    if (!drawn.colour || !(drawn.shadow || ++drawn.updates > 2)) return true;
+    delete gun.userData.warming;
+    gun.traverse((o) => {
+      if (!o.isMesh) return;
+      o.frustumCulled = true;
+      delete o.onAfterRender;
+    });
+    this.dressGun(kind, gun);
+    return false;
   }
 
   // What this body wears stowed when the hands are empty: a pistol on the thigh, long guns across the back
@@ -155,7 +206,7 @@ class CharacterModel {
 
   // Muzzle position of the held weapon (world), for flashes and tracers
   muzzle(out) {
-    const hold = HOLD[this.driver.gunKind];
+    const hold = this.driver.holdFor(this.driver.gunKind);
     if (!hold || !this.driver.hasGun) return out.copy(this.rig.hand).add(_up.set(0, 0.05, 0));
     return this.driver.muzzle(hold, out);
   }
@@ -195,7 +246,7 @@ class CharacterModel {
     this.mesh.visible = visible && !this.cameraOccluded;
     const shown = visible && !this.cameraOccluded;
     if (!visible) {
-      for (const gun of this.guns.values()) gun.visible = false;
+      for (const gun of this.guns.values()) if (gun.userData.warming === undefined) gun.visible = false;
       if (this.holster) this.holster.visible = false;
       return;
     }
@@ -205,15 +256,18 @@ class CharacterModel {
     this.skeleton.update();
     if (this.sidearm >= 0) this.materials[this.sidearm] = driver.gunKind === 'pistol' && driver.swap > 0.3 ? HIDDEN : this.sidearmMaterial;
     for (const [kind, gun] of this.guns) {
+      if (gun.userData.warming !== undefined && this.warming(kind, gun)) continue;
       if (kind === driver.gunKind && driver.hasGun && (driver.swap >= 1 || this.carried.includes(kind) || driver.gunOut && driver.swap > 0.3)) {
         // in the hands, or between the body and the hands
         gun.visible = shown && driver.gunOut;
         if (!gun.visible) continue;
+        stowWeapon(gun, driver.swap < 0.45); // what the holster has no room for goes on as the weapon clears it
         animateWeapon(gun, kind, driver.shotAge, this.rig.reloading);
         gun.matrix.compose(driver.gunP, driver.gunQ, _one);
       } else if (this.carried.includes(kind) && !SLOTS[HOLD[kind].slot].hidden) {
         gun.visible = shown && (this.showCarried || HOLD[kind].slot === 'thigh');
         if (!gun.visible) continue;
+        stowWeapon(gun, true);
         driver.slotPose(kind, _p, _q);
         gun.matrix.compose(_p, _q, _one);
       } else { gun.visible = false; continue; }

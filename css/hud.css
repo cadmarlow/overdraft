@@ -181,3 +181,6 @@ body[data-game-state=driving] #drive-gauge{display:grid}
 #weapon-wheel .hub em{font-size:8px;font-style:normal;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:#e6e7d880;margin-top:4px}
 body.in-menu #weapon-wheel{display:none}
 #weapon-wheel .wedge image{pointer-events:none}#weapon-wheel .wedge.locked image{opacity:.3}
+
+.shop-close{position:absolute;right:12px;top:10px;border:1px solid #ffffff30;background:#ffffff0a;color:inherit;width:32px;height:32px;font-size:24px;cursor:pointer}
+.shop-panel button:focus-visible{outline:2px solid #e1c492;outline-offset:2px}

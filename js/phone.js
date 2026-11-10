@@ -4,6 +4,13 @@ import { repairBody } from './drive-fx.js';
 // holds what. The game holds its breath while it is out; arrows, Entrée and Échap work, and so does the mouse.
 
 const CONTACTS = [
+  { id: 'calibre', name: 'CALIBRE', role: 'Armurerie · stand de tir', actions: [
+    { label: 'Trouver une armurerie', sub: 'Itinéraire vers le comptoir le plus proche', run: (g, p) => {
+      const shop = g.shops.nearest('guns');
+      if (!shop) return;
+      g.gps(shop.x, shop.z); g.toast('CALIBRE · itinéraire', shop.shop.sub); p.close();
+    } }
+  ] },
   { id: 'mireille', name: 'Mireille Okafor', role: 'Garagiste', actions: [
     { label: 'Réparer le véhicule', sub: '800 $', run: (g, p) => p.repair() },
     { label: 'Amène-moi le hors-bord', sub: 'À la rive la plus proche', run: (g) => g.garage.summon('boat') }

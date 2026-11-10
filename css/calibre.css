@@ -1,0 +1,72 @@
+/* CALIBRE: the counter's sheet and the shooting range's readouts. Bottle green, brass, brick red: the shop's own colours. */
+.calibre-counter{--green:#121d18;--brass:#d9b36a;--cream:#efe4c6;--red:#c9532f;position:fixed;inset:0;z-index:30;pointer-events:none;color:var(--cream);font-family:Arial,Helvetica,sans-serif}
+.calibre-counter[hidden],.calibre-range[hidden],.calibre-result[hidden]{display:none}
+.calibre-counter>*{pointer-events:auto}
+.cc-head{position:absolute;left:36px;top:30px;display:flex;align-items:flex-end;gap:28px;text-shadow:0 2px 14px #000b}
+.cc-brand strong{display:block;font-size:44px;font-weight:900;letter-spacing:.2em;line-height:1;color:var(--brass)}
+.cc-brand span{display:block;margin-top:9px;font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:#d6ceb4}
+.cc-purse{padding-left:26px;border-left:1px solid #d9b36a55}
+.cc-purse strong{display:block;font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;color:#bfe3a0}
+.cc-purse span{display:block;margin-top:6px;font-size:10px;letter-spacing:.06em;color:#cfc7ad}
+.cc-tabs{position:absolute;left:36px;top:116px;display:flex;flex-direction:column;gap:3px;width:196px}
+.cc-tabs button{all:unset;box-sizing:border-box;cursor:pointer;padding:11px 14px;font-size:12px;font-weight:800;letter-spacing:.14em;color:#d9d2ba;background:#101a15c7;border-left:3px solid transparent;transition:background .12s,color .12s,padding .12s}
+.cc-tabs button:hover{background:#17251ee0}
+.cc-tabs button.on{color:#16130c;background:var(--brass);border-left-color:var(--red);padding-left:20px}
+.cc-card{position:absolute;right:36px;top:50%;transform:translateY(-50%);width:min(408px,calc(100vw - 280px));max-height:calc(100dvh - 96px);display:flex;flex-direction:column;background:linear-gradient(175deg,#16241df5,#0f1814f7);border:1px solid #d9b36a30;border-top:4px solid var(--red);box-shadow:0 22px 60px #000a;padding:24px 22px 14px}
+.cc-card h2{margin:0;font-size:34px;font-weight:900;letter-spacing:.05em;line-height:1;color:var(--cream)}
+.cc-kind{margin:8px 0 0;font-size:10px;font-weight:700;letter-spacing:.24em;text-transform:uppercase;color:var(--brass)}
+.cc-text{margin:12px 0 16px;font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:14px;line-height:1.5;color:#cfc9b3}
+.cc-bars{display:grid;gap:7px;padding:14px 0;border-top:1px solid #efe4c61f;border-bottom:1px solid #efe4c61f}
+.cc-bar{display:grid;grid-template-columns:84px 1fr 30px;align-items:center;gap:10px}
+.cc-bar[hidden],.cc-bars[hidden]{display:none}
+.cc-bar span{font-size:9px;font-weight:700;letter-spacing:.16em;color:#b9b39c}
+.cc-bar i{position:relative;display:block;height:7px;background:#efe4c61a;overflow:hidden}
+.cc-bar b{position:absolute;left:0;top:0;bottom:0;background:var(--cream);transition:width .18s}
+.cc-bar u{position:absolute;top:0;bottom:0;transition:left .18s,width .18s}
+.cc-bar u.up{background:#8fdc7a}.cc-bar u.down{background:#e2674a}
+.cc-bar em{font-style:normal;font-size:10px;font-weight:800;font-variant-numeric:tabular-nums;text-align:right;color:#8fdc7a}
+.cc-lines{display:flex;flex-direction:column;gap:2px;margin-top:10px;overflow-y:auto;min-height:0;padding-right:2px;scrollbar-width:thin;scrollbar-color:#d9b36a66 transparent}
+.cc-lines h3{margin:12px 0 5px;font-size:9px;font-weight:800;letter-spacing:.26em;color:var(--brass)}
+.cc-line{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:1fr auto;grid-template-rows:auto auto;align-items:center;column-gap:14px;padding:9px 11px;background:#efe4c60a;border:1px solid transparent}
+.cc-line strong{font-size:12.5px;font-weight:800;letter-spacing:.07em}
+.cc-line span{grid-column:1;margin-top:3px;font-size:10.5px;color:#b5b09a}
+.cc-line em{grid-row:1/3;grid-column:2;font-style:normal;font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;color:#bfe3a0;white-space:nowrap}
+.cc-line.sel{background:#d9b36a26;border-color:#d9b36a99}
+.cc-line.off{opacity:.42}.cc-line.off em{color:#e98a72}
+.cc-line.fitted em,.cc-line.worn em{font-size:10px;letter-spacing:.14em;color:#16130c;background:var(--brass);padding:4px 7px}
+.cc-line.stowed em,.cc-line.owned em{font-size:10px;letter-spacing:.14em;color:var(--brass);border:1px solid #d9b36a88;padding:3px 6px}
+.cc-line.shake{animation:cc-shake .28s}
+@keyframes cc-shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.cc-foot{position:absolute;left:36px;bottom:28px;font-size:10px;letter-spacing:.14em;white-space:pre;color:#e6dfc8;text-shadow:0 1px 8px #000c}
+.cc-close{all:unset;position:absolute;right:36px;top:26px;width:34px;height:34px;display:grid;place-items:center;cursor:pointer;font-size:24px;color:var(--cream);background:#101a15c7;border:1px solid #efe4c633}
+.cc-close:hover{background:var(--red)}
+.calibre-counter button:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+body.at-counter .gh>:not(.gh-subtitle){opacity:0!important}
+body.at-counter .hud-bottom-left,body.at-counter #game-keybar,body.at-counter #stamina-track,body.at-counter .quick-button,body.at-counter #game-prompt,body.at-counter #game-brand,body.at-counter #session-badge{opacity:0!important;pointer-events:none!important}
+@media(max-width:900px){.cc-head{left:16px;top:14px;gap:14px}.cc-brand strong{font-size:26px}.cc-tabs{left:16px;top:auto;bottom:44px;flex-direction:row;flex-wrap:wrap;width:auto;right:16px}.cc-tabs button{padding:8px 9px;font-size:10px}.cc-card{right:16px;top:74px;transform:none;width:calc(100vw - 32px);max-height:calc(100dvh - 190px);padding:14px}.cc-card h2{font-size:22px}.cc-text{display:none}.cc-foot{display:none}.cc-close{right:16px;top:14px}}
+@media(max-height:680px){.cc-text{display:none}.cc-card{padding-top:16px}.cc-bars{padding:9px 0;gap:5px}}
+
+/* The full map's legend: the gun shops' blip (gameplay.js drawMapOverlay) */
+.legend-swatch.gun-swatch{width:16px;height:16px;border-radius:50%;border:1.5px solid #e1c492;background:#16261f url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23f3dda6' fill-rule='evenodd' d='M2 6h18.5v1H22v2.6h-1.5v1h-6.8a3 3 0 0 1-3 3H9.1L7.9 19H2.3l1.1-6.4L2 10.6zM10.3 11v1.4h1.1a1.5 1.5 0 0 0 1.5-1.4z'/%3E%3C/svg%3E") center/11px no-repeat}
+
+/* The range: the course's readout at the top of the screen, the result card after it */
+.calibre-range{position:fixed;left:50%;top:76px;transform:translateX(-50%);z-index:9;min-width:340px;padding:13px 20px 12px;pointer-events:none;color:#efe4c6;font-family:Arial,Helvetica,sans-serif;background:#0f1814e8;border-top:3px solid #c9532f;box-shadow:0 12px 40px #0008;text-align:center}
+.calibre-range strong{display:block;font-size:10px;font-weight:800;letter-spacing:.26em;color:#d9b36a}
+.cr-stage{display:block;margin-top:7px;font-size:15px;font-weight:800;letter-spacing:.08em}
+.cr-row{display:flex;align-items:center;justify-content:center;gap:18px;margin-top:9px}
+.cr-row em{font-style:normal;font-size:34px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1;min-width:70px;text-align:right}
+.cr-pips{display:flex;gap:6px}
+.cr-pips i{width:13px;height:13px;border-radius:50%;border:2px solid #efe4c655;box-sizing:border-box}
+.cr-pips i.on{background:#b9b39c;border-color:#b9b39c}.cr-pips i.good{background:#efe4c6;border-color:#efe4c6}.cr-pips i.best{background:#e9b948;border-color:#e9b948}
+.cr-clock{height:3px;margin-top:11px;background:#efe4c622;overflow:hidden}
+.cr-clock b{display:block;height:100%;background:#c9532f;transform-origin:left}
+.cr-call{margin:8px 0 0;min-height:14px;font-size:11px;letter-spacing:.06em;color:#cfc9b3}
+.calibre-result{position:fixed;left:50%;top:22%;transform:translateX(-50%);z-index:9;min-width:380px;padding:22px 30px;pointer-events:none;text-align:center;color:#efe4c6;font-family:Arial,Helvetica,sans-serif;background:linear-gradient(175deg,#16241df7,#0f1814f7);border:1px solid #d9b36a40;border-top:4px solid #c9532f;box-shadow:0 22px 60px #000b;animation:cr-in .35s cubic-bezier(.2,.9,.3,1)}
+@keyframes cr-in{from{opacity:0;transform:translate(-50%,14px)}to{opacity:1;transform:translate(-50%,0)}}
+.calibre-result>*{display:block}
+.cr-kicker{font-size:10px;font-weight:800;letter-spacing:.26em;color:#d9b36a}
+.calibre-result .medal{margin-top:12px;font-size:28px;font-weight:900;letter-spacing:.08em;color:#b9b39c}
+.calibre-result .medal.m1{color:#c98a52}.calibre-result .medal.m2{color:#d7dade}.calibre-result .medal.m3{color:#f0c453}
+.calibre-result em{margin-top:8px;font-style:normal;font-size:44px;font-weight:900;font-variant-numeric:tabular-nums;line-height:1}
+.calibre-result span{margin-top:9px;font-size:11px;letter-spacing:.05em;color:#cfc9b3}
+.calibre-result .cr-prize{color:#bfe3a0;font-weight:700}

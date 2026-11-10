@@ -1,0 +1,66 @@
+<!doctype html>
+<meta charset="utf-8"><title>Succursale CALIBRE</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b0d0c;overflow:hidden;font:12px/1.3 -apple-system,Helvetica,Arial,sans-serif;color:#fff}
+  canvas{display:block}
+  #help{position:absolute;left:8px;bottom:8px;opacity:.7}
+</style>
+<script type="importmap">{"imports":{"three":"../../vendor/three/build/three.webgpu.js","three/webgpu":"../../vendor/three/build/three.webgpu.js","three/tsl":"../../vendor/three/build/three.tsl.js","three/addons/":"../../vendor/three/examples/jsm/"}}</script>
+<div id="help"></div>
+<script type="module">
+// One branch of CALIBRE on its own, built by the game's own modules (js/calibre-room.js), to judge the layout and the
+// materials in seconds. The game lights it with clustered lamps, bloom and its eye: this page is a plain renderer with
+// the same lamps, so brightness differs; shapes, textures and placement do not.
+//   ?cam=x,y,z&look=x,y,z  camera, in the branch's frame (x along the front, z into the building is negative, y above the floor)
+//   ?fov=55  ?exposure=1  ?sun=1 (daylight through the front)  ?ambient=0.16
+// `window.look(cx, cy, cz, tx, ty, tz, fov)` moves the camera and redraws; the title becomes "done" after each picture.
+import * as THREE from 'three/webgpu';
+import { loadWeaponModels } from '../../js/weapon-models.js';
+import { loadGround } from '../../js/ground-assets.js';
+import { loadCalibreKit } from '../../js/calibre-kit.js';
+import { createCalibreWorld } from '../../js/calibre-room.js';
+import { INDOOR } from '../../js/calibre-build.js';
+import { CALIBRE } from '../../js/calibre-plan.js';
+
+const q = new URLSearchParams(location.search);
+const vec = (k, d) => (q.get(k) || d).split(',').map(Number);
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+renderer.setPixelRatio(1);
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = +(q.get('exposure') || 1);
+document.body.prepend(renderer.domElement);
+await renderer.init();
+await Promise.all([loadWeaponModels(), loadGround(), loadCalibreKit()]);
+if (q.has('ambient')) INDOOR.ambient.value = +q.get('ambient');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(q.get('sun') ? 0x9db4d0 : 0x05070a);
+scene.add(new THREE.HemisphereLight(0x9abbe6, 0xc88a62, 1.05));
+if (q.get('sun')) { const sun = new THREE.DirectionalLight(0xffca92, 5.8); sun.position.set(6, 9, 14); scene.add(sun); }
+// a pavement in front
+const street = new THREE.Mesh(new THREE.PlaneGeometry(40, 14), new THREE.MeshStandardNodeMaterial({ color: 0x55585a, roughness: 0.9 }));
+street.rotation.x = -Math.PI / 2; street.position.set(0, 0.18, 7); scene.add(street);
+const site = { x: 0, z: 0, nx: 0, nz: 1, id: 'preview', variant: 0 };
+const t0 = performance.now();
+const world = createCalibreWorld(scene, [site]);
+window.world = world;
+const camera = new THREE.PerspectiveCamera(+(q.get('fov') || 55), innerWidth / innerHeight, 0.08, 200);
+const player = { x: 0, z: 30 };
+function look(cx, cy, cz, tx, ty, tz, fov) {
+  document.title = 'drawing';
+  camera.position.set(cx, cy + CALIBRE.floor, cz);
+  camera.lookAt(tx, ty + CALIBRE.floor, tz);
+  if (fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  for (let i = 0; i < 4; i++) world.update(camera, player, 1, null, [], +(q.get('night') || 0));
+  renderer.render(scene, camera);
+  return new Promise((done) => requestAnimationFrame(() => { document.title = 'done'; done(); }));
+}
+window.look = look;
+window.door = (open) => { player.z = open ? 1 : 30; };
+let tris = 0, meshes = 0;
+world.rooms[0].root.traverse((o) => { if (o.isMesh) { meshes++; tris += (o.geometry.index?.count ?? o.geometry.attributes.position.count) / 3; } });
+document.getElementById('help').textContent = `${meshes} maillages · ${Math.round(tris).toLocaleString('fr-FR')} triangles · construit en ${Math.round(performance.now() - t0)} ms`;
+window.stats = { meshes, tris: Math.round(tris), ms: Math.round(performance.now() - t0) };
+await look(...vec('cam', '0,1.7,-0.7'), ...vec('look', '-0.6,1.5,-9'));
+</script>

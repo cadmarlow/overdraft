@@ -1,5 +1,69 @@
 # Changelog
 
+## 0.9.18 — Dry Powder — 10 novembre 2026
+
+**CALIBRE ouvre 48 armureries dans Manhattan, et on y entre.** On pousse la porte vitrée, l'armurier lève les yeux,
+on choisit sur le comptoir, on essaie au stand de tir du fond. La première est sur la 5e Avenue, au coin de la
+37e Rue, à quarante mètres du départ ; le téléphone (**P → Contacts → CALIBRE**) guide vers la plus proche, et toutes
+sont sur la carte et la mini-carte : un pistolet de laiton sur une pastille vert bouteille, qui s'écarte quand un
+repère de mission est sur le même pas de porte.
+
+- **Une vraie boutique dans un vrai immeuble**, sans écran de chargement. Vitrine vert bouteille et lettres de laiton,
+  éclairée par ses cols-de-cygne la nuit. Dedans : un mur de quinze armes longues sous un néon, un comptoir vitré où
+  dorment les pistolets, des rayonnages de munitions étiquetées par calibre, des gilets et des casques, deux vitrines
+  d'accessoires, l'établi de l'armurier avec son étau et sa perceuse, la caisse, l'ardoise des « cours du jour ».
+  Bois, béton, tôle et objets sont photographiés ou numérisés (Poly Haven, CC0) ; affiches, enseignes et étiquettes
+  sont dessinées pour le jeu. La pièce est éclairée par ses propres lampes, de jour comme de nuit.
+- **Le comptoir.** **F** devant l'armurier : la caméra vient se poser sur le tapis où il présente la pièce. Une fiche
+  par arme, avec six barres (dégâts, cadence, précision, portée, contrôle, capacité), ses munitions, ses améliorations
+  et ses finitions ; un onglet pour les grenades, un pour les gilets. **← →** changent d'arme, **↑ ↓** de ligne,
+  **Entrée** achète, **Échap** quitte ; la souris et la manette (croix, LB/RB, A, B) font de même. La ligne
+  survolée se voit tout de suite : la lunette apparaît sur le fusil, la finition sur son métal, et les barres montrent
+  ce qu'on gagne ou ce qu'on perd avant de payer. Le monde continue de tourner pendant l'achat.
+- **Des améliorations qu'on ne trouve que chez CALIBRE.** Toutes les armes restent dans les poches dès le départ ;
+  la boutique vend ce qui les rend meilleures. Chargeur étendu (18, 45, 45 coups, 8 cartouches), silencieux
+  (la rue n'entend plus rien, contre un peu de dégâts et de portée), poignée avant (recul et dispersion), point rouge
+  ou lunette ×3 (visée plus fine, plus rapprochée au fusil), étrangleur du fusil à pompe (gerbe resserrée). Une
+  amélioration achetée se démonte et se remonte gratuitement. Sept finitions par arme, du noir mat à l'or.
+  Tout se voit sur l'arme, en main comme rangée sur le corps, et tout est sauvegardé. Le SENTINEL de série perd la
+  poignée avant que portait son modèle : c'est désormais l'amélioration.
+- **Étienne, l'armurier.** Il accueille, suit le client le long de son comptoir, commente les achats, refuse de servir
+  quiconque a la police aux trousses. Une arme levée dans la boutique vaut un avertissement ; deux secondes plus tard
+  il sort son fusil à pompe de sous la caisse, les clients filent par la porte, une étoile tombe et la succursale
+  ferme deux minutes et demie. Deux clients flânent entre les rayons.
+- **Le stand de tir**, derrière chaque boutique : quatre pas de tir, des cibles en papier sur chariots, un habitué qui
+  vide ses chargeurs au premier. **F** à un pas libre lance un parcours de six épreuves avec l'arme qu'on a en main,
+  munitions offertes : cible fixe à 6 puis 10 m, cible mobile, longue distance, cible qui avance, cible pivotante.
+  Six impacts comptent par épreuve ; les points vont au centre, à la vitesse et aux balles bien employées. Bronze,
+  argent, or, pour chacune des quatre armes : chaque médaille paie une prime (250, 600, 1 500 $) et fait baisser pour
+  de bon tous les prix du comptoir, jusqu'à 15 %. Les tirs du stand n'affolent personne et n'attirent pas la police.
+- **Sauvegarde fidèle de l'inventaire** : recharger la partie ne complète plus gratuitement chargeurs et réserves.
+- **Sous le capot.** Chaque succursale (8,8 × 27,8 m) doit tenir dans un seul immeuble, loin des cours et des voisins ;
+  façade et collisions du rez-de-chaussée sont ouvertes ensemble, les étages restent pleins. Mobilier, arbres et
+  échafaudages laissent l'entrée libre. Tout le décor d'une succursale tient en une trentaine d'objets à dessiner,
+  partagés par les 48 adresses ; seule la plus proche a ses lampes, son personnel et ses cibles. Caméra dans la pièce
+  et vitrine hors champ, la ville n'est plus dessinée : la boutique tourne plus vite que la rue.
+  `tools/calibre` régénère les objets (`build-kit.mjs`) et montre une succursale seule en quelques secondes
+  (`room-preview.html`).
+- La foule a un nouveau passant à la place de celui qui avait le visage de l'armurier.
+
+L'implantation dans les immeubles, les portes, les repères de carte, le contact du téléphone et la sauvegarde viennent
+du premier jet de cette fonction (worktree `calibre-armureries`) ; la boutique, le comptoir, le personnel, les
+améliorations et le stand ont été refaits ou ajoutés par-dessus.
+
+Vérification : tests du placement sur les données réelles (48 adresses, parcours du client jusqu'à chaque pas de
+tir), du comptoir, des améliorations, du barème du stand ; dans le jeu en qualité HAUTE, avec de vraies touches et de
+vrais clics : visite de jour et de nuit, achats, aperçu des améliorations, une séance de tir jusqu'à la médaille,
+menace sur l'armurier jusqu'à la riposte. Coût mesuré dans la même page, avec et sans : nul devant la vitrine,
+1 ms dans la pièce (8 ms par image en HAUTE).
+
+Limites : aucune voix (répliques en sous-titres) ; personne n'a entendu les tirs étouffés du silencieux ni ceux de
+l'habitué ; le tir depuis une voiture avec améliorations n'a pas été essayé ; les placages (nickel, cuivre, or)
+couvrent aussi le polymère du HORNET et du SENTINEL ; l'armurier n'a pas de geste de remise en main propre ; les 48 succursales sont identiques ; le gilet
+présenté au comptoir est sommaire ; les lampes de la pièce ne projettent pas d'ombres ; la première fois que la rue
+réapparaît après une téléportation, une image prend 0,15 s (pas constaté en entrant à pied). La qualité FLUIDE et
+la manette physique n'ont pas été essayées ; les missions n'ont pas été rejouées.
+
 ## 0.9.17 — Stop Loss — 10 novembre 2026
 
 Version de correctifs.

@@ -46,5 +46,23 @@ Chaque matériau a trois images WebP : couleur `_c`, normales `_n`, occlusion/ru
 4. `tools/gun-studio.html` montre le héros avec l'arme : portée, prête, en joue, dégainée, rangée, sous plusieurs angles
    (`?set=rifle:carry:3.9,rifle:aim&cams=180:8:2.8,290:5:2.8`, `focus=gun` pour les mains).
 
+## Accessoires et finitions
+
+Les accessoires vendus chez CALIBRE (silencieux, viseurs, lunette, poignées, chargeurs longs, tube rallongé,
+étrangleur) ne sont pas importés : `js/weapon-attachments.js` les usine aux mesures de chaque arme, lues sur la grille
+de `gun-preview.html`. Leurs points d'ancrage sont dans `MOUNTS` et dans les recettes du même fichier (centre de la
+bouche, pente du canon et des rails : le HORNET et le SENTINEL ne sont pas modélisés de niveau). Si un modèle est
+réimporté, relire ces mesures : `tests/weapon-dress.test.mjs` vérifie que chaque pièce est bien sur l'arme livrée.
+
+La poignée avant et le point rouge livrés avec le modèle du SENTINEL sont découpés au chargement (`FACTORY` dans
+`js/weapon-models.js`) : la poignée devient l'amélioration, le point rouge cède la place à la lunette.
+
+Pour les voir :
+
+- `gun-preview.html?names=rifle&mods=mag,suppressor,grip,sight&finish=or` : l'arme habillée sur la grille
+  (`&cam=50:20:0.7&beauty=1` : en perspective, à la distance d'un comptoir) ;
+- `gun-studio.html?set=rifle:aim,smg:ready&mods=mag,suppressor,grip,sight,choke&finish=nickel` : sur le héros, dans
+  les mains et rangée (chaque arme ne prend que ce qui lui va).
+
 Les portraits de la roue (`icon-*.webp`) sont des rendus de `gun-preview.html?beauty=1` sur fond noir puis blanc, dont
 la différence donne la transparence.

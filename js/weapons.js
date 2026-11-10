@@ -29,14 +29,16 @@ const HANDLING = {
   rifle: { aimed: 0.0022, hip: 0.024, move: 0.01, bloom: 0.0022, maxBloom: 0.018, recovery: 6, falloff: 75, minimum: 0.58 }
 };
 
+// A weapon carrying its own `handling` (the player's, with upgrades fitted: weapon-mods.js effectiveWeapon) is read
+// through it; a bare WEAPONS entry falls back on the stock table.
 function gunSpread(weapon, aiming, speed = 0, bloom = 0) {
-  const h = HANDLING[weapon.id];
+  const h = weapon.handling ?? HANDLING[weapon.id];
   if (!h) return weapon.spread || 0;
   return (aiming ? h.aimed : h.hip) + Math.min(1.5, Math.abs(speed) / 3.9) * h.move + Math.max(0, bloom);
 }
 
 function gunDamage(weapon, distance) {
-  const h = HANDLING[weapon.id];
+  const h = weapon.handling ?? HANDLING[weapon.id];
   if (!h || distance <= h.falloff) return weapon.damage;
   const t = Math.min(1, Math.max(0, (distance - h.falloff) / (weapon.range - h.falloff)));
   return weapon.damage * (1 - t * (1 - h.minimum));

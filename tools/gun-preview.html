@@ -7,10 +7,12 @@
 // The weapons of assets/weapons on a measured grid, to read off where the hands go (tools/weapons/README.md).
 // ?names=pistol,rifle  &view=side|other|top|rear  &span=0.5 (metres across the picture)  &parts=1 (moving parts pulled out)
 // &beauty=1 drops the grid and lights the weapon for a portrait (used to make the wheel's icons: &bg=000000 / ffffff)
+// &mods=mag,suppressor,grip,sight,choke &finish=or dresses them (weapon-mods.js)  &cam=40:15:0.7 looks at them in
+// perspective instead (degrees round from the side view, degrees up, metres away), as the camera of a counter would
 // Lines every centimetre, heavier every 5 and 10; the origin is the red cross. The title becomes "done" when drawn.
 import * as THREE from 'three/webgpu';
 import { color, normalWorld, mix, smoothstep } from 'three/tsl';
-import { loadWeapon } from '../js/weapon-models.js';
+import { loadWeapon, loadWeaponModels, createWeaponModel, dressWeapon } from '../js/weapon-models.js';
 const q = new URLSearchParams(location.search);
 const names = (q.get('names') || 'pistol').split(',');
 const view = q.get('view') || 'side';
@@ -39,7 +41,16 @@ scene.add(new THREE.HemisphereLight(0xffffff, 0x777777, 1.1));
   dome.add(lamp);
   scene.environment = new THREE.PMREMGenerator(renderer).fromScene(dome, 0.02).texture;
 }
-const guns = await Promise.all(names.map((n) => loadWeapon(n)));
+const mods = (q.get('mods') || '').split(',').filter(Boolean), finish = q.get('finish');
+let guns;
+if (mods.length || finish) {
+  await loadWeaponModels();
+  guns = names.map((n) => {
+    const g = createWeaponModel(n, { dress: true });
+    g.matrixAutoUpdate = true;
+    return dressWeapon(g, { ...Object.fromEntries(mods.map((m) => [m, 1])), finish });
+  });
+} else guns = await Promise.all(names.map((n) => loadWeapon(n)));
 // where the camera stands for each view, and which weapon axes run across and up the picture
 const VIEWS = { side: { eye: [-1, 0, 0], right: 'z', up: 'y', sx: 1 }, other: { eye: [1, 0, 0], right: 'z', up: 'y', sx: -1 }, top: { eye: [0, 1, 0], right: 'z', up: 'x', sx: 1 }, rear: { eye: [0, 0, -1], right: 'x', up: 'y', sx: -1 } };
 const v = VIEWS[view];
@@ -50,12 +61,18 @@ guns.forEach((g, i) => {
   scene.add(g);
 });
 scene.updateMatrixWorld(true);
-const cam = new THREE.OrthographicCamera(-W / 2 / scale, W / 2 / scale, ch / 2 / scale, -ch / 2 / scale, 0.01, 20);
+const orbit = q.get('cam')?.split(':').map(Number);
+const cam = orbit ? new THREE.PerspectiveCamera(+(q.get('fov') || 30), W / ch, 0.02, 20)
+  : new THREE.OrthographicCamera(-W / 2 / scale, W / 2 / scale, ch / 2 / scale, -ch / 2 / scale, 0.01, 20);
 renderer.autoClear = false;
 renderer.setScissorTest(true);
 const draw = async () => {
   for (let i = 0; i < rows; i++) {
     cam.position.set(centre[0] + v.eye[0] * 5, centre[1] - i * 10 + v.eye[1] * 5, centre[2] + v.eye[2] * 5);
+    if (orbit) {
+      const a = orbit[0] * Math.PI / 180, e = orbit[1] * Math.PI / 180;
+      cam.position.set(centre[0] - Math.cos(a) * Math.cos(e) * orbit[2], centre[1] - i * 10 + Math.sin(e) * orbit[2], centre[2] + Math.sin(a) * Math.cos(e) * orbit[2]);
+    }
     cam.up.set(view === 'top' ? -1 : 0, view === 'top' ? 0 : 1, 0);
     cam.lookAt(centre[0], centre[1] - i * 10, centre[2]);
     cam.updateMatrixWorld();
@@ -69,7 +86,7 @@ await new Promise((r) => setTimeout(r, 500));
 renderer.setScissorTest(false); renderer.setViewport(0, 0, W, H); await renderer.clearAsync();
 renderer.setScissorTest(true);
 await draw();
-if (!beauty) {
+if (!beauty && !orbit) {
   const grid = document.getElementById('grid');
   grid.width = W; grid.height = H;
   const c = grid.getContext('2d');

@@ -342,6 +342,33 @@ Le jeu est original : titre, personnages, marques (Valmont, Brisant, Gréville, 
 stations de radio, missions et musique. Aucune référence à une licence existante. La ville est un
 lieu réel ; les données géographiques gardent leurs licences (voir `CREDITS.md`).
 
+## CALIBRE (0.9.18 « Dry Powder »)
+
+Une chaîne d'armureries de quartier, la seule du jeu : 48 adresses fixes, choisies parmi les vitrines réelles assez
+larges et dont l'immeuble est assez profond pour loger une boutique et un stand de tir (8,8 × 27,8 m). La première est
+la plus proche du départ ; les autres couvrent l'île, à 350 m au moins les unes des autres.
+
+- **Pourquoi y aller.** Les quatre armes sont offertes dès le départ (« pour s'amuser ») : CALIBRE vend ce qui vient
+  après. Munitions, grenades, gilets ; et surtout les **améliorations** (chargeur étendu, silencieux, poignée avant,
+  point rouge ou lunette, étrangleur) et les **finitions**, qu'on ne trouve nulle part ailleurs. Une amélioration
+  achetée est acquise : elle se démonte et se remonte au comptoir, gratuitement.
+- **Le comptoir.** On parle à l'armurier (F). La caméra quitte le héros pour le tapis où la pièce est posée ; la fiche
+  donne six barres comparables d'une arme à l'autre, et la ligne survolée se voit sur l'arme et sur les barres avant
+  d'être payée. Le monde continue pendant la transaction.
+- **Le stand.** Derrière chaque boutique, quatre pas de tir. Un parcours de six épreuves avec sa propre arme, munitions
+  offertes ; six impacts comptent par épreuve, notés selon la zone, plus la vitesse et l'économie de balles. Trois
+  médailles par arme : chacune paie une prime une fois et retire 1,25 % à tous les prix du comptoir (15 % au plus).
+  Les améliorations aident à décrocher les médailles, les médailles financent les améliorations.
+- **L'armurier.** Étienne tient la boutique : il accueille, commente, refuse de servir un client recherché. Une arme
+  levée dans la boutique vaut un avertissement, puis son fusil à pompe ; les clients fuient, la police est appelée,
+  la succursale ferme deux minutes et demie. Au stand, on tire librement.
+- **Rendu.** Une succursale est dessinée une fois et partagée par les 48 adresses ; lampes, personnel, cibles et pièce
+  présentée n'existent que dans la plus proche. Quand la caméra est dans la pièce et que la vitrine est hors champ,
+  la ville n'est pas dessinée (elle continue de vivre).
+
+Restent à faire : voix, geste de remise de l'arme, succursales différenciées par quartier, armes vendues seulement
+chez CALIBRE (fusil de précision, pistolet lourd), ombres des lampes intérieures.
+
 ## Feuille de route
 
 Les versions portent des noms de la finance, comme la dette de Sacha.
@@ -374,4 +401,5 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.15** | **After Hours** | Écran titre illustré sur l’East River, ouverture sur le dossier de Sacha et thème original « La dette ». |
 | **0.9.16** | **Green Shoots** | Les parcs : pelouses qui savent où sont l'ombre, les allées et l'eau, 70 km de sentiers réels dans Central Park, ses 110 affleurements de schiste, allées en bitume aux accotements de terre, berges. |
 | **0.9.17** | **Stop Loss** | Correctifs : les fumées et les effets ne sortent plus en carrés noirs en qualité HAUTE ; une voiture ou un bus qui explose laisse la carcasse de son propre modèle. |
+| **0.9.18** | **Dry Powder** | CALIBRE : 48 armureries où l'on entre, comptoir avec fiches et aperçu sur l'arme, améliorations et finitions, armurier qui défend sa boutique, stand de tir à médailles et remises. |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |

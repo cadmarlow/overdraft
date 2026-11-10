@@ -51,6 +51,10 @@ import { setTreeDetail } from './trees.js';
 import { createGrass } from './grass.js';
 import { currentLevel, FramePacer } from './quality.js';
 import { OpeningScreen } from './opening-screen.js';
+import { calibreBox, calibreFixtures } from './calibre-plan.js';
+import { createCalibreWorld } from './calibre-room.js';
+import { loadCalibreKit } from './calibre-kit.js';
+import { CalibreSystem } from './calibre.js';
 
 // Application setup, shader warm-up and frame loop.
 
@@ -134,7 +138,7 @@ async function initApp() {
   // 3. Build Manhattan Geography, Iconic Landmarks, Blocks, Street Details & Traffic
   await showLoadingStage('Préparation des rues et des quais…');
   await Promise.all([loadNature(), loadWorld(), loadGround(), loadClutter(), loadCars(undefined, { surveyedReflections: quality.id === 'high' }),
-    loadStorefronts(), loadUrbanLight({ reflections: quality.id === 'high' })]);
+    loadStorefronts(), loadUrbanLight({ reflections: quality.id === 'high' }), loadCalibreKit()]);
   setTreeDetail(quality.trees);
   const cityGrid = buildCityGrid(scene);
   markInit('cityGrid');
@@ -148,19 +152,21 @@ async function initApp() {
   const cityBlocks = buildCityBlocks(scene, landmarkColliders);
   markInit('blocks');
   // Ground-floor shops, built in 3D around the camera (the facades paint them further out)
-  const storefronts = createStorefronts(scene, cityBlocks.shops, { radius: { high: 300, balanced: 250, fluid: 170 }[quality.id] ?? 250 });
+  const storefronts = createStorefronts(scene, cityBlocks.shops.filter(s => !s.calibre), { radius: { high: 300, balanced: 250, fluid: 170 }[quality.id] ?? 250 });
   markInit('storefronts');
   // Window sills, hoods and air conditioners in 3D around the camera (the facades paint them further out)
   const facadeKit = createFacadeKit(scene, cityBlocks.records, { radius: { high: 200, balanced: 160, fluid: 0 }[quality.id] ?? 160 });
-  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...storefronts.colliders, ...boroughs.colliders, ...(cityGrid.colliders || [])];
+  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...cityBlocks.calibreSites.flatMap(calibreFixtures), ...storefronts.colliders, ...boroughs.colliders, ...(cityGrid.colliders || [])];
 
   await showLoadingStage('Préparation des rues…');
-  const streetDetails = buildStreetDetails(scene, allColliders);
+  const entranceReserves = cityBlocks.calibreSites.map(s => calibreBox(s, 0, 1.7, 3.4, 3.8, 0, 3.5));
+  const streetDetails = buildStreetDetails(scene, [...allColliders, ...entranceReserves]);
   // Central Park's ground can now be told where its trees shade it (js/park-plan.js)
   surveyCentralPark(streetDetails.treeField.sites, (cityGrid.colliders || []).filter((c) => c.obstacle === 'rock'));
   markInit('streetDetails');
   await showLoadingStage('La ville prend vie…');
   await Promise.all([loadCharacters(), loadCrowd(CROWD_BODIES, CROWD_PROPS), loadCrowdMotion()]);
+  const calibreWorld = createCalibreWorld(scene, cityBlocks.calibreSites);
   // Buildings turned along non-grid streets have oriented colliders whose world bounds reach past their lots: they stay
   // inside the property line anyway, so the road network (lanes & sidewalks) doesn't need them.
   // Elevated building sections that clear even a bus don't obstruct ground traffic.
@@ -175,9 +181,9 @@ async function initApp() {
   await showLoadingStage('Préparation des trottoirs…');
   const footprintsBefore = streetDetails.footprints.length;
   const furniture = createSidewalkFurniture(scene, {
-    network: roadNetwork, records: cityBlocks.records, shops: cityBlocks.shops, trunks: streetDetails.treeField.trunks, street: STREET,
+    network: roadNetwork, records: cityBlocks.records, shops: cityBlocks.shops.filter(s => !s.calibre), trunks: streetDetails.treeField.trunks, street: STREET,
     isOnSidewalk: streetDetails.isOnSidewalk, isClearOfPoles: streetDetails.isClearOfPoles, addPole: streetDetails.addPole,
-    addFootprint: streetDetails.addFootprint, obstacles: streetDetails.obstacles, colliders: allColliders, quality: quality.id
+    addFootprint: streetDetails.addFootprint, obstacles: streetDetails.obstacles, colliders: allColliders, entrances: entranceReserves, quality: quality.id
   });
   // what it put on the sidewalks keeps the pedestrians' routes clear of it
   for (let i = footprintsBefore; i < streetDetails.footprints.length; i++) roadNetwork.addObstacle(streetDetails.footprints[i]);
@@ -194,10 +200,11 @@ async function initApp() {
   // nobody parks at a bus stop or where a building site's dumpster stands
   for (const stop of furniture.busStops) parking.ban(stop.x, stop.z, 13);
   for (const b of furniture.roadBlocks) parking.ban(b.x, b.z, b.r);
+  for (const site of cityBlocks.calibreSites) parking.ban(site.x, site.z, 6);
   markInit('parking');
   // People with somewhere to be: the crowd's density, its stops at the street's spots, doors, bus stops, cabs
   const streetLife = createStreetLife({
-    pedestrians: trafficSystem.pedestrians, traffic: trafficSystem, shops: cityBlocks.shops, subwayMouths: streetDetails.subwayMouths,
+    pedestrians: trafficSystem.pedestrians, traffic: trafficSystem, shops: cityBlocks.shops.filter(s => !s.calibre), subwayMouths: streetDetails.subwayMouths,
     foodCarts: streetDetails.foodCarts, seats: furniture.seats, stands: furniture.stands, busStops: furniture.busStops,
     hourOf: () => gameplay?.atmosphere?.hour ?? 12
   });
@@ -259,6 +266,7 @@ async function initApp() {
     .map((name) => scene.getObjectByName(name))
     .filter(Boolean);
   setupSceneCulling(scene, cullingRoots, lightingSystem.sunLight.shadow, quality);
+  calibreWorld.setExteriorRoots(scene.children.filter(o => /^(Manhattan|Boroughs|Storefronts|FacadeKit|SidewalkFurniture|HighwayTraffic|ParkedCars|Ground|Road|StreetAnimals|CullCell|ShadowProxy)/.test(o.name)));
 
   // Initialize static world matrices once, including the chunks and shadow proxies created above.
   // Crowd, tree and building-detail animation changes instance/pose buffers, not Object3D transforms.
@@ -682,6 +690,7 @@ async function initApp() {
   gameplay = new Playground({ controllers: controllerManager, camera: cameraSystem, traffic: trafficSystem, highway: highwayTraffic, streets: streetDetails,
     scene, onMode: selectMode, onTime: selectTime, audio: audioSystem, map: mapSystem, touch: touchControls, gamepad: gamepadControls,
     lighting: lightingSystem, grade: colorGrade, parking });
+  gameplay.calibre = new CalibreSystem(gameplay, calibreWorld, cityBlocks.calibreSites);
   gameplay.openingScreen = opening;
   gamepadControls.game = gameplay;
   // The Architect (ARCHITECTE.md) is a local development tool: on this machine or its network only, never online, where
@@ -712,7 +721,7 @@ async function initApp() {
       const shore = getIslandBoundsAtZ(z);
       probe.water = Math.max(0, 1 - Math.min(Math.abs(x - shore.westX), Math.abs(x - shore.eastX)) / 160);
       probe.birds = gameplay.birds?.near ? gameplay.birds.near(x, z) : 0;
-      probe.indoor = 0;
+      probe.indoor = gameplay.calibre.inside ? 0.88 : 0;
       return probe;
     };
   }
@@ -881,7 +890,7 @@ async function initApp() {
       updateSceneCulling(cameraSystem.camera.position);
       for (const root of dynamicRoots) root.updateMatrixWorld();
       applyQAView();
-      renderPipeline.render();
+      calibreWorld.render(cameraSystem.camera, () => renderPipeline.render());
     };
   }
 
@@ -908,12 +917,13 @@ async function initApp() {
     if (audioSystem.ready && !graphicsLost) gamepadControls.update(dt);
     if (opening.ready) return; // The first frame is warm. Save the GPU while the player is on the title screen.
     elapsed += dt;
-    const simulationDt = gameplay.active ? dt * gameplay.timeScale : 0;
+    const liveShop = gameplay.playing && !gameplay.paused && !mapSystem.isFullMapOpen && gameplay.shops.open?.calibre;
+    const simulationDt = gameplay.active || liveShop ? dt * gameplay.timeScale : 0;
     const worldDt = !gameplay.playing ? dt : simulationDt;
 
     // Update 3rd-person controllers, camera, signals, traffic & vehicle collisions, building LODs, and dynamic shadow focus
     gameplay.beforeUpdate(simulationDt);
-    if (simulationDt > 0) controllerManager.update(simulationDt, elapsed, cameraSystem.initialized ? cameraSystem.currentPos : null);
+    if (simulationDt > 0 && gameplay.active) controllerManager.update(simulationDt, elapsed, cameraSystem.initialized ? cameraSystem.currentPos : null);
     cameraSystem.update(simulationDt > 0 ? simulationDt : dt, elapsed);
     colorGrade.speedBlur.value = Math.max(0, cameraSystem.speedFov - 7) / 20;
     streetDetails.signalClock.value = elapsed;
@@ -958,7 +968,7 @@ async function initApp() {
     if (streetDetails.update) streetDetails.update(cameraSystem.camera);
     lightingSystem.update(cameraSystem.currentPos, cameraSystem.camera, now);
     mapSystem.update();
-    audioSystem.update(dt, elapsed, cameraSystem.camera, lightingSystem.activePresetId === 'midnight', gameplay.active);
+    audioSystem.update(dt, elapsed, cameraSystem.camera, lightingSystem.activePresetId === 'midnight', gameplay.active || liveShop);
     updateSceneCulling(cameraSystem.camera.position);
     // Traffic collisions can move the player after controller updates; finalize moving hierarchies here.
     for (const root of dynamicRoots) root.updateMatrixWorld();
@@ -986,7 +996,7 @@ async function initApp() {
     }
     // the Architect's own eye: a photo frame rendered and read back just before the player's (local development only)
     gameplay.architect?.beforeRender(cameraSystem.camera, () => renderPipeline.render(), renderer.domElement);
-    renderPipeline.render();
+    calibreWorld.render(cameraSystem.camera, () => renderPipeline.render());
     // the Architect's photos read the frame back here, while it is still on the canvas (local development only)
     gameplay.architect?.afterRender(renderer.domElement);
     pacer.submitted(now);

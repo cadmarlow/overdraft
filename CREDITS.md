@@ -175,3 +175,70 @@ Les géométries et textures réimportées proviennent des mêmes modèles CC BY
 des textures fournies avec ces œuvres. Le modèle Car Concept d'Eric Chadwick et Darmstadt Graphics Group GmbH
 fournit également son intérieur, son volant et ses freins ; les marques Khronos et 3D Commerce ont été retirées
 des couleurs et du relief des pneus. Les autres habitacles et leurs instruments restent des créations du projet.
+
+## CALIBRE
+
+Architecture, enseignes, affiches et agencement de CALIBRE : créations originales du projet, générées localement au
+chargement dans `js/calibre-room.js`. Les armes exposées et les personnages réutilisent les modèles déjà crédités dans
+ce document et leurs fichiers de licence respectifs.
+
+Les objets et les matières des boutiques (`assets/calibre`, préparés par `tools/calibre`) viennent de
+[Poly Haven](https://polyhaven.com), sous licence CC0. Chaque modèle est aplati, simplifié et rangé dans un atlas
+commun ; l'inscription de l'extincteur est repeinte, l'aérosol change de couleurs, le tableau électrique est refermé et
+quelques petites pièces (vis, lettres en relief) sont retirées.
+
+Objets :
+- Ammo Box par DanKit : https://polyhaven.com/a/ammo_box
+- Cash Register 01 par Joe Seabuhr : https://polyhaven.com/a/CashRegister_01
+- Steel Frame Shelves 01 par James Ray Cock : https://polyhaven.com/a/steel_frame_shelves_01
+- Steel Frame Shelves 02 par James Ray Cock : https://polyhaven.com/a/steel_frame_shelves_02
+- Metal Tool Chest par Yann Kervran et John Hutcheson : https://polyhaven.com/a/metal_tool_chest
+- Metal Toolbox par Mateusz Sadek : https://polyhaven.com/a/metal_toolbox
+- Bench Vice 01 par Yann Kervran et Antanas Kep : https://polyhaven.com/a/bench_vice_01
+- Old Drill Press par Harsh Vardhan Singh : https://polyhaven.com/a/old_drill_press
+- Hanging Industrial Lamp par Kuutti Siitonen : https://polyhaven.com/a/hanging_industrial_lamp
+- Industrial Wall Lamp par Kuutti Siitonen : https://polyhaven.com/a/industrial_wall_lamp
+- Mounted Fluorescent Lights par Ulan Cabanilla : https://polyhaven.com/a/mounted_fluorescent_lights
+- Caged Hanging Light par Ulan Cabanilla : https://polyhaven.com/a/caged_hanging_light
+- Cardboard Box 01 par Rahul Chaudhary : https://polyhaven.com/a/cardboard_box_01
+- Wooden Crate 01 par James Ray Cock : https://polyhaven.com/a/wooden_crate_01
+- Wooden Crate 02 par James Ray Cock et Jurita Burger : https://polyhaven.com/a/wooden_crate_02
+- Wooden Military Crate par Prabhjinder Singh : https://polyhaven.com/a/wooden_military_crate
+- Korean Fire Extinguisher 01 par UM JOORIN : https://polyhaven.com/a/korean_fire_extinguisher_01
+- Fire Alarm par Slinc : https://polyhaven.com/a/fire_alarm
+- Medical Box par Ulan Cabanilla : https://polyhaven.com/a/medical_box
+- Power Box 01 par Rico Cilliers et Yann Kervran : https://polyhaven.com/a/power_box_01
+- Security Camera 02 par Garrison Gager et Yann Kervran : https://polyhaven.com/a/security_camera_02
+- Metal Stool 01 par Ulan Cabanilla : https://polyhaven.com/a/metal_stool_01
+- Metal Office Desk par Ulan Cabanilla : https://polyhaven.com/a/metal_office_desk
+- Hand Truck par Mutanzom3D : https://polyhaven.com/a/hand_truck
+- Baseball Bat par Enrique Martín : https://polyhaven.com/a/baseball_bat
+- Hatchet par James Ray Cock et Ulan Cabanilla : https://polyhaven.com/a/hatchet
+- Binoculars par Derek Wight : https://polyhaven.com/a/binoculars
+- Crowbar 01 par Alexander Otterbeck : https://polyhaven.com/a/crowbar_01
+- Lubricant Spray par James Ray Cock : https://polyhaven.com/a/lubricant_spray
+- Cleaner Tin 01 par Tom Phillips : https://polyhaven.com/a/cleaner_tin_01
+- Desk Lamp Arm 01 par Yann Kervran et Kuutti Siitonen : https://polyhaven.com/a/desk_lamp_arm_01
+- Cross Pein Hammer par Tics : https://polyhaven.com/a/cross_pein_hammer
+- Adjustable Wrench par Mateusz Sadek : https://polyhaven.com/a/adjustable_wrench
+- Flathead Screwdriver par Dylan Detwiller : https://polyhaven.com/a/flathead_screwdriver
+- Measuring Tape 01 par Kuutti Siitonen : https://polyhaven.com/a/measuring_tape_01
+- Clipboard par ProgrammerOnCoffee : https://polyhaven.com/a/clipboard
+- Modular Airduct Rectangular 01 par James Ray Cock : https://polyhaven.com/a/modular_airduct_rectangular_01
+- Modular Industrial Pipes 01 par Jorge Camacho : https://polyhaven.com/a/modular_industrial_pipes_01
+- Wall Clock par PierreB3D : https://polyhaven.com/a/wall_clock
+- Barrel 03 par Serhii Khromov : https://polyhaven.com/a/barrel_03
+- Metal Jerrycan Green par Ulan Cabanilla : https://polyhaven.com/a/metal_jerrycan_green
+- Wet Floor Sign 01 par Fran Calvente : https://polyhaven.com/a/WetFloorSign_01
+- Television 02 par Benny Weimer : https://polyhaven.com/a/television_02
+- Old Tyre par MP : https://polyhaven.com/a/old_tyre
+
+Matières :
+- Synthetic Wood (lattes) par Dario Barresi et Charlotte Baglioni : https://polyhaven.com/a/synthetic_wood
+- Metal Plate 02 (tôle) par Rob Tuytel : https://polyhaven.com/a/metal_plate_02
+- Rubber Tiles (dalles de caoutchouc) par Amal Kumar : https://polyhaven.com/a/rubber_tiles
+- Painted Plaster Wall (enduit peint) par Amal Kumar : https://polyhaven.com/a/painted_plaster_wall
+- Corrugated Iron 02 (bac acier du plafond) par Jenelle van Heerden et Sergej Majboroda : https://polyhaven.com/a/corrugated_iron_02
+
+La mousse acoustique du stand de tir n'existe pas chez Poly Haven : elle est dessinée par
+`tools/calibre/build-kit.mjs`, création du projet.

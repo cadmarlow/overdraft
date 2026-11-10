@@ -26,6 +26,7 @@ const NUMBER_KEYS = ['sunIntensity', 'hemiIntensity', 'fogDensity', 'interiorGlo
   'turbidity', 'rayleigh', 'mieCoefficient', 'mieDirectionalG', 'cloudCoverage', 'cloudDensity', 'skyExposure', 'nightFactor'];
 const LOOK_KEYS = ['exposure', 'contrast', 'saturation', 'bloom', 'threshold'];
 const RAIN_DROPS = 5000;
+const INDOOR_EYE = 1.12; // the eye among a shop's lamps (adapt)
 const lerp = (a, b, t) => a + (b - a) * t;
 const smooth = (t) => t * t * (3 - 2 * t);
 
@@ -280,7 +281,8 @@ class Atmosphere {
       lit += ent ? 0.35 * this.sunReaches(ent.position.x, ent.position.y + 1.5, ent.position.z, p.sunDir) : 0.35;
       this.sunlit = lit;
     }
-    const target = 1 + lift * (1 - this.sunlit);
+    // Indoors (a shop's own lamps, calibre.js) the eye settles on them, whatever the hour outside
+    const target = this.indoor ? INDOOR_EYE : 1 + lift * (1 - this.sunlit);
     const tau = target > this.eye ? 1.0 : 0.5;
     this.eye += (target - this.eye) * (1 - Math.exp(-dt / tau));
   }

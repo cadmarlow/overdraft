@@ -1033,6 +1033,8 @@ class ThirdPersonControllerManager {
    * at or just above it count too: a body on a roof stands on it, one below a roof stays in the street.
    */
   getGroundHeight(x, z, mode = 'person', y = 0) {
+    const interior = y < 2 ? this.interiorFloor?.(x, z) : null;
+    if (interior != null) return interior;
     const street = this.streetHeight(x, z, mode);
     if (y < 2 || (mode !== 'person' && mode !== 'helicopter')) return street;
     return Math.max(street, this.roofHeight(x, z, y));

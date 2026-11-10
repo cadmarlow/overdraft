@@ -3,12 +3,11 @@ import { WEAPONS } from './weapons.js';
 import { repairBody } from './drive-fx.js';
 
 // Places to spend money: gun shops, a body shop that repairs and repaints (and loses the police if they did not see the
-// car go in), and safehouses to buy, sleep in (8 hours pass, wounds heal) and save at. Each place is a world marker; its
-// menu is a DOM panel that freezes the game while it is open.
+// car go in), and safehouses to buy, sleep in (8 hours pass, wounds heal) and save at. The gun shops are CALIBRE's 48
+// branches (calibre.js): their counter has its own sheet (calibre-counter.js) and keeps the world running during a
+// transaction; this system only opens and closes it. The other services pause the game while their panel is open.
 
 const SHOPS = [
-  { id: 'calibre-west', type: 'guns', name: 'CALIBRE', sub: 'Armurerie · 9e Avenue', x: -1123, z: streetZ(41) + 30 },
-  { id: 'calibre-east', type: 'guns', name: 'CALIBRE', sub: 'Armurerie · 2e Avenue', x: 850, z: streetZ(8) + 30 },
   { id: 'eclair-west', type: 'body', name: 'CARROSSERIE ÉCLAIR', sub: '11e Avenue', x: -1678, z: streetZ(50) + 40, drive: true },
   { id: 'eclair-east', type: 'body', name: 'CARROSSERIE ÉCLAIR', sub: '3e Avenue', x: 616, z: streetZ(22) + 40, drive: true },
   { id: 'loft', type: 'home', name: 'LOFT EAST VILLAGE', sub: 'Planque · 1re Avenue', x: 1079, z: streetZ(12) + 40, price: 0, gift: 'grande' },
@@ -48,6 +47,11 @@ class ShopSystem {
     this.sel = 0;
     this.panel = el('div', 'shop-panel', document.body);
     this.panel.hidden = true;
+    this.panel.setAttribute('role', 'dialog');
+    this.panel.setAttribute('aria-label', 'Boutique');
+    const close = el('button', 'shop-close', this.panel, '×');
+    close.setAttribute('aria-label', 'Quitter la boutique');
+    close.addEventListener('click', () => this.close());
     this.head = el('div', 'shop-head', this.panel);
     this.title = el('strong', null, this.head);
     this.sub = el('span', null, this.head);
@@ -61,11 +65,12 @@ class ShopSystem {
     const g = this.game;
     for (const m of this.markers) g.markers.remove(m.marker);
     this.markers.length = 0;
-    for (const s of SHOPS) {
+    const shops = [...SHOPS, ...(this.gunShops || [])];
+    for (const s of shops) {
       if (s.gift && !g.missionsDone.includes(s.gift) && !this.owned.has(s.id)) continue;
-      const spot = g.safeSpot(s.x, s.z, s.drive ? 1.5 : 0.5);
-      const kind = s.type === 'home' ? (this.owned.has(s.id) ? 'home' : 'homeSale') : 'shop';
-      const marker = g.markers.add(spot.x, spot.z, { kind, radius: s.drive ? 3.2 : 1.2, height: s.drive ? 3 : 2.4, label: s.name, blip: true });
+      const spot = s.calibre ? s : g.safeSpot(s.x, s.z, s.drive ? 1.5 : 0.5);
+      const kind = s.calibre ? 'guns' : s.type === 'home' ? (this.owned.has(s.id) ? 'home' : 'homeSale') : 'shop';
+      const marker = g.markers.add(spot.x, spot.z, { kind, radius: s.drive ? 3.2 : 1.2, height: s.drive ? 3 : 2.4, label: s.name, blip: true, mapOnly: !!s.calibre });
       if (marker) this.markers.push({ shop: s, marker, x: spot.x, z: spot.z });
     }
   }
@@ -87,6 +92,7 @@ class ShopSystem {
     if (this.open || this.cooldown > 0 || g.director.current) return;
     for (const m of this.markers) {
       const s = m.shop;
+      if (s.calibre) continue;
       const r = s.drive ? 4 : 1.6;
       if (Math.hypot(g.player.x - m.x, g.player.z - m.z) > r) continue;
       if (s.drive ? g.state !== 'driving' : g.state !== 'onFoot') continue;
@@ -101,13 +107,13 @@ class ShopSystem {
     const g = this.game;
     if (s.type === 'guns') {
       return GUN_ITEMS.map((it) => {
-        if (it.id === 'armor') return { label: 'GILET PARE-BALLES', detail: `Gilet : ${Math.round(g.armor)} %`, price: it.price, enabled: g.armor < 100, act: () => { g.armor = 100; } };
+        if (it.id === 'armor') return { id: it.id, label: 'GILET PARE-BALLES', detail: `Gilet : ${Math.round(g.armor)} %`, price: it.price, enabled: g.armor < 100, act: () => { g.armor = 100; } };
         const w = WEAPONS[it.id];
         const owned = !!g.weapons[it.id];
-        if (!owned) return { label: w.name, detail: w.sub, price: it.price, act: () => g.giveWeapon(it.id, it.ammo) };
+        if (!owned) return { id: it.id, label: w.name, detail: w.sub, price: it.price, act: () => g.giveWeapon(it.id, it.ammo) };
         const slot = g.weapons[it.id];
         const ammoText = w.throwable ? `${slot.mag} en stock` : `${slot.mag + slot.ammo} munitions`;
-        return { label: `${w.name} · munitions`, detail: `+${it.ammo} · ${ammoText}`, price: it.ammoPrice, act: () => g.giveWeapon(it.id, it.ammo) };
+        return { id: it.id, label: `${w.name} · munitions`, detail: `+${w.throwable ? Math.min(it.ammo, w.mag - slot.mag) : it.ammo} · ${ammoText}`, enabled: !w.throwable || slot.mag < w.mag, price: it.ammoPrice, act: () => g.giveWeapon(it.id, it.ammo) };
       });
     }
     if (s.type === 'body') {
@@ -135,11 +141,13 @@ class ShopSystem {
 
   show(s) {
     const g = this.game;
+    if (s.calibre && !g.calibre.available(s)) return;
     this.open = s;
     this.sel = 0;
     g.modal = true;
     g.controllers.resetInput();
     g.releasePointer();
+    if (s.calibre) { g.audio.ui('shop'); g.calibre.openCounter(s); return; }
     this.title.textContent = s.name;
     this.sub.textContent = s.sub;
     this.panel.hidden = false;
@@ -160,7 +168,10 @@ class ShopSystem {
       el('strong', null, row, it.label);
       el('span', 'shop-detail', row, it.detail || '');
       el('span', 'shop-price', row, it.price ? money(it.price) : '');
-      row.addEventListener('mouseenter', () => { this.sel = i; this.refreshSelection(); });
+      row.addEventListener('pointermove', e => {
+        if ((!e.movementX && !e.movementY) || this.sel === i) return;
+        this.sel = i; this.refreshSelection();
+      });
       row.addEventListener('click', () => { this.sel = i; this.buy(); });
     });
     const keys = g.gamepad?.using ? '↑ ↓ choisir · A valider · B quitter' : '↑ ↓ choisir · ENTRÉE valider · ÉCHAP quitter';
@@ -172,6 +183,7 @@ class ShopSystem {
   }
 
   navigate(step) {
+    if (this.open?.calibre) { this.game.calibre.counter.navigate(step); return; }
     const count = this.current?.length;
     if (!count) return;
     this.sel = (this.sel + step + count) % count;
@@ -179,8 +191,14 @@ class ShopSystem {
     this.list.children[this.sel]?.scrollIntoView({ block: 'nearest' });
   }
 
+  // Left and right: the counter's tabs (the other services have none)
+  turn(step) {
+    if (this.open?.calibre) this.game.calibre.counter.turn(step);
+  }
+
   buy() {
     const g = this.game;
+    if (this.open?.calibre) { g.calibre.counter.act(); return; }
     const it = this.current?.[this.sel];
     if (!it) return;
     if (it.enabled === false || it.price > g.money) { g.audio.ui('deny'); return; }
@@ -192,11 +210,13 @@ class ShopSystem {
 
   key(e) {
     if (!this.open) return;
+    if (this.open.calibre) { this.game.calibre.counter.key(e); return; }
     const k = e.code;
-    if (['ArrowUp', 'ArrowDown', 'KeyW', 'KeyS', 'KeyZ', 'Enter', 'NumpadEnter', 'Space', 'Escape'].includes(k)) {
+    if (['ArrowUp', 'ArrowDown', 'KeyW', 'KeyS', 'KeyZ', 'Enter', 'NumpadEnter', 'Space', 'Escape', 'Tab'].includes(k)) {
       e.preventDefault();
       e.stopImmediatePropagation();
     } else return;
+    if (e.repeat && ['Enter', 'NumpadEnter', 'Space', 'Escape'].includes(k)) return;
     if (k === 'ArrowUp' || k === 'KeyW' || k === 'KeyZ') this.navigate(-1);
     if (k === 'ArrowDown' || k === 'KeyS') this.navigate(1);
     if (k === 'Enter' || k === 'NumpadEnter' || k === 'Space') this.buy();
@@ -206,6 +226,7 @@ class ShopSystem {
 
   close() {
     const g = this.game;
+    if (this.open?.calibre) g.calibre.closeCounter();
     this.open = null;
     this.panel.hidden = true;
     g.modal = false;

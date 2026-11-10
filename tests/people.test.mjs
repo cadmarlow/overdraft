@@ -33,7 +33,7 @@ function sound(m, bones) {
   assert.ok(m.faces.every((i) => i < vertices), 'triangles use existing vertices');
 }
 
-const CAST = ['hero', 'cop', 'cop-b', 'detective', 'swat', 'crew', 'suit', 'guard'];
+const CAST = ['hero', 'cop', 'cop-b', 'detective', 'swat', 'crew', 'suit', 'guard', 'clerk'];
 for (const id of CAST) {
   test(`${id}: a whole person, every vertex on the skeleton and every material painted`, () => {
     const m = person(`${id}.bin`);

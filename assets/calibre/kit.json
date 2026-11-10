@@ -1,0 +1,1760 @@
+{
+ "atlas": {
+  "size": 2048,
+  "gutter": 8,
+  "colour": "kit_c.webp",
+  "normal": "kit_n.webp",
+  "orm": "kit_orm.webp",
+  "emission": "kit_e.webp"
+ },
+ "props": [
+  {
+   "name": "ammo_box",
+   "id": "ammo_box",
+   "title": "Ammo Box",
+   "authors": [
+    "DanKit"
+   ],
+   "budget": 900,
+   "triangles": 900,
+   "sourceTriangles": 4382,
+   "vertices": 1207,
+   "size": [
+    0.2579,
+    0.1775,
+    0.0865
+   ],
+   "min": [
+    -0.1289,
+    0,
+    -0.0432
+   ],
+   "max": [
+    0.1289,
+    0.1775,
+    0.0432
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     0,
+     0,
+     512,
+     512
+    ]
+   ]
+  },
+  {
+   "name": "cash_register",
+   "id": "CashRegister_01",
+   "title": "Cash Register 01",
+   "authors": [
+    "Joe Seabuhr"
+   ],
+   "budget": 2500,
+   "triangles": 2496,
+   "sourceTriangles": 9921,
+   "vertices": 3528,
+   "size": [
+    0.5952,
+    0.6214,
+    0.4392
+   ],
+   "min": [
+    -0.2976,
+    0,
+    -0.2196
+   ],
+   "max": [
+    0.2976,
+    0.6214,
+    0.2196
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     512,
+     0,
+     512,
+     512
+    ]
+   ]
+  },
+  {
+   "name": "shelves",
+   "id": "steel_frame_shelves_01",
+   "title": "Steel Frame Shelves 01",
+   "authors": [
+    "James Ray Cock"
+   ],
+   "budget": 1200,
+   "triangles": 1198,
+   "sourceTriangles": 4348,
+   "vertices": 1442,
+   "size": [
+    1.0949,
+    2.1405,
+    0.5021
+   ],
+   "min": [
+    -0.5475,
+    0,
+    -0.2511
+   ],
+   "max": [
+    0.5475,
+    2.1405,
+    0.2511
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1024,
+     0,
+     512,
+     512
+    ]
+   ]
+  },
+  {
+   "name": "shelves_narrow",
+   "id": "steel_frame_shelves_02",
+   "title": "Steel Frame Shelves 02",
+   "authors": [
+    "James Ray Cock"
+   ],
+   "budget": 1200,
+   "triangles": 1198,
+   "sourceTriangles": 4348,
+   "vertices": 1414,
+   "size": [
+    0.5912,
+    2.1416,
+    0.5024
+   ],
+   "min": [
+    -0.2956,
+    0,
+    -0.2512
+   ],
+   "max": [
+    0.2956,
+    2.1416,
+    0.2512
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1560,
+     512,
+     360,
+     360
+    ]
+   ]
+  },
+  {
+   "name": "tool_chest",
+   "id": "metal_tool_chest",
+   "title": "Metal Tool Chest",
+   "authors": [
+    "Yann Kervran",
+    "John Hutcheson"
+   ],
+   "budget": 2200,
+   "triangles": 2186,
+   "sourceTriangles": 13360,
+   "vertices": 2876,
+   "size": [
+    0.6841,
+    0.6518,
+    0.4072
+   ],
+   "min": [
+    -0.342,
+    0,
+    -0.2036
+   ],
+   "max": [
+    0.342,
+    0.6518,
+    0.2036
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1032,
+     512,
+     528,
+     496
+    ]
+   ]
+  },
+  {
+   "name": "toolbox",
+   "id": "metal_toolbox",
+   "title": "Metal Toolbox",
+   "authors": [
+    "Mateusz Sadek"
+   ],
+   "budget": 1400,
+   "triangles": 1398,
+   "sourceTriangles": 14228,
+   "vertices": 2078,
+   "size": [
+    0.4,
+    0.3044,
+    0.2668
+   ],
+   "min": [
+    -0.2,
+    0,
+    -0.1334
+   ],
+   "max": [
+    0.2,
+    0.3044,
+    0.1334
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1560,
+     872,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "vice",
+   "id": "bench_vice_01",
+   "title": "Bench Vice 01",
+   "authors": [
+    "Yann Kervran",
+    "Antanas Kep"
+   ],
+   "budget": 1000,
+   "triangles": 1000,
+   "sourceTriangles": 2864,
+   "vertices": 969,
+   "size": [
+    0.2005,
+    0.2017,
+    0.3957
+   ],
+   "min": [
+    -0.1002,
+    0,
+    -0.1979
+   ],
+   "max": [
+    0.1002,
+    0.2017,
+    0.1979
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1032,
+     1008,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "drill_press",
+   "id": "old_drill_press",
+   "title": "Old Drill Press",
+   "authors": [
+    "Harsh Vardhan Singh"
+   ],
+   "budget": 3000,
+   "triangles": 3000,
+   "sourceTriangles": 18184,
+   "vertices": 3721,
+   "size": [
+    0.2742,
+    1.05,
+    0.5078
+   ],
+   "min": [
+    -0.1371,
+    0,
+    -0.2539
+   ],
+   "max": [
+    0.1371,
+    1.05,
+    0.2539
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1536,
+     0,
+     512,
+     512
+    ]
+   ]
+  },
+  {
+   "name": "lamp_hanging",
+   "id": "hanging_industrial_lamp",
+   "title": "Hanging Industrial Lamp",
+   "authors": [
+    "Kuutti Siitonen"
+   ],
+   "budget": 1400,
+   "triangles": 1399,
+   "sourceTriangles": 8812,
+   "vertices": 1841,
+   "size": [
+    0.5462,
+    1.3554,
+    0.5496
+   ],
+   "min": [
+    -0.2766,
+    -1.3554,
+    -0.2748
+   ],
+   "max": [
+    0.2696,
+    0,
+    0.2748
+   ],
+   "anchor": "ceiling",
+   "rects": [
+    [
+     1288,
+     1008,
+     256,
+     256
+    ]
+   ],
+   "lights": [
+    {
+     "at": [
+      -0.001,
+      -1.076,
+      0
+     ],
+     "min": [
+      -0.047,
+      -1.138,
+      -0.038
+     ],
+     "max": [
+      0.043,
+      -1.011,
+      0.045
+     ]
+    }
+   ]
+  },
+  {
+   "name": "lamp_wall",
+   "id": "industrial_wall_lamp",
+   "title": "Industrial Wall Lamp",
+   "authors": [
+    "Kuutti Siitonen"
+   ],
+   "budget": 900,
+   "triangles": 900,
+   "sourceTriangles": 3698,
+   "vertices": 1025,
+   "size": [
+    0.2735,
+    0.4283,
+    0.1393
+   ],
+   "min": [
+    -0.1367,
+    -0.2142,
+    0
+   ],
+   "max": [
+    0.1367,
+    0.2142,
+    0.1393
+   ],
+   "anchor": "wall",
+   "rects": [
+    [
+     512,
+     1016,
+     256,
+     256
+    ]
+   ],
+   "lights": [
+    {
+     "at": [
+      0,
+      0.002,
+      0.064
+     ],
+     "min": [
+      -0.028,
+      -0.041,
+      0.032
+     ],
+     "max": [
+      0.032,
+      0.05,
+      0.093
+     ]
+    }
+   ]
+  },
+  {
+   "name": "lamp_tube",
+   "id": "mounted_fluorescent_lights",
+   "title": "Mounted Fluorescent Lights",
+   "authors": [
+    "Ulan Cabanilla"
+   ],
+   "budget": 700,
+   "triangles": 700,
+   "sourceTriangles": 2920,
+   "vertices": 798,
+   "size": [
+    0.9122,
+    0.0351,
+    0.0404
+   ],
+   "min": [
+    -0.4561,
+    -0.0351,
+    -0.0201
+   ],
+   "max": [
+    0.4561,
+    0,
+    0.0203
+   ],
+   "anchor": "ceiling",
+   "rects": [
+    [
+     768,
+     1016,
+     256,
+     256
+    ],
+    [
+     1800,
+     1640,
+     96,
+     176
+    ]
+   ],
+   "lights": [
+    {
+     "at": [
+      0,
+      -0.027,
+      0
+     ],
+     "min": [
+      -0.442,
+      -0.034,
+      -0.019
+     ],
+     "max": [
+      0.442,
+      -0.02,
+      0.019
+     ]
+    }
+   ]
+  },
+  {
+   "name": "lamp_caged",
+   "id": "caged_hanging_light",
+   "title": "Caged Hanging Light",
+   "authors": [
+    "Ulan Cabanilla"
+   ],
+   "budget": 2000,
+   "triangles": 1991,
+   "sourceTriangles": 22893,
+   "vertices": 2519,
+   "size": [
+    1.1618,
+    0.7501,
+    0.3149
+   ],
+   "min": [
+    -0.5803,
+    -0.7501,
+    -0.1575
+   ],
+   "max": [
+    0.5815,
+    0,
+    0.1574
+   ],
+   "anchor": "ceiling",
+   "rects": [
+    [
+     0,
+     1024,
+     256,
+     256
+    ]
+   ],
+   "lights": [
+    {
+     "at": [
+      -0.001,
+      -0.712,
+      0
+     ],
+     "min": [
+      -0.551,
+      -0.73,
+      -0.129
+     ],
+     "max": [
+      0.55,
+      -0.665,
+      0.129
+     ]
+    }
+   ]
+  },
+  {
+   "name": "cardboard_box",
+   "id": "cardboard_box_01",
+   "title": "Cardboard Box 01",
+   "authors": [
+    "Rahul Chaudhary"
+   ],
+   "budget": 400,
+   "triangles": 400,
+   "sourceTriangles": 16952,
+   "vertices": 248,
+   "size": [
+    0.3848,
+    0.34,
+    0.515
+   ],
+   "min": [
+    -0.1924,
+    0,
+    -0.2575
+   ],
+   "max": [
+    0.1924,
+    0.34,
+    0.2575
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     256,
+     1024,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "crate",
+   "id": "wooden_crate_01",
+   "title": "Wooden Crate 01",
+   "authors": [
+    "James Ray Cock"
+   ],
+   "budget": 900,
+   "triangles": 900,
+   "sourceTriangles": 6576,
+   "vertices": 963,
+   "size": [
+    0.8189,
+    0.3437,
+    0.4024
+   ],
+   "min": [
+    -0.4095,
+    0,
+    -0.2012
+   ],
+   "max": [
+    0.4095,
+    0.3437,
+    0.2012
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1544,
+     1128,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "crate_long",
+   "id": "wooden_crate_02",
+   "title": "Wooden Crate 02",
+   "authors": [
+    "James Ray Cock",
+    "Jurita Burger"
+   ],
+   "budget": 800,
+   "triangles": 800,
+   "sourceTriangles": 5176,
+   "vertices": 928,
+   "size": [
+    1.1564,
+    0.464,
+    0.5291
+   ],
+   "min": [
+    -0.5782,
+    0,
+    -0.2646
+   ],
+   "max": [
+    0.5782,
+    0.464,
+    0.2646
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1024,
+     1264,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "crate_military",
+   "id": "wooden_military_crate",
+   "title": "Wooden Military Crate",
+   "authors": [
+    "Prabhjinder Singh"
+   ],
+   "budget": 1500,
+   "triangles": 1500,
+   "sourceTriangles": 22986,
+   "vertices": 2167,
+   "size": [
+    1.2411,
+    0.4639,
+    0.5179
+   ],
+   "min": [
+    -0.6205,
+    0,
+    -0.2589
+   ],
+   "max": [
+    0.6205,
+    0.4639,
+    0.2589
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     512,
+     512,
+     520,
+     504
+    ]
+   ]
+  },
+  {
+   "name": "extinguisher",
+   "id": "korean_fire_extinguisher_01",
+   "title": "Korean Fire Extinguisher 01",
+   "authors": [
+    "UM JOORIN"
+   ],
+   "budget": 1200,
+   "triangles": 1200,
+   "sourceTriangles": 9561,
+   "vertices": 1199,
+   "size": [
+    0.279,
+    0.6591,
+    0.3674
+   ],
+   "min": [
+    -0.1395,
+    0,
+    -0.1837
+   ],
+   "max": [
+    0.1395,
+    0.6591,
+    0.1837
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1280,
+     1264,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "fire_alarm",
+   "id": "fire_alarm",
+   "title": "Fire Alarm",
+   "authors": [
+    "Slinc"
+   ],
+   "budget": 400,
+   "triangles": 399,
+   "sourceTriangles": 2705,
+   "vertices": 521,
+   "size": [
+    0.0994,
+    0.1436,
+    0.0264
+   ],
+   "min": [
+    -0.0497,
+    -0.0718,
+    0
+   ],
+   "max": [
+    0.0497,
+    0.0718,
+    0.0264
+   ],
+   "anchor": "wall",
+   "rects": [
+    [
+     1288,
+     1776,
+     160,
+     160
+    ]
+   ]
+  },
+  {
+   "name": "first_aid",
+   "id": "medical_box",
+   "title": "Medical Box",
+   "authors": [
+    "Ulan Cabanilla"
+   ],
+   "budget": 700,
+   "triangles": 692,
+   "sourceTriangles": 3718,
+   "vertices": 904,
+   "size": [
+    0.5255,
+    0.3501,
+    0.0975
+   ],
+   "min": [
+    -0.2627,
+    -0.1723,
+    0
+   ],
+   "max": [
+    0.2627,
+    0.1778,
+    0.0975
+   ],
+   "anchor": "wall",
+   "rects": [
+    [
+     512,
+     1272,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "power_box",
+   "id": "power_box_01",
+   "title": "Power Box 01",
+   "authors": [
+    "Rico Cilliers",
+    "Yann Kervran"
+   ],
+   "budget": 500,
+   "triangles": 499,
+   "sourceTriangles": 21272,
+   "vertices": 531,
+   "size": [
+    0.341,
+    0.5031,
+    0.0992
+   ],
+   "min": [
+    -0.1705,
+    -0.2516,
+    0
+   ],
+   "max": [
+    0.1705,
+    0.2516,
+    0.0992
+   ],
+   "anchor": "wall",
+   "rects": [
+    [
+     768,
+     1272,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "camera",
+   "id": "security_camera_02",
+   "title": "Security Camera 02",
+   "authors": [
+    "Garrison Gager",
+    "Yann Kervran"
+   ],
+   "budget": 1100,
+   "triangles": 1091,
+   "sourceTriangles": 12473,
+   "vertices": 1209,
+   "size": [
+    0.1406,
+    0.2083,
+    0.3938
+   ],
+   "min": [
+    -0.0703,
+    -0.0443,
+    0
+   ],
+   "max": [
+    0.0703,
+    0.1639,
+    0.3938
+   ],
+   "anchor": "wall",
+   "rects": [
+    [
+     0,
+     1280,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "stool",
+   "id": "metal_stool_01",
+   "title": "Metal Stool 01",
+   "authors": [
+    "Ulan Cabanilla"
+   ],
+   "budget": 1200,
+   "triangles": 1200,
+   "sourceTriangles": 8334,
+   "vertices": 989,
+   "size": [
+    0.3507,
+    0.8824,
+    0.353
+   ],
+   "min": [
+    -0.1754,
+    0,
+    -0.1765
+   ],
+   "max": [
+    0.1754,
+    0.8824,
+    0.1765
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     256,
+     1280,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "desk",
+   "id": "metal_office_desk",
+   "title": "Metal Office Desk",
+   "authors": [
+    "Ulan Cabanilla"
+   ],
+   "budget": 1100,
+   "triangles": 1099,
+   "sourceTriangles": 6898,
+   "vertices": 1535,
+   "size": [
+    2,
+    0.7875,
+    0.9451
+   ],
+   "min": [
+    -1,
+    0,
+    -0.4726
+   ],
+   "max": [
+    1,
+    0.7875,
+    0.4726
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     0,
+     512,
+     512,
+     512
+    ]
+   ]
+  },
+  {
+   "name": "hand_truck",
+   "id": "hand_truck",
+   "title": "Hand Truck",
+   "authors": [
+    "Mutanzom3D"
+   ],
+   "budget": 2400,
+   "triangles": 2400,
+   "sourceTriangles": 13220,
+   "vertices": 3639,
+   "size": [
+    0.5933,
+    1.4016,
+    0.6877
+   ],
+   "min": [
+    -0.2966,
+    0,
+    -0.3439
+   ],
+   "max": [
+    0.2966,
+    1.4016,
+    0.3439
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1536,
+     1384,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "bat",
+   "id": "baseball_bat",
+   "title": "Baseball Bat",
+   "authors": [
+    "Enrique Martín"
+   ],
+   "budget": 400,
+   "triangles": 400,
+   "sourceTriangles": 2672,
+   "vertices": 359,
+   "size": [
+    0.9118,
+    0.0631,
+    0.0635
+   ],
+   "min": [
+    -0.4559,
+    0,
+    -0.0318
+   ],
+   "max": [
+    0.4559,
+    0.0631,
+    0.0318
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     784,
+     1784,
+     128,
+     128
+    ]
+   ]
+  },
+  {
+   "name": "hatchet",
+   "id": "hatchet",
+   "title": "Hatchet",
+   "authors": [
+    "James Ray Cock",
+    "Ulan Cabanilla"
+   ],
+   "budget": 600,
+   "triangles": 600,
+   "sourceTriangles": 5250,
+   "vertices": 865,
+   "size": [
+    0.2862,
+    0.0254,
+    0.0982
+   ],
+   "min": [
+    -0.1431,
+    0,
+    -0.0491
+   ],
+   "max": [
+    0.1431,
+    0.0254,
+    0.0491
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     0,
+     1792,
+     128,
+     128
+    ]
+   ]
+  },
+  {
+   "name": "binoculars",
+   "id": "binoculars",
+   "title": "Binoculars",
+   "authors": [
+    "Derek Wight"
+   ],
+   "budget": 2400,
+   "triangles": 2400,
+   "sourceTriangles": 16196,
+   "vertices": 2383,
+   "size": [
+    0.1519,
+    0.0637,
+    0.1177
+   ],
+   "min": [
+    -0.0759,
+    0,
+    -0.0589
+   ],
+   "max": [
+    0.0759,
+    0.0637,
+    0.0589
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1536,
+     1640,
+     264,
+     248
+    ]
+   ]
+  },
+  {
+   "name": "crowbar",
+   "id": "crowbar_01",
+   "title": "Crowbar 01",
+   "authors": [
+    "Alexander Otterbeck"
+   ],
+   "budget": 300,
+   "triangles": 300,
+   "sourceTriangles": 2300,
+   "vertices": 243,
+   "size": [
+    0.5551,
+    0.0404,
+    0.1265
+   ],
+   "min": [
+    -0.2775,
+    0,
+    -0.0633
+   ],
+   "max": [
+    0.2775,
+    0.0404,
+    0.0633
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     128,
+     1792,
+     128,
+     128
+    ]
+   ]
+  },
+  {
+   "name": "spray",
+   "id": "lubricant_spray",
+   "title": "Lubricant Spray",
+   "authors": [
+    "James Ray Cock"
+   ],
+   "budget": 500,
+   "triangles": 499,
+   "sourceTriangles": 5476,
+   "vertices": 569,
+   "size": [
+    0.0667,
+    0.1647,
+    0.0644
+   ],
+   "min": [
+    -0.0334,
+    0,
+    -0.0322
+   ],
+   "max": [
+    0.0334,
+    0.1647,
+    0.0322
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     256,
+     1792,
+     128,
+     128
+    ]
+   ]
+  },
+  {
+   "name": "tin",
+   "id": "cleaner_tin_01",
+   "title": "Cleaner Tin 01",
+   "authors": [
+    "Tom Phillips"
+   ],
+   "budget": 400,
+   "triangles": 400,
+   "sourceTriangles": 3560,
+   "vertices": 260,
+   "size": [
+    0.0869,
+    0.1304,
+    0.0861
+   ],
+   "min": [
+    -0.0435,
+    0,
+    -0.0431
+   ],
+   "max": [
+    0.0435,
+    0.1304,
+    0.0431
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     384,
+     1792,
+     128,
+     128
+    ]
+   ]
+  },
+  {
+   "name": "desk_lamp",
+   "id": "desk_lamp_arm_01",
+   "title": "Desk Lamp Arm 01",
+   "authors": [
+    "Yann Kervran",
+    "Kuutti Siitonen"
+   ],
+   "budget": 1500,
+   "triangles": 1457,
+   "sourceTriangles": 16689,
+   "vertices": 1893,
+   "size": [
+    0.1967,
+    0.8926,
+    0.611
+   ],
+   "min": [
+    -0.0795,
+    0,
+    -0.3008
+   ],
+   "max": [
+    0.1171,
+    0.8926,
+    0.3102
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1792,
+     1384,
+     256,
+     256
+    ]
+   ],
+   "lights": [
+    {
+     "at": [
+      0.004,
+      0.779,
+      0.192
+     ],
+     "min": [
+      -0.023,
+      0.742,
+      0.159
+     ],
+     "max": [
+      0.037,
+      0.83,
+      0.228
+     ]
+    }
+   ]
+  },
+  {
+   "name": "hammer",
+   "id": "cross_pein_hammer",
+   "title": "Cross Pein Hammer",
+   "authors": [
+    "Tics"
+   ],
+   "budget": 300,
+   "triangles": 300,
+   "sourceTriangles": 2124,
+   "vertices": 284,
+   "size": [
+    0.2994,
+    0.0241,
+    0.099
+   ],
+   "min": [
+    -0.1497,
+    0,
+    -0.0495
+   ],
+   "max": [
+    0.1497,
+    0.0241,
+    0.0495
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1448,
+     1888,
+     128,
+     128
+    ]
+   ]
+  },
+  {
+   "name": "wrench",
+   "id": "adjustable_wrench",
+   "title": "Adjustable Wrench",
+   "authors": [
+    "Mateusz Sadek"
+   ],
+   "budget": 1000,
+   "triangles": 999,
+   "sourceTriangles": 5390,
+   "vertices": 1448,
+   "size": [
+    0.2529,
+    0.0303,
+    0.068
+   ],
+   "min": [
+    -0.1264,
+    0,
+    -0.034
+   ],
+   "max": [
+    0.1264,
+    0.0303,
+    0.034
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1576,
+     1888,
+     128,
+     128
+    ]
+   ]
+  },
+  {
+   "name": "screwdriver",
+   "id": "flathead_screwdriver",
+   "title": "Flathead Screwdriver",
+   "authors": [
+    "Dylan Detwiller"
+   ],
+   "budget": 300,
+   "triangles": 300,
+   "sourceTriangles": 2300,
+   "vertices": 302,
+   "size": [
+    0.2613,
+    0.03,
+    0.03
+   ],
+   "min": [
+    -0.1306,
+    0,
+    -0.015
+   ],
+   "max": [
+    0.1306,
+    0.03,
+    0.015
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1896,
+     1640,
+     120,
+     136
+    ]
+   ]
+  },
+  {
+   "name": "tape",
+   "id": "measuring_tape_01",
+   "title": "Measuring Tape 01",
+   "authors": [
+    "Kuutti Siitonen"
+   ],
+   "budget": 500,
+   "triangles": 500,
+   "sourceTriangles": 2868,
+   "vertices": 571,
+   "size": [
+    0.0406,
+    0.0728,
+    0.1684
+   ],
+   "min": [
+    -0.0203,
+    0,
+    -0.0842
+   ],
+   "max": [
+    0.0203,
+    0.0728,
+    0.0842
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1704,
+     1888,
+     128,
+     128
+    ]
+   ]
+  },
+  {
+   "name": "clipboard",
+   "id": "clipboard",
+   "title": "Clipboard",
+   "authors": [
+    "ProgrammerOnCoffee"
+   ],
+   "budget": 700,
+   "triangles": 688,
+   "sourceTriangles": 6176,
+   "vertices": 954,
+   "size": [
+    0.2284,
+    0.042,
+    0.3364
+   ],
+   "min": [
+    -0.1142,
+    0,
+    -0.1682
+   ],
+   "max": [
+    0.1142,
+    0.042,
+    0.1682
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1024,
+     1520,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "duct",
+   "id": "modular_airduct_rectangular_01",
+   "title": "Modular Airduct Rectangular 01",
+   "authors": [
+    "James Ray Cock"
+   ],
+   "budget": 600,
+   "triangles": 595,
+   "sourceTriangles": 3176,
+   "vertices": 865,
+   "size": [
+    1.8,
+    0.5126,
+    0.6634
+   ],
+   "min": [
+    -0.9,
+    -0.5126,
+    -0.3317
+   ],
+   "max": [
+    0.9,
+    0,
+    0.3317
+   ],
+   "anchor": "ceiling",
+   "rects": [
+    [
+     784,
+     1912,
+     128,
+     128
+    ],
+    [
+     1280,
+     1520,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "pipe",
+   "id": "modular_industrial_pipes_01",
+   "title": "Modular Industrial Pipes 01",
+   "authors": [
+    "Jorge Camacho"
+   ],
+   "budget": 400,
+   "triangles": 400,
+   "sourceTriangles": 648,
+   "vertices": 531,
+   "size": [
+    1.9546,
+    0.2071,
+    0.2063
+   ],
+   "min": [
+    -0.9773,
+    -0.2071,
+    -0.1028
+   ],
+   "max": [
+    0.9773,
+    0,
+    0.1036
+   ],
+   "anchor": "ceiling",
+   "rects": [
+    [
+     512,
+     1784,
+     272,
+     240
+    ]
+   ]
+  },
+  {
+   "name": "wall_clock",
+   "id": "wall_clock",
+   "title": "Wall Clock",
+   "authors": [
+    "PierreB3D"
+   ],
+   "budget": 700,
+   "triangles": 699,
+   "sourceTriangles": 3130,
+   "vertices": 795,
+   "size": [
+    0.3187,
+    0.3205,
+    0.0354
+   ],
+   "min": [
+    -0.1593,
+    -0.1602,
+    0
+   ],
+   "max": [
+    0.1593,
+    0.1602,
+    0.0354
+   ],
+   "anchor": "wall",
+   "rects": [
+    [
+     512,
+     1528,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "barrel",
+   "id": "barrel_03",
+   "title": "Barrel 03",
+   "authors": [
+    "Serhii Khromov"
+   ],
+   "budget": 600,
+   "triangles": 600,
+   "sourceTriangles": 1473,
+   "vertices": 530,
+   "size": [
+    0.6339,
+    0.9276,
+    0.6348
+   ],
+   "min": [
+    -0.317,
+    0,
+    -0.3174
+   ],
+   "max": [
+    0.317,
+    0.9276,
+    0.3174
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     768,
+     1528,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "jerrycan",
+   "id": "metal_jerrycan_green",
+   "title": "Metal Jerrycan Green",
+   "authors": [
+    "Ulan Cabanilla"
+   ],
+   "budget": 800,
+   "triangles": 798,
+   "sourceTriangles": 9636,
+   "vertices": 914,
+   "size": [
+    0.36,
+    0.4982,
+    0.1709
+   ],
+   "min": [
+    -0.18,
+    0,
+    -0.0854
+   ],
+   "max": [
+    0.18,
+    0.4982,
+    0.0854
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1024,
+     1776,
+     264,
+     248
+    ]
+   ]
+  },
+  {
+   "name": "wet_floor_sign",
+   "id": "WetFloorSign_01",
+   "title": "Wet Floor Sign 01",
+   "authors": [
+    "Fran Calvente"
+   ],
+   "budget": 228,
+   "triangles": 228,
+   "sourceTriangles": 228,
+   "vertices": 254,
+   "size": [
+    0.3001,
+    0.6295,
+    0.3585
+   ],
+   "min": [
+    -0.15,
+    0,
+    -0.1793
+   ],
+   "max": [
+    0.15,
+    0.6295,
+    0.1793
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     1896,
+     1776,
+     120,
+     136
+    ]
+   ]
+  },
+  {
+   "name": "monitor",
+   "id": "television_02",
+   "title": "Television 02",
+   "authors": [
+    "Benny Weimer"
+   ],
+   "budget": 600,
+   "triangles": 600,
+   "sourceTriangles": 2310,
+   "vertices": 842,
+   "size": [
+    0.3997,
+    0.4114,
+    0.3494
+   ],
+   "min": [
+    -0.1999,
+    0,
+    -0.1747
+   ],
+   "max": [
+    0.1999,
+    0.4114,
+    0.1747
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     0,
+     1536,
+     256,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "tyre",
+   "id": "old_tyre",
+   "title": "Old Tyre",
+   "authors": [
+    "MP"
+   ],
+   "budget": 500,
+   "triangles": 500,
+   "sourceTriangles": 2880,
+   "vertices": 461,
+   "size": [
+    0.5875,
+    0.1632,
+    0.6
+   ],
+   "min": [
+    -0.2938,
+    0,
+    -0.3
+   ],
+   "max": [
+    0.2938,
+    0.1632,
+    0.3
+   ],
+   "anchor": "floor",
+   "rects": [
+    [
+     256,
+     1536,
+     256,
+     256
+    ]
+   ]
+  }
+ ],
+ "surfaces": {
+  "slats": {
+   "id": "synthetic_wood",
+   "title": "Synthetic Wood",
+   "metres": 2,
+   "authors": [
+    "Dario Barresi",
+    "Charlotte Baglioni"
+   ]
+  },
+  "foam": {
+   "id": null,
+   "source": "drawn by tools/calibre/build-kit.mjs",
+   "metres": 0.5,
+   "authors": []
+  },
+  "plate": {
+   "id": "metal_plate_02",
+   "title": "Metal Plate 02",
+   "metres": 2,
+   "authors": [
+    "Rob Tuytel"
+   ]
+  },
+  "rubber": {
+   "id": "rubber_tiles",
+   "title": "Rubber Tiles",
+   "metres": 2,
+   "authors": [
+    "Amal Kumar"
+   ]
+  },
+  "plaster": {
+   "id": "painted_plaster_wall",
+   "title": "Painted Plaster Wall",
+   "metres": 2,
+   "authors": [
+    "Amal Kumar"
+   ]
+  },
+  "ceiling": {
+   "id": "corrugated_iron_02",
+   "title": "Corrugated Iron 02",
+   "metres": 2.7,
+   "authors": [
+    "Jenelle van Heerden",
+    "Sergej Majboroda"
+   ]
+  }
+ }
+}

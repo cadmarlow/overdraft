@@ -170,6 +170,8 @@ class GamepadControls {
       } else if (edge(B)) g.shops.close();
       else if (edge(A)) g.shops.buy();
       else if (direction === 'up' || direction === 'down') g.shops.navigate(direction === 'up' ? -1 : 1);
+      else if (direction === 'left' || direction === 'right') g.shops.turn(direction === 'left' ? -1 : 1);
+      else if (edge(LB) || edge(RB)) g.shops.turn(edge(RB) ? 1 : -1);
       return;
     }
 

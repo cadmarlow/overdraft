@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { WEAPONS, HANDLING, gunSpread, gunDamage, sightOrigin, muzzleObstruction, castShot, lineOfSight, spreadDirection, raycastBuildings } from '../js/weapons.js';
+import { effectiveWeapon } from '../js/weapon-mods.js';
 import { Vector3 } from '../vendor/three/build/three.core.js';
 import { AimAssist } from '../js/aim-assist.js';
 
@@ -141,7 +142,7 @@ function weaponHarness(id = 'pistol', colliders = []) {
     clamp: (x, lo, hi) => Math.max(lo, Math.min(hi, x)), angleDelta: (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a)) };
   const state = { shots: [], sounds: [], crosshair: null, combat: null, impacts: [], brass: [] };
   const g = {
-    state: 'onFoot', weaponId: id, get weapon() { return WEAPONS[this.weaponId]; },
+    state: 'onFoot', weaponId: id, mods: {}, get weapon() { return effectiveWeapon(this.weaponId, this.mods[this.weaponId]); },
     weapons: Object.fromEntries(Object.entries(WEAPONS).map(([k, w]) => [k, { mag: w.mag || 0, ammo: w.mag * 10 || 0 }])),
     triggerBuffer: 0, bloom: 0, combatReadyT: 0, hipT: 0, strafeT: 0, threatT: 0, threatNear: false, autoReloadT: 0, shotsInBurst: 0, lastGunShot: -10,
     aimAssist: new AimAssist(), assistTargets: [], actors: { actors: [] }, arsenal: { open: false },

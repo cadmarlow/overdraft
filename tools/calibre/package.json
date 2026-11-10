@@ -1,0 +1,10 @@
+{
+  "name": "overdraft-calibre-tools",
+  "private": true,
+  "type": "module",
+  "description": "Offline build of the gun shops' prop kit and surfaces in assets/calibre",
+  "dependencies": {
+    "meshoptimizer": "^0.25.0",
+    "sharp": "^0.34.0"
+  }
+}

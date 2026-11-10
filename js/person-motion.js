@@ -234,6 +234,7 @@ class BodyDriver {
     this.aimShoulder = 1;
     this.grip = [0, 0];
     this.gunKind = null; // the weapon the right hand is busy with: held, being drawn or being put away
+    this.holds = null; // kind → a HOLD entry of this body's own (a dressed weapon: its muzzle, where its foregrip is)
     this.swap = 0; // 0 on the body .. 1 in the hands
     this.swapDir = 0; // +1 drawing, -1 putting away
     this.gunOut = false; // out of its clothes: to be drawn at gunP / gunQ
@@ -485,7 +486,7 @@ class BodyDriver {
       this.kickS.x = this.kickS.v = 0;
       if (this.gunKind && kind === this.gunKind && this.swap >= 1 && !rig.limp && !rig.riding) {
         // a jump, a dive: the weapon stays in the hand that holds it and goes where that hand goes
-        this.placeInHand(HOLD[this.gunKind], this.gunP, this.gunQ);
+        this.placeInHand(this.holdFor(this.gunKind), this.gunP, this.gunQ);
         this.hasGun = this.gunOut = true;
       } else { this.snapWeapon(null); this.hasGun = this.gunOut = false; }
     }
@@ -670,6 +671,9 @@ class BodyDriver {
     else if (this.swap <= 0) { this.swap = 0; this.swapDir = 0; this.gunKind = null; }
   }
 
+  // How this body holds a weapon: the shared entry, unless its own weapon of that kind is dressed otherwise
+  holdFor(kind) { return this.holds?.[kind] ?? HOLD[kind]; }
+
   // At once, without the gesture: a spawn, someone who held it all along
   snapWeapon(kind) {
     this.gunKind = kind && HOLD[kind] ? kind : null;
@@ -706,7 +710,7 @@ class BodyDriver {
   upperBody(dt, rig) {
     const { body } = this;
     const { bone } = this.skeleton;
-    const hold = this.gunKind ? HOLD[this.gunKind] : null;
+    const hold = this.gunKind ? this.holdFor(this.gunKind) : null;
     const gun = !!hold && hold.stance !== 'thrown';
     const rifle = gun && hold.stance === 'rifle';
     const target = gun && rig.aim && rig.aim.y !== undefined ? rig.aim : null;

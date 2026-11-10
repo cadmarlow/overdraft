@@ -92,6 +92,7 @@ class CameraSystem {
     // Follow cameras (chase / action) are smoothed relative to the followed entity, see update()
     this.followEntity = null;
     this.spectate = null; // () => the entity to follow instead of the player's (architect.js)
+    this.still = null; // { pos, look, fov }: a frame held on something (the counter of a shop, calibre.js)
     this.followOffset = new THREE.Vector3();
     this.followLookOffset = new THREE.Vector3();
     this.followBaseY = 0;
@@ -172,6 +173,21 @@ class CameraSystem {
     if (!keys || keys.length < 2) return;
     this.cinematic = { keys, duration: Math.max(0.1, duration), t: 0, onDone };
     this.initialized = true;
+  }
+
+  // A frame someone else chose: eased into and held for as long as `still` is set. The follow camera glides back from
+  // it once it is cleared.
+  updateStill(dt) {
+    const view = this.still, k = 1 - Math.exp(-dt * 6.5);
+    this.currentPos.lerp(view.pos, k);
+    this.currentLookAt.lerp(view.look, k);
+    this.camera.position.copy(this.currentPos);
+    this.camera.lookAt(this.currentLookAt);
+    const fov = this.camera.fov + ((view.fov ?? 40) - this.camera.fov) * k;
+    if (Math.abs(this.camera.fov - fov) > 0.02) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
+    this.followEntity = null;
+    this.aimBlend = this.combatBlend = 0;
+    this.bodyOccluded = false;
   }
 
   // Cuts a cinematic short: the camera jumps to its last key and the follow camera takes over
@@ -380,6 +396,7 @@ class CameraSystem {
     const near = carCockpit ? 0.06 : entity.type === 'person' ? 0.12 : 0.35;
     if (this.camera.near !== near) { this.camera.near = near; this.camera.updateProjectionMatrix(); }
     if (this.cinematic) { this.updateCinematic(dt); return; }
+    if (this.still) { this.updateStill(dt); return; }
     if (this.flightView && (this.activePresetId === 'chase' || this.activePresetId === 'action')) { this.updateFlight(dt, entity); return; }
     this.flying = false;
     const desiredPos = this._desiredPos;
