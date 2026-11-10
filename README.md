@@ -3,7 +3,10 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.14 — Ground Floor**. Le sol de la ville est refait : chaque chaussée connaît ses voies et s'use là où l'on
+Version **0.9.15 — After Hours**. Sacha Roux ouvre le jeu sur les quais de l’East River, avec un écran illustré et
+« La dette », un thème original qui mêle cordes, cuivres et rythme hip-hop. L’écran reste en place jusqu’à votre choix.
+
+La **0.9.14 — Ground Floor** a refait le sol de la ville : chaque chaussée connaît ses voies et s'use là où l'on
 roule, les trottoirs sont des dalles coulées une à une derrière des bordures aux angles arrondis, et tout ce que New York
 pose dans son sol y est, en relief : plaques d'égout, avaloirs, grilles du métro, trappes de cave, bandes podotactiles.
 
@@ -92,6 +95,8 @@ Nouveautés : [CHANGELOG.md](CHANGELOG.md).
 ## Jouer
 
 Navigateur de bureau récent avec accélération matérielle (Chrome ou Edge recommandés, WebGPU).
+À l’écran titre, choisissez **Écouter le thème** si le navigateur attend un clic pour autoriser le son.
+Une fois la ville prête, **Entrer dans la ville** lance la partie et **Menu principal** donne accès aux réglages.
 Cliquez dans la vue pour verrouiller la souris ; Échap la libère et ouvre le menu.
 
 ### À pied

@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
+const { readFileSync, statSync } = require('node:fs');
 const { join } = require('node:path');
 const test = require('node:test');
 
@@ -42,4 +42,13 @@ test('native module entry and imports share canonical preloaded URLs on GitHub P
       assert.ok(urls.has(url.href), `${src} imports an unpreloaded or mismatched URL: ${specifier}`);
     }
   }
+});
+
+test('the opening artwork loads eagerly and the local soundtrack waits for playback', () => {
+  const image = html.match(/<img class="opening-art" src="([^"]+)"/)?.[1];
+  const audio = html.match(/<audio id="opening-theme" src="([^"]+)" preload="none" loop>/)?.[1];
+  assert.ok(image?.startsWith('./assets/opening/') && audio?.startsWith('./assets/opening/'));
+  assert.ok(html.includes(`rel="preload" as="image" href="${image}" fetchpriority="high"`));
+  assert.ok(statSync(join(__dirname, '..', image)).size > 0);
+  assert.ok(statSync(join(__dirname, '..', audio)).size > 0);
 });

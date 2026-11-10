@@ -108,6 +108,9 @@ async function snapshot(label) {
 async function ready() {
   await until('!!window.__game && !!window.__render && !!document.querySelector("#loading-overlay.hidden")', 'chargement et précompilation', 180000);
   check(await evaluate('window.__render.renderer.backend.isWebGPUBackend === true'), 'Rendu WebGPU actif');
+  check(await evaluate('document.getElementById("opening-theme").paused'), 'La préférence son coupé empêche le lancement du thème');
+  await click('#opening-options');
+  await until('getComputedStyle(document.getElementById("opening-screen")).visibility === "hidden"', 'fin du fondu du titre');
 }
 async function start() {
   for (let attempt = 0; attempt < 3; attempt++) {

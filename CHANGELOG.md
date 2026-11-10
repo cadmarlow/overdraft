@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.9.15 — After Hours — 10 novembre 2026
+
+- **Écran d’ouverture.** Sacha Roux sur les quais de l’East River, sous la pluie, avec le pont de Brooklyn et Manhattan à l’horizon. L’illustration reste à l’écran pendant le chargement et jusqu’au lancement de la partie ou à l’ouverture du menu principal.
+- **« La dette ».** Un thème stéréo original de 55 secondes à 88 BPM, construit autour d’un motif de piano et de cordes sur un rythme hip-hop. Le thème se lit en boucle et s’efface en fondu à la sortie de l’écran titre. Le bouton audio permet de l’écouter quand le navigateur attend une interaction.
+
 ## 0.9.14 — Ground Floor — 10 novembre 2026
 
 Le sol. Chaussées, trottoirs et bordures de toute l'île sont refaits autour d'une règle : l'usure suit l'usage. Le sol

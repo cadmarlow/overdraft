@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>OVERDRAFT — 0.9.14 · Ground Floor</title>
+  <title>OVERDRAFT — 0.9.15 · After Hours</title>
   <link rel="icon" href="data:," />
+  <link rel="preload" as="image" href="./assets/opening/sacha-east-river.jpg" fetchpriority="high" />
   <meta name="description" content="OVERDRAFT. Un jeu d’action en monde ouvert dans Manhattan : missions, poursuites, combats et niveau de recherche à cinq étoiles." />
   <!-- three.js dev branch pinned to a commit (builds committed to mrdoob/three.js@dev, served by jsDelivr) -->
   <script type="importmap">
@@ -87,6 +88,7 @@
   <link rel="modulepreload" href="./js/audio-sources.js" />
   <link rel="modulepreload" href="./js/audio-acoustics.js" />
   <link rel="modulepreload" href="./js/audio-system.js" />
+  <link rel="modulepreload" href="./js/opening-screen.js" />
   <link rel="modulepreload" href="./js/main.js" />
   <link rel="modulepreload" href="./js/urban-light.js" />
   <link rel="modulepreload" href="./js/urban-light-field.js" />
@@ -167,6 +169,7 @@
   <link rel="stylesheet" href="./css/game.css" />
   <link rel="stylesheet" href="./css/hud.css" />
   <link rel="stylesheet" href="./css/pause-menu.css" />
+  <link rel="stylesheet" href="./css/opening-screen.css" />
 </head>
 <body>
   <!-- Icon sprite (24 × 24 stroke icons, drawn in currentColor) -->
@@ -209,15 +212,36 @@
     </defs>
   </svg>
 
-  <!-- Loading Screen -->
-  <div id="loading-overlay" role="status" aria-live="polite">
-    <div class="loader">
-      <span class="mta-bullet loader-bullet" aria-hidden="true">OD</span>
-      <div class="loader-title">OVERDRAFT</div>
-      <div class="loader-track is-indeterminate" aria-hidden="true"><span id="loading-progress" class="loader-fill"></span></div>
-      <div id="loading-status">Préparation de Manhattan…</div>
+  <section id="opening-screen" data-state="loading" aria-labelledby="opening-title">
+    <img class="opening-art" src="./assets/opening/sacha-east-river.jpg" width="1672" height="941" alt="" fetchpriority="high" />
+    <header class="opening-header">
+      <div class="opening-file"><span aria-hidden="true">01</span> <span>Dossier Roux<small>Acte I / La dette</small></span></div>
+      <span class="opening-coordinates" aria-hidden="true">40°42′ N <b>·</b> 74°00′ O</span>
+    </header>
+    <div class="opening-content">
+      <p class="opening-location">Manhattan <span> / </span> New York</p>
+      <h1 id="opening-title">OVERDRAFT</h1>
+      <p class="opening-hook">Son frère a disparu.<br><strong>La dette, elle, est restée.</strong></p>
+      <div class="opening-actions">
+        <div id="loading-overlay">
+          <div class="loader-track is-indeterminate" aria-hidden="true"><span id="loading-progress" class="loader-fill"></span></div>
+          <p id="loading-status" role="status">Préparation de Manhattan…</p>
+          <div id="opening-recovery"></div>
+        </div>
+        <div id="opening-launch" hidden>
+          <button id="opening-options" class="opening-link" type="button">Menu principal</button>
+        </div>
+      </div>
     </div>
-  </div>
+    <footer class="opening-footer">
+      <button id="opening-music" type="button" aria-pressed="false" disabled>
+        <span class="opening-audio-icon" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+        <span><strong>La dette</strong><small id="opening-music-label">Écouter le thème</small></span>
+      </button>
+      <span class="opening-caption">Les quais de l’East River <b> / </b> 01</span>
+    </footer>
+    <audio id="opening-theme" src="./assets/opening/la-dette.m4a" preload="none" loop></audio>
+  </section>
 
   <!-- 3D WebGPU Viewport Container -->
   <main id="canvas-container" aria-label="OVERDRAFT 3D viewport"></main>

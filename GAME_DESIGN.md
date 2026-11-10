@@ -371,4 +371,5 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.12** | **Blue Chips** | Quatorze nouvelles carrosseries, Zénith restaurée, habitacles ; les voitures de la rue au niveau de celle qu'on conduit (niveaux de détail, vraies roues qui tournent, plaques) ; menu pause en quatre onglets |
 | **0.9.13** | **Market Order** | Manette Xbox en jeu et dans les menus : combat, arsenal, conduite, vol, téléphone, garage, boutiques et carte. |
 | **0.9.14** | **Ground Floor** | Le sol : chaussées découpées en voies avec l'usure là où l'on roule, rustines, couloirs de bus, trottoirs en dalles, bordures à nez d'acier et angles arrondis, plaques, grilles et trappes en relief, peinture écaillée. |
+| **0.9.15** | **After Hours** | Écran titre illustré sur l’East River, ouverture sur le dossier de Sacha et thème original « La dette ». |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |

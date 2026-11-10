@@ -12,6 +12,13 @@ See the upstream README for source datasets and their individual terms.
 
 The original MIT copyright and license are preserved in LICENSE.
 
+**After Hours (0.9.15).** L’illustration de Sacha Roux sur l’East River (`assets/opening/sacha-east-river.jpg`)
+a été générée avec ImageGen pour OVERDRAFT. « La dette » est une composition et un mixage originaux pour le jeu.
+Les enregistrements de cordes, de cor, de piano et de percussions utilisés dans le mix proviennent de
+[VSCO 2 Community Edition, Versilian Studios](https://versilian-studios.com/vsco-community/),
+sous [CC0 1.0](https://github.com/sgossner/VSCO-2-CE/blob/440300901dfe9275fd84e0b7763af1f8443ae62e/LICENSE).
+Les chemins des échantillons et la partition sont dans `tools/opening/render-theme.mjs`.
+
 The people of the game (avatars, textures) and all motion capture come from the
 Microsoft Rocketbox Avatar Library (MIT): https://github.com/microsoft/Microsoft-Rocketbox
 Its license is reproduced in assets/people/LICENSE-Rocketbox.md.

@@ -15,7 +15,7 @@ const choices = (attribute, items) => `<div class="pm-choice-group">${items.map(
 const controls = (name, rows) => `<article class="pm-controls-card"><h3>${name}</h3><dl>${rows.map(([key, action]) => `<div><dt><kbd>${key}</kbd></dt><dd>${action}</dd></div>`).join('')}</dl></article>`;
 
 function pauseMenuMarkup(build) {
-  return `<div id="game-menu" class="game-menu pause-menu" role="dialog" aria-modal="true" aria-labelledby="pm-title">
+  return `<div id="game-menu" class="game-menu pause-menu" role="dialog" aria-modal="true" aria-labelledby="pm-title" inert>
     <div class="pm-shell">
       <header class="pm-header"><div class="pm-wordmark" id="pm-title">OVERDRAFT<span>MANHATTAN · NEW YORK</span></div><div class="pm-status"><span id="pm-mode">MENU PRINCIPAL</span><strong id="pm-location">MANHATTAN</strong><span id="pm-clock"></span></div><button id="pm-resume" class="pm-resume" type="button" hidden>Reprendre <kbd>ÉCHAP</kbd></button></header>
       <nav class="pm-tabs" role="tablist" aria-label="Menu du jeu">${TABS.map(([id, label], i) => `<button type="button" id="pm-tab-${id}" role="tab" data-pause-tab="${id}" aria-controls="pm-panel-${id}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}"><span>0${i + 1}</span>${label}</button>`).join('')}</nav>
@@ -72,7 +72,7 @@ class PauseMenu {
     this.sync();
   }
   el(id) { return document.getElementById(id); }
-  get visible() { return !this.root.hidden && !this.root.classList.contains('dismissed') && !this.game.map.isFullMapOpen; }
+  get visible() { return !this.root.inert && !this.root.hidden && !this.root.classList.contains('dismissed') && !this.game.map.isFullMapOpen; }
   selectTab(id, focus = false) {
     if (!TABS.some(t => t[0] === id)) return;
     this.section = id; this.root.dataset.section = id;
@@ -209,8 +209,7 @@ class PauseMenu {
   }
 
   key(e) {
-    const loading = document.getElementById('loading-overlay');
-    if (!this.visible || this.applying || e.ctrlKey || e.metaKey || e.altKey || (loading && !loading.classList.contains('hidden'))) return;
+    if (!this.visible || this.applying || e.ctrlKey || e.metaKey || e.altKey) return;
     // Menu keys never reach driving, mission skipping or weapon shortcuts underneath the modal.
     e.stopImmediatePropagation();
     // Keep native dialog actions while shielding any gameplay overlay still open underneath.

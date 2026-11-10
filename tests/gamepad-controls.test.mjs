@@ -51,6 +51,26 @@ function setup() {
   return { pad, controls, game, controller, inputs, calls, button, step };
 }
 
+test('the title screen accepts gamepad confirmation without carrying a held button into the game', () => {
+  const { game, calls, button, step } = setup();
+  game.active = false;
+  game.openingScreen = {
+    ready: true,
+    root: { contains: () => false },
+    play: { click() { game.openingScreen.ready = false; game.active = true; calls.push('start'); } }
+  };
+  button(0, 1);
+  step();
+  assert.deepEqual(calls, []);
+  button(0, 0);
+  step();
+  button(0, 1);
+  step();
+  assert.deepEqual(calls, ['start']);
+  step();
+  assert.deepEqual(calls, ['start']);
+});
+
 test('LT and RT use independent analog thresholds and fire edges, with no stuck combat input on disconnect', () => {
   const { pad, controls, game, calls, button, step } = setup();
   button(6, 0.35);

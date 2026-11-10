@@ -48,8 +48,11 @@ import { buildRoadNetwork } from './road-network.js';
 import { setTreeDetail } from './trees.js';
 import { createGrass } from './grass.js';
 import { currentLevel, FramePacer } from './quality.js';
+import { OpeningScreen } from './opening-screen.js';
 
 // Application setup, shader warm-up and frame loop.
+
+const opening = new OpeningScreen();
 
 async function initApp() {
   let gameplay = null;
@@ -57,20 +60,8 @@ async function initApp() {
   const quality = currentLevel();
   if (!quality.reflections) disableEffectOutputs();
   const container = document.getElementById('canvas-container');
-  const loadingOverlay = document.getElementById('loading-overlay');
-  const loadingStatus = document.getElementById('loading-status');
-  const loadingTrack = loadingOverlay ? loadingOverlay.querySelector('.loader-track') : null;
-  const loadingFill = document.getElementById('loading-progress');
-  // Only shader compilation has measurable progress; other stages use the sweeping bar.
-  const setLoadingProgress = (p) => {
-    if (!loadingFill) return;
-    if (loadingTrack) loadingTrack.classList.remove('is-indeterminate');
-    loadingFill.style.transform = `scaleX(${Math.min(1, Math.max(0, p))})`;
-  };
-
   async function showLoadingStage(message) {
-    if (loadingStatus) loadingStatus.textContent = message;
-    if (loadingTrack) loadingTrack.classList.add('is-indeterminate');
+    opening.setStage(message);
     if (document.hidden) return;
     // Let the label paint before synchronous work. The timeout also lets hidden tabs keep loading.
     await new Promise((resolve) => {
@@ -124,15 +115,11 @@ async function initApp() {
     graphicsLost = true;
     console.error('[graphics]', info);
     renderer.setAnimationLoop(null);
-    document.getElementById('loading-overlay')?.classList.remove('hidden');
-    const status = document.getElementById('loading-status');
-    if (status) status.textContent = 'Le navigateur a interrompu le rendu graphique. Rechargez la page ou utilisez le mode compatibilité.';
-    if (!document.getElementById('compatibility-button')) {
-      const button = document.createElement('button');
-      button.id = 'compatibility-button'; button.className = 'retry-button'; button.textContent = 'Mode compatibilité';
-      button.addEventListener('click', () => { const url = new URL(location.href); url.searchParams.set('renderer', 'webgl'); location.href = url.href; });
-      document.getElementById('loading-overlay')?.append(button);
-    }
+    opening.fail('Le navigateur a interrompu le rendu graphique.', 'Lancer le mode compatibilité', () => {
+      const url = new URL(location.href);
+      url.searchParams.set('renderer', 'webgl');
+      location.href = url.href;
+    });
   };
   markInit('renderer');
 
@@ -691,6 +678,7 @@ async function initApp() {
   gameplay = new Playground({ controllers: controllerManager, camera: cameraSystem, traffic: trafficSystem, highway: highwayTraffic, streets: streetDetails,
     scene, onMode: selectMode, onTime: selectTime, audio: audioSystem, map: mapSystem, touch: touchControls, gamepad: gamepadControls,
     lighting: lightingSystem, grade: colorGrade, parking });
+  gameplay.openingScreen = opening;
   gamepadControls.game = gameplay;
   // The Architect (ARCHITECTE.md) is a local development tool: on this machine or its network only, never online, where
   // the production build does not even ship his files (scripts/build.mjs). Built here, before the shaders compile, so his
@@ -809,7 +797,7 @@ async function initApp() {
     });
 
     await showLoadingStage(`Derniers préparatifs… 0 %`);
-    setLoadingProgress(0);
+    opening.progress(0);
     renderer.setRenderTarget(scenePass.renderTarget);
     if (sceneMRT) renderer.setMRT(sceneMRT);
     const compile = async (object) => {
@@ -829,10 +817,8 @@ async function initApp() {
         const job = jobs[next++];
         for (const object of job) await compile(object);
         done++;
-        if (loadingStatus) {
-          loadingStatus.textContent = `Derniers préparatifs… ${Math.round((done / jobs.length) * 100)} %`;
-        }
-        setLoadingProgress(done / jobs.length);
+        opening.status.textContent = `Derniers préparatifs… ${Math.round((done / jobs.length) * 100)} %`;
+        opening.progress(done / jobs.length);
       }
     };
     await Promise.all(Array.from({ length: COMPILE_POOL }, worker));
@@ -908,8 +894,9 @@ async function initApp() {
     const rawDt = (now - lastTime) * 0.001;
     lastTime = now;
     const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
+    if (audioSystem.ready && !graphicsLost) gamepadControls.update(dt);
+    if (opening.ready) return; // The first frame is warm. Save the GPU while the player is on the title screen.
     elapsed += dt;
-    if (warmedUp && (!loadingOverlay || loadingOverlay.classList.contains('hidden'))) gamepadControls.update(dt);
     const simulationDt = gameplay.active ? dt * gameplay.timeScale : 0;
     const worldDt = !gameplay.playing ? dt : simulationDt;
 
@@ -1010,15 +997,14 @@ async function initApp() {
       // The loading screen stays up until the GPU has got through the first frame (and the pipelines its warm-up
       // compiled), i.e. until the city is actually on screen
       const device = renderer.backend.device;
-      if (loadingStatus) loadingStatus.textContent = 'Encore un instant…';
+      opening.status.textContent = 'Encore un instant…';
       Promise.resolve(device && device.queue.onSubmittedWorkDone()).catch(() => {}).then(() => {
         if (graphicsLost) return;
         markInit('gpu');
         console.log(`[init] ${initTimings.join(', ')}`);
         initTimings = null;
-        if (loadingOverlay) loadingOverlay.classList.add('hidden');
         audioSystem.ready = true;
-        setLoadingProgress(1);
+        opening.showLaunch(gameplay.pauseMenu.root);
       });
     }
 
@@ -1071,11 +1057,6 @@ function architectAllowed() {
 
 initApp().catch(error => {
   console.error('[startup]', error);
-  const status = document.getElementById('loading-status');
-  if (status) status.textContent = 'Impossible de lancer le rendu 3D. Essayez Chrome ou Edge à jour, avec l’accélération matérielle activée.';
-  const overlay = document.getElementById('loading-overlay');
-  if (overlay) {
-    const retry = document.createElement('button'); retry.className = 'retry-button';
-    retry.textContent = 'Réessayer'; retry.addEventListener('click', () => location.reload()); overlay.append(retry);
-  }
+  opening.fail('Impossible de lancer le rendu 3D. Essayez Chrome ou Edge avec l’accélération matérielle activée.',
+    'Réessayer', () => location.reload());
 });

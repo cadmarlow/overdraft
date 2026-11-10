@@ -125,7 +125,7 @@ class GamepadControls {
     }
 
     const dialog = document.querySelector('dialog[open]');
-    const context = dialog || (g.map.isFullMapOpen ? 'map' : g.pauseMenu.visible ? 'pause'
+    const context = dialog || (g.openingScreen?.ready ? 'opening' : g.map.isFullMapOpen ? 'map' : g.pauseMenu.visible ? 'pause'
       : g.phone.open ? 'phone' : g.garage.open ? 'garage' : g.shops.open ? 'shop'
       : this.enabled && g.active ? g.state : 'inactive');
     if (context !== this.context) {
@@ -147,10 +147,14 @@ class GamepadControls {
     const buttonActivity = pressed.some((down, i) => down && !previous[i]);
     if (buttonActivity || Math.hypot(movement.x, movement.y) > 0.12 || Math.hypot(look.x, look.y) > 0.12) this.setUsing(true);
 
-    if (dialog || ['map', 'pause', 'phone', 'garage', 'shop'].includes(context)) {
+    if (dialog || ['opening', 'map', 'pause', 'phone', 'garage', 'shop'].includes(context)) {
       const direction = this.menuDirection(held, movement, dt);
       if (dialog) g.pauseMenu.controlDialog(dialog, direction, edge(A), edge(B) || edge(MENU));
-      else if (context === 'map') {
+      else if (context === 'opening') {
+        const opening = g.openingScreen;
+        if (edge(A)) (opening.root.contains(target) && target.tagName === 'BUTTON' ? target : opening.play).click();
+        else if (direction) g.pauseMenu.focusNextButton(opening.root, direction, opening.play);
+      } else if (context === 'map') {
         if (edge(B) || edge(MENU) || edge(DOWN)) g.map.toggleFullMap(false);
         else g.map.controlGamepad(movement.x, movement.y, Number(held(RT)) - Number(held(LT)), dt, edge(A), edge(X));
       } else if (context === 'pause') {
