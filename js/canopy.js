@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { sealEffect } from './effect-outputs.js';
 
 // The paraglider (its flight lives in air-physics.js): a ram-air wing of 11 cells on an arc over the pilot, each cell an
 // airfoil with an open mouth on the leading edge, the upper skin puffed out between the ribs. Lines run from the wing's
@@ -79,7 +80,7 @@ function createCanopy(scene) {
   const linePos = new Float32Array(lineCount * 2 * 3);
   const lineGeo = new THREE.BufferGeometry();
   lineGeo.setAttribute('position', new THREE.BufferAttribute(linePos, 3).setUsage(THREE.DynamicDrawUsage));
-  const lines = new THREE.LineSegments(lineGeo, new THREE.LineBasicNodeMaterial({ color: 0x3a3f45, transparent: true, opacity: 0.85 }));
+  const lines = new THREE.LineSegments(lineGeo, sealEffect(new THREE.LineBasicNodeMaterial({ color: 0x3a3f45, transparent: true, opacity: 0.85 })));
   lines.frustumCulled = false;
 
   const group = new THREE.Group();

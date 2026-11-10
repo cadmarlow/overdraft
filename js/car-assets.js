@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import {
   Fn,
+  If,
   attribute,
   atan,
   bumpMap,
@@ -43,7 +44,7 @@ import {
   vec3,
   vec4
 } from 'three/tsl';
-import { cityUniforms } from './tsl-materials.js';
+import { cityUniforms, noise2D } from './tsl-materials.js';
 import { traceUrbanReflection } from './urban-light.js';
 import { cabinLayout } from './car-cabin.js';
 import { openCabinGeometry } from './car-cabin-clearance.js';
@@ -55,6 +56,9 @@ import { openCabinGeometry } from './car-cabin-clearance.js';
 const base = new URL('../assets/cars/', import.meta.url);
 const DENTS = 6;
 const LAMPS_OFF = 256; // added to an instance's style code (carState.w): headlights and tail lamps dark
+// Added to it as well: what a fire left of the car. The paint is gone to rust and soot, the glass smoked black, every
+// lamp dead (it is above LAMPS_OFF). A wreck is the car that burned, never another model (controllers.js, burnt).
+const BURNT = 512;
 const models = {};
 const carSpecs = {}; // what the game asks of a body kind: its size, axles, lamps, doors
 // WHEEL + i: the four wheels of a car drawn as one mesh (withWheels), which the street's material turns on their axles
@@ -378,6 +382,7 @@ function createBodyMaterial(model, { paint = null, instanced = false, livery = 0
   const dentDirs = instanced ? null : uniformArray(Array.from({ length: DENTS }, () => new THREE.Vector4(0, 0, 0, 0)));
   const paintNode = instanced ? varying(attribute('paintColor', 'vec3')) : paintUniform;
   const state = instanced ? varying(attribute('carState', 'vec4')) : stateUniform;
+  const burnt = instanced ? step(float(BURNT - 0.5), state.w) : float(0);
   const flag = attribute('flag', 'float');
   const isFlag = (id) => step(float(id - 0.5), flag).mul(step(flag, float(id + 0.5)));
   const glassMask = varying(isFlag(FLAG.GLASS));
@@ -479,6 +484,20 @@ function createBodyMaterial(model, { paint = null, instanced = false, livery = 0
     c.assign(mix(c, badge.rgb, badge.a));
     // The panels' inside faces are the cabin's trim, seen through the glass
     if (!instanced) c.assign(mix(c, vec3(0.085, 0.08, 0.075), inside));
+    if (instanced) {
+      If(burnt.greaterThan(0.5), () => {
+        // Burnt out: bare steel already rusting where the paint blistered off, soot where the smoke ran, thickest up the
+        // pillars and over the roof; the lenses, the plates and the glass are black
+        const mottle = noise2D(vec2(local.z.mul(1.7).add(local.y.mul(2.9)), local.x.mul(2.3).sub(local.y.mul(1.9))));
+        const fine = noise2D(vec2(local.z.mul(11.0).sub(local.x.mul(6.3)), local.y.mul(13.0).add(local.x.mul(7.7))));
+        const high = smoothstep(model.spec.height * 0.4, model.spec.height * 0.95, local.y);
+        // a dark scorched skin everywhere; rust blooming through it low down, pale ash dusted over it
+        const rust = smoothstep(0.25, 0.85, mottle.mul(0.6).add(fine.mul(0.4))).mul(high.oneMinus().mul(0.55).add(0.2));
+        const ash = smoothstep(0.62, 0.9, fine).mul(smoothstep(0.35, 0.7, mottle)).mul(0.5);
+        const steel = mix(mix(vec3(0.024, 0.022, 0.021), vec3(0.085, 0.046, 0.027), rust), vec3(0.13, 0.125, 0.12), ash).mul(base.g.mul(0.7).add(0.65));
+        c.assign(mix(steel, vec3(0.008, 0.008, 0.009), max(glassMask, max(max(head, brake), max(reverse, blinker)))));
+      });
+    }
     return c;
   })();
   // A satin pigment below a polished dielectric coat gives a broad highlight under the sharper reflected skyline.
@@ -496,6 +515,12 @@ function createBodyMaterial(model, { paint = null, instanced = false, livery = 0
   mat.roughnessNode = mix(mix(mat.roughnessNode, float(0.36), plate.a), float(0.23), badge.a);
   mat.metalnessNode = mix(mix(mat.metalnessNode, float(0.12), plate.a), float(0.82), badge.a);
   if (physical) mat.clearcoatNode = mat.clearcoatNode.mul(max(plate.a, badge.a).oneMinus());
+  if (instanced) {
+    // nothing shines on a burnt car: no coat, no chrome, soot on the glass
+    mat.roughnessNode = mix(mat.roughnessNode, mix(float(0.93), float(0.6), glassMask), burnt);
+    mat.metalnessNode = mix(mat.metalnessNode, float(0.12), burnt);
+    if (physical) mat.clearcoatNode = mat.clearcoatNode.mul(burnt.oneMinus());
+  }
   mat.envMapIntensity = 1.25;
   const street = createStreet();
   mat.envNode = new StreetReflectionNode(street, surveyedReflections && !instanced);
@@ -513,7 +538,7 @@ function createBodyMaterial(model, { paint = null, instanced = false, livery = 0
     e.addAssign(vec3(1, 0.025, 0.04).mul(tailBlade).mul(night.mul(0.8).add(0.2)).mul(lampsOn));
     e.addAssign(vec3(1, 0.5, 0.08).mul(blinker).mul(blink.mul(4)));
     if (!instanced) e.addAssign(vec3(0.9, 0.95, 1).mul(reverse).mul(state.w.mul(3)));
-    return e.mul(inside.oneMinus());
+    return e.mul(inside.oneMinus()).mul(burnt.oneMinus());
   })();
   if (instanced) {
     // What moves on a street car, worked out in the vertex stage before the instance places the car: the wheels
@@ -611,6 +636,18 @@ function createSourcePartMaterial(model) {
 
 // A wheel: rubber and alloy from the atlas
 const wheelMaterials = new Map();
+// The wheels of a burnt-out car: the tyres gone to a black crust on the rims. One material for every wreck.
+let burntWheelMaterial = null;
+function createBurntWheelMaterial() {
+  if (burntWheelMaterial) return burntWheelMaterial;
+  burntWheelMaterial = new THREE.MeshStandardNodeMaterial({ roughness: 0.95, metalness: 0.1 });
+  burntWheelMaterial.name = 'BurntWheel';
+  const p = positionLocal;
+  const crust = noise2D(vec2(p.y.mul(17.0).add(p.x.mul(9.0)), p.z.mul(17.0).sub(p.x.mul(7.0))));
+  burntWheelMaterial.colorNode = mix(vec3(0.012, 0.011, 0.011), vec3(0.075, 0.04, 0.024), smoothstep(0.5, 0.85, crust));
+  return burntWheelMaterial;
+}
+
 function createWheelMaterial(model) {
   if (wheelMaterials.has(model.id)) return wheelMaterials.get(model.id);
   const mat = new THREE.MeshStandardNodeMaterial();
@@ -644,4 +681,4 @@ function createWheelMaterial(model) {
   return mat;
 }
 
-export { DENTS, FINISH, FLAG, bodySurfaceAt, identityPlacement, LAMPS_OFF, carSpecs, createBodyMaterial, createGlassMaterial, createSourcePartMaterial, createWheelMaterial, loadCars, models as carModels, trafficMaterial, withWheels };
+export { BURNT, DENTS, FINISH, FLAG, bodySurfaceAt, createBurntWheelMaterial, identityPlacement, LAMPS_OFF, carSpecs, createBodyMaterial, createGlassMaterial, createSourcePartMaterial, createWheelMaterial, loadCars, models as carModels, trafficMaterial, withWheels };

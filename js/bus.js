@@ -1,6 +1,8 @@
 import * as THREE from 'three/webgpu';
-import { cityUniforms } from './tsl-materials.js';
+import { cityUniforms, noise2D } from './tsl-materials.js';
 import {
+  Fn,
+  If,
   float,
   vec2,
   vec3,
@@ -30,6 +32,8 @@ import { CAR_PARTS, buildBodyLoft, carBodyHalfWidthAt } from './cars.js';
 // tight roof radius and arches over the wheels; bumpers, the folded front bike rack, stalk mirrors and the roof AC &
 // battery pods are separate pieces of the same mesh (partId). Windows, doors, livery & lamps are painted by
 // createLoftedBusMaterial(); destination signs are textured panels (buildBusSignGeometry).
+const BUS_BURNT = 2; // busState.x of a burnt-out bus (0 and 1 are its brake lamps off and on)
+
 const BUS_PARTS = {
   BODY: 0,
   TRIM: 1,
@@ -617,9 +621,24 @@ function createLoftedBusMaterial() {
 
   const col = mix(mix(body, color(0x191d22), isTrim), color(0xd0d5dc), isPod);
 
+  // A bus that burned (busState.x = BUS_BURNT, set by the wreck that stands in for it: controllers.js): rust and soot
+  // for its livery, black for its glass and lamps, every light dead
+  const burnt = step(float(BUS_BURNT - 0.5), state.x);
   const mat = new THREE.MeshStandardNodeMaterial();
-  mat.colorNode = col;
-  mat.roughnessNode = mix(
+  mat.colorNode = Fn(() => {
+    const c = vec3(col).toVar();
+    If(burnt.greaterThan(0.5), () => {
+      const mottle = noise2D(vec2(p.z.mul(1.1).add(p.y.mul(2.3)), p.x.mul(2.1).sub(p.y.mul(1.7))));
+      const fine = noise2D(vec2(p.z.mul(9.0).sub(p.x.mul(5.1)), p.y.mul(11.0).add(p.x.mul(6.9))));
+      const high = smoothstep(1.2, 3.0, p.y);
+      const rust = smoothstep(0.25, 0.85, mottle.mul(0.6).add(fine.mul(0.4))).mul(high.oneMinus().mul(0.55).add(0.2));
+      const ash = smoothstep(0.62, 0.9, fine).mul(smoothstep(0.35, 0.7, mottle)).mul(0.5);
+      const steel = mix(mix(vec3(0.024, 0.022, 0.021), vec3(0.085, 0.046, 0.027), rust), vec3(0.13, 0.125, 0.12), ash);
+      c.assign(mix(steel, vec3(0.008, 0.008, 0.009), max(glass, max(headLamp, rearLens))));
+    });
+    return c;
+  })();
+  mat.roughnessNode = mix(mix(
     mix(
       mix(float(0.16), float(0.06), max(glass, max(headLamp, rearLens))),
       float(0.68),
@@ -627,8 +646,8 @@ function createLoftedBusMaterial() {
     ),
     float(0.36),
     isPod
-  );
-  mat.metalnessNode = mix(mix(float(0.24), float(0.82), glass), float(0.06), max(isTrim, isPod));
+  ), mix(float(0.93), float(0.6), glass), burnt);
+  mat.metalnessNode = mix(mix(mix(float(0.24), float(0.82), glass), float(0.06), max(isTrim, isPod)), float(0.12), burnt);
 
   const brake = state.x;
   const blink = max(state.y.mul(step(0.0, p.x)), state.z.mul(step(p.x, 0.0)));
@@ -647,13 +666,15 @@ function createLoftedBusMaterial() {
     .add(color(0xfff0d4).mul(cabinGlow))
     .add(color(0xff9210).mul(max(browMarker, sideMarkers).mul(mix(float(0.65), float(1.15), night))))
     .add(color(0xff9a14).mul(max(turnFront, turnRear).mul(blink).mul(2.2)))
-    .add(color(0xff0c14).mul(tailLamp.mul(brake.mul(1.6).add(0.75)).add(highBrake.mul(brake.mul(1.8))).add(rearIdLamps.mul(night))));
+    .add(color(0xff0c14).mul(tailLamp.mul(brake.mul(1.6).add(0.75)).add(highBrake.mul(brake.mul(1.8))).add(rearIdLamps.mul(night))))
+    .mul(burnt.oneMinus());
 
   _busLoftedMat = mat;
   return mat;
 }
 
 export {
+  BUS_BURNT,
   BUS_SPEC,
   buildLoftedBusBodyGeometry,
   buildBusSignGeometry,

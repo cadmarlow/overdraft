@@ -2,9 +2,12 @@ const vm = require('node:vm');
 
 // Keep the existing isolated unit harnesses synchronous. Only the app's static import/export declarations
 // are adapted; dependencies are explicit namespace stubs, and the production function bodies run unchanged.
-const OPTIONAL = { './car-assets.js': {}, './car-physics.js': {}, './car-cabin.js': {}, './pause-menu.js': {}, './ramps.js': {}, './boat.js': {}, './missions-act3.js': { ACT3: [], PLACES3: {}, REGATTA: {} },
+const OPTIONAL = { './car-assets.js': {}, './bus.js': { BUS_SPEC: { wheelX: 1.12, wheelRadius: 0.5, wheelZ: 3.6, zFront: 5.9, zRear: -6.22, frontDoor: [4.36, 5.42] } }, './car-physics.js': {}, './car-cabin.js': {}, './pause-menu.js': {}, './ramps.js': {}, './boat.js': {}, './missions-act3.js': { ACT3: [], PLACES3: {}, REGATTA: {} },
   // The harnesses' islands keep their sharp corners (js/ground-plan.js rounds the real ones)
-  './ground-plan.js': { onRoundedBlock: () => true } };
+  './ground-plan.js': { onRoundedBlock: () => true },
+  // Effect materials keep out of the reflections' outputs (js/effect-outputs.js): nothing to test without a renderer
+  './effect-outputs.js': { sealEffect: (material) => material, sealEffects: () => [], effectSweeper: () => () => [], transparentEffectMRT: () => null,
+    disableEffectOutputs() {} } };
 function loadModule(source, { imports: given = {}, globals = {}, filename = 'module.js' } = {}) {
   const imports = { ...OPTIONAL, ...given };
   const exported = [];

@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { uv, smoothstep, sin, time } from 'three/tsl';
 import { streetZ } from './city-config.js';
 import { RoadNavigator } from './navigation.js';
+import { sealEffect } from './effect-outputs.js';
 
 // Missions, activities, world markers and pickups. Missions are generator scripts: each `yield` waits a frame, so a
 // mission reads as a sequence (talk, steal this, drive there, survive) while the director checks failures every frame.
@@ -35,13 +36,13 @@ const PRECINCTS = [
 const MARKER_COLORS = { objective: 0xffd54a, destination: 0x5ec8ff, contact: 0xe1f3a0, target: 0xff4d4d, race: 0xff9a3c, shop: 0xc99bff, home: 0x7ee08a, homeSale: 0x3e8a4a };
 
 function markerMaterial(hex) {
-  const m = new THREE.MeshBasicNodeMaterial({ color: hex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
+  const m = sealEffect(new THREE.MeshBasicNodeMaterial({ color: hex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }));
   const y = uv().y;
   m.opacityNode = smoothstep(1.0, 0.0, y).pow(1.8).mul(sin(time.mul(3.0)).mul(0.15).add(0.55));
   return m;
 }
 function ringMaterial(hex) {
-  const m = new THREE.MeshBasicNodeMaterial({ color: hex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false });
+  const m = sealEffect(new THREE.MeshBasicNodeMaterial({ color: hex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }));
   const r = uv().sub(0.5).length().mul(2.0);
   m.opacityNode = smoothstep(0.7, 0.95, r).mul(smoothstep(1.0, 0.95, r)).mul(0.9).add(smoothstep(1.0, 0.0, r).mul(0.12));
   return m;
@@ -128,7 +129,7 @@ class PickupSystem {
     scene.add(this.root);
     this.items = [];
     const glowMat = (hex) => {
-      const m = new THREE.MeshBasicNodeMaterial({ color: hex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+      const m = sealEffect(new THREE.MeshBasicNodeMaterial({ color: hex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
       m.opacityNode = smoothstep(1.0, 0.0, uv().sub(0.5).length().mul(2.0)).mul(0.6);
       return m;
     };

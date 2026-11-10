@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { attribute, float, positionWorld, sin, smoothstep, uniform, varying } from 'three/tsl';
 import { DENTS } from './car-assets.js';
 import { WATER } from './boat.js';
+import { sealEffect } from './effect-outputs.js';
 
 // What driving leaves in the world: rubber on the road, tyre smoke, sparks, flames from the exhaust, bodywork that stays
 // bent. Reads each car's physics state (car-physics.js) once a frame.
@@ -33,7 +34,7 @@ class SkidMarks {
     for (let i = 0; i < edge.length; i += 2) { edge[i] = 1; edge[i + 1] = -1; }
     geometry.setAttribute('edge', new THREE.BufferAttribute(edge, 1));
     const across = varying(attribute('edge', 'float')).abs();
-    const material = new THREE.MeshBasicNodeMaterial({ color: colour, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, side: THREE.DoubleSide });
+    const material = sealEffect(new THREE.MeshBasicNodeMaterial({ color: colour, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3, side: THREE.DoubleSide }));
     if (fades) {
       // White in the middle of the track, gone at its edges, broken up along it
       this.born = new Float32Array(quads * 4);

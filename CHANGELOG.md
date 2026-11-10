@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9.17 — Stop Loss — 10 novembre 2026
+
+Version de correctifs.
+
+- **Les carrés noirs à chaque tir, chaque choc et chaque dérapage ont disparu.** En qualité HAUTE, la fumée des armes,
+  des moteurs abîmés et des pneus sortait en boîtes noires floues qui cachaient l'action. La cause : avec les reflets
+  actifs, la scène écrit aussi la direction de chaque surface, et les particules y écrasaient celle du décor sur tout
+  leur carré ; l'occlusion ambiante assombrissait ensuite ce carré. La qualité ÉQUILIBRÉE n'était pas touchée.
+- Le même défaut est corrigé pour tous les effets : flashs, étincelles, traînées de balles, impacts et trous de balles,
+  marques de pneus, pluie, lasers, balises de mission, traînées de vol, disques d'hélice.
+- **Une voiture qui explose reste elle-même.** Toute épave devenait la même berline calcinée, même celle d'un bus.
+  Un taxi brûle maintenant en taxi, un pick-up en pick-up, un bus en bus : les quinze modèles et le bus de la ville ont
+  chacun leur carcasse, à la même place et dans le même sens. Peinture partie en suie et en rouille, vitres noircies,
+  feux éteints, pneus en croûte noire, caisse affaissée.
+- Jusqu'à six carcasses restent dans la rue (quatre avant) ; la plus ancienne s'en va à la septième. On ne traverse
+  plus à pied les extrémités d'une carcasse de bus.
+- Les effets déclarent maintenant qu'ils ne sont pas des surfaces (`js/effect-outputs.js`). Un oubli est rattrapé au
+  chargement, puis en continu pendant la partie (quelques centaines d'objets par image), et signalé dans la console.
+
 ## 0.9.16 — Green Shoots — 10 novembre 2026
 
 Les parcs. Central Park n'était qu'une moquette vert fluo traversée de rubans bleu marine. Il a maintenant ses

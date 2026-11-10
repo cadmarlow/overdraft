@@ -3,7 +3,10 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.16 — Green Shoots**. Les parcs sont refaits. Central Park a ses 70 km de sentiers réels, ses 110
+Version **0.9.17 — Stop Loss**, une version de correctifs : les fumées de tir, de moteur et de pneus ne sortent plus en
+carrés noirs en qualité HAUTE, et un véhicule qui explose laisse la carcasse de son propre modèle, bus compris.
+
+La **0.9.16 — Green Shoots** a refait les parcs. Central Park a ses 70 km de sentiers réels, ses 110
 affleurements de schiste et des pelouses qui savent où elles sont : drues et tondues sur Sheep Meadow, clairsemées et
 jonchées de feuilles sous les arbres, en paille le long des allées, en boue au bord de l'eau.
 

@@ -19,6 +19,7 @@ import { GamepadControls } from './gamepad-controls.js';
 import { CameraSystem, CAMERA_PRESETS } from './cameras.js';
 import { LightingSystem } from './lighting.js';
 import { disableEffectOutputs } from './tsl-materials.js';
+import { sealEffects, effectSweeper } from './effect-outputs.js';
 import { NYCMapSystem } from './nyc-map.js';
 import { setupSceneCulling, updateSceneCulling } from './scene-culling.js';
 import { CityAudioSystem } from './audio-system.js';
@@ -830,6 +831,11 @@ async function initApp() {
     for (const o of culled) o.frustumCulled = true;
   }
 
+  // Smoke, flashes, rain, beacons: effects draw their colour and leave the reflections' normals alone, or the ambient
+  // occlusion darkens the whole square each is drawn on (js/effect-outputs.js). Whatever was made without saying so is
+  // caught here, before its shader is compiled, and then a few hundred objects a frame for what is made later.
+  sealEffects(scene);
+  const sweepEffects = effectSweeper(scene);
   if (renderer.backend.isWebGPUBackend) await precompileShaders();
   if (graphicsLost) throw new Error('Graphics device lost during loading');
   markInit('compile');
@@ -897,6 +903,8 @@ async function initApp() {
     const rawDt = (now - lastTime) * 0.001;
     lastTime = now;
     const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
+    const late = sweepEffects();
+    if (late.length) console.warn(`[effects] sealed after the fact: ${[...new Set(late)].join(', ')}`);
     if (audioSystem.ready && !graphicsLost) gamepadControls.update(dt);
     if (opening.ready) return; // The first frame is warm. Save the GPU while the player is on the title screen.
     elapsed += dt;

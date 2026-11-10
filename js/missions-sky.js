@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { streetZ } from './city-config.js';
+import { sealEffect } from './effect-outputs.js';
 
 // 0.9 « Leverage »: the city's roofs as a playground. Two activities open from the start (a race across Midtown's roofs and
 // a wingsuit descent through rings), and a contract for Jules: Cazal's ledgers, at the top of a tower whose lobby is
@@ -117,7 +118,8 @@ class SkyRings {
   constructor(scene) {
     const geometry = new THREE.TorusGeometry(RING_RADIUS, 0.32, 8, 48);
     const material = new THREE.MeshStandardNodeMaterial({ color: 0xe1f3a0, emissive: 0xe1f3a0, emissiveIntensity: 1.6, roughness: 0.4 });
-    const next = new THREE.MeshStandardNodeMaterial({ color: 0xffb347, emissive: 0xffb347, emissiveIntensity: 1.2, roughness: 0.4, transparent: true, opacity: 0.55 });
+    // (a see-through marker, not a surface: it leaves the reflections' outputs alone)
+    const next = sealEffect(new THREE.MeshStandardNodeMaterial({ color: 0xffb347, emissive: 0xffb347, emissiveIntensity: 1.2, roughness: 0.4, transparent: true, opacity: 0.55 }));
     this.meshes = Array.from({ length: 3 }, (_, i) => {
       const m = new THREE.Mesh(geometry, i ? next : material);
       m.matrixAutoUpdate = false;

@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { attribute } from 'three/tsl';
+import { sealEffect } from './effect-outputs.js';
 
 // What speed through the air looks like (0.9.1). Streaks: specks of air that the body flies through, drawn as lines
 // stretched along the motion, thicker the faster it goes. Smoke: the two smoke trails a wingsuit pilot wears on the
@@ -17,7 +18,7 @@ class AirFx {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
     geo.setAttribute('airAlpha', new THREE.BufferAttribute(alpha, 1).setUsage(THREE.DynamicDrawUsage));
-    const mat = new THREE.LineBasicNodeMaterial({ color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    const mat = sealEffect(new THREE.LineBasicNodeMaterial({ color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
     mat.opacityNode = attribute('airAlpha', 'float');
     this.streaks = new THREE.LineSegments(geo, mat);
     this.streaks.frustumCulled = false;
@@ -43,7 +44,7 @@ class AirFx {
       const index = [];
       for (let i = 0; i < TRAIL - 1; i++) { const k = i * 2; index.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); }
       g.setIndex(index);
-      const m = new THREE.MeshBasicNodeMaterial({ color: style.color, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+      const m = sealEffect(new THREE.MeshBasicNodeMaterial({ color: style.color, transparent: true, depthWrite: false, side: THREE.DoubleSide }));
       m.opacityNode = attribute('smokeAlpha', 'float');
       const mesh = new THREE.Mesh(g, m);
       mesh.frustumCulled = false;

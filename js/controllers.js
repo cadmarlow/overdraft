@@ -11,7 +11,11 @@ import {
 } from './city-config.js';
 import { onRoundedBlock } from './ground-plan.js';
 import { cityUniforms, createCarPaintMaterial, createContactShadowMaterial, createPersonContactShadowMaterial } from './tsl-materials.js';
-import { carModels, carSpecs, createBodyMaterial, createGlassMaterial, createSourcePartMaterial, createWheelMaterial, trafficMaterial } from './car-assets.js';
+import {
+  BURNT, carModels, carSpecs, createBodyMaterial, createBurntWheelMaterial, createGlassMaterial, createSourcePartMaterial, createWheelMaterial,
+  trafficMaterial
+} from './car-assets.js';
+import { BUS_BURNT, BUS_SPEC, buildBusWheelGeo, buildLoftedBusBodyGeometry, createLoftedBusMaterial } from './bus.js';
 import { createBody, impactBody, makeTune, settleBody, stepCar } from './car-physics.js';
 import { buildCabin, poseCabin } from './car-cabin.js';
 import {
@@ -28,6 +32,19 @@ import { bryantParkLawn } from './landmarks.js';
 import { polygonContact, roofAt, roofColliderAt } from './building-collision.js';
 import { rampRise } from './ramps.js';
 import { WATER, stepBoat } from './boat.js';
+import { sealEffect } from './effect-outputs.js';
+
+// A burnt-out city bus as the car layer sees one (createCarEntity, burnt): the street bus's own size and axles
+const BUS_WRECK_SPEC = (() => {
+  const s = BUS_SPEC, x = s.wheelX, r = s.wheelRadius, z = s.wheelZ;
+  return {
+    name: 'bus', halfW: 1.3, zFront: s.zFront, zRear: s.zRear, height: 3.23, sill: 0.35,
+    wheelX: x, wheelXr: x, wheelZf: z, wheelZr: -z, wheelRadius: r, wheelZ: z, wheelMid: 0, roofZ: 0,
+    doors: [s.frontDoor[1], s.frontDoor[0]], wheels: [[-x, r, z], [x, r, z], [-x, r, -z], [x, r, -z]]
+  };
+})();
+let busWreckBody = null;
+const busWreckWheels = [null, null];
 
 // Player models, animation and movement for walking, driving, cycling and flying.
 
@@ -550,7 +567,11 @@ class ThirdPersonControllerManager {
   // =========================================================================
   // lite: a car knocked out of the traffic mid-game. It draws with the street's own materials, which are already compiled, so
   // that a pile-up never stalls a frame; it gives up dents, lamps and a door that opens.
-  createCarEntity({ kind = 'taxi', paint = 0xffbe14, livery = 0, handling = kind, lite = false } = {}) {
+  // burnt: what a fire left of a vehicle of that kind, a city bus ('bus') included: the same body, drawn the lite way
+  // with the street material's burnt state (car-assets.js BURNT, bus.js BUS_BURNT) on charred wheels.
+  createCarEntity({ kind = 'taxi', paint = 0xffbe14, livery = 0, handling = kind, lite = false, burnt = false } = {}) {
+    if (burnt) lite = true;
+    const bus = burnt && kind === 'bus';
     const root = new THREE.Group();
     root.name = 'PlayerTaxiCar';
 
@@ -561,11 +582,22 @@ class ThirdPersonControllerManager {
     chassisPivot.add(bodyPivot);
 
     const id = carModels[kind] ? kind : 'sedan';
-    const model = carModels[id], spec = carSpecs[id];
-    const paintMaterial = lite ? trafficMaterial(id) : createBodyMaterial(model, { paint, livery });
+    const model = bus ? null : carModels[id], spec = bus ? BUS_WRECK_SPEC : carSpecs[id];
+    const paintMaterial = bus ? createLoftedBusMaterial() : lite ? trafficMaterial(id) : createBodyMaterial(model, { paint, livery });
     const mechanismMaterial = !lite && (model.steering || model.calipers?.some(Boolean)) ? createSourcePartMaterial(model) : null;
     let carBodyMesh, glassMaterial = null, cabin = null;
-    if (lite) {
+    if (bus) {
+      // the street's own bus body (one geometry for every bus wreck), with a state of its own that says it burned
+      const source = (busWreckBody ??= buildLoftedBusBodyGeometry());
+      const shell = new THREE.BufferGeometry();
+      for (const name of Object.keys(source.attributes)) if (name !== 'busState') shell.setAttribute(name, source.attributes[name]);
+      shell.setIndex(source.index);
+      shell.setAttribute('busState', new THREE.InstancedBufferAttribute(Float32Array.of(BUS_BURNT, 0, 0, 1), 4));
+      carBodyMesh = new THREE.InstancedMesh(shell, paintMaterial, 1);
+      carBodyMesh.setMatrixAt(0, new THREE.Matrix4());
+      carBodyMesh.frustumCulled = false;
+      bodyPivot.add(carBodyMesh);
+    } else if (lite) {
       const shell = new THREE.BufferGeometry();
       // a car knocked loose is always close by: it keeps the level it had in traffic there
       const level = model.mid ?? model.shell;
@@ -573,7 +605,7 @@ class ThirdPersonControllerManager {
       shell.setIndex(level.index);
       const colour = new THREE.Color(paint);
       shell.setAttribute('paintColor', new THREE.InstancedBufferAttribute(Float32Array.of(colour.r, colour.g, colour.b), 3));
-      shell.setAttribute('carState', new THREE.InstancedBufferAttribute(new Float32Array(4), 4));
+      shell.setAttribute('carState', new THREE.InstancedBufferAttribute(Float32Array.of(0, 0, 0, burnt ? BURNT : 0), 4));
       shell.setAttribute('carPose', new THREE.InstancedBufferAttribute(new Float32Array(4), 4));
       carBodyMesh = new THREE.InstancedMesh(shell, paintMaterial, 1);
       carBodyMesh.setMatrixAt(0, new THREE.Matrix4());
@@ -595,11 +627,13 @@ class ThirdPersonControllerManager {
     const wheels = [];
     // A car knocked loose keeps its own wheels (at the level it wore in the street). Their material is the model's
     // own, compiled behind the loading screen with the garage's cars: every model has one waiting there.
-    const wheelMaterial = createWheelMaterial(model);
+    const wheelMaterial = burnt ? createBurntWheelMaterial() : createWheelMaterial(model);
     spec.wheels.forEach(([x, y, z], i) => {
       const steerPivot = new THREE.Group();
       steerPivot.position.set(x, y, z);
-      const tire = new THREE.Mesh(lite ? (model.midWheels ?? model.wheels)[i] : model.wheels[i], wheelMaterial);
+      const wheelGeometry = bus ? (busWreckWheels[x < 0 ? 0 : 1] ??= buildBusWheelGeo(x < 0 ? -1 : 1))
+        : lite ? (model.midWheels ?? model.wheels)[i] : model.wheels[i];
+      const tire = new THREE.Mesh(wheelGeometry, wheelMaterial);
       tire.castShadow = true;
       tire.receiveShadow = true;
       steerPivot.add(tire);
@@ -619,6 +653,7 @@ class ThirdPersonControllerManager {
       halfW: spec.halfW, halfL: Math.max(spec.zFront, -spec.zRear), height: spec.height, sill: spec.sill,
       wheelX: (spec.wheelX + spec.wheelXr) / 2, wheelZf: spec.wheelZf, wheelZr: spec.wheelZr, wheelRadius: spec.wheelRadius
     });
+    if (bus) tune.mass = 12000;
 
     // Ground contact shadow and paired headlight spotlights
     const carShadowGeo = new THREE.PlaneGeometry(spec.halfW * 2 + 0.38, spec.zFront - spec.zRear + 0.3);
@@ -650,7 +685,7 @@ class ThirdPersonControllerManager {
       bodyMesh: carBodyMesh,
       paintMaterial,
       shadow: carShadow,
-      label: CAR_LABELS[kind] || 'Berline',
+      label: bus ? 'Bus' : CAR_LABELS[kind] || 'Berline',
       mesh: root,
       chassisPivot,
       bodyPivot,
@@ -852,13 +887,13 @@ class ThirdPersonControllerManager {
     root.add(tiltPivot);
 
     const heliLoftMat = createLoftedHelicopterMaterial();
-    const blurDiscMat = new THREE.MeshBasicNodeMaterial({
+    const blurDiscMat = sealEffect(new THREE.MeshBasicNodeMaterial({
       color: 0xc8d8e8,
       transparent: true,
       opacity: 0.13,
       side: THREE.DoubleSide,
       depthWrite: false
-    });
+    }));
 
     // 1. 3D Lofted Monocoque Fuselage + Tailboom + Twin-Turbine Cowling + Swept Fin + Stabilizers + Tubular Skids
     const heliBodyGeo = buildHelicopterBodyGeometry();

@@ -1,6 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { attribute, uv, float, smoothstep, abs, mix, vec2, vec3, texture, select, dot } from 'three/tsl';
 import { buildFxAtlas, GLOW, SMOKE, DECAL } from './fx-textures.js';
+import { sealEffect } from './effect-outputs.js';
 
 // Gameplay visual effects: gunfire (shaped muzzle flashes, smoke, tracers, brass, impacts by surface, bullet holes and
 // blood), fire, explosions, wreck debris, scorch marks and a small pool of flash lights.
@@ -138,7 +139,7 @@ function particleMesh(max, blending, name) {
   const geometry = new THREE.PlaneGeometry(1, 1);
   const [a, b] = instanceAttributes(geometry, max);
   const additive = blending === THREE.AdditiveBlending;
-  const material = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending, side: THREE.DoubleSide, fog: false });
+  const material = sealEffect(new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, blending, side: THREE.DoubleSide, fog: false }));
   const fxA = attribute('fxA', 'vec4'), fxB = attribute('fxB', 'vec4');
   const code = fxB.x;
   const p = uv().sub(0.5).mul(2.0);
@@ -227,7 +228,7 @@ class EffectsSystem {
     const scorchGeo = new THREE.CircleGeometry(1, 20).rotateX(-Math.PI / 2);
     const scorchAlpha = new THREE.InstancedBufferAttribute(new Float32Array(SCORCH_MAX), 1);
     scorchGeo.setAttribute('fxAlpha', scorchAlpha);
-    const scorchMat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, color: 0x0b0907 });
+    const scorchMat = sealEffect(new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, color: 0x0b0907 }));
     const sp = uv().sub(0.5).mul(2.0);
     scorchMat.opacityNode = smoothstep(1.0, 0.2, sp.length()).mul(attribute('fxAlpha', 'float')).mul(0.85);
     scorchMat.polygonOffset = true;
@@ -267,8 +268,9 @@ class EffectsSystem {
     const markGeo = new THREE.PlaneGeometry(1, 1);
     [this.decalA, this.decalB] = instanceAttributes(markGeo, DECAL_MAX);
     const markA = attribute('fxA', 'vec4'), markB = attribute('fxB', 'vec4');
-    const markMat = new THREE.MeshStandardNodeMaterial({ color: 0xffffff, metalness: 0, roughness: 0.95, transparent: true, depthWrite: false,
-      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+    // (a decal: what it lies on keeps its own normal and gloss)
+    const markMat = sealEffect(new THREE.MeshStandardNodeMaterial({ color: 0xffffff, metalness: 0, roughness: 0.95, transparent: true, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
     const mark = tileSample(markB.x.add(TILE));
     markMat.colorNode = markA.rgb.mul(mark.b);
     markMat.opacityNode = mix(mark.a, smoothstep(0.36, 0.6, mark.a), markB.y).mul(markA.a);

@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { float, vec3, uniform, fract, sin, positionLocal, cameraPosition, time, normalize, smoothstep, length, instanceIndex } from 'three/tsl';
 import { TIME_PRESETS } from './lighting.js';
 import { GRADE_LOOKS } from './post-processing.js';
+import { sealEffect } from './effect-outputs.js';
 
 // Time of day and weather. The clock runs a 24 h day in about half an hour; the four hand-tuned lighting presets are
 // blended through it (morning mirrors the evening sun across the avenues). Weather drifts between clear, cloudy, rain
@@ -78,7 +79,7 @@ class Atmosphere {
     const toCam = normalize(vec3(cameraPosition.x.sub(center.x), 0.001, cameraPosition.z.sub(center.z)));
     const right = vec3(toCam.z, 0, toCam.x.negate());
     const along = normalize(vec3(this.uWind.x, speed.negate(), this.uWind.z));
-    const material = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
+    const material = sealEffect(new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false }));
     material.positionNode = center.add(right.mul(positionLocal.x.mul(0.011))).sub(along.mul(positionLocal.y.mul(0.72)));
     const d = length(center.sub(cameraPosition));
     material.colorNode = this.uTint;

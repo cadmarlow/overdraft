@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { sealEffect } from './effect-outputs.js';
 
 // The Hauturier Sterne, a light single-engine plane, and the parachute that goes with it. Its flight model is in flight.js.
 
@@ -101,7 +102,7 @@ function createPlane(scene) {
   prop.add(part(blades, dark));
   tilt.add(prop);
   const blur = new THREE.Mesh(new THREE.CircleGeometry(1.1, 28),
-    new THREE.MeshBasicNodeMaterial({ color: 0xdfe6ee, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false }));
+    sealEffect(new THREE.MeshBasicNodeMaterial({ color: 0xdfe6ee, transparent: true, opacity: 0.1, side: THREE.DoubleSide, depthWrite: false })));
   blur.position.z = 4.1;
   tilt.add(blur);
 

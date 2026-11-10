@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { lineOfSight } from './weapons.js';
+import { sealEffect } from './effect-outputs.js';
 
 // The police go up too (0.9 « Leverage »). A wanted player on a roof is not safe there: officers in the street below take
 // the stairs and come out of the roof door, from four stars the helicopter drops a team down ropes onto the roof, and from
@@ -20,7 +21,7 @@ class RoofPolice {
     this.snipers = [];
     this.roped = [];
     const scene = game.scene;
-    const red = new THREE.MeshBasicNodeMaterial({ color: 0xff2a1a, transparent: true, opacity: 0.55, depthWrite: false });
+    const red = sealEffect(new THREE.MeshBasicNodeMaterial({ color: 0xff2a1a, transparent: true, opacity: 0.55, depthWrite: false }));
     const beam = new THREE.CylinderGeometry(0.012, 0.012, 1, 4, 1).translate(0, 0.5, 0);
     this.lasers = Array.from({ length: SNIPERS }, () => this.line(scene, beam, red));
     const rope = new THREE.MeshStandardNodeMaterial({ color: 0x23211d, roughness: 0.8 });

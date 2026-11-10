@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { world } from './world-assets.js';
+import { disableEffectOutputs as disableOutputs, transparentEffectMRT } from './effect-outputs.js';
 import { ground } from './ground-assets.js';
 import { urbanSkyVisibility } from './urban-light.js';
 import {
@@ -2896,15 +2897,10 @@ function getSmokeCloudTexture() {
  */
 // Transparent decal/effect planes & sprites preserve the underlying road/scene G-buffer in MRT (zero RGB & zero alpha on normal & metalRough)
 // Decals only address the reflection outputs: with no such outputs (quality.js), an MRT would leave them nothing to draw to
+// (js/effect-outputs.js holds that MRT and says why every see-through effect needs it)
 let _effectOutputs = true;
-function disableEffectOutputs() { _effectOutputs = false; }
-// The MRT of a see-through ground layer (js/ground-materials.js), or null when there are no reflection outputs
-function transparentEffectMRT() { return _effectOutputs ? _transparentEffectMRT : null; }
-
-const _transparentEffectMRT = mrt({
-  normal: vec4(0.0, 0.0, 0.0, 0.0),
-  metalRough: vec4(0.0, 0.0, 0.0, 0.0)
-});
+function disableEffectOutputs() { _effectOutputs = false; disableOutputs(); }
+const _transparentEffectMRT = transparentEffectMRT();
 
 function createSteamMaterial() {
   const smokeMap = getSmokeCloudTexture();
@@ -3050,6 +3046,7 @@ function createContactShadowMaterial() {
 // real shadow), fading to nothing well inside its quad
 function createPersonContactShadowMaterial() {
   const mat = new THREE.MeshBasicNodeMaterial({ transparent: true, depthWrite: false, fog: false });
+  if (_effectOutputs) mat.mrtNode = _transparentEffectMRT;
   const r = length(uv().sub(vec2(0.5, 0.5)).mul(2.0));
   mat.colorNode = color(0x020305);
   mat.opacityNode = smoothstep(0.85, 0.05, r).mul(smoothstep(0.85, 0.05, r)).mul(0.3);

@@ -45,7 +45,8 @@ loin : plus fou, plus inventif, plus généreux. Le niveau de référence est un
 Les versions portent des noms de la finance : 0.2 Opening Bell, 0.3 Margin Call, 0.4 Human Capital, 0.5 Hard Assets,
 0.6 Prime Real Estate, 0.7 Bull Run, 0.8 Hostile Takeover, 0.9 Leverage, 0.9.3 Main Street, 0.9.4 Momentum, 0.9.5 Due Diligence,
 0.9.6 Footfall, 0.9.7 Curb Appeal, 0.9.8 Revaluation, 0.9.9 Break Even, 0.9.10 Price Action, 0.9.11 Short Squeeze,
-0.9.12 Blue Chips, 0.9.13 Market Order, 0.9.14 Ground Floor, 0.9.15 After Hours, 0.9.16 Green Shoots.
+0.9.12 Blue Chips, 0.9.13 Market Order, 0.9.14 Ground Floor, 0.9.15 After Hours, 0.9.16 Green Shoots,
+0.9.17 Stop Loss.
 Prochaine : 1.0 Closing Bell (voir `GAME_DESIGN.md`).
 
 Une nouvelle version met à jour, ensemble :
@@ -112,6 +113,15 @@ Paramètres d'adresse : `?stats=1` (images par seconde et coût de chaque systè
 - Une roue se juge sur trois choses que le nombre de triangles ne dit pas : ronde, d'équerre sur son essieu, jante
   visible devant le disque. Trois sources arrivaient braquées, carrossées ou ovales, et tournaient en vacillant
   (`tests/car-visual-contract.test.mjs` le vérifie maintenant).
+- Un matériau transparent qui n'est pas une surface (fumée, flash, pluie, balise, décalque) doit passer par
+  `sealEffect()` de `js/effect-outputs.js`. Sinon, en qualité HAUTE, il écrase les normales de la scène sur tout son
+  carré et l'occlusion ambiante dessine une boîte noire à la place de chaque volute. Le jeu rattrape les oublis au
+  chargement et le signale dans la console (`[effects] sealed after the fact`).
+- **Tester l'image en qualité HAUTE** (`?quality=high`), celle de l'utilisateur : la qualité ÉQUILIBRÉE, par défaut
+  dans un Chrome neuf, n'a ni reflets ni carte de normales et cache toute une famille de bugs.
+- L'utilisateur joue à la manette Xbox sur ce Mac, et tout Chrome la voit. Un Chrome de test au focus émulé obéit à ses
+  boutons : le héros monte en voiture, vise, met en pause pendant la mesure. Couper la manette dans la page de test
+  (`navigator.getGamepads = () => []` par `Page.addScriptToEvaluateOnNewDocument`).
 - Le dossier personnel `/Users/ulik` est lui-même un dépôt Git : une session Claude Code lancée au-dessus de ce dépôt
   partage sa mémoire avec d'autres projets. Travailler depuis ce dossier.
 

@@ -32,7 +32,7 @@ import { CAR_CATALOG, CAR_NAMES as FLEET_NAMES } from './car-catalog.js';
 import { popBody, settleBody, shuntBody } from './car-physics.js';
 import { driverPose } from './car-cabin.js';
 import { carFrame, planEntry, planExit, sampleEntry, sampleExit, createSample, stations as entryStations, REST_WHEEL, restPedals, lerp, FAST as ENTRY_FAST } from './vehicle-entry.js';
-import { DriveEffects, FallingLamps, addDent } from './drive-fx.js';
+import { DriveEffects, FallingLamps } from './drive-fx.js';
 import { StuntScore } from './stunts.js';
 import { GangSystem } from './gangs.js';
 import { Phone } from './phone.js';
@@ -45,8 +45,8 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.16';
-const BUILD_NAME = 'Green Shoots';
+const BUILD = '0.9.17';
+const BUILD_NAME = 'Stop Loss';
 const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
 // The neighbourhoods as the opening card names them (city-config.js districtAt)
 const DISTRICT_NAMES = {
@@ -75,7 +75,8 @@ const EJECT_ALTITUDE = 20; // a crash above this throws the pilot clear, under a
 // tenth at 90, a quarter at 130, half at 200. A car survives a good chase; it is bullets and blasts that set it alight.
 const crashDamage = (speed) => 0.17 * Math.max(0, speed - 9) ** 1.5;
 const IDLE_STICK = { pitch: 0, roll: 0, throttle: 0 };
-const WRECK_POOL = 4;
+const WRECK_MAX = 6; // burnt-out vehicles left standing at once: the oldest goes when a seventh burns
+const WRECKS_PER_KIND = 2; // of one model
 const DEBUG = new URLSearchParams(location.search).has('debug');
 
 function splitDoor(car) {
@@ -217,19 +218,11 @@ export class Game {
     this.world = { controllers, traffic, cars: this.allCars, actors: this.actors.actors, player: this.player, parking };
     // A parked car driven into: it becomes a car of its own and takes the blow through the car-to-car collisions
     controllers.onParkedHit = (c, car) => this.hitParked(c, car);
-    this.wrecks = Array.from({ length: WRECK_POOL }, (_, i) => {
-      const car = controllers.createCarEntity({ kind: 'sedan', paint: 0x1d1a17 });
-      car.wreck = true; car.destroyed = true; car.hp = 0; car.burnT = 0;
-      // What a fire leaves of a car
-      const top = car.spec.height;
-      car.body.q[1] = 0; car.body.q[3] = 1; car.body.r[0] = car.body.r[4] = car.body.r[8] = 1;
-      for (const [x, y, z, nx, nz] of [[0.2, 0.8, 2.3, 0, -1], [-0.7, 0.8, -2.2, 0.3, 1], [0.8, 0.9, 0.6, -1, 0], [0, top, 0, 0, 0.3]]) addDent(car, x, y, z, nx, nz, 24);
-      car.position.set(-20 - i * 6, -40, -3000);
-      car.mesh.position.copy(car.position);
-      car.mesh.updateMatrixWorld();
-      return car;
-    });
-    this.wreckCursor = 0;
+    // What a fire leaves of a vehicle is that vehicle: a taxi burns down to a taxi, a bus to a bus. One wreck of every
+    // model waits out of sight from the start, so its pipelines compile behind the loading screen (see update()).
+    this.wrecks = [];
+    this.wreckKinds = [...CAR_CATALOG.map((c) => c.kind), 'bus']; // every model that can burn: the fifteen cars and the city bus
+    for (const kind of this.wreckKinds) this.makeWreck(kind);
 
     this.spawnFleet();
     this.restore();
@@ -1023,7 +1016,8 @@ export class Game {
   resolveParkedCollision(person, car) {
     if (person.position.y > car.position.y + 1.7) return;
     const dx = person.position.x - car.position.x, dz = person.position.z - car.position.z;
-    if (Math.abs(dx) > 4 || Math.abs(dz) > 4) return;
+    const reach = Math.max(4, (car.halfL ?? 2.2) + 1.5); // a bus's wreck is twelve metres long
+    if (Math.abs(dx) > reach || Math.abs(dz) > reach) return;
     const sin = Math.sin(car.heading), cos = Math.cos(car.heading);
     const x = dx * cos - dz * sin, z = dx * sin + dz * cos;
     const hx = (car.halfW ?? 0.92) + 0.03, hz = car.halfL ?? Math.max(car.spec.zFront, -car.spec.zRear);
@@ -1871,18 +1865,49 @@ export class Game {
     }
   }
 
-  // Swap a burnt-out car for a pooled wreck, with the blast
-  placeWreck(x, z, heading, burn = 22) {
-    const w = this.wrecks[this.wreckCursor++ % this.wrecks.length];
+  // A burnt-out vehicle of the given model, waiting out of sight (createCarEntity, burnt)
+  makeWreck(kind) {
+    const car = this.controllers.createCarEntity({ kind, burnt: true });
+    car.wreck = true; car.destroyed = true; car.hp = 0; car.burnT = 0; car.smokeT = 0; car.standing = false;
+    car.body.q[1] = 0; car.body.q[3] = 1; car.body.r[0] = car.body.r[4] = car.body.r[8] = 1;
+    // down on its burst tyres, a little askew
+    const n = this.wrecks.length;
+    car.bodyPivot.position.y = -0.05;
+    car.bodyPivot.rotation.z = (n % 2 ? 1 : -1) * 0.022;
+    car.bodyPivot.rotation.x = ((n % 3) - 1) * 0.012;
+    car.position.set(-20 - n * 7, -40, -3000);
+    car.mesh.position.copy(car.position);
+    car.mesh.updateMatrixWorld();
+    this.wrecks.push(car);
+    return car;
+  }
+
+  // The burnt-out body that takes the place of a vehicle of model `kind` where it blew up. One of that model lying
+  // idle, else a second one (its materials are the street's, already compiled), else the oldest of that model again.
+  placeWreck(x, z, heading, kind = 'sedan', burn = 22) {
+    if (!this.wreckKinds.includes(kind)) kind = 'sedan';
+    const same = this.wrecks.filter((c) => c.kind === kind);
+    const w = same.find((c) => !c.standing) || (same.length < WRECKS_PER_KIND ? this.makeWreck(kind) : same.reduce((a, b) => (a.placedAt < b.placedAt ? a : b)));
     w.position.set(x, 0, z);
     w.heading = heading;
     w.prevX = x; w.prevZ = z;
     w.speed = w.vx = w.vz = w.angularVel = 0;
     w.burnT = burn; w.smokeT = 60;
+    w.standing = true; w.placedAt = this.clock;
     w.mesh.visible = true;
     w.mesh.position.copy(w.position);
     w.mesh.rotation.y = heading;
     w.mesh.updateMatrixWorld();
+    // too many in the street: the oldest is cleared away
+    const standing = this.wrecks.filter((c) => c.standing);
+    if (standing.length > WRECK_MAX) {
+      const old = standing.reduce((a, b) => (a.placedAt < b.placedAt ? a : b));
+      old.standing = false; old.burnT = old.smokeT = 0;
+      old.mesh.visible = false;
+      old.position.set(old.position.x, -40, old.position.z);
+      old.mesh.position.copy(old.position);
+      old.mesh.updateMatrixWorld();
+    }
     return w;
   }
 
@@ -1900,7 +1925,7 @@ export class Game {
       this.removeFleetCar(car);
     }
     car.mesh.visible = false;
-    if (!car.moto && !car.mode && !car.boat) this.placeWreck(x, z, heading);
+    if (!car.moto && !car.mode && !car.boat) this.placeWreck(x, z, heading, car.kind);
     if (playerInside && !ejected) {
       // thrown clear, fatally
       this.transition = null;
@@ -1918,7 +1943,7 @@ export class Game {
     if (!v.edge) return;
     const x = v.x, z = v.z, heading = v.yaw + v.yawOffset;
     this.traffic.removeVehicle(v);
-    this.placeWreck(x, z, heading);
+    this.placeWreck(x, z, heading, v.bus ? 'bus' : v.bodyType);
     this.explode(x, 0.8, z, 0.85, generation ? 'chain' : 'player', generation);
     this.stats.cars++;
   }
@@ -2628,7 +2653,7 @@ export class Game {
     this.hud.setClock(this.atmosphere.clockLabel, this.atmosphere.weatherLabel, this.atmosphere.night > 0.5);
     // Pools stay drawn for the first frames so their pipelines compile behind the loading screen
     if (++this.frames === 5) {
-      for (const w of this.wrecks) if (!w.burnT && !w.smokeT) w.mesh.visible = false;
+      for (const w of this.wrecks) if (!w.standing) w.mesh.visible = false;
       for (const ride of this.rides) if (!this.fleet.includes(ride)) ride.mesh.visible = false;
     }
     const falling = this.state === 'falling';
