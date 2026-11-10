@@ -31,9 +31,13 @@ https://sketchfab.com/3d-models/ak-12-f78ad7ae10ad4335b3ad81be3ec15bb0 ; "M67 Fr
 https://sketchfab.com/3d-models/m67-fragmentation-grenade-26eda181849f4d188f69105302fd7b65 (the last four under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/). What was changed is listed in assets/weapons/LICENSE-weapons.md.
 
-Leaves and turf are from ambientCG (CC0): https://ambientcg.com (LeafSet010, LeafSet013, LeafSet014, LeafSet016, Grass001, Grass005).
+Leaves and turf are from ambientCG (CC0): https://ambientcg.com (LeafSet004, LeafSet009, LeafSet010, LeafSet014, LeafSet016,
+LeafSet022, LeafSet024, Grass001, Grass005). The honey locusts' fronds are the leaves of the Jacaranda Tree model by
+Rico Cilliers (guidance: Rob Tuytel), from Poly Haven (CC0): https://polyhaven.com/a/jacaranda_tree.
 Bark is from Poly Haven (CC0): https://polyhaven.com (japanese_zelkova_bark and jolcham_oak_bark_01 by Charlotte Baglioni,
 bark_brown_02 by Rob Tuytel, bark_platanus by Dimitrios Savva).
+Which tree stands where, its species and the diameter of its trunk are from NYC Parks' Forestry Tree Points (NYC Open Data,
+https://data.cityofnewyork.us/d/hn5i-inap). The trees themselves are grown, meshed and photographed by tools/trees.
 
 Building surfaces are from Poly Haven (CC0): white_sandstone_bricks, red_brick_03 and brown_brick_02 by Rob Tuytel,
 brick_wall_09 by Rob Tuytel and Matterfield. (Until 0.9.13 the streets used asphalt_02 by Rob Tuytel and

@@ -85,8 +85,8 @@ Paramètres d'adresse : `?stats=1` (images par seconde et coût de chaque systè
 
 ## Vérifier son travail
 
-- **Tests** : `npm test` après chaque changement. Un seul échec est attendu, `tree-geodata`, parce que la licence Xcode
-  n'est pas acceptée sur cette machine.
+- **Tests** : `npm test` après chaque changement. Tous les tests passent : aucun échec n'est attendu. (`tree-geodata`
+  échouait tant que son outil était en Python ; c'est maintenant `tools/trees/build-tree-data.mjs`, en Node.)
 - **Dans le vrai jeu** : piloter un Chrome sans fenêtre par CDP (son propre `--user-data-dir`), avec de vraies touches
   (`Input.dispatchKeyEvent`) et des captures d'écran. Les faux événements DOM ont déjà caché des bugs.
 - **Juger l'image en caméra de jeu, de jour**, pas sur des gros plans posés : c'est ce que voit le joueur.

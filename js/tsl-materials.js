@@ -1482,125 +1482,6 @@ function createCarPaintMaterial(baseHex = 0xffc218) {
   return mat;
 }
 
-// Sunlight shining through leaves (Barré-Brisebois & Bouchard's fast translucency approximation): looking against
-// the light, a leaf glows with the light it lets through. It takes the direct light's colour, so shadows (the crown's
-// own included) dim it like the sunlit side. Materials set `translucencyNode` (vec3, 0 where nothing shines through).
-class FoliageLightingModel extends THREE.PhysicalLightingModel {
-  direct(lightData, builder) {
-    const { lightDirection, lightColor, reflectedLight } = lightData;
-    const translucency = builder.material.translucencyNode;
-    if (translucency) {
-      const scatter = normalize(lightDirection.add(normalView.mul(0.3)));
-      const through = pow(clamp(dot(positionViewDirection, scatter.negate()), 0.0, 1.0), 3.0);
-      reflectedLight.directDiffuse.addAssign(lightColor.mul(translucency).mul(through));
-    }
-    super.direct(lightData, builder);
-  }
-}
-
-class TreeNodeMaterial extends THREE.MeshStandardNodeMaterial {
-  static get type() {
-    return 'TreeNodeMaterial';
-  }
-
-  constructor(parameters) {
-    super(parameters);
-    this.translucencyNode = null;
-  }
-
-  setupLightingModel() {
-    return new FoliageLightingModel();
-  }
-}
-
-const BARK_METRES = 1.4; // what one repeat of a bark photograph covers
-
-// Prevailing wind (xz, blowing from the west-north-west across Manhattan)
-const TREE_WIND = vec2(0.86, 0.51);
-
-/**
- * Instanced street & park tree material (js/trees.js): bark tubes and alpha-tested leaf cards in ONE draw per mesh.
- * Geometry attributes:
- * - uv: leaf-atlas coordinates on the cards; on the bark (metres round the stem, metres along it)
- * - normal: on the cards, crown-shell normals (out from the crown centre, blended with the card face), so a crown
- *   shades as one leafy volume and both sides of a card light alike (the back faces keep them unflipped)
- * - aTree (vec4): x = 1 on leaf cards / 0 on bark, y = crown occlusion (0 deep inside .. 1 on the outer shell),
- *   z = sway weight (0 on the trunk .. 1 at the twig tips & cards), w = per-card random (leaf flutter phase)
- * - aTreeData (instanced vec4): rgb = per-tree linear foliage tint, w = species index + per-tree random fraction
- *   (species 0 London plane: flaking camouflage bark, 1 honey locust & 2 elm: dark furrowed bark)
- * Leaf atlas texels: r = leaf brightness, g = per-leaf hue jitter, b = twig / stalk mask, a = coverage (its mipmaps
- * keep the coverage, so distant crowns stay full).
- * Shading: per-tree tint with sun-yellowed & cooler leaves, deep leaves darker and occluded from the sky, sunlight
- * shining through the leaves toward the camera (FoliageLightingModel), alpha-to-coverage leaf edges on the MSAA scene
- * pass (alpha-tested in the shadow maps: dappled shadows). Wind: gusts rolling across the city sway the crowns
- * (shadows follow), branches bob and leaves flutter.
- */
-function createTreeMaterial({ leaves, leavesNormal, bark, barkNormal }) {
-  const mat = new TreeNodeMaterial({
-    side: THREE.DoubleSide,
-    alphaToCoverage: true,
-    metalness: 0.0,
-    roughness: 0.8
-  });
-
-  const aTree = attribute('aTree', 'vec4');
-  const aData = attribute('aTreeData', 'vec4');
-  const isLeaf = aTree.x;
-  const crownAO = aTree.y;
-  const rnd = fract(aData.w);
-  const species = floor(aData.w);
-  const leaf = texture(leaves, uv());
-  const barkUv = uv().div(BARK_METRES);
-
-  // Wind. positionLocal is already instanced (world space); positionGeometry is the tree's own frame (metres)
-  mat.positionNode = Fn(() => {
-    const p = positionLocal;
-    const g = positionGeometry;
-    const phase = rnd.mul(6.2832);
-    // gusts rolling downwind across the city
-    const gust = sin(time.mul(0.5).sub(dot(p.xz, TREE_WIND).mul(0.045))).mul(0.5).add(0.5);
-    const strength = gust.mul(gust).mul(0.7).add(0.3);
-    // the whole tree bends with height, leaning downwind and rocking across it
-    const h = g.y.div(11.0);
-    const bend = h.mul(h);
-    const lean = sin(time.mul(0.85).add(phase)).mul(0.45).add(0.55).mul(strength).mul(0.2);
-    const rock = sin(time.mul(0.67).add(phase.mul(1.7))).mul(0.06).mul(strength);
-    const sway = vec3(TREE_WIND.x.mul(lean).sub(TREE_WIND.y.mul(rock)), 0.0, TREE_WIND.y.mul(lean).add(TREE_WIND.x.mul(rock))).mul(bend);
-    // branches bob, the phase flowing smoothly through the crown so joints stay together
-    const bob = sin(time.mul(2.1).add(g.x.mul(0.9)).add(g.z.mul(0.7)).add(phase)).mul(0.05).mul(aTree.z).mul(strength);
-    // leaves flutter, every card on its own
-    const flutter = sin(time.mul(8.0).add(aTree.w.mul(37.0)).add(g.y.mul(2.0))).mul(0.03).mul(isLeaf).mul(aTree.z).mul(strength.add(0.25));
-    return p.add(sway).add(vec3(0.0, bob, 0.0)).add(normalLocal.mul(flutter));
-  })();
-
-  // Coverage: leaf cards from the atlas; bark is opaque from outside (its back faces are dropped). Mipmaps average leaves
-  // away with distance: raising alpha with the mip level keeps a crown as dense far off as up close
-  const texels = uv().mul(float(leaves.image.width));
-  const footprint = max(length(dFdx(texels)), length(dFdy(texels)));
-  const mip = log2(max(footprint, 1.0));
-  const alpha = mix(float(frontFacing), leaf.a.mul(mip.mul(0.34).add(1.0)), isLeaf);
-  mat.alphaTest = 0.5;
-
-  // Leaves as they were scanned, under the tree's own tint; darker deep in the crown. Bark as it was photographed
-  const foliage = leaf.rgb.mul(aData.xyz).mul(crownAO.mul(0.55).add(0.45));
-  mat.colorNode = vec4(mix(texture(bark, barkUv).rgb.mul(1.35), foliage, isLeaf), alpha);
-
-  mat.roughnessNode = mix(float(0.9), float(0.62), isLeaf);
-
-  // Card normals are crown-shell normals on both faces, so a crown lights as one volume; each leaf's relief comes on top
-  const leafRelief = texture(leavesNormal, uv()).xy.sub(0.5).mul(1.1);
-  const barkRelief = normalMap(texture(barkNormal, barkUv), vec2(1.3));
-  mat.normalNode = mix(barkRelief, normalize(normalViewGeometry.add(vec3(leafRelief, 0.0))), isLeaf);
-
-  // Sky light: street-canyon occlusion, deep inside the crown far less
-  mat.aoNode = canyonSkyAONode().mul(mix(crownAO.mul(0.3).add(0.7), crownAO.mul(0.75).add(0.25), isLeaf));
-
-  // Light through the leaves: yellow-green, strongest out on the thin shell
-  mat.translucencyNode = leaf.rgb.mul(aData.xyz).mul(vec3(1.5, 1.7, 0.6)).mul(crownAO.mul(0.8).add(0.2)).mul(isLeaf);
-
-  return mat;
-}
-
 // Pointy-top hexagon cell of p (in hex units): x = distance to the cell edge (0 at the joint .. 0.5 at the centre),
 // yz = cell id
 const hexCell = Fn(([p]) => {
@@ -3098,7 +2979,6 @@ export {
   createFacadeBoxes,
   createChryslerCrownMaterial,
   createCarPaintMaterial,
-  createTreeMaterial,
   createParkPavingMaterial,
   createParkWallMaterial,
   createIronFenceMaterial,

@@ -90,7 +90,19 @@ test('placement and generated appearance are deterministic without changing inpu
   const original = [...points], sites = place(points, [], clear);
   assert.deepEqual(place(points, [], clear), sites);
   assert.deepEqual(points, original);
-  assert.equal(sites[0].tier, 1);
-  assert.equal(sites[2].tier, 2);
-  for (const site of sites) assert.ok(site.scale >= 0.6 && site.scale <= 0.8 && site.species >= 0 && site.species <= 2);
+  assert.equal(sites[0].grate, true, 'avenue pits wear a grate');
+  assert.equal(sites[2].grate, false);
+  // with no survey to go by, an ordinary street tree of one of the usual kinds
+  for (const site of sites) assert.ok(site.dbh >= 5 && site.dbh <= 14 && [0, 1, 5].includes(site.kind));
+});
+
+test('each tree keeps the kind and the trunk the survey gives it', () => {
+  const place = setup([rectangle(0, 0, 40, 80)]), points = [2, 10, 2, 20, 2, 30, 2, 40];
+  const sites = place(points, [], clear, Uint8Array.of(3, 7, 8, 0), Uint8Array.of(22, 4, 9, 0));
+  assert.deepEqual(Array.from(sites, (s) => s.kind).slice(0, 2), [3, 7]);
+  assert.deepEqual(Array.from(sites, (s) => s.dbh).slice(0, 3), [22, 4, 9]);
+  assert.ok([5, 6, 2, 7].includes(sites[2].kind), 'a kind the game has no tree for stands in as one it has');
+  assert.equal(sites[3].kind, 0);
+  assert.ok(sites[3].dbh >= 5 && sites[3].dbh <= 14, 'an unmeasured trunk is taken for an ordinary one');
+  assert.deepEqual(place(points, [], clear, Uint8Array.of(3, 7, 8, 0), Uint8Array.of(22, 4, 9, 0)), sites);
 });
