@@ -115,8 +115,9 @@ demander plus de preuves retire cette autorisation et interrompt sa correction e
 explicite de validation humaine doivent être validés à nouveau.
 
 Une livraison n’est acceptée qu’avec une fiche structurée, un processus terminé normalement et un `npm test` complet
-sur le dernier état des fichiers. Seul l’échec précisément identifié `tree-geodata` / licence Xcode est toléré. Une
-modification après les tests, un fichier interdit ou une attribution ambiguë garde le ticket en échec, avec la raison.
+sur le dernier état des fichiers. Depuis la 0.9.19, aucun échec n’est attendu : la génération des données d’arbres
+utilise Node.js et ne dépend plus de la licence Xcode. Une modification après les tests, un fichier interdit ou une
+attribution ambiguë garde le ticket en échec, avec la raison.
 Les changements déjà écrits restent visibles pour le Créateur : l’atelier n’annule jamais ses éditions.
 
 Les relevés Git sont recoupés avec les traces des outils et les empreintes des fichiers. Si tu modifies le dépôt pendant

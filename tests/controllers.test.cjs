@@ -73,6 +73,26 @@ test('feet and all vehicle modes use the same park surface as wheel suspension',
   assert.equal(hit.y, 0.22);
 });
 
+test('CALIBRE floors override outdoor surfaces at street level without replacing building roofs', async () => {
+  const { createGroundSurfaces } = await import('../js/ground-surfaces.js');
+  const { CALIBRE, calibreLocal, calibreZone } = await import('../js/calibre-plan.js');
+  const { controller } = keyboardHarness();
+  const site = { x: 5, z: 5, nx: 0, nz: 1 };
+  controller.groundSurfaces = createGroundSurfaces();
+  controller.groundSurfaces.add([{ x: -5, z: -30 }, { x: 15, z: -30 }, { x: 15, z: 15 }, { x: -5, z: 15 }], 0.22);
+  controller.interiorFloor = (x, z) => {
+    const local = calibreLocal(site, x, z);
+    return calibreZone(local.x, local.z) ? CALIBRE.floor : null;
+  };
+  controller.colliders = [{ minX: 0.6, maxX: 9.4, minZ: -22.8, maxZ: 5, minY: CALIBRE.height, maxY: 10, roof: true }];
+
+  assert.equal(controller.getGroundHeight(5, 3, 'person', 0.22), 0.24, 'entering the shop raises feet onto its floor');
+  assert.equal(controller.getGroundHeight(5, 7, 'person', 0.24), 0.22, 'leaving the shop restores the sidewalk height');
+  for (const mode of ['person', 'helicopter']) {
+    assert.equal(controller.getGroundHeight(5, 3, mode, 10), 10, `${mode} above the shop stays on the roof`);
+  }
+});
+
 test('the actual car solver climbs the curb but cannot drive through a park wall at 108 km/h', async () => {
   const physics = await import('../js/car-physics.js');
   const { createGroundSurfaces, groundBoundaryColliders } = await import('../js/ground-surfaces.js');

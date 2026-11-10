@@ -1,6 +1,23 @@
 # Changelog
 
-## Non publié — Sol, trottoirs et murs des parcs
+## 0.9.19 — Growth Equity — 10 novembre 2026
+
+La refonte des arbres et les corrections du sol rejoignent les armureries CALIBRE de la 0.9.18.
+
+### Les arbres
+
+- Huit essences — platane, févier, poirier, ginkgo, chêne, orme, tilleul et cerisier — avec un modèle jeune et un
+  modèle adulte pour chacune. Les arbres de rue reprennent l'espèce et le diamètre du tronc consignés par la ville ;
+  ceux des parcs gardent leurs emplacements aménagés.
+- Chaque arbre a ses branches, ses rameaux, ses feuilles et son écorce. De près, le modèle complet ; plus loin,
+  une géométrie allégée issue du même arbre, puis des images de ce modèle vues sous plusieurs angles. Les niveaux
+  se relayent progressivement et gardent leurs ombres.
+- Troncs, branches et feuilles suivent le vent et les rafales de la météo. Les modèles s'adaptent à l'espace
+  disponible près des façades ; les troncs conservent leurs collisions.
+- Les outils de génération sont regroupés dans `tools/trees/`, les ressources du jeu dans `assets/trees/`.
+  La préparation des données du recensement utilise Node.js ; elle ne dépend plus de Python ni de la licence Xcode.
+
+### Sol, trottoirs et murs des parcs
 
 - Les pieds et les roues prennent appui sur les surfaces réellement construites : trottoirs, places, pelouses,
   allées de Central Park et leurs accotements. Les trottoirs des parcs n'ont plus un sol physique 22 à 26 cm trop bas.
@@ -11,11 +28,38 @@
   retirée au lieu d'autoriser un trajet sur le trottoir. Les voies restantes gardent une sortie valide.
 - Régressions couvertes : hauteurs et normales du sol, jonctions des morceaux de mur, collisions du simulateur
   automobile jusqu'à 108 km/h à 30 et 60 pas par seconde, voies et virages sur la géographie de Manhattan.
-- Vérifié dans un Chrome isolé, WebGPU, qualité HAUTE, de jour, avec de vraies touches : marche et conduite sur le
+- Vérifié avant intégration dans un Chrome isolé, WebGPU, qualité HAUTE, de jour, avec de vraies touches : marche et conduite sur le
   trottoir de Central Park, quatre pneus en appui, arrêt contre son mur. Contrôle des hauteurs dans six parcs.
   Le réseau chargé conserve 5 055 tronçons et 12 892 liaisons de virage, sans point contrôlé sur un trottoir.
 - Limites : les autres murs décoratifs de Manhattan n'ont pas fait l'objet d'un audit exhaustif ; les performances
   globales et les missions n'ont pas été requalifiées par ce correctif.
+
+### Intégration avec CALIBRE
+
+- Les ressources des arbres et celles des boutiques sont chargées ensemble avant de construire la ville. Le sol
+  intérieur des armureries reste prioritaire sur les surfaces extérieures.
+- Les réserves devant les portes CALIBRE sont prises en compte par la plantation des nouveaux arbres. Leurs
+  différents niveaux de détail restent couverts par le masquage de la ville lorsque la caméra regarde le fond
+  d'une boutique.
+- Contrôles ciblés avant validation finale : 25 tests arbres, placements et géodonnées réussis ; 4 032 points
+  vérifiés sur les réserves d'entrée des 48 boutiques, sans plantation possible dans le passage.
+
+### Vérification finale
+
+- Suite complète : 963 tests, dont 926 réussis, 37 ignorés et aucun échec (`npm test -- --test-concurrency=2`).
+  Un test d'intégration couvre le passage du trottoir au plancher CALIBRE puis le retour dehors, sans remplacer les toits.
+- Build de production réussi ; ressources des arbres et nouveaux modules présents, Architecte exclu du build.
+- Dans un Chrome isolé, WebGPU, qualité HAUTE, à 13 h, avec de vraies touches : marche sur le trottoir de Central Park,
+  pieds à 0,22 m ; conduite jusqu'au muret, arrêt du véhicule et quatre roues en contact à 0,22 m. Les nouveaux arbres
+  sont visibles depuis les caméras de jeu.
+- Parcours à pied dans CALIBRE : entrée, ouverture du comptoir, passage au stand, démarrage d'une séance, puis sortie.
+  Le sol passe de 0,22 à 0,24 m et revient à 0,22 m ; le décor extérieur réapparaît. Aucune exception JavaScript relevée.
+- Réseau routier chargé après fusion : 5 055 tronçons, 12 892 virages ; aucun point échantillonné sur un trottoir et
+  aucune voie sans sortie.
+
+Limites de cette validation d'intégration : missions, médaille complète du stand, manette physique et performances
+globales non requalifiées ; essais visuels en qualité HAUTE uniquement. Les limites propres à CALIBRE restent décrites
+dans la version 0.9.18 ci-dessous.
 
 ## 0.9.18 — Dry Powder — 10 novembre 2026
 

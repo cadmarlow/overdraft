@@ -3,7 +3,16 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.18 — Dry Powder**. CALIBRE ouvre **48 armureries où l'on entre** : une vraie boutique dans un vrai
+Version **0.9.19 — Growth Equity**. Les arbres sont refaits : huit essences, chacune jeune ou adulte, avec des
+branches et un feuillage propres, l'espèce et le diamètre du recensement pour les arbres de rue, et le vent de la
+météo dans les cimes. Les pieds et les pneus prennent appui sur les trottoirs et les pelouses à leur vraie hauteur ;
+la circulation suit les contours des chaussées, et les murs de soutènement de Central Park et de Bryant Park
+arrêtent les véhicules. Cette version réunit ces changements avec les armureries CALIBRE de la version précédente.
+
+Pour essayer : marcher puis conduire sur le trottoir de Central Park, longer son muret, observer les arbres en
+s'approchant, puis entrer chez CALIBRE.
+
+La **0.9.18 — Dry Powder** a ouvert **48 armureries où l'on entre** : une vraie boutique dans un vrai
 immeuble, un armurier derrière son comptoir, un mur d'armes sous un néon, et un stand de tir au fond. **F** devant le
 comptoir : la caméra se pose sur la pièce présentée, avec sa fiche, ses munitions, ses **améliorations** (chargeur
 étendu, silencieux, poignée, point rouge ou lunette, étrangleur) et ses **finitions**, visibles sur l'arme avant
@@ -273,13 +282,15 @@ défauts inconnus à l'échelle de toute la ville reste à mesurer sur des séan
 | `js/quick-strip.js` | Bouton et bandeau communs au garage et au sélecteur d'armes |
 | `js/garage.js`, `js/arsenal.js` | Garage rapide, sélecteur d'armes |
 | `tools/world/` | Prépare les textures de la ville et importe les objets de rue dans `assets/world/` |
-| `tools/nature/` | Compose l'atlas de feuilles et prépare écorces et herbe dans `assets/nature/` |
+| `tools/nature/` | Prépare les textures d'herbe dans `assets/nature/` |
+| `tools/trees/` | Prépare les écorces et le feuillage, génère les arbres et leurs vues lointaines dans `assets/trees/`, et les données du recensement dans `js/tree-geodata.*` |
 | `tools/people/` | Importe les avatars, les armes et la motion capture Rocketbox dans `assets/people/` |
 | `tools/build-humans.mjs`, `tools/humans/` | Sculpte les accessoires de la foule dans `assets/humans/` |
 | `js/characters.js`, `js/person-body.js`, `js/person-motion.js` | Personnages : squelette, motion capture, tenue des armes |
 | `js/mocap.js`, `js/crowd-motion.js` | Lecture de la motion capture, poses de la foule |
 | `js/people-assets.js`, `js/people-material.js`, `js/human-crowd.js` | Chargement des modèles, matières, rendu de la foule |
-| `js/trees.js`, `js/grass.js`, `js/nature-assets.js` | Arbres, brins d'herbe, textures de la nature |
+| `js/trees.js`, `js/tree-assets.js`, `js/tree-materials.js`, `js/tree-levels.js` | Arbres : chargement, plantation, matières et niveaux de détail |
+| `js/grass.js`, `js/nature-assets.js` | Brins d'herbe et textures d'herbe |
 | `js/world-assets.js`, `js/street-clutter.js` | Surfaces de la ville, objets de rue |
 | `js/ragdoll.js` | Chutes physiques des corps |
 | `js/airplane.js`, `js/flight.js` | Avion et parachute (modèles), modèle de vol |

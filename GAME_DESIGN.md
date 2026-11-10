@@ -402,4 +402,5 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.16** | **Green Shoots** | Les parcs : pelouses qui savent où sont l'ombre, les allées et l'eau, 70 km de sentiers réels dans Central Park, ses 110 affleurements de schiste, allées en bitume aux accotements de terre, berges. |
 | **0.9.17** | **Stop Loss** | Correctifs : les fumées et les effets ne sortent plus en carrés noirs en qualité HAUTE ; une voiture ou un bus qui explose laisse la carcasse de son propre modèle. |
 | **0.9.18** | **Dry Powder** | CALIBRE : 48 armureries où l'on entre, comptoir avec fiches et aperçu sur l'arme, améliorations et finitions, armurier qui défend sa boutique, stand de tir à médailles et remises. |
+| **0.9.19** | **Growth Equity** | Arbres refaits : huit essences jeunes et adultes, espèces et diamètres recensés, niveaux de détail cohérents et vent de la météo. Appuis sur les surfaces réelles, circulation hors des trottoirs, collisions des murs de Central Park et Bryant Park ; intégration avec CALIBRE. |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |
