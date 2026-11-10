@@ -163,11 +163,20 @@ class ShopSystem {
       row.addEventListener('mouseenter', () => { this.sel = i; this.refreshSelection(); });
       row.addEventListener('click', () => { this.sel = i; this.buy(); });
     });
-    this.foot.textContent = `↑ ↓ choisir · ENTRÉE valider · ÉCHAP quitter · ${money(g.money)}`;
+    const keys = g.gamepad?.using ? '↑ ↓ choisir · A valider · B quitter' : '↑ ↓ choisir · ENTRÉE valider · ÉCHAP quitter';
+    this.foot.textContent = `${keys} · ${money(g.money)}`;
   }
 
   refreshSelection() {
     [...this.list.children].forEach((row, i) => row.classList.toggle('sel', i === this.sel));
+  }
+
+  navigate(step) {
+    const count = this.current?.length;
+    if (!count) return;
+    this.sel = (this.sel + step + count) % count;
+    this.refreshSelection();
+    this.list.children[this.sel]?.scrollIntoView({ block: 'nearest' });
   }
 
   buy() {
@@ -188,9 +197,8 @@ class ShopSystem {
       e.preventDefault();
       e.stopImmediatePropagation();
     } else return;
-    const n = this.current?.length || 0;
-    if (k === 'ArrowUp' || k === 'KeyW' || k === 'KeyZ') this.sel = (this.sel - 1 + n) % n;
-    if (k === 'ArrowDown' || k === 'KeyS') this.sel = (this.sel + 1) % n;
+    if (k === 'ArrowUp' || k === 'KeyW' || k === 'KeyZ') this.navigate(-1);
+    if (k === 'ArrowDown' || k === 'KeyS') this.navigate(1);
     if (k === 'Enter' || k === 'NumpadEnter' || k === 'Space') this.buy();
     if (k === 'Escape') this.close();
     this.refreshSelection();

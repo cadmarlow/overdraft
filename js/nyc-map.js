@@ -518,13 +518,7 @@ class NYCMapSystem {
       });
     }
     if (centerPlayerBtn) {
-      centerPlayerBtn.addEventListener('click', () => {
-        const ent = this.controllerManager.getActiveEntity();
-        this.viewCenterX = ent.position.x;
-        this.viewCenterZ = ent.position.z;
-        this.viewZoom = 0.9; // Street-by-street detail zoom
-        this.renderFullMap();
-      });
+      centerPlayerBtn.addEventListener('click', () => this.centerOnPlayer());
     }
     if (fullIslandBtn) {
       fullIslandBtn.addEventListener('click', () => {
@@ -604,16 +598,7 @@ class NYCMapSystem {
           const mx = e.clientX - rect.left;
           const my = e.clientY - rect.top;
           if (mx >= 0 && mx <= rect.width && my >= 0 && my <= rect.height) {
-            const wPos = this.clampToManhattan(this.screenToWorld(mx, my, rect.width, rect.height));
-            this.waypoint = {
-              x: wPos.x,
-              z: wPos.z,
-              name: getLocationLabel(wPos.x, wPos.z)
-            };
-            if (this.onTeleport) {
-              this.onTeleport(wPos.x, wPos.z);
-            }
-            this.renderFullMap();
+            this.placeWaypoint(this.screenToWorld(mx, my, rect.width, rect.height), true);
           }
         }
       });
@@ -641,6 +626,32 @@ class NYCMapSystem {
         this.renderFullMap();
       }, { passive: false });
     }
+  }
+
+  centerOnPlayer() {
+    const { position } = this.controllerManager.getActiveEntity();
+    this.viewCenterX = position.x;
+    this.viewCenterZ = position.z;
+    this.viewZoom = 0.9;
+    this.renderFullMap();
+  }
+
+  placeWaypoint(point, allowTeleport = false) {
+    const { x, z } = this.clampToManhattan(point);
+    this.waypoint = { x, z, name: getLocationLabel(x, z) };
+    if (allowTeleport) this.onTeleport?.(x, z);
+    this.renderFullMap();
+  }
+
+  controlGamepad(x, y, zoom, dt, waypoint, center) {
+    if (center) { this.centerOnPlayer(); return; }
+    if (waypoint) { this.placeWaypoint({ x: this.viewCenterX, z: this.viewCenterZ }); return; }
+    if (!x && !y && !zoom) return;
+    const distance = 540 * dt / this.viewZoom, bounds = ISLAND_BOUNDS;
+    this.viewCenterX = Math.max(bounds.minX - 1500, Math.min(bounds.maxX + 1500, this.viewCenterX + x * distance));
+    this.viewCenterZ = Math.max(bounds.minZ - 1500, Math.min(bounds.maxZ + 1500, this.viewCenterZ + y * distance));
+    this.viewZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, this.viewZoom * Math.exp(zoom * dt * 1.75)));
+    this.renderFullMap();
   }
 
   /**

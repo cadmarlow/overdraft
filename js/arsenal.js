@@ -48,8 +48,8 @@ class Arsenal {
     this.previous = null; // the weapon to go back to on a tap
     this.shownIcon = null;
     this.build();
-    window.addEventListener('keyup', (e) => { if (e.code === 'Tab') this.release(); });
-    window.addEventListener('blur', () => { this.held = -1; if (this.open) this.close(); });
+    window.addEventListener('keyup', (e) => { if (e.code === 'Tab' && this.source === 'keyboard') this.release(); });
+    window.addEventListener('blur', () => this.cancelHold(this.source, true));
     // The pointer steers the wheel while it is open: the view must not turn under it
     document.addEventListener('mousemove', (e) => {
       if (!this.open) return;
@@ -117,15 +117,16 @@ class Arsenal {
 
   get scale() { return Math.min(1, Math.min(innerWidth, innerHeight) / 620); }
 
-  // TAB went down (gameplay.js filters repeats)
-  press() {
+  // The keyboard and gamepad share the same tap-to-swap and hold-to-open timing.
+  press(source = 'keyboard') {
+    if (this.source && this.source !== source) return;
     if (this.open) { this.close(); return; }
-    if (this.available) this.held = 0;
+    if (this.available) { this.source = source; this.held = 0; }
   }
 
-  // TAB came up: the wheel's choice if it was open, else straight back to the weapon held before
   release() {
     const held = this.held;
+    this.source = null;
     this.held = -1;
     if (this.open) { if (!this.sticky) this.pick(this.sel); return; }
     if (held < 0 || !this.available) return;
@@ -133,6 +134,19 @@ class Arsenal {
     const back = this.previous && g.weapons[this.previous] && this.previous !== g.weaponId ? this.previous
       : g.weaponId === 'fists' ? WEAPON_ORDER.find((id) => id !== 'fists' && g.weapons[id] && !WEAPONS[id].gadget) : 'fists';
     if (back) g.selectWeapon(back);
+  }
+
+  cancelHold(source, closeWheel = false) {
+    if (!closeWheel && this.source !== source) return;
+    this.source = null;
+    this.held = -1;
+    if (this.open) this.close();
+  }
+
+  point(x, y) {
+    if (Math.hypot(x, y) < 0.35) return;
+    this.select(wedgeAt(x, y, WEAPON_ORDER.length));
+    this.dot.setAttribute('transform', `translate(${(x * R0 * 0.72).toFixed(1)} ${(y * R0 * 0.72).toFixed(1)})`);
   }
 
   toggle() { if (this.open) this.close(); else if (this.available) this.show(true); }
@@ -163,6 +177,8 @@ class Arsenal {
     if (!this.open) return;
     const g = this.game;
     this.open = false;
+    this.source = null;
+    this.held = -1;
     this.root.classList.remove('show');
     this.root.hidden = true;
     g.camera.lookLocked = false;
@@ -197,7 +213,7 @@ class Arsenal {
     this.hubSub.textContent = w.sub;
     this.hubName.textContent = w.name;
     this.hubAmmo.textContent = this.reserve(id);
-    this.hubHint.textContent = owned ? (this.sticky ? 'Cliquer pour prendre' : 'Relâcher TAB') : 'Chez Calibre';
+    this.hubHint.textContent = owned ? (this.sticky ? (this.game.gamepad?.using ? 'A : prendre' : 'Cliquer pour prendre') : this.source === 'gamepad' ? 'Relâcher LB' : 'Relâcher TAB') : 'Chez Calibre';
     if (!quiet) this.game.audio.ui('dry', 0.35);
   }
 
@@ -214,7 +230,7 @@ class Arsenal {
     const shop = g.shops.nearest('guns');
     if (!g.director.current && shop) g.gps(shop.x, shop.z);
     g.audio.ui('deny');
-    g.toast(`${WEAPONS[id].name} : pas encore à vous`, `${money(GUN_ITEMS.find((it) => it.id === id).price)} chez Calibre · TAB : vos armes`);
+    g.toast(`${WEAPONS[id].name} : pas encore à vous`, `${money(GUN_ITEMS.find((it) => it.id === id).price)} chez Calibre · ${g.gamepad?.using ? 'LB' : 'TAB'} : vos armes`);
   }
 
   key(e) {
@@ -249,7 +265,7 @@ class Arsenal {
     if (this.open && !this.available) this.close();
     if (this.held >= 0 && !this.open) {
       this.held += dt;
-      if (this.held >= HOLD) { if (this.available) this.show(false); else this.held = -1; }
+      if (this.held >= HOLD) { if (this.available) this.show(false); else this.cancelHold(this.source); }
     }
   }
 }

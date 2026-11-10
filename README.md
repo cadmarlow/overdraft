@@ -3,7 +3,11 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.12 — Blue Chips**. Quatorze des quinze voitures ont une nouvelle carrosserie, et la rue est enfin à leur
+Version **0.9.13 — Market Order**. Une manette Xbox permet de jouer de l’écran titre jusqu’aux missions.
+Maintenez **LT** pour viser, appuyez sur **RT** pour tirer, et tenez **LB** pour choisir une arme avec le stick droit.
+Le menu **Commandes** donne les raccourcis. Voir aussi la section [Manette Xbox](#manette-xbox).
+
+La **0.9.12 — Blue Chips** a refait les voitures. Quatorze des quinze voitures ont une nouvelle carrosserie, et la rue est enfin à leur
 niveau : une voiture garée ou croisée dans la circulation garde la silhouette, les jantes, les plaques et les badges de
 celle qu'on conduit. Les roues tournent et braquent, la caisse plonge au freinage sur des roues qui restent au sol.
 Le menu pause est refait en quatre onglets (Partie, Graphismes, Ambiance, Commandes).
@@ -144,8 +148,23 @@ Un hélicoptère se pose sur n'importe quel toit ; F en sort sans sauter.
 M : carte (un clic place un point de passage) · V : caméra · Entrée : passer un dialogue ·
 H : masquer l'interface · N : couper le son · Échap : pause.
 
-Manette standard prise en charge (sticks, gâchettes, A pour sauter, clic du stick gauche pour courir, X pour tirer le
-grappin, épaule pour interagir, Y pour la caméra).
+### Manette Xbox
+
+LS et RS désignent les sticks gauche et droit. L3 et R3 désignent leur clic. La croix et le stick gauche naviguent
+dans les menus. **A** valide, **B** revient, **LB / RB** changent d’onglet dans la pause. Le stick droit défile.
+
+| Situation | Commandes |
+|---|---|
+| À pied | LS déplacement, RS caméra, A tenu sprint, X saut, Y interaction ou véhicule |
+| Armes | LT dégainer et viser, RT tirer ou frapper, B recharger, LT + R3 changer d’épaule, L3 régler la visée assistée |
+| Arsenal | LB bref arme précédente, LB tenu roue. RS désigne une arme, relâcher LB valide, B annule |
+| Grappin et vol libre | RB sortir ou ranger le grappin, RT le tirer. X sauter, ouvrir la wingsuit en chute libre ou lâcher le grappin. Y ouvrir ou larguer le parapente, LS et RS dirigent |
+| Au volant | LS direction, RT accélérateur, LT frein puis marche arrière, RB frein à main, A nitro ou wheeling, L3 klaxon, R3 regarder derrière, B remettre le véhicule d’aplomb à l’arrêt, Y descendre |
+| Tir embarqué | Tenir X pour viser par la vitre, RT pour tirer, B pour recharger. X sort le pistolet si l’arme en main ne convient pas |
+| Avion / hélicoptère | LS piloter, RT / LT augmenter ou réduire les gaz / monter ou descendre, Y quitter |
+| Partout | ↑ téléphone, ↓ carte, View bref caméra, View tenu garage, Menu pause, A passer les séquences de mission |
+| Radio (à bord) | ← / → station précédente / suivante |
+| Carte | LS déplacer, LT / RT dézoomer / zoomer, A placer un repère au centre, X recentrer, B fermer |
 
 ## Dans la ville
 

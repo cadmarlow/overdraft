@@ -387,14 +387,15 @@ async function initApp() {
   const elLocation = document.getElementById('hud-location');
   const elControlsHint = document.getElementById('hud-controls-hint');
   const gamepadControls = new GamepadControls(controllerManager, cameraSystem, {
-    onCycleMode: () => gameplay?.interact(),
-    onGrapple: () => gameplay?.vertical.fire(),
     onCycleCamera: cycleCamera,
-    onToggleMap: () => {
-      if (gameplay?.active || mapSystem.isFullMapOpen) mapSystem.toggleFullMap(!mapSystem.isFullMapOpen);
-    },
-    onCloseMap: () => mapSystem.toggleFullMap(false)
+    onHorn: honk
   });
+
+  function honk() {
+    const ent = controllerManager.getActiveEntity();
+    audioSystem.honk(ent);
+    birds.scatter(ent.position.x, ent.position.z, 22);
+  }
 
   // Keyboard guide for each mode: [keys, action]
   const controlHints = {
@@ -664,11 +665,7 @@ async function initApp() {
         if (!e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) audioSystem.setEnabled(!audioSystem.enabled);
         break;
       case 'KeyB':
-        if (!e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && !mapSystem.isFullMapOpen) {
-          const ent = controllerManager.getActiveEntity();
-          audioSystem.honk(ent);
-          birds.scatter(ent.position.x, ent.position.z, 22);
-        }
+        if (!e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey && !mapSystem.isFullMapOpen) honk();
         break;
     }
   });
@@ -690,6 +687,7 @@ async function initApp() {
   gameplay = new Playground({ controllers: controllerManager, camera: cameraSystem, traffic: trafficSystem, highway: highwayTraffic, streets: streetDetails,
     scene, onMode: selectMode, onTime: selectTime, audio: audioSystem, map: mapSystem, touch: touchControls, gamepad: gamepadControls,
     lighting: lightingSystem, grade: colorGrade, parking });
+  gamepadControls.game = gameplay;
   // The Architect (ARCHITECTE.md) is a local development tool: on this machine or its network only, never online, where
   // the production build does not even ship his files (scripts/build.mjs). Built here, before the shaders compile, so his
   // car and helicopter compile behind the loading screen. ?architecte=0 plays without him, as online.
@@ -907,11 +905,11 @@ async function initApp() {
     lastTime = now;
     const dt = Math.min(Math.max(rawDt, 0.001), 0.05);
     elapsed += dt;
+    if (warmedUp && (!loadingOverlay || loadingOverlay.classList.contains('hidden'))) gamepadControls.update(dt);
     const simulationDt = gameplay.active ? dt * gameplay.timeScale : 0;
     const worldDt = !gameplay.playing ? dt : simulationDt;
 
     // Update 3rd-person controllers, camera, signals, traffic & vehicle collisions, building LODs, and dynamic shadow focus
-    gamepadControls.update(simulationDt);
     gameplay.beforeUpdate(simulationDt);
     if (simulationDt > 0) controllerManager.update(simulationDt, elapsed, cameraSystem.initialized ? cameraSystem.currentPos : null);
     cameraSystem.update(simulationDt > 0 ? simulationDt : dt, elapsed);

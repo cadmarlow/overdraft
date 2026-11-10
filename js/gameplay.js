@@ -45,7 +45,7 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.12';
+const BUILD = '0.9.13';
 const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
 // The neighbourhoods as the opening card names them (city-config.js districtAt)
 const DISTRICT_NAMES = {
@@ -430,7 +430,7 @@ export class Game {
   buildInterface() {
     document.body.insertAdjacentHTML('beforeend', `
       <div id="game-vignette" aria-hidden="true"></div>
-      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · BLUE CHIPS</small></span></div>
+      <div id="game-brand"><span class="cm-monogram">OD<span>↗</span></span><span>OVERDRAFT<small>v${BUILD} · MARKET ORDER</small></span></div>
       <div id="session-badge"><i></i><span>MANHATTAN</span><b id="session-mode">LIBRE</b><button id="pause-button" aria-label="Ouvrir le menu pause">Ⅱ</button></div>
       <div id="game-prompt" role="status" aria-live="polite"><kbd>F</kbd><span>Voler la voiture<small>VÉHICULE</small></span></div>
       <div id="game-toast" role="status" aria-live="polite"></div>
@@ -441,7 +441,7 @@ export class Game {
       <div id="intro-bars" aria-hidden="true"><i></i><i></i></div>
       <div id="intro-card" aria-hidden="true"><span>MANHATTAN · NEW YORK</span><strong>Midtown</strong><em>5e Avenue</em></div>
       ${pauseMenuMarkup(BUILD)}
-      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Blue Chips</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap. Mobilier urbain : registres publics de la ville et de la MTA (bouches d’incendie, arrêts et abris de bus, kiosques, arceaux, bancs, bornes, parcmètres, échafaudages, terrasses).</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : KiW, razor24, meeww, ziedarchi, lael.eugenio, cenobyte, Tomaso, Jiaxing, Lexyc16, Myedsu, kekomag et Eric Chadwick / DGG. Modèles sous CC BY 4.0, modifiés pour OVERDRAFT.</p><p>Armes : « Service Pistol » de Mateusz Sadek (Poly Haven, CC0) ; « AK-12 » et « Remington 870 with Magpul furniture » de rwroclav, « MP7 » de Harry / habbottcapps, « M67 Fragmentation Grenade » de FJH (Sketchfab, CC BY 4.0). Réorientées, découpées en pièces mobiles et débarrassées de leurs marquages pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
+      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · Market Order</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Musique et sons générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap. Mobilier urbain : registres publics de la ville et de la MTA (bouches d’incendie, arrêts et abris de bus, kiosques, arceaux, bancs, bornes, parcmètres, échafaudages, terrasses).</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : KiW, razor24, meeww, ziedarchi, lael.eugenio, cenobyte, Tomaso, Jiaxing, Lexyc16, Myedsu, kekomag et Eric Chadwick / DGG. Modèles sous CC BY 4.0, modifiés pour OVERDRAFT.</p><p>Armes : « Service Pistol » de Mateusz Sadek (Poly Haven, CC0) ; « AK-12 » et « Remington 870 with Magpul furniture » de rwroclav, « MP7 » de Harry / habbottcapps, « M67 Fragmentation Grenade » de FJH (Sketchfab, CC BY 4.0). Réorientées, découpées en pièces mobiles et débarrassées de leurs marquages pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
       <button id="mobile-interact" class="touch-interact" hidden>F <span>VÉHICULE</span></button>
     `);
     this.driveInstruments = new DriveInstruments(document.getElementById('drive-gauge'));
@@ -482,23 +482,12 @@ export class Game {
         this.aimToggle = !this.aimToggle;
       }
       if (e.code === 'KeyC' && this.state === 'onFoot' && HANDLING[this.weaponId]) this.camera.swapShoulder();
-      if (e.code === 'KeyY' && this.state === 'onFoot') {
-        const on = this.aimAssist.enabled = !this.aimAssist.enabled;
-        try { localStorage.setItem('overdraft:aimAssist', on ? '1' : '0'); } catch { /* storage optional */ }
-        this.audio.ui(on ? 'shop' : 'deny');
-        this.toast(on ? 'Visée assistée : activée' : 'Visée assistée : coupée', on ? 'Viser près d’un ennemi amène le viseur sur lui' : 'Visée libre · Y pour la remettre');
-      }
+      if (e.code === 'KeyY' && this.state === 'onFoot') this.toggleAimAssist();
       if (e.code === 'KeyR') {
-        if (this.state === 'driving' && Math.abs(this.car.speed) < 1.5) {
-          const car = this.car;
-          car.position.y = this.controllers.getGroundHeight(car.position.x, car.position.z, 'car');
-          car.speed = car.vx = car.vz = car.angularVel = 0;
-        } else if (this.state === 'onFoot') this.reload();
+        if (this.state === 'driving') this.resetStoppedVehicle();
+        else if (this.state === 'onFoot') this.reload();
       }
-      if (e.code === 'KeyT' && this.radio && this.state === 'driving') {
-        if (e.shiftKey) this.radio.prev(); else this.radio.next();
-        this.showRadio();
-      }
+      if (e.code === 'KeyT') this.changeRadio(e.shiftKey ? -1 : 1);
       const digit = ['Digit1', 'Digit2', 'Digit3', 'Digit4', 'Digit5', 'Digit6', 'Digit7'].indexOf(e.code);
       if (digit >= 0 && (this.state === 'onFoot' || this.state === 'driving' || this.vertical.owns(this.state) || this.state === 'falling')) {
         if (this.state !== 'onFoot' && this.state !== 'driving' && WEAPON_ORDER[digit] !== 'grapple') return; // in the air, only the grapple comes out
@@ -632,6 +621,27 @@ export class Game {
 
   updateKeybar() {
     const k = (keys, label) => `<span>${keys.map((x) => `<kbd>${x}</kbd>`).join(' ')} ${label}</span>`;
+    if (this.gamepad?.using) {
+      const end = [k(['View'], 'Caméra / garage (tenu)'), k(['↑'], 'Téléphone'), k(['↓'], 'Carte'), k(['Menu'], 'Pause')];
+      const wheel = k(['LB'], 'Armes'), interact = k(['Y'], 'Interagir');
+      const aim = k(['LT', 'RT'], this.weaponId === 'grapple' ? 'Viser / grappin' : 'Viser / tirer');
+      const grapple = k(['RB'], 'Sortir / ranger le grappin');
+      let hints;
+      if (this.state === 'driving') {
+        const car = this.car;
+        hints = car.air ? [k(['LS'], 'Piloter'), k(['RT', 'LT'], car.mode === 'plane' ? 'Gaz + / −' : 'Monter / descendre'), k(['Y'], 'Quitter'), k(['←', '→'], 'Radio')]
+          : [k(['LS'], 'Diriger'), k(['RT', 'LT'], 'Gaz / frein'), k(['Y'], 'Descendre'),
+            ...(!car.boat ? [k(['RB'], 'Frein à main')] : []),
+            ...(!car.bicycle ? [k(['X', 'RT'], 'Tir embarqué'), wheel] : []), k(['←', '→'], 'Radio')];
+      } else if (this.state === 'swimming') hints = [k(['LS'], 'Nager'), k(['A'], 'Crawl'), k(['Y'], 'Monter à bord')];
+      else if (this.state === 'surfing') hints = [aim, k(['X'], 'Sauter'), interact, grapple];
+      else if (this.vertical?.owns(this.state) || this.state === 'falling') hints = [k(['LS', 'RS'], 'Diriger'), k(['X'], 'Sauter / wingsuit'), k(['Y'], 'Parapente / larguer'), grapple, k(['RT'], 'Tirer le grappin')];
+      else hints = [k(['A'], 'Courir'), k(['X'], 'Sauter'), interact, aim, k(['B'], 'Recharger'), wheel, grapple];
+      this.ui['game-keybar'].innerHTML = [...hints, ...end].join('');
+      this.ui['game-prompt'].querySelector('kbd').textContent = 'Y';
+      return;
+    }
+    this.ui['game-prompt'].querySelector('kbd').textContent = 'F';
     const armed = this.weaponId !== 'fists';
     const end = [k(['G'], 'Garage'), k(['V'], 'Caméra'), k(['M'], 'Carte'), k(['ÉCHAP'], 'Menu')];
     const air = { helicopter: [k(['Z', 'S'], 'Avancer'), k(['Q', 'D'], 'Pivoter'), k(['ESPACE'], 'Monter'), k(['C'], 'Descendre')],
@@ -672,6 +682,20 @@ export class Game {
     const now = this.radio?.nowPlaying;
     if (now) this.hud.showRadio(now.name, now.song ? `${now.song}` : now.tagline, now.color);
     else if (this.radio) this.hud.showRadio('RADIO COUPÉE', '', '#9aa39a');
+  }
+
+  changeRadio(step) {
+    if (!this.radio || this.state !== 'driving') return;
+    if (step < 0) this.radio.prev(); else this.radio.next();
+    this.showRadio();
+  }
+
+  resetStoppedVehicle() {
+    const car = this.car;
+    if (this.state !== 'driving' || Math.abs(car.speed) >= 1.5) return;
+    car.position.y = this.controllers.getGroundHeight(car.position.x, car.position.z, 'car');
+    car.speed = car.vx = car.vz = car.angularVel = 0;
+    if (car.body) settleBody(car);
   }
 
   // ---- Map overlay: flooded streets, police, mission blips, GPS ----------------------------------------------------
@@ -1213,7 +1237,20 @@ export class Game {
   }
 
   isAiming() {
-    return (this.state === 'onFoot' || this.state === 'surfing') && (this.aimHeld || this.aimToggle) && this.weaponId !== 'fists';
+    return (this.state === 'onFoot' || this.state === 'surfing') && (this.aimHeld || this.aimToggle || this.gamepad?.aim) && this.weaponId !== 'fists';
+  }
+
+  toggleAimAssist() {
+    const on = this.aimAssist.enabled = !this.aimAssist.enabled;
+    try { localStorage.setItem('overdraft:aimAssist', on ? '1' : '0'); } catch { /* storage optional */ }
+    this.audio.ui(on ? 'shop' : 'deny');
+    this.toast(on ? 'Visée assistée : activée' : 'Visée assistée : coupée', on ? 'Viser près d’un ennemi amène le viseur sur lui'
+      : `Visée libre · ${this.gamepad?.using ? 'L3' : 'Y'} pour la remettre`);
+  }
+
+  get canDriveBy() {
+    const w = this.weapon;
+    return this.state === 'driving' && !this.car.bicycle && !this.car.air && (w.id === 'pistol' || w.id === 'smg') && !!this.weapons[w.id];
   }
 
   cancelWeaponActions() {
@@ -1297,9 +1334,12 @@ export class Game {
   updateWeapons(dt) {
     const w = this.weapon, slot = this.weapons[this.weaponId];
     const handling = HANDLING[w.id];
+    const fireHeld = this.fireHeld || this.gamepad?.fire;
+    const firePressed = this.firePressed || this.gamepad?.firePressed;
+    if (firePressed && this.gamepad) this.gamepad.bufferedShot = !this.firePressed && !!handling;
     // Carry fractional cadence forward while an automatic trigger is held, without accumulating paused shots.
-    this.cooldown = Math.max(w.auto && this.fireHeld ? -Math.min(dt, 0.05) : 0, this.cooldown - dt);
-    this.triggerBuffer = this.firePressed && handling ? 0.14 : Math.max(0, this.triggerBuffer - dt);
+    this.cooldown = Math.max(w.auto && fireHeld ? -Math.min(dt, 0.05) : 0, this.cooldown - dt);
+    this.triggerBuffer = firePressed && handling ? 0.14 : Math.max(0, this.triggerBuffer - dt);
     this.combatReadyT = Math.max(0, this.combatReadyT - dt);
     this.hipT = Math.max(0, this.hipT - dt);
     this.strafeT = Math.max(0, this.strafeT - dt);
@@ -1347,14 +1387,14 @@ export class Game {
       if (!this.punchHit && this.punchT < 0.24) { this.punchHit = true; this.meleeHit(); }
     } else rig.punch = 0;
 
-    if (this.firePressed && !drawn && handling) this.triggerBuffer = 0.5;
-    const shooting = onFoot && !this.arsenal.open && (w.auto ? this.fireHeld : handling ? this.triggerBuffer > 0 : this.firePressed);
+    if (firePressed && !drawn && handling) this.triggerBuffer = 0.5;
+    const shooting = onFoot && !this.arsenal.open && (w.auto ? fireHeld : handling ? this.triggerBuffer > 0 : firePressed);
     // Drive-by: aim out of the driver's window with a one-handed or compact weapon
-    const driveBy = this.state === 'driving' && !this.car.bicycle && !this.car.air && this.aimHeld && !w.melee && !w.throwable && !w.gadget && w.id !== 'shotgun' && w.id !== 'rifle' && !!slot;
+    const driveBy = this.canDriveBy && !this.arsenal.open && (this.aimHeld || this.gamepad?.aim);
     this.world.ignoreCar = this.state === 'driving' ? this.car : null;
     if (driveBy) {
       this.hud.setCrosshair(true, w.spread + 0.02);
-      if ((w.auto ? this.fireHeld : this.firePressed) && this.cooldown <= 0 && this.reloadT <= 0) {
+      if ((w.auto ? fireHeld : firePressed) && this.cooldown <= 0 && this.reloadT <= 0) {
         if (slot.mag > 0) this.fire(w, slot, true);
         else if (slot.ammo > 0) this.reload();
       }
@@ -1388,7 +1428,7 @@ export class Game {
       this.hero.muzzle(_muzzle);
       this.muzzleBlocked = !!muzzleObstruction(this.world, this.player, _muzzle);
     }
-    if (!driveBy) this.hud.setCrosshair(hookSight || (onFoot && !w.melee && !w.gadget && (aiming || this.hipT > 0 || this.fireHeld)),
+    if (!driveBy) this.hud.setCrosshair(hookSight || (onFoot && !w.melee && !w.gadget && (aiming || this.hipT > 0 || fireHeld)),
       w.gadget ? 0.01 : gunSpread(w, aiming, person.speed, this.bloom), { aiming, shotgun: w.id === 'shotgun', blocked: this.muzzleBlocked,
         hostile: raised && this.sightHit?.kind === 'actor' && !!this.sightHit.target?.hostile, locked: this.locked });
 
@@ -1402,19 +1442,20 @@ export class Game {
       } else if (w.throwable) {
         if (slot.mag > 0) this.throwGrenade(w, slot);
       } else if (w.gadget) {
-        if (this.firePressed) { this.cooldown = w.interval; person.heading = this.camera.footYaw; this.vertical.fire(); }
+        if (firePressed) { this.cooldown = w.interval; person.heading = this.camera.footYaw; this.vertical.fire(); }
       } else if (this.reloadT <= 0) {
         if (slot.mag > 0) this.fire(w, slot);
         else if (slot.ammo > 0) this.reload();
-        else if (this.firePressed) { this.audio.sfx('dry', this.player.x, this.player.y + 1.2, this.player.z); this.cooldown = 0.3; }
+        else if (firePressed) { this.audio.sfx('dry', this.player.x, this.player.y + 1.2, this.player.z); this.cooldown = 0.3; }
       }
     }
     // In the air or on a rope the grapple fires along the view, no aiming needed
-    if (w.gadget && this.firePressed && this.cooldown <= 0 && (this.state === 'falling' || (this.vertical.owns(this.state) && this.state !== 'surfing'))) {
+    if (w.gadget && firePressed && this.cooldown <= 0 && (this.state === 'falling' || (this.vertical.owns(this.state) && this.state !== 'surfing'))) {
       this.cooldown = w.interval;
       this.vertical.fire();
     }
     this.firePressed = false;
+    if (this.gamepad && !this.triggerBuffer) this.gamepad.bufferedShot = false;
     this.hud.setWeapon(w.name, w.melee || w.gadget ? w.sub.toUpperCase() : w.throwable ? `× ${slot.mag}` : `${slot.mag} / ${slot.ammo}${this.reloadT > 0 ? ' · RECHARGE' : ''}`);
     this.hud.setCombat({ visible: !!handling && (onFoot || driveBy), aiming, mag: slot?.mag, capacity: w.mag, reserve: slot?.ammo,
       reload: this.reloadT > 0 ? 1 - this.reloadT / w.reload : -1, mode: w.auto ? 'AUTOMATIQUE' : w.id === 'shotgun' ? 'POMPE' : 'SEMI-AUTO', shoulder: this.camera.shoulderSide });
@@ -2528,7 +2569,10 @@ export class Game {
 
   announce(car) {
     const [brand, model] = CAR_NAMES[car.kind] || ['', 'VÉHICULE'];
-    const hint = car.police ? 'Véhicule de police : ils ne vous lâcheront pas.' : car.mode === 'plane' ? 'Trop lent, il décroche : gardez de la vitesse.' : car.body ? 'Maj : nitro · Espace : frein à main · T : radio' : 'T : changer de radio';
+    const pad = this.gamepad?.using;
+    const radio = pad ? '← → : radio' : 'T : radio';
+    const drive = pad ? 'A : nitro · RB : frein à main' : 'Maj : nitro · Espace : frein à main';
+    const hint = car.police ? 'Véhicule de police : ils ne vous lâcheront pas.' : car.mode === 'plane' ? 'Trop lent, il décroche : gardez de la vitesse.' : car.body ? `${drive} · ${radio}` : radio;
     this.toast(car.label2 || `${brand} ${model}`, hint);
   }
 

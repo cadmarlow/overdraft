@@ -37,12 +37,17 @@ function pauseMenuMarkup(build) {
           <div class="pm-setting"><div class="pm-setting-heading"><h3>Son du jeu</h3><p>Ambiance, véhicules, effets et radio.</p></div>${choices('data-sound', [['on', 'Activé'], ['off', 'Coupé']])}</div>
         </div><aside class="pm-aside"><p class="pm-kicker">À VOTRE RYTHME</p><h3>Les détails font<br>la différence.</h3><p>Une avenue sous la pluie, une virée de nuit ou les carrosseries au soleil : choisissez votre cadre.</p><p class="pm-setting-note">Ces réglages prennent effet immédiatement, sans recharger la partie.</p><div class="pm-display-row"><button id="fullscreen-toggle" class="pm-secondary" type="button" hidden><span>Plein écran</span> <span aria-hidden="true">⛶</span></button><span id="fullscreen-status" role="status"></span></div><p id="pm-world-status" class="pm-setting-note" role="status" aria-live="polite"></p></aside></div></section>
         <section class="pm-panel" id="pm-panel-controls" role="tabpanel" aria-labelledby="pm-tab-controls" hidden><div class="pm-layout"><div class="pm-main">
-          <p class="pm-kicker">CLAVIER AZERTY · SOURIS · PAVÉ TACTILE</p><h2 class="pm-heading">Gardez<br><em>le contrôle.</em></h2>
+          <p class="pm-kicker">MANETTE XBOX · CLAVIER AZERTY · SOURIS</p><h2 class="pm-heading">Gardez<br><em>le contrôle.</em></h2>
+          <div class="pm-controls-grid pm-xbox-controls">
+            ${controls('Xbox · À pied', [['LS / RS', 'Se déplacer / regarder'], ['A / X', 'Sprinter / sauter'], ['Y', 'Interagir ou monter'], ['LT / RT / B', 'Viser / tirer / recharger'], ['LB', 'Tenu : roue au stick droit. Bref : arme précédente'], ['RB', 'Sortir ou ranger le grappin'], ['LT + R3', 'Changer d’épaule'], ['L3', 'Régler la visée assistée']])}
+            ${controls('Xbox · Au volant', [['LS', 'Tourner'], ['RT / LT', 'Accélérer / freiner, puis reculer'], ['RB / A', 'Frein à main / nitro ou wheeling'], ['L3 / R3', 'Klaxon / regard arrière'], ['X + RT', 'Tenir X pour viser, RT pour tirer'], ['B', 'Remettre d’aplomb à l’arrêt'], ['← →', 'Changer de station']])}
+            ${controls('Xbox · Partout', [['↑ / ↓', 'Téléphone / carte'], ['View', 'Bref : caméra. Tenu : garage'], ['Menu', 'Pause ou reprise'], ['Croix / A / B', 'Choisir / valider / revenir'], ['LB / RB', 'Changer d’onglet dans la pause'], ['RS', 'Défiler dans la pause'], ['A', 'Passer une séquence de mission']])}
+          </div>
           <div class="pm-controls-grid">${controls('Dans les rues', [['Z Q S D', 'Se déplacer'], ['ESPACE', 'Courir'], ['MAJ', 'Sauter'], ['F', 'Interagir / monter'], ['E', 'Grappin'], ['G', 'Garage'], ['P', 'Téléphone'], ['M', 'Carte']])}${controls('Au volant', [['Z / S', 'Accélérer / freiner, puis reculer'], ['Q / D', 'Tourner'], ['ESPACE', 'Frein à main'], ['V', 'Changer de caméra'], ['C', 'Regarder derrière'], ['T', 'Changer de radio'], ['F', 'Descendre à l’arrêt']])}${controls('Les armes', [['CLIC', 'Tirer, ou frapper à mains nues'], ['CLIC DROIT', 'Dégainer, puis viser tant qu’il est tenu'], ['X', 'Visée fixe, sans tenir le clic'], ['C', 'Changer d’épaule'], ['Y', 'Visée assistée'], ['R', 'Recharger'], ['TAB', 'Tenu : roue des armes. Bref : arme précédente']])}</div>
         </div><aside class="pm-aside"><p class="pm-kicker">DANS CE MENU</p><h3>Tout à portée<br>de main.</h3><p><kbd>TAB</kbd> parcourt les éléments.<br><kbd>← →</kbd> change d’onglet ou de choix.<br><kbd>ENTRÉE</kbd> valide l’action.<br><kbd>ÉCHAP</kbd> reprend la partie.</p><p class="pm-setting-note">Au pavé tactile, cliquez directement sur les grandes zones de sélection. Le défilement reste disponible dans chaque page.</p></aside></div></section>
       </div>
       <div class="pm-apply-bar"><span id="pm-quality-status" role="status" aria-live="polite"></span><button id="pm-quality-reset" class="pm-text-button" type="button" disabled>Annuler le choix</button><button id="pm-quality-apply" class="pm-primary" type="button" disabled>Appliquer <span aria-hidden="true">↗</span></button></div>
-      <footer class="pm-footer"><div class="pm-key-hints"><span><kbd>← →</kbd> Choisir</span><span><kbd>ENTRÉE</kbd> Valider</span><span id="pm-escape-hint"><kbd>ÉCHAP</kbd> Reprendre</span></div><button id="credits-button" class="pm-text-button" type="button">Crédits</button><small id="pm-build">${build} · OVERDRAFT</small></footer>
+      <footer class="pm-footer"><div class="pm-key-hints"><span><kbd>← →</kbd> Choisir</span><span><kbd>ENTRÉE</kbd> Valider</span><span id="pm-escape-hint"><kbd>ÉCHAP</kbd> Reprendre</span></div><div class="pad-menu-hints"><kbd>LB / RB</kbd> Onglets · <kbd>A</kbd> Valider · <kbd>B</kbd> Retour</div><button id="credits-button" class="pm-text-button" type="button">Crédits</button><small id="pm-build">${build} · OVERDRAFT</small></footer>
     </div>
   </div><dialog id="pm-reset-dialog" class="pm-dialog" aria-labelledby="pm-reset-title"><p class="pm-kicker">NOUVEAU DÉPART</p><h2 id="pm-reset-title">Recommencer l’histoire ?</h2><p>Votre progression actuelle sera effacée : missions, argent et véhicules sauvegardés. Les préférences graphiques et audio sont conservées.</p><div class="pm-dialog-actions"><button id="pm-reset-cancel" class="pm-secondary" type="button" autofocus>Garder ma partie</button><button id="pm-reset-confirm" class="pm-primary" type="button">Recommencer</button></div></dialog>`;
 }
@@ -169,6 +174,40 @@ class PauseMenu {
     else if (b.dataset.clock) { this.game.atmosphere.running = b.dataset.clock === 'run'; this.worldChanged(this.game.atmosphere.running ? 'La journée reprend son cours.' : 'L’heure reste figée.'); }
   }
   worldChanged(message) { this.savePreferences(); this.syncWorld(); this.el('pm-clock').textContent = this.game.atmosphere.clockLabel; this.el('pm-world-status').textContent = message; }
+
+  controlGamepad(direction, tabStep, confirm, back, scroll) {
+    if (this.applying) return;
+    const active = document.activeElement;
+    if (back) {
+      if (this.game.playing) this.game.start();
+      else if (this.section !== 'session') this.selectTab('session', true);
+    } else if (tabStep || (active?.dataset.pauseTab && (direction === 'left' || direction === 'right'))) {
+      const i = TABS.findIndex(([id]) => id === this.section);
+      const step = tabStep || (direction === 'left' ? -1 : 1);
+      this.selectTab(TABS[(i + step + TABS.length) % TABS.length][0], true);
+    } else if (confirm) {
+      const target = this.root.contains(active) && active.tagName === 'BUTTON' ? active
+        : this.section === 'session' ? this.el('play-button') : this.el(`pm-tab-${this.section}`);
+      target.click();
+    } else if (direction) {
+      this.focusNextButton(this.root, direction, this.el(`pm-tab-${this.section}`));
+    } else if (scroll) this.root.querySelector('.pm-scroll').scrollTop += scroll * 520;
+  }
+
+  controlDialog(dialog, direction, confirm, back) {
+    if (back) dialog.close();
+    else if (confirm && dialog.contains(document.activeElement) && document.activeElement.tagName === 'BUTTON') document.activeElement.click();
+    else if (direction) this.focusNextButton(dialog, direction);
+  }
+
+  focusNextButton(root, direction, fallback) {
+    const buttons = [...root.querySelectorAll('button:not([disabled])')].filter(el => el.tabIndex >= 0 && el.getClientRects().length);
+    const current = buttons.indexOf(document.activeElement);
+    const step = direction === 'up' || direction === 'left' ? -1 : 1;
+    const next = current < 0 ? (fallback || buttons[0]) : buttons[(current + step + buttons.length) % buttons.length];
+    next?.focus();
+  }
+
   key(e) {
     const loading = document.getElementById('loading-overlay');
     if (!this.visible || this.applying || e.ctrlKey || e.metaKey || e.altKey || (loading && !loading.classList.contains('hidden'))) return;

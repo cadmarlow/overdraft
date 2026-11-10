@@ -1,7 +1,11 @@
 import { isTypingInField } from './city-config.js';
 
 const DEAD_ZONE = 0.15;
-const BUTTON_COUNT = 17;
+// Standard Gamepad mapping (Xbox button names).
+const A = 0, B = 1, X = 2, Y = 3, LB = 4, RB = 5, LT = 6, RT = 7;
+const VIEW = 8, MENU = 9, L3 = 10, R3 = 11, UP = 12, DOWN = 13, LEFT = 14, RIGHT = 15;
+const BUTTON_COUNT = 16;
+const TRIGGER_PRESS = 0.22, TRIGGER_RELEASE = 0.12;
 
 function axis(value) {
   return Number.isFinite(value) ? Math.max(-1, Math.min(1, value)) : 0;
@@ -24,47 +28,54 @@ function buttonValue(pad, index) {
   return Number.isFinite(button?.value) ? Math.max(0, Math.min(1, button.value)) : button?.pressed ? 1 : 0;
 }
 
-function buttons(pad) {
-  return Array.from({ length: BUTTON_COUNT }, (_, i) => Boolean(pad.buttons?.[i]?.pressed) || buttonValue(pad, i) > 0.5);
+function buttons(pad, previous) {
+  return Array.from({ length: BUTTON_COUNT }, (_, i) => {
+    if (i === LT || i === RT) return buttonValue(pad, i) > (previous[i] ? TRIGGER_RELEASE : TRIGGER_PRESS);
+    return Boolean(pad.buttons?.[i]?.pressed) || buttonValue(pad, i) > 0.5;
+  });
 }
 
 class GamepadControls {
-  constructor(controllerManager, cameraSystem, callbacks = {}) {
-    this.controller = controllerManager;
-    this.camera = cameraSystem;
-    this.callbacks = callbacks;
+  constructor(controller, camera, { onCycleCamera, onHorn } = {}) {
+    Object.assign(this, { controller, camera, onCycleCamera, onHorn });
     this.connected = false;
+    this.using = false;
     this.enabled = true;
-    this.padIndex = null;
-    this.padId = null;
-    this.previousButtons = [];
-    this.suppressedButtons = [];
-    this.syncButtons = true;
-    this.revision = 0;
-    this.focused = typeof document.hasFocus !== 'function' || document.hasFocus();
-
-    window.addEventListener('blur', () => {
-      this.focused = false;
-      this.reset();
-    });
-    window.addEventListener('focus', () => {
-      this.focused = true;
-      this.reset();
-    });
+    this.previous = [];
+    this.suppressed = [];
+    this.sync = true;
+    this.focused = document.hasFocus();
+    window.addEventListener('blur', () => { this.focused = false; this.reset(); });
+    window.addEventListener('focus', () => { this.focused = true; this.reset(); });
     document.addEventListener('visibilitychange', () => this.reset());
+    window.addEventListener('keydown', () => this.setUsing(false), true);
+    window.addEventListener('pointerdown', (e) => { if (e.isTrusted) this.setUsing(false); }, true);
+  }
+
+  setUsing(using) {
+    if (this.using === using) return;
+    this.using = using;
+    document.body.classList.toggle('using-gamepad', using);
+    this.game?.updateKeybar();
+    for (const [menu, pad, keyboard] of [
+      [this.game?.arsenal, 'LB', 'TAB'],
+      [this.game?.garage, 'View', 'G'],
+      [this.game?.phone, '↑', 'P']
+    ]) {
+      const hint = menu?.button?.querySelector('kbd');
+      if (hint) hint.textContent = using ? pad : keyboard;
+    }
   }
 
   readPad() {
     // Some browsers expose the API but reject it through Permissions Policy.
     try {
-      if (typeof navigator === 'undefined' || typeof navigator.getGamepads !== 'function') return null;
-      const pads = navigator.getGamepads();
+      const pads = navigator.getGamepads?.();
       let first = null;
-      for (let i = 0; i < (pads?.length || 0); i++) {
-        const pad = pads[i];
+      for (const pad of pads ?? []) {
         if (!pad?.connected || pad.mapping !== 'standard') continue;
         if (pad.index === this.padIndex && pad.id === this.padId) return pad;
-        if (!first) first = pad;
+        first ??= pad;
       }
       return first;
     } catch {
@@ -72,106 +83,202 @@ class GamepadControls {
     }
   }
 
+  clearCombat() {
+    if (this.bufferedShot && this.game) this.game.triggerBuffer = 0;
+    this.aim = this.fire = this.firePressed = this.bufferedShot = false;
+  }
+
   reset() {
-    this.revision++;
     this.controller.clearGamepadInput();
-    const pad = this.readPad();
-    if (pad && pad.index === this.padIndex && pad.id === this.padId) {
-      this.previousButtons = buttons(pad);
-      this.suppressedButtons = this.previousButtons.slice();
-      this.syncButtons = false;
-    } else {
-      this.syncButtons = true;
-    }
+    this.clearCombat();
+    this.game?.arsenal?.cancelHold('gamepad');
+    this.sync = true;
+    this.driveBy = false;
+    this.viewHold = 0;
+    this.direction = '';
+    this.repeatAt = 0;
   }
 
   setEnabled(enabled) {
-    enabled = Boolean(enabled);
-    if (enabled === this.enabled) return;
+    if (this.enabled === enabled) return;
     this.enabled = enabled;
     this.reset();
   }
 
   update(dt) {
+    const g = this.game;
+    if (!g) return;
     const pad = this.readPad();
-    const connected = Boolean(pad);
-    const changedPad = pad ? pad.index !== this.padIndex || pad.id !== this.padId : this.connected;
-    if (changedPad) {
-      this.controller.clearGamepadInput();
-      this.padIndex = pad ? pad.index : null;
-      this.padId = pad ? pad.id : null;
-      this.syncButtons = true;
+    if (!pad || pad.index !== this.padIndex || pad.id !== this.padId) {
+      if (pad || this.connected) this.reset();
+      this.padIndex = pad?.index;
+      this.padId = pad?.id;
     }
-    this.connected = connected;
-    if (!pad) return;
-
-    const pressed = buttons(pad);
-    if (this.syncButtons) {
-      // Connecting, switching pads, or resetting must not turn a held button into a fresh action.
-      this.previousButtons = pressed.slice();
-      this.suppressedButtons = pressed.slice();
-      this.syncButtons = false;
-    }
-    for (let i = 0; i < BUTTON_COUNT; i++) if (!pressed[i]) this.suppressedButtons[i] = false;
-    const edge = (i) => pressed[i] && !this.previousButtons[i] && !this.suppressedButtons[i];
-    const held = (i) => pressed[i] && !this.suppressedButtons[i];
-    // Capture edges before callbacks: changing mode or opening the map may synchronously call reset().
-    const toggleMap = edge(9), closeMap = edge(1);
-    const cycleMode = Number(Boolean(edge(5))) - Number(Boolean(edge(4)));
-    const cycleCamera = edge(3), recenter = edge(11), grapple = edge(2);
-    this.previousButtons = pressed;
+    this.connected = !!pad;
+    if (!pad) { this.setUsing(false); return; }
 
     const target = document.activeElement;
-    const typing = isTypingInField({ target }) || target?.tagName === 'TEXTAREA' || target?.isContentEditable;
-    if (!this.focused || document.hidden || (typeof document.hasFocus === 'function' && !document.hasFocus()) || typing) {
-      this.suppressedButtons = pressed.slice();
-      this.controller.clearGamepadInput();
+    const typing = !g.map.isFullMapOpen && (isTypingInField({ target }) || target?.tagName === 'TEXTAREA' || target?.isContentEditable);
+    if (!this.focused || document.hidden || !document.hasFocus() || typing) {
+      if (!this.sync) this.reset();
       return;
     }
 
-    const revision = this.revision;
-    if (toggleMap) {
-      this.controller.clearGamepadInput();
-      this.callbacks.onToggleMap?.();
+    const dialog = document.querySelector('dialog[open]');
+    const context = dialog || (g.map.isFullMapOpen ? 'map' : g.pauseMenu.visible ? 'pause'
+      : g.phone.open ? 'phone' : g.garage.open ? 'garage' : g.shops.open ? 'shop'
+      : this.enabled && g.active ? g.state : 'inactive');
+    if (context !== this.context) {
+      this.reset();
+      this.context = context;
+    }
+    const previous = this.previous;
+    const pressed = this.previous = buttons(pad, previous);
+    if (this.sync) {
+      // Never let a held trigger or button cross a screen, focus change or vehicle transition.
+      this.suppressed = pressed.slice();
+      this.sync = false;
+    }
+    for (let i = 0; i < BUTTON_COUNT; i++) if (!pressed[i]) this.suppressed[i] = false;
+    const held = (i) => pressed[i] && !this.suppressed[i];
+    const edge = (i) => held(i) && !previous[i];
+    const released = (i) => previous[i] && !pressed[i];
+    const movement = stick(pad, 0), look = stick(pad, 2);
+    const buttonActivity = pressed.some((down, i) => down && !previous[i]);
+    if (buttonActivity || Math.hypot(movement.x, movement.y) > 0.12 || Math.hypot(look.x, look.y) > 0.12) this.setUsing(true);
+
+    if (dialog || ['map', 'pause', 'phone', 'garage', 'shop'].includes(context)) {
+      const direction = this.menuDirection(held, movement, dt);
+      if (dialog) g.pauseMenu.controlDialog(dialog, direction, edge(A), edge(B) || edge(MENU));
+      else if (context === 'map') {
+        if (edge(B) || edge(MENU) || edge(DOWN)) g.map.toggleFullMap(false);
+        else g.map.controlGamepad(movement.x, movement.y, Number(held(RT)) - Number(held(LT)), dt, edge(A), edge(X));
+      } else if (context === 'pause') {
+        g.pauseMenu.controlGamepad(direction, Number(edge(RB)) - Number(edge(LB)), edge(A), edge(MENU) || edge(B), look.y * dt);
+      } else if (context === 'phone') {
+        if (edge(B)) g.phone.back();
+        else if (edge(A)) g.phone.activate();
+        else if (direction) g.phone.navigate(direction);
+      } else if (context === 'garage') {
+        if (edge(B)) g.garage.close();
+        else if (edge(A)) g.garage.pick(g.garage.sel);
+        else if (direction) g.garage.navigate(direction);
+      } else if (edge(B)) g.shops.close();
+      else if (edge(A)) g.shops.buy();
+      else if (direction === 'up' || direction === 'down') g.shops.navigate(direction === 'up' ? -1 : 1);
       return;
     }
-    if (!this.enabled) {
-      this.controller.clearGamepadInput();
-      for (let i = 0; i < BUTTON_COUNT; i++) if (i !== 1 && i !== 9) this.suppressedButtons[i] = pressed[i];
-      if (closeMap) this.callbacks.onCloseMap?.();
+
+    if (context === 'inactive') return;
+    if (g.intro) {
+      if (pressed.some((_, i) => edge(i)) || Math.hypot(movement.x, movement.y, look.x, look.y) > 0.25) g.endIntro();
       return;
     }
-    if (cycleMode) this.callbacks.onCycleMode?.(cycleMode);
-    if (revision !== this.revision) return;
-    if (cycleCamera) this.callbacks.onCycleCamera?.(1);
-    if (revision !== this.revision) return;
-    if (recenter) this.camera.resetOrbit();
-    // X / Square: the grapple (vertical.js)
-    if (grapple) this.callbacks.onGrapple?.();
-    if (revision !== this.revision) return;
+    if (edge(MENU)) {
+      this.reset();
+      g.setPaused(true);
+      return;
+    }
+    if (edge(DOWN)) {
+      this.reset();
+      g.releasePointer();
+      g.map.toggleFullMap(true);
+      return;
+    }
+
+    const wheel = g.arsenal;
+    if (edge(LB)) wheel.press('gamepad');
+    if (wheel.open) {
+      this.controller.clearGamepadInput();
+      this.clearCombat();
+      // A trigger pressed in the wheel must be released before it can fire again.
+      if (pressed[RT]) this.suppressed[RT] = true;
+      if (pressed[LT]) this.suppressed[LT] = true;
+      if (edge(B)) wheel.cancelHold('gamepad', true);
+      else if (wheel.source === 'gamepad' && released(LB)) wheel.release();
+      else if (wheel.sticky && edge(A)) wheel.pick(wheel.sel);
+      else wheel.point(look.x, look.y);
+      return;
+    }
+    if (wheel.source === 'gamepad' && released(LB)) wheel.release();
+
+    if (edge(UP)) { g.phone.toggle(); return; }
+    if (held(VIEW)) {
+      if (this.viewHold >= 0 && (this.viewHold += dt) >= 0.35) {
+        this.viewHold = -1;
+        g.garage.toggle();
+        if (g.garage.open) return;
+      }
+    } else if (released(VIEW)) {
+      if (this.viewHold > 0) this.onCycleCamera?.(1);
+      this.viewHold = 0;
+    }
+    if (edge(Y)) { g.interact(); return; }
+    if (edge(A) && g.director.current) g.director.skip = true;
 
     const mode = this.controller.activeMode;
     const driving = mode === 'car' || mode === 'cyclist';
-    const movement = driving ? { x: steeringAxis(pad.axes?.[0]), y: 0 } : stick(pad, 0);
-    const look = stick(pad, 2);
-    let drive = -movement.y;
-    let vertical = 0;
+    const onFoot = g.state === 'onFoot' || g.state === 'surfing';
+    const station = Number(edge(RIGHT)) - Number(edge(LEFT));
+    if (station && g.state === 'driving') g.changeRadio(station);
     if (driving) {
-      drive = buttonValue(pad, 7) - buttonValue(pad, 6);
-    } else if (mode === 'helicopter' || mode === 'plane') {
-      vertical = buttonValue(pad, 7) - buttonValue(pad, 6);
+      if (edge(L3)) this.onHorn?.();
+      if (edge(B)) {
+        if (held(X) && g.canDriveBy) g.reload();
+        else g.resetStoppedVehicle();
+      }
+      if (edge(X) && !g.canDriveBy && !g.car.bicycle && g.weapons.pistol) g.selectWeapon('pistol');
+    } else {
+      if (edge(RB)) g.vertical.toggleGrapple();
+      if (edge(L3) && onFoot) g.toggleAimAssist();
+      if (edge(R3)) {
+        if (held(LT) && onFoot) this.camera.swapShoulder();
+        else this.camera.resetOrbit();
+      }
+      if (edge(B) && onFoot) g.reload();
     }
+    const driveBy = driving && held(X) && g.canDriveBy;
+    if (driveBy !== this.driveBy && pressed[RT] && !edge(RT)) this.suppressed[RT] = true;
+    this.driveBy = driveBy;
+    this.aim = driveBy || (onFoot && held(LT));
+    if (onFoot && edge(LT)) { g.aimToggle = false; g.drawForAim(); }
+    const canFire = driveBy || onFoot || (!driving && g.weaponId === 'grapple' && g.vertical.canFire);
+    this.fire = canFire && held(RT);
+    this.firePressed = canFire && edge(RT);
+
+    const drive = driving ? this.trigger(pad, RT, driveBy) - this.trigger(pad, LT) : -movement.y;
+    const vertical = mode === 'helicopter' || mode === 'plane' ? this.trigger(pad, RT) - this.trigger(pad, LT) : 0;
+    const steer = driving ? steeringAxis(pad.axes?.[0]) : movement.x;
+    const jump = mode === 'person' && held(X);
     this.controller.setGamepadInput('forward', Math.max(0, drive));
     this.controller.setGamepadInput('backward', Math.max(0, -drive));
-    this.controller.setGamepadInput('left', Math.max(0, -movement.x));
-    this.controller.setGamepadInput('right', Math.max(0, movement.x));
-    this.controller.setGamepadInput('up', mode === 'person' ? Number(Boolean(held(0))) : Math.max(0, vertical));
-    // on foot: A jumps (and opens the wingsuit, through 'up'), the left stick's click runs
-    this.controller.setGamepadInput('jump', mode === 'person' ? Number(Boolean(held(0))) : 0);
-    this.controller.setGamepadInput('run', mode === 'person' ? Number(Boolean(held(10))) : 0);
-    this.controller.setGamepadInput('down', Math.max(0, -vertical));
-    const zoom = Number(Boolean(held(13))) - Number(Boolean(held(12)));
-    this.camera.applyGamepadInput(look.x, look.y, zoom, Number.isFinite(dt) ? Math.max(0, Math.min(0.1, dt)) : 0);
+    this.controller.setGamepadInput('left', Math.max(0, -steer));
+    this.controller.setGamepadInput('right', Math.max(0, steer));
+    this.controller.setGamepadInput('up', jump || Math.max(0, vertical));
+    this.controller.setGamepadInput('jump', jump);
+    this.controller.setGamepadInput('run', mode === 'person' && held(A));
+    this.controller.setGamepadInput('sprint', driving && held(A));
+    this.controller.setGamepadInput('handbrake', driving && held(RB));
+    this.controller.setGamepadInput('down', driving ? held(R3) : Math.max(0, -vertical));
+    this.camera.applyGamepadInput(look.x, look.y, 0, dt);
+  }
+
+  trigger(pad, index, blocked = false) {
+    return blocked || this.suppressed[index] ? 0 : buttonValue(pad, index);
+  }
+
+  menuDirection(held, { x, y }, dt) {
+    const stickDirection = Math.max(Math.abs(x), Math.abs(y)) > 0.5
+      ? (Math.abs(x) > Math.abs(y) ? (x > 0 ? 'right' : 'left') : (y > 0 ? 'down' : 'up')) : '';
+    const direction = held(UP) ? 'up' : held(DOWN) ? 'down' : held(LEFT) ? 'left' : held(RIGHT) ? 'right' : stickDirection;
+    if (direction !== this.direction) {
+      this.direction = direction;
+      this.repeatAt = 0.32;
+      return direction;
+    }
+    if (!direction || (this.repeatAt -= dt) > 0) return '';
+    this.repeatAt = 0.13;
+    return direction;
   }
 }
 

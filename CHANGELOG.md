@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.9.13 — Market Order — 10 novembre 2026
+
+- **Manette Xbox de bout en bout**. LT dégaine et vise, RT tire, B recharge. LB ouvre la roue des armes au stick droit
+  ou rappelle l’arme précédente. A sprinte, X saute, Y interagit et RB sort le grappin.
+- **Au volant**, RT accélère, LT freine et RB déclenche le frein à main. X maintenu passe en visée embarquée et RT
+  tire. Le klaxon, la radio, le regard arrière, le nitro et le wheeling ont leurs boutons.
+- **Interfaces** utilisables à la manette. Partie, pause, téléphone, garage, boutiques et carte avec repère au centre.
+  Les indications en jeu changent avec la dernière source de commande. Un changement de contexte ou une déconnexion
+  annule les gâchettes et les actions maintenues.
+
 ## 0.9.12 — Blue Chips — 10 novembre 2026
 
 Les voitures. Quatorze carrosseries neuves, et surtout une rue à leur niveau : une voiture garée ou croisée dans la

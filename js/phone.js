@@ -38,7 +38,7 @@ class Phone {
     this.panel = document.createElement('div');
     this.panel.id = 'phone';
     this.panel.hidden = true;
-    this.panel.innerHTML = '<div class="phone-top"><span class="phone-clock"></span><span class="phone-bars">●●●○ OD</span></div><h3></h3><div class="phone-body"></div><footer>↑↓ choisir · Entrée · Échap retour</footer>';
+    this.panel.innerHTML = '<div class="phone-top"><span class="phone-clock"></span><span class="phone-bars">●●●○ OD</span></div><h3></h3><div class="phone-body"></div><footer><span class="keyboard-hint">↑↓ choisir · Entrée · Échap retour</span><span class="gamepad-hint">Croix choisir · A valider · B retour</span></footer>';
     this.clock = this.panel.querySelector('.phone-clock');
     this.title = this.panel.querySelector('h3');
     this.body = this.panel.querySelector('.phone-body');
@@ -141,6 +141,14 @@ class Phone {
     if (row?.run) { this.game.audio.ui('checkpoint', 0.2); row.run(); }
   }
 
+  navigate(direction) {
+    const n = this.current?.length ?? 0, step = this.body.classList.contains('grid') ? 2 : 1;
+    const offset = { down: step, up: -step, right: 1, left: -1 }[direction];
+    if (!n || !offset) return;
+    this.sel = Math.max(0, Math.min(n - 1, this.sel + offset));
+    this.highlight();
+  }
+
   key(e) {
     if (this.game.paused || document.querySelector('dialog[open]')) return;
     if (!this.open) {
@@ -149,13 +157,12 @@ class Phone {
     }
     e.preventDefault();
     e.stopPropagation();
-    const n = this.current?.length ?? 0, step = this.body.classList.contains('grid') ? 2 : 1;
     if (e.code === 'KeyP') this.close();
     else if (e.code === 'Escape' || e.code === 'Backspace') this.back();
-    else if (e.code === 'ArrowDown' || e.code === 'KeyS') { this.sel = Math.min(n - 1, this.sel + step); this.highlight(); }
-    else if (e.code === 'ArrowUp' || e.code === 'KeyW') { this.sel = Math.max(0, this.sel - step); this.highlight(); }
-    else if (e.code === 'ArrowRight' || e.code === 'KeyD') { this.sel = Math.min(n - 1, this.sel + 1); this.highlight(); }
-    else if (e.code === 'ArrowLeft' || e.code === 'KeyA') { this.sel = Math.max(0, this.sel - 1); this.highlight(); }
+    else if (e.code === 'ArrowDown' || e.code === 'KeyS') this.navigate('down');
+    else if (e.code === 'ArrowUp' || e.code === 'KeyW') this.navigate('up');
+    else if (e.code === 'ArrowRight' || e.code === 'KeyD') this.navigate('right');
+    else if (e.code === 'ArrowLeft' || e.code === 'KeyA') this.navigate('left');
     else if (e.code === 'Enter' || e.code === 'Space') this.activate();
   }
 

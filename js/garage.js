@@ -73,7 +73,8 @@ class Garage extends QuickStrip {
     this.info.querySelector('strong').textContent = entry ? `${entry.brand} ${entry.model}` : choice.label;
     this.info.querySelector('small').textContent = car
       ? `${entry.drive}  ·  ${car.tune.mass.toLocaleString('fr-FR')} KG  ·  ${car.tune.gears.length} RAPPORTS  ·  ${car.tune.torque} NM`
-      : 'FLÈCHES : CHOISIR  ·  ENTRÉE : PRENDRE LE VOLANT  ·  G : FERMER';
+      : this.game.gamepad?.using ? 'CROIX : CHOISIR · A : PRENDRE LE VOLANT · B : FERMER'
+        : 'FLÈCHES : CHOISIR  ·  ENTRÉE : PRENDRE LE VOLANT  ·  G : FERMER';
     if (this.open) this.tiles[i].scrollIntoView({ block: 'nearest' });
   }
 
@@ -82,12 +83,16 @@ class Garage extends QuickStrip {
       e.preventDefault();
       e.stopImmediatePropagation();
       if (e.repeat) return;
-      const columns = getComputedStyle(this.panel).gridTemplateColumns.split(' ').length;
-      this.select((this.sel + (e.code === 'ArrowDown' ? columns : -columns) + CHOICES.length) % CHOICES.length);
-      this.tiles[this.sel].scrollIntoView({ block: 'nearest' });
+      this.navigate(e.code === 'ArrowDown' ? 'down' : 'up');
       return;
     }
     super.key(e);
+  }
+
+  navigate(direction) {
+    const columns = getComputedStyle(this.panel).gridTemplateColumns.split(' ').length;
+    const step = { up: -columns, down: columns, left: -1, right: 1 }[direction];
+    this.select((this.sel + step + CHOICES.length) % CHOICES.length);
   }
 
   pick(i) {

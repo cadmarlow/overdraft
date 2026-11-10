@@ -1030,6 +1030,21 @@ body[data-mode='helicopter'] .gauge-alt {
   cursor: grabbing;
 }
 
+.map-pad-reticle, .map-pad-hints { display: none; }
+.using-gamepad .map-pad-hints { display: inline; }
+.using-gamepad #fullmap-hover-info, .using-gamepad #hud-controls-hint { display: none; }
+.using-gamepad .map-pad-reticle {
+  display: block;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  color: #fff;
+  font: 700 28px/1 monospace;
+  text-shadow: 0 0 4px #000, 0 0 4px #000;
+}
+
 #fullmap-canvas {
   touch-action: none;
   display: block;

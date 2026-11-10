@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>OVERDRAFT — 0.9.12 · Blue Chips</title>
+  <title>OVERDRAFT — 0.9.13 · Market Order</title>
   <link rel="icon" href="data:," />
   <meta name="description" content="OVERDRAFT. Un jeu d’action en monde ouvert dans Manhattan : missions, poursuites, combats et niveau de recherche à cinq étoiles." />
   <!-- three.js dev branch pinned to a commit (builds committed to mrdoob/three.js@dev, served by jsDelivr) -->
@@ -373,6 +373,7 @@
   <section id="fullmap-modal" class="fullmap-modal hidden" role="dialog" aria-modal="true" aria-label="Full New York City Interactive Street Map">
     <div id="fullmap-canvas-wrap" class="fullmap-canvas-wrap">
       <canvas id="fullmap-canvas"></canvas>
+      <span class="map-pad-reticle" aria-hidden="true">+</span>
     </div>
 
     <div class="fullmap-header">
@@ -414,7 +415,8 @@
 
     <div class="fullmap-footer">
       <div class="panel fullmap-status">
-        <span id="fullmap-hover-info">Click anywhere to teleport &amp; set your GPS route · Drag to pan · Scroll to zoom</span>
+        <span id="fullmap-hover-info">Cliquer pour placer un repère · Glisser pour déplacer la carte · Défiler pour zoomer</span>
+        <span class="map-pad-hints">LS Déplacer · LT / RT Zoom · A Repère · X Centrer · B Fermer</span>
       </div>
     </div>
 
