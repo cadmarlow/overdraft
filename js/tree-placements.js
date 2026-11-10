@@ -5,8 +5,12 @@ function hashPos(x, y, z) {
   return s - Math.floor(s);
 }
 
-// Fit surveyed street trees to the modeled curbs, preserving nearby park and plaza trees.
-function placeStreetTrees(points, existingSites, isClear) {
+// The city's survey has kinds this game has no tree for (conifers, hollies...): they stand in as one of these
+const STAND_INS = [5, 6, 2, 7];
+
+// Fit surveyed street trees to the modeled curbs, preserving nearby park and plaza trees. Each keeps what the survey
+// says of it: `kinds` (the census class per point, js/tree-geodata.js) and `diameters` (trunk diameter in inches).
+function placeStreetTrees(points, existingSites, isClear, kinds = null, diameters = null) {
   const cells = new Map();
   const insert = (site) => {
     const key = Math.floor(site.x / 4) + ',' + Math.floor(site.z / 4);
@@ -72,11 +76,13 @@ function placeStreetTrees(points, existingSites, isClear) {
     }
     if (!fits) continue;
 
-    const r = hashPos(x, 6.1, z), species = hashPos(x, 4.4, z);
+    const r = hashPos(x, 6.1, z), pick = hashPos(x, 4.4, z);
     const yaw = Math.atan2(edge.dx, edge.dz);
-    const site = { x, y: 0.22, z, scale: narrow ? 0.54 + r * 0.1 : 0.6 + r * 0.2,
-      species: narrow ? 1 : species < 0.4 ? 0 : species < 0.75 ? 1 : 2,
-      yaw, sx: 0.82, tier: crossStreet ? 2 : 1, pitRot: yaw, grate: !crossStreet, pitS };
+    const surveyed = kinds ? kinds[i >> 1] : 255;
+    const kind = surveyed < 8 ? surveyed : kinds ? STAND_INS[Math.floor(pick * STAND_INS.length)] : pick < 0.4 ? 0 : pick < 0.75 ? 1 : 5;
+    // an unmeasured trunk is taken for an ordinary street tree's
+    const dbh = diameters && diameters[i >> 1] > 0 ? diameters[i >> 1] : 5 + Math.round(r * 9);
+    const site = { x, y: 0.22, z, kind, dbh, yaw: yaw + (r - 0.5) * 6, pitRot: yaw, grate: !crossStreet, pitS };
     sites.push(site);
     insert(site);
   }

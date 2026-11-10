@@ -23,7 +23,7 @@ const MODULES = [
   [/Chunk$/, 'js/road-paint.js (marquages)'],
   [/ManhattanStreetDetails|StreetClusteredLights/, 'js/street-details.js (feux, lampadaires)'],
   [/Clutter_/, 'js/street-clutter.js (mobilier urbain)'],
-  [/TreeCell|Trees|leaf|bark/i, 'js/trees.js, js/nature-assets.js'],
+  [/TreeCell|Trees|leaf|bark/i, 'js/trees.js, js/tree-materials.js, tools/trees'],
   [/grass|lawn/i, 'js/grass.js'],
   [/fire.?escape/i, 'js/fire-escapes.js'],
   [/HighwayTraffic|ManhattanTrafficAndPedestrians/, 'js/traffic.js (trafic, piétons), js/human-crowd.js'],

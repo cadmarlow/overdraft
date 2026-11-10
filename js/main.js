@@ -29,6 +29,8 @@ import { loadCrowd } from './human-assets.js';
 import { CROWD_BODIES, CROWD_PROPS } from './human-crowd.js';
 import { loadCrowdMotion } from './crowd-motion.js';
 import { loadNature } from './nature-assets.js';
+import { loadTrees } from './tree-assets.js';
+import { treeUniforms } from './tree-materials.js';
 import { loadCars } from './car-assets.js';
 import { buildRamps } from './ramps.js';
 import { loadWorld } from './world-assets.js';
@@ -137,7 +139,7 @@ async function initApp() {
 
   // 3. Build Manhattan Geography, Iconic Landmarks, Blocks, Street Details & Traffic
   await showLoadingStage('Préparation des rues et des quais…');
-  await Promise.all([loadNature(), loadWorld(), loadGround(), loadClutter(), loadCars(undefined, { surveyedReflections: quality.id === 'high' }),
+  await Promise.all([loadNature(), loadTrees(), loadWorld(), loadGround(), loadClutter(), loadCars(undefined, { surveyedReflections: quality.id === 'high' }),
     loadStorefronts(), loadUrbanLight({ reflections: quality.id === 'high' }), loadCalibreKit()]);
   setTreeDetail(quality.trees);
   const cityGrid = buildCityGrid(scene);
@@ -966,6 +968,9 @@ async function initApp() {
     storefronts.update(cameraSystem.camera, gameplay.atmosphere.hour, dt);
     facadeKit.update(cameraSystem.camera);
     if (streetDetails.update) streetDetails.update(cameraSystem.camera);
+    // The wind that carries the paraglider is the one that bends the trees: the weather's, gusts and all
+    const air = gameplay?.vertical?.wind;
+    if (air) treeUniforms.wind.value.set(Math.sin(air.dir), Math.cos(air.dir), air.base, air.gust);
     lightingSystem.update(cameraSystem.currentPos, cameraSystem.camera, now);
     mapSystem.update();
     audioSystem.update(dt, elapsed, cameraSystem.camera, lightingSystem.activePresetId === 'midnight', gameplay.active || liveShop);

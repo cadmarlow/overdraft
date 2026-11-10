@@ -453,4 +453,5 @@ function updateSceneCulling(cameraPosition) {
   }
 }
 
-export { setupSceneCulling, updateSceneCulling, SHADOW_PROXY_LAYER };
+export {
+  FAR_CASTER_LAYER, setupSceneCulling, updateSceneCulling, SHADOW_PROXY_LAYER };

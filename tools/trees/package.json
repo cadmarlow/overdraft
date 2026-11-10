@@ -1,0 +1,9 @@
+{
+  "name": "overdraft-tree-tools",
+  "private": true,
+  "type": "module",
+  "description": "Offline build of the trees in assets/trees: foliage atlas, tree models, impostors, census data",
+  "dependencies": {
+    "sharp": "^0.34.0"
+  }
+}

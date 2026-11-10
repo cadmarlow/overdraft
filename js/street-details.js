@@ -18,7 +18,7 @@ import { cityUniforms, createSteamMaterial, createGodRayMaterial } from './tsl-m
 import { createGroundCurbMaterial, createGroundSoilMaterial } from './ground-materials.js';
 import { createTreeField } from './trees.js';
 import { createClutter, removeClutter } from './street-clutter.js';
-import { REAL_TREES } from './tree-geodata.js';
+import { REAL_TREES, REAL_TREE_SPECIES, REAL_TREE_DBH } from './tree-geodata.js';
 import { placeStreetTrees } from './tree-placements.js';
 import { createSubwayEntranceParts, createFoodCartParts } from './street-props.js';
 import { createSubwayEntrances } from './subway-entrances.js';
@@ -902,7 +902,7 @@ function buildStreetDetails(scene, colliders = []) {
   const mall = cpClear && cpClear.mall;
   if (mall) {
     for (let tz = mall.z0 + 4; tz <= mall.z1 - 4; tz += 9.5) {
-      for (const [dx, sc] of [[-16, 1.08], [-9, 1.0], [9, 1.0], [16, 1.08]]) treePositions.push({ x: mall.x + dx, y: CP_LAWN_Y, z: tz, scale: sc, species: 2 });
+      for (const [dx, sc] of [[-16, 1.08], [-9, 1.0], [9, 1.0], [16, 1.08]]) treePositions.push({ x: mall.x + dx, y: CP_LAWN_Y, z: tz, scale: sc * 1.15, species: 2, kind: 5 });
     }
   }
 
@@ -972,14 +972,24 @@ function buildStreetDetails(scene, colliders = []) {
   // B5. The squares, the other parks & the plazas (sites laid out by city-grid.js)
   for (const s of parkTreeSites || []) treePositions.push(s);
 
-  // Surveyed street trees; parks keep their authored terrain, clearings and tree layouts.
+  // The parks' trees were laid out as three sorts (plane, honey locust, elm): each becomes one of the eight kinds the
+  // game grows (js/tree-assets.js: 0 plane, 1 locust, 2 pear, 3 ginkgo, 4 oak, 5 elm, 6 linden, 7 cherry)
+  const PARK_KINDS = [[[0.62, 0], [0.8, 6], [1, 4]], [[0.55, 1], [0.8, 7], [1, 2]], [[0.42, 5], [0.84, 4], [1, 6]], [[1, 4]]];
+  for (const t of treePositions) {
+    if (t.kind !== undefined) continue;
+    const r = hashPos(t.z, 2.7, t.x);
+    t.kind = PARK_KINDS[Math.min(3, Math.max(0, t.species || 0))].find(([share]) => r < share)[1];
+  }
+
+  // Surveyed street trees, each the kind and the size the city's foresters recorded; parks keep their authored
+  // terrain, clearings and tree layouts.
   let sidewalkTreePositions = placeStreetTrees(REAL_TREES, treePositions,
-    (x, z) => !inPlaza(x, z, 1.5) && isClearOfPoles(x, z, 2.2));
+    (x, z) => !inPlaza(x, z, 1.5) && isClearOfPoles(x, z, 2.2), REAL_TREE_SPECIES, REAL_TREE_DBH);
   for (const tree of sidewalkTreePositions) treePositions.push(tree);
   const treeField = createTreeField(scene, treePositions, [...colliders, ...subwayColliders]);
   group.add(treeField.group);
   sidewalkTreePositions = sidewalkTreePositions.filter((t) => treeField.sites.has(t));
-  console.info(`[streetDetails] ${treeField.stats.trees} trees (${sidewalkTreePositions.length} street trees)`);
+  console.info(`[streetDetails] ${treeField.stats.trees} trees (${sidewalkTreePositions.length} street trees)`, treeField.stats.perType);
 
   // A granite surround and a bed of trodden soil (js/ground-materials.js); the cast-iron grates of the Midtown avenues
   // are laid over the beds by js/ground.js, from `treeGrates` below
