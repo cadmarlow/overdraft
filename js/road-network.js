@@ -804,9 +804,10 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
 
   // Paint describes the physical streets, including dead ends and roads AI traffic cannot circulate through.
   // Snapshot their geometry before routing moves stop lines, drops edges and renumbers the surviving junctions.
-  const paintNodes = new Map(nodes.map((n, id) => [n, { id, x: n.x, z: n.z, shape: n.shape }]));
-  const paintEdges = edges.map(({ from, to, axis, x0, z0, sx, sz, dx, dz, rx, rz, span, len, half, lanes, park, bike }) => ({
-    from: paintNodes.get(from), to: paintNodes.get(to), axis, x0, z0, sx, sz, dx, dz, rx, rz, span, len, half, lanes, park, bike
+  // (`hx`, `hz`, `general` and `node`, the live junction with its `signal`, are for the ground: js/ground-plan.js)
+  const paintNodes = new Map(nodes.map((n, id) => [n, { id, x: n.x, z: n.z, shape: n.shape, hx: n.hx, hz: n.hz, general: !!n.general, node: n }]));
+  const paintEdges = edges.map(({ from, to, axis, x0, z0, sx, sz, dx, dz, rx, rz, span, len, half, lanes, park, bike, general }) => ({
+    from: paintNodes.get(from), to: paintNodes.get(to), axis, x0, z0, sx, sz, dx, dz, rx, rz, span, len, half, lanes, park, bike, general: !!general
   }));
 
   // 6. Movements at each intersection (no U-turns) and the lane each lane leads to, along obstacle-free curves:

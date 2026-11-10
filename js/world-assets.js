@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 
-// The city's surfaces: photographed brick, stone, asphalt and concrete (tools/world, Poly Haven, CC0). Loaded once, behind
+// The city's walls: photographed brick and stone (tools/world, Poly Haven, CC0; the ground is js/ground-assets.js). Loaded once, behind
 // the loading screen, before the streets and buildings that use them are built. `metres` is what one repeat covers.
 
 const base = new URL('../assets/world/', import.meta.url);

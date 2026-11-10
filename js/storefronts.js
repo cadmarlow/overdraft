@@ -847,12 +847,9 @@ function buildShop(shop) {
     box(u - 0.1, u + 0.1, 2.46, 2.52, pd, pd + 0.26, KIND.chrome, [0.8, 0.8, 0.8]);
     box(u - 0.1, u + 0.1, 1.68, 1.74, pd, pd + 0.26, KIND.chrome, [0.8, 0.8, 0.8]);
   }
-  // A steel cellar hatch in the pavement
-  if (r() < 0.22) {
-    const len = 1.3 + r() * 0.5;
-    const u0 = (d0 > W / 2 ? opening0 + 0.2 : opening1 - 0.2 - len);
-    if (free(u0, u0 + len)) box(u0, u0 + len, 0.21, 0.235, sidewalk + 0.1, sidewalk + 1.1, KIND.tread, [0.9, 0.9, 0.9]);
-  }
+  // (A steel cellar hatch used to lie in the pavement here: a flat plate that mirrored the dark street. The cellar doors
+  // are now set in the flags by js/ground.js, where sidewalk-furniture.js sites them. The draws keep every front as it was.)
+  if (r() < 0.22) r();
 
   // Roll-down gate (shown when the shop is shut) and the tags sprayed on it
   const gateN = front + 0.05;

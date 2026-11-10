@@ -283,8 +283,8 @@ test('createRoadPaintMaterial caches one material, gates dry/distant noise, and 
 
   const helpers =
     sliceBetween('const hash2D = Fn(', 'const filteredPulse = Fn(') + '\n' +
-    sliceBetween('function roadPuddleField(', '/**\n * Wear & repairs');
-  const roadPaintMatSrc = sliceBetween('let _roadPaintMaterial = null;', '/**\n * NYC Concrete Sidewalk');
+    sliceBetween('function roadPuddleField(', '/**\n * Road markings built');
+  const roadPaintMatSrc = sliceBetween('let _roadPaintMaterial = null;', '/**\n * High-Definition Times Square');
 
   const env = {
     posWorld: [0, 0.012, 0],

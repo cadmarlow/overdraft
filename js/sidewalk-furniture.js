@@ -165,7 +165,7 @@ function createSidewalkFurniture(scene, o) {
   const breakables = [];
   const solid = (collider) => obstacles.push(collider);
   const knockable = (collider, ref, soft = false) => { breakables.push({ collider: { ...collider, breakable: true, soft }, ref }); };
-  const busStops = [], grates = [], sheds = [], roadBlocks = [], cafes = [], newsstands = [];
+  const busStops = [], grates = [], cellars = [], sheds = [], roadBlocks = [], cafes = [], newsstands = [];
   // Where people stop (street-life.js): seats { x, z, yaw } (yaw: the way the sitter faces), standing spots
   // { x, z, yaw, kind, group } (queues at bus stops, customers at newsstands and carts)
   const seats = [], stands = [];
@@ -424,8 +424,7 @@ function createSidewalkFurniture(scene, o) {
         for (let t = 20 + h(15) * 25, k = 0; t < L - 12; t += 44 + h(80 + k) * 16, k++) {
           const p = at(t, 2.2), a = at(t - 2.1, 2.2), b = at(t + 2.1, 2.2);
           if (!free(p.x, p.z, 0.8, 0) || !free(a.x, a.z, 0.5, 0) || !free(b.x, b.z, 0.5, 0)) continue;
-          place('grate', p.x, 0.225, p.z, yawAlong);
-          grates.push({ x: p.x, z: p.z, yaw: yawAlong });
+          grates.push({ x: p.x, z: p.z, yaw: yawAlong }); // drawn flush in the flags by js/ground.js
         }
       }
       // A fire alarm box at some corners
@@ -491,7 +490,7 @@ function createSidewalkFurniture(scene, o) {
       if (wantsCellar && w.width >= 3.0 && h(5 + wi) < 0.7) {
         const p = along(w.len * (0.3 + h(6 + wi) * 0.4), 1.35);
         if (isOnSidewalk(p.x, p.z, 0.2) && !insideBuilding(p.x, p.z)) {
-          place('cellar', p.x, 0.225, p.z, yawOut); // flush: walked over
+          cellars.push({ x: p.x, z: p.z, yaw: yawOut }); // flush, walked over: drawn in the flags by js/ground.js
         }
       }
       if (underShed && w.len >= 7 && w.width >= 3.0) buildShed(w, h, wi);
@@ -655,7 +654,7 @@ function createSidewalkFurniture(scene, o) {
 
   const total = Object.values(counts).reduce((a, b) => a + b, 0);
   console.info(`[furniture] ${total} pieces in ${meshes.length} meshes (${placedData} from the registers), ${sheds.length} sheds, ${busStops.length} bus stops, ${newsstands.length} newsstands, ${grates.length} grates, ${cafes.length} café tables, ${diningSpots.length} dining sheds, ${guards} tree guards, ${wallCount} walls scanned, ${Math.round(performance.now() - t0)} ms`);
-  return { group, update, counts, busStops, grates, sheds, roadBlocks, cafes, newsstands, seats, stands, materials };
+  return { group, update, counts, busStops, grates, cellars, sheds, roadBlocks, cafes, newsstands, seats, stands, materials };
 }
 
 export { createSidewalkFurniture };

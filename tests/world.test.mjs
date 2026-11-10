@@ -6,7 +6,7 @@ const dir = new URL('../assets/world/', import.meta.url);
 const sizes = JSON.parse(readFileSync(new URL('sizes.json', dir), 'utf8'));
 
 test('every surface has its three maps and a real-world size', () => {
-  for (const name of ['limestone', 'redbrick', 'brownbrick', 'buffbrick', 'asphalt', 'sidewalk']) {
+  for (const name of ['limestone', 'redbrick', 'brownbrick', 'buffbrick']) {
     assert.ok(sizes[name], name);
     assert.ok(sizes[name].metres > 0.4 && sizes[name].metres < 6, `${name}: ${sizes[name].metres} m`);
     for (const t of ['c', 'n', 'r']) assert.ok(existsSync(new URL(`${name}_${t}.webp`, dir)), `${name} ${t}`);

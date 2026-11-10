@@ -27,20 +27,5 @@
     "authors": [
       "Rob Tuytel"
     ]
-  },
-  "asphalt": {
-    "id": "asphalt_02",
-    "metres": 3.000000238418579,
-    "authors": [
-      "Rob Tuytel"
-    ]
-  },
-  "sidewalk": {
-    "id": "concrete_floor_worn_001",
-    "metres": 3,
-    "authors": [
-      "Dimitrios Savva",
-      "Rico Cilliers"
-    ]
   }
 }

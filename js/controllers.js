@@ -9,6 +9,7 @@ import {
   blockAt,
   streetZ
 } from './city-config.js';
+import { onRoundedBlock } from './ground-plan.js';
 import { cityUniforms, createCarPaintMaterial, createContactShadowMaterial, createPersonContactShadowMaterial } from './tsl-materials.js';
 import { carModels, carSpecs, createBodyMaterial, createGlassMaterial, createSourcePartMaterial, createWheelMaterial, trafficMaterial } from './car-assets.js';
 import { createBody, impactBody, makeTune, settleBody, stepCar } from './car-physics.js';
@@ -928,7 +929,8 @@ class ThirdPersonControllerManager {
   // On a raised curb island (city-config.js BLOCKS: the real blocks, malls & plazas), not in a park
   isPointOnSidewalk(x, z) {
     const b = blockAt(x, z);
-    return !!b && !(b.park > 0.6 && !b.median);
+    // (the curb turns each corner on a radius: the tip of the block's sharp outline is roadway, js/ground-plan.js)
+    return !!b && !(b.park > 0.6 && !b.median) && onRoundedBlock(b, x, z);
   }
 
   // The building faces nearest (x, z) along the four axes, and how tall they are: the street a car's paint mirrors
@@ -974,6 +976,7 @@ class ThirdPersonControllerManager {
     const block = blockAt(x, z);
     if (!block) return;
     if (block.park > 0.6 && !block.median) { hit.grip = 0.66; hit.rough = 0.018; return; }
+    if (!onRoundedBlock(block, x, z)) return; // past the rounded corner of the curb: still the roadway
     hit.y = ISLAND_BOUNDS.sidewalkHeight; hit.rough = 0.006; hit.curb = true;
   }
 

@@ -45,7 +45,7 @@ loin : plus fou, plus inventif, plus généreux. Le niveau de référence est un
 Les versions portent des noms de la finance : 0.2 Opening Bell, 0.3 Margin Call, 0.4 Human Capital, 0.5 Hard Assets,
 0.6 Prime Real Estate, 0.7 Bull Run, 0.8 Hostile Takeover, 0.9 Leverage, 0.9.3 Main Street, 0.9.4 Momentum, 0.9.5 Due Diligence,
 0.9.6 Footfall, 0.9.7 Curb Appeal, 0.9.8 Revaluation, 0.9.9 Break Even, 0.9.10 Price Action, 0.9.11 Short Squeeze,
-0.9.12 Blue Chips.
+0.9.12 Blue Chips, 0.9.13 Market Order, 0.9.14 Ground Floor.
 Prochaine : 1.0 Closing Bell (voir `GAME_DESIGN.md`).
 
 Une nouvelle version met à jour, ensemble :

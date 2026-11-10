@@ -1,5 +1,80 @@
 # Changelog
 
+## 0.9.14 — Ground Floor — 10 novembre 2026
+
+Le sol. Chaussées, trottoirs et bordures de toute l'île sont refaits autour d'une règle : l'usure suit l'usage. Le sol
+n'est plus un aplat de bruit, il sait où sont les voies, les lignes de stop et les bordures. Rue témoin : la 5e Avenue
+à la 37e Rue, là où la partie commence. Les parcs et les pelouses ne sont pas dans cette version.
+
+### La chaussée
+
+- **Chaque chaussée connaît ses voies**. Le réseau routier est découpé en bandes (voies, stationnement, piste cyclable,
+  carrefours) posées sur le tablier de l'île. Dans chaque voie, les pneus polissent deux traces claires, l'huile
+  assombrit le milieu et s'épaissit à l'approche du stop, la gomme marque le freinage.
+- **Trois bitumes photographiés** se mélangent selon l'âge du tronçon : enrobé neuf, bitume vieilli à gros grain, vieux
+  liant aux gravillons apparents. Une photo aérienne de 30 m casse la répétition.
+- **Rustines et tranchées** alignées sur la rue, à bords sciés et scellés au goudron, neuves ou anciennes. Fissures et
+  serpents de goudron dans les tronçons usés, joints de reprise entre deux passes de finisseur.
+- **Couloirs de bus rouges** sur les 1re, 2e, 3e, 5e Avenues, Madison et Lexington : la peinture s'use là où passent les
+  roues, avec « BUS ONLY » au sol.
+- **Stationnement** : sol plus sale, gouttes d'huile au rythme des capots.
+- **Caniveaux** : la crasse, la poussière et les débris suivent chaque bordure, et l'eau y stagne après la pluie.
+- **Peinture routière écaillée** : les lignes ne pâlissent plus, elles partent par plaques.
+
+### Trottoirs et bordures
+
+- **Angles arrondis** sur tous les îlots, rayon de 2,4 m. Le joueur et les voitures suivent la nouvelle bordure.
+- **Bordures profilées** : granit taillé ou béton à nez d'acier rouillé selon l'îlot, joints, crasse au pied, traces de
+  pneus sur la face.
+- **Un trottoir en lots**, comme à New York où chaque propriétaire refait le sien : tous les 8 à 20 m le dallage
+  change, séparé du voisin par un joint de dilatation noir. Cinq dallages : dalles grises de 5 pieds, les mêmes en
+  vieux (sombres, tachées, fissurées, soulevées), béton neuf et pâle, béton teinté anthracite scié en demi-dalles,
+  pierre bleue en grandes dalles à joints décalés.
+- **Bande de pavés de granit** le long de la bordure sur la moitié des îlots, là où se tiennent poteaux et bouches
+  d’incendie ; bande de béton sombre sur quelques autres.
+- **Rustines de trottoir** : rectangles de béton frais ou d’asphalte laissés par les concessionnaires.
+- **Chaque dalle** a son ton et son morceau de photo. Taches, coulures et chewing-gums s’épaississent vers la bordure.
+- **Jusqu’à la limite de propriété** : le trottoir public va de la bordure au lot (5 à 6 m), le parvis privé au-delà
+  garde son propre dallage.
+- **Les trappes noires devant les boutiques ont disparu** : c’étaient des plaques qui reflétaient la rue sombre.
+- **Fosses d'arbres** : terre battue et entourage de granit, grille en fonte sur les avenues.
+
+### Posé dans le sol
+
+- **Plaques d'égout en relief** dans les voies et les carrefours : quatre modèles, aux noms de fonderies du jeu.
+- **Avaloirs** au bout des caniveaux, plaques de regard, bouches à clé, chambres de tirage des feux.
+- **Grilles d'aération du métro** et **trappes de cave** en tôle larmée, aux emplacements que la 0.9.6 tirait déjà des
+  registres de la ville. Elles remplacent les rectangles sombres.
+- **Bandes podotactiles** rouges ou jaunes aux angles, face aux passages piétons.
+- **Marquages** : flèches de voie avant les feux des avenues, marques de bombe des concessionnaires, taches d'huile,
+  traces de freinage, fissures scellées.
+
+### Lumière
+
+- **Rebond des façades** : au fond d'une rue, le sol à l'ombre n'est plus éclairé par le seul ciel bleu. Il reçoit la
+  lumière chaude renvoyée par les immeubles, d'autant plus que le ciel est caché.
+
+### Sous le capot
+
+- `js/ground-plan.js` (contours arrondis, anneaux de bordure et de trottoir, bandes de chaussée) et
+  `js/ground-dressing.js` (ce qui est posé dans le sol) sont purs et testés dans `tests/ground-plan.test.cjs`.
+  `js/ground.js` fabrique les maillages, `js/ground-materials.js` les matériaux.
+- `tools/ground` télécharge et prépare les photos (Poly Haven, CC0), calcule les masques d'usure et dessine les deux
+  atlas d'objets et de marquages à partir de cartes de hauteur. 7,4 Mo de textures.
+- L'ancien sol est retiré : ses quatre matériaux procéduraux (450 lignes de shader) et les deux photos qu'ils étaient
+  seuls à utiliser, soit 1 Mo de moins à télécharger.
+- Coût mesuré dans la page, ancien sol et nouveau sol alternés sur trois vues à échelle fixe : 18,7 ms contre 18,9,
+  19,0 contre 19,0 et 20,6 contre 20,9. Pas d'écart.
+
+### Limites connues
+
+- Les bordures restent à pleine hauteur aux angles : pas encore de bateau sous les bandes podotactiles.
+- Pas de crasse au pied des façades : le sol ne sait pas encore où chaque immeuble commence.
+- Les rues à une voie sans stationnement tracé montrent peu d'usure de voie.
+- Parcs, pelouses et allées n'ont pas bougé. Les places et les trottoirs des parcs prennent la nouvelle matière, sans
+  la crasse de bordure.
+- La pluie et la nuit gardent leur rendu d'avant : pas encore de vrais reflets de phares sur le sol mouillé.
+
 ## 0.9.13 — Market Order — 10 novembre 2026
 
 - **Manette Xbox de bout en bout**. LT dégaine et vise, RT tire, B recharge. LB ouvre la roue des armes au stick droit

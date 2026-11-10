@@ -3,7 +3,11 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.13 — Market Order**. Une manette Xbox permet de jouer de l’écran titre jusqu’aux missions.
+Version **0.9.14 — Ground Floor**. Le sol de la ville est refait : chaque chaussée connaît ses voies et s'use là où l'on
+roule, les trottoirs sont des dalles coulées une à une derrière des bordures aux angles arrondis, et tout ce que New York
+pose dans son sol y est, en relief : plaques d'égout, avaloirs, grilles du métro, trappes de cave, bandes podotactiles.
+
+La **0.9.13 — Market Order** a apporté la manette Xbox : elle permet de jouer de l’écran titre jusqu’aux missions.
 Maintenez **LT** pour viser, appuyez sur **RT** pour tirer, et tenez **LB** pour choisir une arme avec le stick droit.
 Le menu **Commandes** donne les raccourcis. Voir aussi la section [Manette Xbox](#manette-xbox).
 

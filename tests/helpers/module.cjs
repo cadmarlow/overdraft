@@ -2,7 +2,9 @@ const vm = require('node:vm');
 
 // Keep the existing isolated unit harnesses synchronous. Only the app's static import/export declarations
 // are adapted; dependencies are explicit namespace stubs, and the production function bodies run unchanged.
-const OPTIONAL = { './car-assets.js': {}, './car-physics.js': {}, './car-cabin.js': {}, './pause-menu.js': {}, './ramps.js': {}, './boat.js': {}, './missions-act3.js': { ACT3: [], PLACES3: {}, REGATTA: {} } };
+const OPTIONAL = { './car-assets.js': {}, './car-physics.js': {}, './car-cabin.js': {}, './pause-menu.js': {}, './ramps.js': {}, './boat.js': {}, './missions-act3.js': { ACT3: [], PLACES3: {}, REGATTA: {} },
+  // The harnesses' islands keep their sharp corners (js/ground-plan.js rounds the real ones)
+  './ground-plan.js': { onRoundedBlock: () => true } };
 function loadModule(source, { imports: given = {}, globals = {}, filename = 'module.js' } = {}) {
   const imports = { ...OPTIONAL, ...given };
   const exported = [];

@@ -31,6 +31,8 @@ import { loadNature } from './nature-assets.js';
 import { loadCars } from './car-assets.js';
 import { buildRamps } from './ramps.js';
 import { loadWorld } from './world-assets.js';
+import { loadGround } from './ground-assets.js';
+import { buildRoadSurface, buildGroundDressing } from './ground.js';
 import { loadUrbanLight, urbanSkyVisibility } from './urban-light.js';
 import { loadStorefronts, createStorefronts } from './storefronts.js';
 import { createFacadeKit } from './facade-kit.js';
@@ -142,7 +144,7 @@ async function initApp() {
 
   // 3. Build Manhattan Geography, Iconic Landmarks, Blocks, Street Details & Traffic
   await showLoadingStage('Préparation des rues et des quais…');
-  await Promise.all([loadNature(), loadWorld(), loadClutter(), loadCars(undefined, { surveyedReflections: quality.id === 'high' }),
+  await Promise.all([loadNature(), loadWorld(), loadGround(), loadClutter(), loadCars(undefined, { surveyedReflections: quality.id === 'high' }),
     loadStorefronts(), loadUrbanLight({ reflections: quality.id === 'high' })]);
   setTreeDetail(quality.trees);
   const cityGrid = buildCityGrid(scene);
@@ -209,6 +211,8 @@ async function initApp() {
     hourOf: () => gameplay?.atmosphere?.hour ?? 12
   });
   await showLoadingStage('Derniers préparatifs…');
+  buildRoadSurface(scene, trafficSystem.network);
+  buildGroundDressing(scene, trafficSystem.network, { grates: furniture.grates, cellars: furniture.cellars, treeGrates: streetDetails.treeGrates });
   buildRoadPaint(scene, trafficSystem.network, cityGrid.roadPaint);
   markInit('roadPaint');
 
@@ -260,7 +264,7 @@ async function initApp() {
   // Island-wide static geometry: chunk & distance-cull the small props, shadow stand-ins for the big casters
   // (scene-culling.js)
   await showLoadingStage('Préparation du quartier…');
-  const cullingRoots = ['ManhattanCityGrid', 'ManhattanCityBlocks', 'ManhattanStreetDetails', 'ManhattanLandmarks', 'Boroughs', 'RoadMarkings']
+  const cullingRoots = ['ManhattanCityGrid', 'ManhattanCityBlocks', 'ManhattanStreetDetails', 'ManhattanLandmarks', 'Boroughs', 'RoadMarkings', 'GroundRoads', 'GroundDressing']
     .map((name) => scene.getObjectByName(name))
     .filter(Boolean);
   setupSceneCulling(scene, cullingRoots, lightingSystem.sunLight.shadow, quality);

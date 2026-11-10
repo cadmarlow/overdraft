@@ -41,10 +41,9 @@ import {
   EAST_RIVER_BRIDGES,
   CUT_Z
 } from './city-config.js';
+import { createGroundRoadMaterial, createGroundWalkMaterial, createGroundCurbMaterial } from './ground-materials.js';
+import { buildIslands } from './ground.js';
 import {
-  createRoadSurfaceMaterial,
-  createSidewalkMaterial,
-  createCurbMaterial,
   createWaterMaterial,
   createParkLawnMaterial,
   lawnColorNode,
@@ -1532,7 +1531,7 @@ function buildCityGrid(scene) {
   group.add(seawallMesh);
 
   // Unified Manhattan Roadway Asphalt Deck (Y = 0.0) following true Manhattan coastline
-  const roadMat = createRoadSurfaceMaterial();
+  const roadMat = createGroundRoadMaterial();
   const roadMesh = createFlatPolygonMesh(MANHATTAN_COASTLINE, 0.0, roadMat, true);
   group.add(roadMesh);
 
@@ -1548,8 +1547,11 @@ function buildCityGrid(scene) {
   //    triangles & trapezoids, Lower Manhattan's irregular blocks, the malls down the middle of Park Ave & Broadway)
   //    are extruded from their outlines
   // =========================================================================
-  const sidewalkMat = createSidewalkMaterial();
-  const curbMat = createCurbMaterial();
+  // The islands' own curbs, sidewalks and gutters come from js/ground.js; these two dress the park paths, plazas and
+  // waterfront that are still laid out here
+  const sidewalkMat = createGroundWalkMaterial();
+  const curbMat = createGroundCurbMaterial();
+  const islands = [];
   // Clipped shrubs: the meadow photograph, darker and leafier, laid on the top and run along the sides
   const medianHedgeMat = new THREE.MeshStandardNodeMaterial({ color: 0xffffff, roughness: 0.9 });
   {
@@ -1563,23 +1565,17 @@ function buildCityGrid(scene) {
   }
   const blockSidewalks = []; // { cx, cz, w, d, block } axis-aligned slabs (irregular islands: their lot cover)
   const roadSidewalks = []; // the curbs road-network.js bounds the roads with (medians go in as footprints)
-  const slabGeos = [];
-  const curbGeos = [];
   const hedgeGeos = [];
   const SW_TOP = 0.22;
   for (const b of BLOCKS) {
     if (b.park > 0.6 && !b.median && b.parkName !== 'Bryant Park') continue; // parks build their own perimeter sidewalk (sections 7, 7B)
+    islands.push(b);
     if (b.rect) {
       const slab = { cx: (b.minX + b.maxX) * 0.5, cz: (b.minZ + b.maxZ) * 0.5, w: b.maxX - b.minX, d: b.maxZ - b.minZ, block: b };
       blockSidewalks.push(slab);
       if (b.median) addFootprint(slab.cx, slab.cz, slab.w, slab.d);
       else roadSidewalks.push({ minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ });
     } else {
-      // curb (granite) ring under a sidewalk slab inset by 0.25 m, like the instanced pair below
-      const curb = createExtrudedPolygonMesh(b.poly, 0.0, 0.18, curbMat).geometry;
-      curbGeos.push(curb);
-      const inner = offsetPolygonInward(b.poly, 0.25);
-      if (inner) slabGeos.push(createExtrudedPolygonMesh(inner, 0.03, SW_TOP - 0.03, sidewalkMat).geometry);
       // rect cover for the consumers that work on rectangles: the lot rects grown back out to the curb
       for (const [x0, x1, z0, z1] of b.rects) {
         const r = { minX: x0 - 4.4, maxX: x1 + 4.4, minZ: z0 - 4.4, maxZ: z1 + 4.4 };
@@ -1605,32 +1601,9 @@ function buildCityGrid(scene) {
       group.add(m);
     }
   };
-  mergeInto(curbGeos, curbMat, true);
-  mergeInto(slabGeos, sidewalkMat);
   mergeInto(hedgeGeos, medianHedgeMat, true);
-
-  const rectSlabs = blockSidewalks.filter((s) => !s.cover);
-  const swInstanced = new THREE.InstancedMesh(unitBox, sidewalkMat, rectSlabs.length);
-  const curbInstanced = new THREE.InstancedMesh(unitBox, curbMat, rectSlabs.length);
-  swInstanced.receiveShadow = true;
-  curbInstanced.receiveShadow = true;
-  curbInstanced.castShadow = true;
-
-  rectSlabs.forEach((blk, i) => {
-    dummy.rotation.set(0, 0, 0);
-    dummy.position.set(blk.cx, 0.125, blk.cz);
-    dummy.scale.set(blk.w - 0.5, 0.19, blk.d - 0.5);
-    dummy.updateMatrix();
-    swInstanced.setMatrixAt(i, dummy.matrix);
-
-    dummy.position.set(blk.cx, 0.095, blk.cz);
-    dummy.scale.set(blk.w, 0.17, blk.d);
-    dummy.updateMatrix();
-    curbInstanced.setMatrixAt(i, dummy.matrix);
-  });
-  swInstanced.instanceMatrix.needsUpdate = true;
-  curbInstanced.instanceMatrix.needsUpdate = true;
-  group.add(swInstanced, curbInstanced);
+  // Curbstones with rounded corners, sidewalk flags and gutters of every island
+  buildIslands(group, islands);
 
   // 6. Times Square Pedestrian Plazas, Duffy Square TKTS Red Steps, Herald Square & Flatiron Plaza
   //    Curb-height light-grey granite paver plazas in Broadway's roadbed with granite benches & planters, plus the

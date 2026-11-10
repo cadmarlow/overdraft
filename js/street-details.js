@@ -14,7 +14,8 @@ import {
   BLOCKS,
   LANDMARK_SITES
 } from './city-config.js';
-import { cityUniforms, createSteamMaterial, createTreeGrateMaterial, createGodRayMaterial } from './tsl-materials.js';
+import { cityUniforms, createSteamMaterial, createGodRayMaterial } from './tsl-materials.js';
+import { createGroundCurbMaterial, createGroundSoilMaterial } from './ground-materials.js';
 import { createTreeField } from './trees.js';
 import { createClutter, removeClutter } from './street-clutter.js';
 import { REAL_TREES } from './tree-geodata.js';
@@ -979,24 +980,21 @@ function buildStreetDetails(scene, colliders = []) {
   sidewalkTreePositions = sidewalkTreePositions.filter((t) => treeField.sites.has(t));
   console.info(`[streetDetails] ${treeField.stats.trees} trees (${sidewalkTreePositions.length} street trees)`);
 
-  const grateMat = createTreeGrateMaterial();
-  const pitCurbMat = new THREE.MeshStandardNodeMaterial({ color: 0x484642, roughness: 0.88 });
-  const pitSoilMat = new THREE.MeshStandardNodeMaterial({ color: 0x241c14, roughness: 0.96 });
+  // A granite surround and a bed of trodden soil (js/ground-materials.js); the cast-iron grates of the Midtown avenues
+  // are laid over the beds by js/ground.js, from `treeGrates` below
+  const pitCurbMat = createGroundCurbMaterial();
+  const pitSoilMat = createGroundSoilMaterial();
 
   // Curbside tree pit surrounds & dark soil beds, with concentric cast-iron grates on the Midtown avenues
   // (pits run along the curb: t.pitRot = PI/2 on cross streets)
   const pitCurbGeo = new THREE.BoxGeometry(1.7, 0.22, 2.6);
   const pitSoilGeo = new THREE.BoxGeometry(1.35, 0.23, 2.25);
-  const pitGrateGeo = new THREE.RingGeometry(0.24, 0.82, 12, 1).rotateX(-Math.PI / 2);
   const gratedTrees = sidewalkTreePositions.filter((t) => t.grate !== false);
 
   const pitCurbInst = new THREE.InstancedMesh(pitCurbGeo, pitCurbMat, sidewalkTreePositions.length);
   const pitSoilInst = new THREE.InstancedMesh(pitSoilGeo, pitSoilMat, sidewalkTreePositions.length);
-  const pitGrateInst = new THREE.InstancedMesh(pitGrateGeo, grateMat, Math.max(1, gratedTrees.length));
   pitCurbInst.receiveShadow = true;
   pitSoilInst.receiveShadow = true;
-  pitGrateInst.receiveShadow = true;
-  pitGrateInst.count = gratedTrees.length;
 
   sidewalkTreePositions.forEach((t, i) => {
     dummy.rotation.set(0, t.pitRot || 0, 0);
@@ -1009,22 +1007,17 @@ function buildStreetDetails(scene, colliders = []) {
     dummy.updateMatrix();
     pitSoilInst.setMatrixAt(i, dummy.matrix);
   });
-  gratedTrees.forEach((t, i) => {
-    dummy.rotation.set(0, 0, 0);
-    dummy.position.set(t.x, 0.225, t.z);
-    dummy.updateMatrix();
-    pitGrateInst.setMatrixAt(i, dummy.matrix);
-  });
+  // (the top of a soil bed: where its grate lies)
+  const treeGrates = gratedTrees.map((t) => ({ x: t.x, z: t.z, y: 0.317, yaw: t.pitRot || 0, scale: (t.pitS || 1) < 0.9 ? 0.78 : 0.9 }));
   pitCurbInst.instanceMatrix.needsUpdate = true;
   pitSoilInst.instanceMatrix.needsUpdate = true;
-  pitGrateInst.instanceMatrix.needsUpdate = true;
   // Their footprint would keep these 20 cm boxes drawn at any distance (scene-culling.js): culled with the cross-street
   // trees over them instead (trees.js MAX_DIST)
-  for (const pit of [pitCurbInst, pitSoilInst, pitGrateInst]) {
+  for (const pit of [pitCurbInst, pitSoilInst]) {
     pit.computeBoundingSphere();
     pit.userData.cullDistance = 950;
   }
-  group.add(pitCurbInst, pitSoilInst, pitGrateInst);
+  group.add(pitCurbInst, pitSoilInst);
 
   function hashPos(x, y, z) {
     const s = Math.sin(x * 127.1 + y * 311.7 + z * 74.7) * 43758.5453;
@@ -1197,7 +1190,7 @@ function buildStreetDetails(scene, colliders = []) {
   const foodCarts = cartMatrices.map((m) => ({ x: m.elements[12], z: m.elements[14] }));
   return { group, footprints, obstacles, removeProp, lampParts: { post: pedLampPostGeo, globe: pedGlobeGeo, metal: poleMetalMat, glow: pedGlobeGlow }, signalClock, signalIntersections, audioSignals, treeField, hydrants, perches, trashPiles, subwayMouths, foodCarts,
     // sidewalk-furniture.js places more along the curbs with the same rules
-    isOnSidewalk, isClearOfPoles, addPole, addFootprint, update };
+    isOnSidewalk, isClearOfPoles, addPole, addFootprint, update, treeGrates };
 }
 
 export { buildStreetDetails };

@@ -1,4 +1,5 @@
-// The city's surfaces: photographed brick, stone, asphalt and concrete from Poly Haven (CC0), downloaded and made small.
+// The city's walls: photographed brick and stone from Poly Haven (CC0), downloaded and made small. (The ground has its
+// own tool and folder: tools/ground, assets/ground.)
 // Usage: node build-textures.mjs <work folder> [--out dir]
 // sizes.json records how many metres each photograph covers, as the shaders need to know
 import fs from 'node:fs';
@@ -12,9 +13,7 @@ const SURFACES = {
   limestone: 'white_sandstone_bricks',
   redbrick: 'red_brick_03',
   brownbrick: 'brick_wall_09',
-  buffbrick: 'brown_brick_02',
-  asphalt: 'asphalt_02',
-  sidewalk: 'concrete_floor_worn_001'
+  buffbrick: 'brown_brick_02'
 };
 const AGENT = { headers: { 'User-Agent': 'overdraft-game-tools' } };
 fs.mkdirSync(OUT, { recursive: true });
