@@ -2,7 +2,6 @@ import * as THREE from 'three/webgpu';
 import { buildCarDetails, poseCarDetails } from './car-details.js';
 import {
   ISLAND_BOUNDS,
-  CENTRAL_PARK_BOUNDS,
   WATERFRONT_PIERS,
   getIslandBoundsAtZ,
   isTypingInField,
@@ -28,7 +27,6 @@ import { PersonCrowd, PersonRig } from './pedestrians.js';
 import { HEADLIGHTS, createVehicleHeadlight, placeVehicleHeadlight } from './vehicle-lights.js';
 import { createPlane, posePlane } from './airplane.js';
 import { stepPlane } from './flight.js';
-import { bryantParkLawn } from './landmarks.js';
 import { polygonContact, roofAt, roofColliderAt } from './building-collision.js';
 import { rampRise } from './ramps.js';
 import { WATER, stepBoat } from './boat.js';
@@ -988,24 +986,14 @@ class ThirdPersonControllerManager {
     street.absolute.value = 1;
   }
 
-  // What a wheel stands on. The kerbs are real for cars, which is what makes a sidewalk a jolt, and a park's bank a ramp.
+  // What a wheel stands on: the same park surfaces as a walker's feet, and the rounded curbs of ordinary blocks.
   carGround(x, z, hit) {
     hit.nx = 0; hit.ny = 1; hit.nz = 0; hit.grip = 1; hit.rough = 0.0035; hit.y = 0; hit.curb = false;
     // Past the seawall there is nothing under the wheels
     if (this.overWater(x, z)) { hit.y = -40; return; }
-    const cp = CENTRAL_PARK_BOUNDS;
-    if (x > cp.minX && x < cp.maxX && z > cp.minZ && z < cp.maxZ) {
-      const edge = Math.min(x - cp.minX, cp.maxX - x, z - cp.minZ, cp.maxZ - z);
-      hit.y = 1.24 * Math.min(1, edge / 7);
-      hit.grip = 0.62; hit.rough = 0.024;
+    if (this.groundSurfaces?.sample(x, z, hit)) {
       const rise = rampRise(x, z, hit);
       if (rise) { hit.y += rise; hit.grip = 1; hit.rough = 0.002; }
-      return;
-    }
-    const lawn = bryantParkLawn;
-    if (lawn && x > lawn.minX && x < lawn.maxX && z > lawn.minZ && z < lawn.maxZ) {
-      hit.y = lawn.top * Math.min(1, Math.min(x - lawn.minX, lawn.maxX - x, z - lawn.minZ, lawn.maxZ - z) / 3);
-      hit.grip = 0.62; hit.rough = 0.02;
       return;
     }
     const block = blockAt(x, z);
@@ -1066,20 +1054,9 @@ class ThirdPersonControllerManager {
 
   streetHeight(x, z, mode = 'person') {
     if (this.swimming && mode === 'person') return WATER - 1.28;
-    // Inside Central Park (5th Ave to Central Park West, 59th St to 110th St)
-    const cp = CENTRAL_PARK_BOUNDS;
-    if (x > cp.minX && x < cp.maxX && z > cp.minZ && z < cp.maxZ) {
-      return 1.24;
-    }
-    // Inside Bryant Park's Great Lawn (west of the New York Public Library, 40th-42nd St)
-    const lawn = bryantParkLawn;
-    if (lawn && x > lawn.minX && x < lawn.maxX && z > lawn.minZ && z < lawn.maxZ) {
-      return lawn.top;
-    }
-    if (mode === 'person') {
-      return this.isPointOnSidewalk(x, z) ? ISLAND_BOUNDS.sidewalkHeight : 0.0;
-    }
-    return 0.0;
+    const hit = this._streetGroundHit ??= {};
+    if (this.groundSurfaces?.sample(x, z, hit)) return hit.y;
+    return this.isPointOnSidewalk(x, z) ? ISLAND_BOUNDS.sidewalkHeight : 0.0;
   }
 
   // Static colliders within `r` of (x, z), kept in their original order and indexed once into 48 m cells.

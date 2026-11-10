@@ -20,7 +20,7 @@ function eventTarget() {
   };
 }
 
-function keyboardHarness(nyc = {}) {
+function keyboardHarness(nyc = {}, physics = {}) {
   const window = eventTarget();
   const document = { ...eventTarget(), hidden: false };
   const config = {
@@ -41,6 +41,8 @@ function keyboardHarness(nyc = {}) {
       './vehicle-lights.js': {},
       './airplane.js': {},
       './flight.js': {},
+      './ramps.js': { rampRise: () => 0 },
+      './car-physics.js': physics,
       './landmarks.js': {},
       './building-collision.js': polygonCollision
     }
@@ -58,6 +60,50 @@ function keyboardHarness(nyc = {}) {
     }
   };
 }
+
+test('feet and all vehicle modes use the same park surface as wheel suspension', async () => {
+  const { createGroundSurfaces } = await import('../js/ground-surfaces.js');
+  const { controller } = keyboardHarness({ blockAt: () => null });
+  controller.groundSurfaces = createGroundSurfaces();
+  controller.groundSurfaces.add([{ x: 0, z: 0 }, { x: 10, z: 0 }, { x: 10, z: 10 }, { x: 0, z: 10 }], 0.22);
+  controller.overWater = () => false;
+  for (const mode of ['person', 'car', 'cyclist', 'helicopter']) assert.equal(controller.getGroundHeight(5, 5, mode), 0.22);
+  const hit = {};
+  controller.carGround(5, 5, hit);
+  assert.equal(hit.y, 0.22);
+});
+
+test('the actual car solver climbs the curb but cannot drive through a park wall at 108 km/h', async () => {
+  const physics = await import('../js/car-physics.js');
+  const { createGroundSurfaces, groundBoundaryColliders } = await import('../js/ground-surfaces.js');
+  const rect = (x0, x1, z0, z1) => [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }];
+  const { controller } = keyboardHarness({ blockAt: () => null,
+    ISLAND_BOUNDS: { minX: -200, maxX: 200, minZ: -200, maxZ: 200 },
+    getIslandBoundsAtZ: () => ({ westX: -200, eastX: 200 }) }, physics);
+  controller.overWater = () => false;
+  controller.groundSurfaces = createGroundSurfaces();
+  controller.groundSurfaces.add(rect(-100, 100, -8, 100), 0.22);
+  controller.groundSurfaces.add(rect(-100, 100, 0, 100), 1.05);
+  controller.groundSurfaces.add(rect(-99.4, 99.4, 0.6, 99.4), 1.19);
+  controller.colliders = groundBoundaryColliders(rect(-100, 100, 0, 100), rect(-99.4, 99.4, 0.6, 99.4), 0, 1.05);
+  controller.activeMode = 'car';
+  const tune = physics.makeTune('sedan', { halfW: 0.92, halfL: 2.3, height: 1.42, wheelX: 0.8, wheelZf: 1.42, wheelZr: -1.42, wheelRadius: 0.34 });
+  const world = { ground: (x, z, hit) => controller.carGround(x, z, hit), collide: car => controller.resolveHorizontalCollision(car.position, 1.35, car) };
+  for (const fps of [30, 60]) for (const speed of [0, 15, 30]) {
+    const car = { tune, body: physics.createBody(tune), halfW: 0.92, halfL: 2.3,
+      position: { x: 0, y: 0, z: -20 }, heading: 0, speed, vx: 0, vz: 0, angularVel: 0, steerAngle: 0 };
+    car.body.vz = car.body.speed = speed;
+    let furthest = -20;
+    for (let i = 0; i < 6 * fps; i++) {
+      physics.stepCar(car, { throttle: 1, steer: 0, handbrake: false }, 1 / fps, world);
+      furthest = Math.max(furthest, car.position.z);
+    }
+    assert.ok(furthest <= -2.29, `car crossed wall at ${speed} m/s, ${fps} fps: ${furthest}`);
+    assert.ok(car.position.z > -4, 'car reached the wall');
+    assert.ok(Math.abs(car.position.y - 0.22) < 0.025, 'car rests on the sidewalk');
+    assert.ok(car.body.wheels.every(w => w.hasGround && Math.abs(w.gy - 0.22) < 1e-6));
+  }
+});
 
 test('releasing a movement key after focusing search stops movement', () => {
   const { controller, key } = keyboardHarness();

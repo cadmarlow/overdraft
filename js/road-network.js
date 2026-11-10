@@ -25,7 +25,7 @@ const LANE_CLEAR = 1.2; // half width each lane keeps free of obstacles
 const CROSSWALK = 2.5; // depth between an intersection box and its stop lines
 const SHORE_MARGIN = 6;
 
-function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
+function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs = sidewalks) {
   // 1. Spatial hash of ground footprints: curbs bound the roads, everything else also blocks pedestrians
   const hash = new Map();
   const cellKey = (ix, iz) => (ix + 512) * 1024 + iz + 512;
@@ -39,7 +39,10 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
       }
     }
   }
-  for (const r of sidewalks) insert({ minX: r.minX, maxX: r.maxX, minZ: r.minZ, maxZ: r.maxZ, curb: true });
+  // Lot-cover rectangles still locate the regular street grid. Only the rendered curb polygons decide where a
+  // vehicle may go: irregular blocks and park sidewalks are not covered by those rectangles.
+  for (const r of sidewalks) insert({ ...r, layout: true });
+  for (const r of curbs) insert({ ...r, curb: true });
   for (const r of obstacles) insert(r);
 
   // Calls fn(rect) for every footprint overlapping the box until fn returns true
@@ -49,8 +52,8 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
         const list = hash.get(cellKey(ix, iz));
         if (!list) continue;
         for (const r of list) {
-          if (r.minX < maxX && r.maxX > minX && r.minZ < maxZ && r.maxZ > minZ && fn(r)
-            && (!r.polygon || polygonBoxOverlaps(r.polygon, (minX + maxX) / 2, (minZ + maxZ) / 2, (maxX - minX) / 2, (maxZ - minZ) / 2))) return true;
+          if (r.minX < maxX && r.maxX > minX && r.minZ < maxZ && r.maxZ > minZ
+            && (!r.polygon || polygonBoxOverlaps(r.polygon, (minX + maxX) / 2, (minZ + maxZ) / 2, (maxX - minX) / 2, (maxZ - minZ) / 2)) && fn(r)) return true;
         }
       }
     }
@@ -65,13 +68,11 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
     return true;
   }
 
-  const blocked = (minX, maxX, minZ, maxZ) => !onLand(minX, maxX, minZ, maxZ) || query(minX, maxX, minZ, maxZ, (r) => !r.pedestrianOnly);
-  const walkable = (minX, maxX, minZ, maxZ) => onLand(minX, maxX, minZ, maxZ) && !query(minX, maxX, minZ, maxZ, (r) => !r.curb);
+  const blocked = (minX, maxX, minZ, maxZ) => !onLand(minX, maxX, minZ, maxZ) || query(minX, maxX, minZ, maxZ, (r) => !r.layout && !r.pedestrianOnly);
+  const walkable = (minX, maxX, minZ, maxZ) => onLand(minX, maxX, minZ, maxZ) && !query(minX, maxX, minZ, maxZ, (r) => !r.layout && !r.curb);
   const onSidewalk = (x, z) => query(x, x, z, z, (r) => r.curb);
-  // The same test for the centreline streets (4b), which follow the real streets: the rectangles standing in for
-  // irregular sidewalks may reach a little past their curbs, a whole park's bounds take in the streets around it and a
-  // median mall's bounds (Allen St, Chrystie St...) both its roadways, so only a curb right at (x, z), median malls by
-  // their real outline and other obstacles under 50 m across count
+  // Centreline streets (4b) use the actual curb outline across the full lane width. Large park bounding boxes and
+  // divided-road medians can include real streets: curbs exclude the park itself; medians use their own outline.
   const MEDIANS = BLOCKS.filter((b) => b.median);
   const medianBox = (r) => MEDIANS.some((b) => Math.abs(b.minX - r.minX) < 0.6 && Math.abs(b.maxX - r.maxX) < 0.6 && Math.abs(b.minZ - r.minZ) < 0.6 && Math.abs(b.maxZ - r.maxZ) < 0.6);
   const medianCells = new Map(); // 64 m cells -> the medians reaching into them
@@ -103,9 +104,9 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
     return false;
   }
   const blockedOnStreet = (x, z, clear) => !onLand(x - clear, x + clear, z - clear, z + clear) ||
-    query(x - 0.3, x + 0.3, z - 0.3, z + 0.3, (r) => r.curb) ||
+    query(x - clear, x + clear, z - clear, z + clear, (r) => r.curb) ||
     nearMedian(x, z, clear) ||
-    query(x - clear, x + clear, z - clear, z + clear, (r) => !r.curb && !r.pedestrianOnly && (r.maxX - r.minX < 50 || r.maxZ - r.minZ < 50) && !medianBox(r));
+    query(x - clear, x + clear, z - clear, z + clear, (r) => !r.layout && !r.curb && !r.pedestrianOnly && (r.maxX - r.minX < 50 || r.maxZ - r.minZ < 50) && !medianBox(r));
 
   // 2. Avenue corridors: the most common curb-to-curb gap around each avenue's nominal x along its own stretches
   //    (CSCL: an avenue only exists between its ends, e.g. Irving Pl 14th-20th St, so it never claims a neighbour's
@@ -137,7 +138,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
       let right = Infinity;
       let inside = false;
       query(ave.x - 20, ave.x + 20, z, z, (r) => {
-        if (!r.curb) return false;
+        if (!r.layout) return false;
         if (r.maxX <= ave.x) left = Math.max(left, r.maxX);
         else if (r.minX >= ave.x) right = Math.min(right, r.minX);
         else inside = true;
@@ -821,9 +822,10 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
     const c = makeCurve(e, i, f, j);
     const p = { x: 0, z: 0, dx: 0, dz: 0 };
     const street = e.general || f.general; // through a centreline junction: tested like its lanes
-    for (let k = 1; k < 10; k++) {
-      curvePoint(c, c.len * k / 10, p);
-      if (street ? blockedOnStreet(p.x, p.z, 0.8) : blocked(p.x - 1, p.x + 1, p.z - 1, p.z + 1)) return false;
+    const steps = Math.max(1, Math.ceil(c.len));
+    for (let k = 0; k <= steps; k++) {
+      curvePoint(c, c.len * k / steps, p);
+      if (street ? blockedOnStreet(p.x, p.z, LANE_CLEAR) : blocked(p.x - LANE_CLEAR, p.x + LANE_CLEAR, p.z - LANE_CLEAR, p.z + LANE_CLEAR)) return false;
     }
     return true;
   }
@@ -1045,14 +1047,44 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = []) {
   for (const e of edges) {
     e.moves = e.moves.filter((m) => kept.has(m.to));
     serveEveryLane(e);
-    // Lanes still leading nowhere (every curve out of them grazes a curb or obstacle): send them on to the nearest lane
-    // of the straightest move anyway, so every lane always has a way on
-    for (let i = 0; i < e.lanes.length; i++) {
-      if (!e.moves.length || e.moves.some((m) => m.out[i] >= 0)) continue;
-      const m = e.moves.find((q) => q.turn === 'S') || e.moves[0];
-      m.out[i] = nearestLane(e, i, m.to);
-    }
   }
+  // Repositioning junction ends above can change their curves. Validate the final geometry, including the formerly
+  // unchecked lane ends; an impossible exit must remove its lane, never authorize a path through a sidewalk.
+  for (const e of edges) {
+    e.moves.forEach(m => { m.out = m.out.map((j, i) => j >= 0 && pathClear(e, i, m.to, j) ? j : -1); });
+    e.clearLanes = e.lanes.map(o => {
+      const steps = Math.max(1, Math.ceil(e.len));
+      for (let k = 0; k <= steps; k++) {
+        const s = e.len * k / steps, x = e.sx + e.dx * s + e.rx * o, z = e.sz + e.dz * s + e.rz * o;
+        if (query(x - LANE_CLEAR, x + LANE_CLEAR, z - LANE_CLEAR, z + LANE_CLEAR, r => r.curb)) return false;
+      }
+      return true;
+    });
+  }
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const maps = new Map();
+    for (const e of edges) {
+      let next = 0;
+      maps.set(e, e.lanes.map((_, i) => e.clearLanes[i] && e.moves.some(m => m.out[i] >= 0) ? next++ : -1));
+    }
+    for (const e of edges) {
+      const map = maps.get(e);
+      e.moves = e.moves.filter(m => maps.has(m.to));
+      for (const m of e.moves) m.out = m.out.filter((_, i) => map[i] >= 0).map(j => j >= 0 ? maps.get(m.to)[j] ?? -1 : -1);
+      e.moves = e.moves.filter(m => m.out.some(j => j >= 0));
+      const lanes = e.lanes.filter((_, i) => map[i] >= 0);
+      if (lanes.length !== e.lanes.length) changed = true;
+      e.lanes = lanes;
+      e.clearLanes = lanes.map(() => true);
+    }
+    const connected = largestComponent(edges.filter(e => e.lanes.length && e.moves.length), e => e.moves.map(m => m.to).filter(f => f.lanes.length && f.moves.length));
+    if (connected.size !== edges.length) changed = true;
+    edges = edges.filter(e => connected.has(e));
+    for (const e of edges) e.moves = e.moves.filter(m => connected.has(m.to));
+  }
+  for (const e of edges) delete e.clearLanes;
   edges.forEach((e, i) => (e.id = i));
 
   for (const n of nodes) n.in = n.out = null;

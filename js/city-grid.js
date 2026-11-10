@@ -43,6 +43,8 @@ import {
 } from './city-config.js';
 import { createGroundRoadMaterial, createGroundWalkMaterial, createGroundCurbMaterial } from './ground-materials.js';
 import { buildIslands } from './ground.js';
+import { curbOutline } from './ground-plan.js';
+import { createGroundSurfaces, groundFootprint, groundBoundaryColliders } from './ground-surfaces.js';
 import { lawnColorNode, createGroundLawnMaterial, createParkEdgeMaterial, createGroundRockMaterial } from './park-materials.js';
 import { buildParkWays, buildParkShores, buildOutcrops, paintParkDrives } from './park-ground.js';
 import {
@@ -67,23 +69,15 @@ let parkLampSites;
 let pavedPlazaRects;
 let sidewalkBlocks;
 let fdrViaduct;
-let streetGroundSurfaces = [];
+let streetGroundSurfaces = createGroundSurfaces();
+const streetGroundHit = {};
 
-function addStreetGround(poly, height) {
-  streetGroundSurfaces.push({
-    poly, height,
-    minX: Math.min(...poly.map((p) => p.x)), maxX: Math.max(...poly.map((p) => p.x)),
-    minZ: Math.min(...poly.map((p) => p.z)), maxZ: Math.max(...poly.map((p) => p.z))
-  });
+function addStreetGround(poly, height, options) {
+  streetGroundSurfaces.add(poly, height, options);
 }
 
 function getStreetGroundHeight(x, z) {
-  let height = 0.22;
-  for (const s of streetGroundSurfaces) {
-    if (s.height > height && x >= s.minX && x <= s.maxX && z >= s.minZ && z <= s.maxZ
-      && pointInPolygonXZ(s.poly, x, z)) height = s.height;
-  }
-  return height;
+  return streetGroundSurfaces.sample(x, z, streetGroundHit) ? Math.max(0.22, streetGroundHit.y) : 0.22;
 }
 
 // Manhattan's coastline, raised sidewalks, parks, waterfront piers and shore highways.
@@ -1463,7 +1457,7 @@ function buildWaterfrontPiers(group) {
 }
 
 function buildCityGrid(scene) {
-  streetGroundSurfaces = [];
+  streetGroundSurfaces = createGroundSurfaces();
   const group = new THREE.Group();
   group.name = 'ManhattanCityGrid';
 
@@ -1537,12 +1531,16 @@ function buildCityGrid(scene) {
     medianHedgeMat.colorNode = mix(sides.mul(smoothstep(0.15, 0.75, positionWorld.y.sub(0.2)).mul(0.45).add(0.55)), crown, top);
   }
   const blockSidewalks = []; // { cx, cz, w, d, block } axis-aligned slabs (irregular islands: their lot cover)
+  const curbs = []; // exact rendered outlines, separate from the rectangles used to infer the street grid
+  const groundColliders = [];
   const roadSidewalks = []; // the curbs road-network.js bounds the roads with (medians go in as footprints)
   const hedgeGeos = [];
   const SW_TOP = 0.22;
   for (const b of BLOCKS) {
     if (b.park > 0.6 && !b.median && b.parkName !== 'Bryant Park') continue; // parks build their own perimeter sidewalk (sections 7, 7B)
     islands.push(b);
+    curbs.push(groundFootprint((b.curb ??= curbOutline(b.poly)).loop));
+    addStreetGround(b.curb.loop, SW_TOP);
     if (b.rect) {
       const slab = { cx: (b.minX + b.maxX) * 0.5, cz: (b.minZ + b.maxZ) * 0.5, w: b.maxX - b.minX, d: b.maxZ - b.minZ, block: b };
       blockSidewalks.push(slab);
@@ -1595,6 +1593,8 @@ function buildCityGrid(scene) {
     const top = createExtrudedPolygonMesh(topPoly, 0.0, topY, pavingMat, true, false);
     setPavingStyle(top.geometry, style);
     group.add(top);
+    curbs.push(groundFootprint(pts));
+    addStreetGround(pts, topY - 0.04);
     addStreetGround(topPoly, topY);
     const xs = pts.map((p) => p.x);
     const zs = pts.map((p) => p.z);
@@ -1795,9 +1795,14 @@ function buildCityGrid(scene) {
   // Perimeter sidewalk: the park's curb island (BLOCKS), with the schist wall along the real park line inside it
   const cpBlock = BLOCKS.filter((b) => b.parkName === 'Central Park').sort((a, b) => b.area - a.area)[0];
   if (cpBlock) {
+    curbs.push(groundFootprint(cpBlock.poly));
+    addStreetGround(cpBlock.poly, 0.18);
     group.add(createExtrudedPolygonMesh(cpBlock.poly, 0.0, 0.18, curbMat, true, true));
     const sw = offsetPolygonInward(cpBlock.poly, 0.25);
-    if (sw) group.add(createExtrudedPolygonMesh(sw, 0.03, 0.19, sidewalkMat));
+    if (sw) {
+      group.add(createExtrudedPolygonMesh(sw, 0.03, 0.19, sidewalkMat));
+      addStreetGround(sw, 0.22);
+    }
     addFootprint((cpBlock.minX + cpBlock.maxX) * 0.5, (cpBlock.minZ + cpBlock.maxZ) * 0.5, cpBlock.maxX - cpBlock.minX, cpBlock.maxZ - cpBlock.minZ);
   }
   // Low coursed-schist perimeter wall (~0.8 m above the sidewalk) with the lawn a little inside it
@@ -1806,13 +1811,14 @@ function buildCityGrid(scene) {
   addStreetGround(cpWall, 1.05);
   const cpLawnPts = offsetPolygonInward(cpWall, 0.6) || cpWall;
   group.add(createExtrudedPolygonMesh(cpLawnPts, 0.85, 0.34, cpLawnMat, true, false));
-  addStreetGround(cpLawnPts, 1.19);
+  addStreetGround(cpLawnPts, 1.19, { grip: 0.62, rough: 0.024, curb: false });
+  groundColliders.push(...groundBoundaryColliders(cpWall, cpLawnPts, 0, 1.05));
 
   // Sunlit open meadows & lawns: Sheep Meadow, the Great Lawn, North Meadow, the Great Hill, Cedar & Pilgrim Hills...
   const cpLawnPolys = CPG.lawns.map((l) => flatPts(l.ring));
   for (const pts of cpLawnPolys) {
     group.add(createFlatPolygonMesh(pts, 1.21, cpMeadowMat, true));
-    addStreetGround(pts, 1.21);
+    addStreetGround(pts, 1.21, { grip: 0.62, rough: 0.024, curb: false });
   }
 
   // Water: the Lake, the Jacqueline Kennedy Onassis Reservoir (raised in its stone basin, ringed by the running
@@ -1823,7 +1829,10 @@ function buildCityGrid(scene) {
     cpWaterPolys.push(pts);
     if (w.name === 'Jacqueline Kennedy Onassis Reservoir') {
       const track = offsetPolygon(pts, -6);
-      if (track) group.add(createExtrudedPolygonMesh(track, 1.18, 0.38, cpPathMat, true, false));
+      if (track) {
+        group.add(createExtrudedPolygonMesh(track, 1.18, 0.38, cpPathMat, true, false));
+        addStreetGround(track, 1.56);
+      }
       group.add(createFlatPolygonMesh(pts, 1.58, waterMat, true));
     } else {
       group.add(createFlatPolygonMesh(pts, 1.24, waterMat, true));
@@ -1850,7 +1859,11 @@ function buildCityGrid(scene) {
     ...CPG.drives.map((d) => ({ pts: d.pts, width: d.transverse ? Math.max(9, d.w || 10) : d.w || 8.5, y: d.transverse ? CP_TRANSVERSE_TOP : CP_DRIVE_TOP })),
     ...CPG.paths.map(([width, earth, pts]) => ({ pts, width, earth: !!earth, y: earth ? CP_LAWN + 0.022 : 1.228, shoulder: 0.8 }))
   ];
-  for (const mesh of buildParkWays(cpWays, { asphalt: roadMat, edge: cpEdgeMat, lawn: CP_LAWN })) group.add(mesh);
+  for (const mesh of buildParkWays(cpWays, { asphalt: roadMat, edge: cpEdgeMat, lawn: CP_LAWN })) {
+    group.add(mesh);
+    streetGroundSurfaces.addTriangles(mesh.geometry.attributes.position.array, mesh.geometry.index.array,
+      mesh.name === 'ParkWays' ? { rough: 0.0035, curb: false } : { grip: 0.66, rough: 0.018, curb: false });
+  }
   // Trees keep their trunks off the paths (their crowns meet over them): the path segments by 24 m cell
   const pathCells = new Map();
   for (const [width, , pts] of CPG.paths) {
@@ -1892,6 +1905,7 @@ function buildCityGrid(scene) {
   mallPromenade.position.set(mallX, 1.18, mallZ0 + MALL_LEN * 0.5);
   mallPromenade.receiveShadow = true;
   group.add(mallPromenade);
+  addStreetGround(rectPolygon(mallX - 9, mallX + 9, mallZ0, mallZ0 + MALL_LEN), 1.26);
   const bethesdaTerrace = new THREE.Mesh(new THREE.BoxGeometry(48, 2.2, 16), marbleArchMat);
   bethesdaTerrace.position.set(beth.x + 4, 1.8, beth.z + 20);
   group.add(bethesdaTerrace);
@@ -2066,7 +2080,8 @@ function buildCityGrid(scene) {
       group.add(createExtrudedPolygonMesh(bed, 0.2, BED_Y - 0.21, graniteMat, true, false));
       const lawn = offsetConvexPolygon(bed, -0.3);
       parkLawnGeos.push(createExtrudedPolygonMesh(lawn, 0.3, BED_Y - 0.3, cpLawnMat).geometry);
-      addStreetGround(lawn, BED_Y);
+      addStreetGround(bed, BED_Y - 0.01);
+      addStreetGround(lawn, BED_Y, { grip: 0.66, rough: 0.018, curb: false });
       const hoop = offsetConvexPolygon(bed, -0.18);
       parkFenceGeos.push(buildFenceStripGeometry(hoop.map((p, k) => {
         const q = hoop[(k + 1) % hoop.length];
@@ -2263,6 +2278,8 @@ function buildCityGrid(scene) {
     const top = createExtrudedPolygonMesh(slab, 0.0, PARK_Y, pavingMat, true, false);
     setPavingStyle(top.geometry, 0);
     group.add(top);
+    curbs.push(groundFootprint(b.poly));
+    addStreetGround(b.poly, PARK_Y - 0.04);
     addStreetGround(slab, PARK_Y);
     pavedRects.push({ minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ });
     addFootprint((b.minX + b.maxX) * 0.5, (b.minZ + b.maxZ) * 0.5, b.maxX - b.minX, b.maxZ - b.minZ);
@@ -2272,7 +2289,8 @@ function buildCityGrid(scene) {
     const lawnTop = offsetPolygonInward(bed, 0.3);
     if (lawnTop) {
       parkLawnGeos.push(createExtrudedPolygonMesh(lawnTop, 0.3, BED_Y - 0.3, cpLawnMat).geometry);
-      addStreetGround(lawnTop, BED_Y);
+      addStreetGround(bed, BED_Y - 0.01);
+      addStreetGround(lawnTop, BED_Y, { grip: 0.66, rough: 0.018, curb: false });
     }
     // trees on a jittered grid inside the bed
     const SP = 11;
@@ -2505,9 +2523,9 @@ function buildCityGrid(scene) {
   // Raised sidewalk blocks bound the roads (the planted malls down Park Ave, Broadway & co. are obstacles in the
   // roadway, handed over with the footprints)
   const sidewalks = roadSidewalks;
-  // Player colliders of the South Street Viaduct's columns, ramps and portal
-  const colliders = [...((fdrViaduct && fdrViaduct.colliders) || []), ...outcrops.colliders];
-  return { group, sidewalks, footprints, highwayLanes, colliders, roadPaint };
+  // Player colliders of the viaduct, park rocks and retaining walls
+  const colliders = [...((fdrViaduct && fdrViaduct.colliders) || []), ...outcrops.colliders, ...groundColliders];
+  return { group, sidewalks, curbs, groundSurfaces: streetGroundSurfaces, footprints, highwayLanes, colliders, roadPaint };
 }
 
 // =====================================================================================================================
