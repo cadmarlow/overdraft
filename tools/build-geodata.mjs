@@ -86,7 +86,7 @@ const osmCP = load('osm_centralpark.json');
 const cpPark = parkShapes.find((p) => p.name === 'Central Park');
 const cpBB = bbox(cpPark.rings.reduce((a, r) => (Math.abs(ringArea(r)) > Math.abs(ringArea(a)) ? r : a)));
 const insideCP = ([x, z]) => x > cpBB.x0 - 5 && x < cpBB.x1 + 5 && z > cpBB.z0 - 5 && z < cpBB.z1 + 5;
-const cp = { bounds: { minX: q(cpBB.x0), maxX: q(cpBB.x1), minZ: q(cpBB.z0), maxZ: q(cpBB.z1) }, outline: null, water: [], lawns: [], drives: [], paths: [], sites: [] };
+const cp = { bounds: { minX: q(cpBB.x0), maxX: q(cpBB.x1), minZ: q(cpBB.z0), maxZ: q(cpBB.z1) }, outline: null, water: [], lawns: [], drives: [], paths: [], rocks: [], sites: [] };
 cp.outline = flat(rdpRing(cpPark.rings.reduce((a, r) => (Math.abs(ringArea(r)) > Math.abs(ringArea(a)) ? r : a)), 0.8));
 const WATER_NAMES = new Set(['Jacqueline Kennedy Onassis Reservoir', 'The Lake', 'The Pond', 'Harlem Meer', 'Turtle Pond', 'Conservatory Water', 'The Pool']);
 const LAWN_NAMES = new Set(['Sheep Meadow', 'The Great Lawn', 'North Meadow', 'Great Hill', 'Heckscher Ballfields', 'East Meadow', 'Cedar Hill', 'Pilgrim Hill', 'The Dene', 'Conservatory Garden', 'Strawberry Fields']);
@@ -140,6 +140,20 @@ for (const e of osmCP.elements) {
   } else if (e.type === 'way' && t.highway && /Transverse/.test(n) && t.highway !== 'footway') {
     const r = elemRing(e);
     if (r.length > 1) cp.drives.push({ name: n, w: 10, transverse: true, pts: flat(rdp(r, 0.8)) });
+  } else if (e.type === 'way' && t.natural === 'bare_rock') {
+    // A schist outcrop: [x, z, half length, half width, heading of its long axis], from its outline's principal axes
+    const r = elemRing(e);
+    if (r.length < 4 || !insideCP(centroid(r)) || Math.abs(ringArea(r)) < 20) continue;
+    const [mx, mz] = centroid(r);
+    let sxx = 0, szz = 0, sxz = 0;
+    for (const [x, z] of r) { sxx += (x - mx) ** 2; szz += (z - mz) ** 2; sxz += (x - mx) * (z - mz); }
+    const ang = 0.5 * Math.atan2(2 * sxz, sxx - szz);
+    let a = 0, b = 0;
+    for (const [x, z] of r) {
+      a = Math.max(a, Math.abs((x - mx) * Math.cos(ang) + (z - mz) * Math.sin(ang)));
+      b = Math.max(b, Math.abs((z - mz) * Math.cos(ang) - (x - mx) * Math.sin(ang)));
+    }
+    cp.rocks.push([q(mx), q(mz), q(a), q(b), Math.round(ang * 1000) / 1000]);
   } else if (SITE_NAMES.includes(n) && !seenSites.has(n)) {
     const r = elemRing(e);
     if (!r.length) continue;
@@ -155,7 +169,40 @@ for (const e of osmCP.elements) {
 }
 // Transverses from the centreline (OSM marks parts of them as footways)
 for (const p of roadLines) if (/TRANSVERSE/.test(p.name)) cp.drives.push({ name: p.name, w: p.w || 10, transverse: true, pts: flat(p.pts) });
-log(`Central Park: ${cp.water.length} water bodies, ${cp.lawns.length} lawns, ${cp.drives.length} drive pieces, ${cp.sites.length} sites`);
+// The footpaths (tools/data/osm_centralpark_paths.json: q_cp_paths.overpassql less the sidewalks and crossings of the
+// streets around): [width, 0 paved / 1 earth, [x, z, ...]]. Inside the park line, clear of the drives' own lanes.
+{
+  const outline = cpPark.rings.reduce((a, r) => (Math.abs(ringArea(r)) > Math.abs(ringArea(a)) ? r : a));
+  const inPark = ([x, z]) => {
+    let inside = false;
+    for (let i = 0, j = outline.length - 1; i < outline.length; j = i++) {
+      const [ax, az] = outline[i], [bx, bz] = outline[j];
+      if ((az > z) !== (bz > z) && x < ((bx - ax) * (z - az)) / (bz - az) + ax) inside = !inside;
+    }
+    return inside;
+  };
+  const driveLines = cp.drives.map((d) => ({ half: d.w / 2, pts: d.pts }));
+  const onDrive = ([x, z]) => driveLines.some((d) => {
+    for (let i = 0; i + 3 < d.pts.length; i += 2) {
+      const ax = d.pts[i], az = d.pts[i + 1], dx = d.pts[i + 2] - ax, dz = d.pts[i + 3] - az;
+      const u = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+      if (Math.hypot(x - ax - dx * u, z - az - dz * u) < d.half + 1.5) return true;
+    }
+    return false;
+  });
+  const EARTH = /^(unpaved|dirt|ground|earth|woodchips|fine_gravel|gravel|compacted|grass|rock|sand)$/;
+  for (const e of load('osm_centralpark_paths.json').elements) {
+    const t = e.tags || {};
+    if (t.area === 'yes' || t.tunnel || t.indoor || t.covered || t.highway === 'steps' || /Drive|Transverse/.test(t.name || '')) continue;
+    const r = elemRing(e);
+    if (r.length < 2 || r.filter(inPark).length < r.length * 0.8) continue;
+    if (r.filter(onDrive).length > r.length * 0.6) continue;
+    const earth = t.highway === 'bridleway' || EARTH.test(t.surface || '');
+    const width = Math.min(8, Math.max(1.8, parseFloat(t.width) || (t.highway === 'pedestrian' ? 5 : t.highway === 'bridleway' ? 3.6 : earth ? 2.2 : 3.2)));
+    cp.paths.push([q(width), earth ? 1 : 0, flat(rdp(r, 0.5))]);
+  }
+}
+log(`Central Park: ${cp.water.length} water bodies, ${cp.lawns.length} lawns, ${cp.drives.length} drive pieces, ${cp.paths.length} paths, ${cp.rocks.length} outcrops, ${cp.sites.length} sites`);
 
 // --- Landmarks: real footprints (grid-aligned bounding boxes) from OSM ---------------------------------------------
 const osmLM = load('osm_landmarks.json');

@@ -25,9 +25,14 @@ const SURFACES = {
   chipseal: 'tarred_gravel', // old binder with the stone showing through
   concrete: 'granular_concrete', // sidewalk flags
   trowel: 'brushed_concrete', // hand-finished concrete: older flags, curbs, bluestone
-  setts: 'cobblestone_floor_08' // Belgian block: the strip of granite setts along many curbs
+  setts: 'cobblestone_floor_08', // Belgian block: the strip of granite setts along many curbs
+  dirt: 'park_dirt', // trodden earth: under the trees, along the paths, where the grass gave up
+  litter: 'forest_leaves_03', // last year's leaves, under the canopy
+  rock: 'lichen_rock' // Manhattan schist: the outcrops of Central Park
 };
 const MACRO = 'aerial_asphalt_01';
+// Surfaces the shaders only read the colour and height of: no normal map is shipped for them
+const COLOUR_ONLY = new Set(['dirt', 'litter', 'rock']);
 
 fs.mkdirSync(OUT, { recursive: true });
 fs.mkdirSync(WORK, { recursive: true });
@@ -73,9 +78,11 @@ for (const [name, id] of Object.entries(SURFACES)) {
     normal[i * 4 + 3] = Math.max(2, rough[i]);
   }
   await sharp(colour, { raw: { width: SIZE, height: SIZE, channels: 4 } }).webp({ quality: 78, alphaQuality: 35, effort: 6 }).toFile(path.join(OUT, `${name}_c.webp`));
-  await sharp(normal, { raw: { width: SIZE, height: SIZE, channels: 4 } }).webp({ quality: 80, alphaQuality: 35, effort: 6 }).toFile(path.join(OUT, `${name}_n.webp`));
+  if (COLOUR_ONLY.has(name)) fs.rmSync(path.join(OUT, `${name}_n.webp`), { force: true });
+  else await sharp(normal, { raw: { width: SIZE, height: SIZE, channels: 4 } }).webp({ quality: 80, alphaQuality: 35, effort: 6 }).toFile(path.join(OUT, `${name}_n.webp`));
   info[name] = {
     id, metres: +(((meta.dimensions?.[0] ?? 2000) / 1000).toFixed(3)), mean: mean.map((m) => +(m / (SIZE * SIZE)).toFixed(4)),
+    ...(COLOUR_ONLY.has(name) ? { normal: false } : {}),
     authors: Object.keys(meta.authors || {})
   };
   console.log(name, id, info[name].metres, 'm', info[name].mean.join(' '));

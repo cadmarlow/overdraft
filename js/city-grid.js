@@ -43,10 +43,10 @@ import {
 } from './city-config.js';
 import { createGroundRoadMaterial, createGroundWalkMaterial, createGroundCurbMaterial } from './ground-materials.js';
 import { buildIslands } from './ground.js';
+import { lawnColorNode, createGroundLawnMaterial, createParkEdgeMaterial, createGroundRockMaterial } from './park-materials.js';
+import { buildParkWays, buildParkShores, buildOutcrops, paintParkDrives } from './park-ground.js';
 import {
   createWaterMaterial,
-  createParkLawnMaterial,
-  lawnColorNode,
   cityUniforms,
   createParkPavingMaterial,
   createIronFenceMaterial,
@@ -143,35 +143,6 @@ function addStoneArchBridge(parent, cx, cz, rotY, span, width, archRise, wallMat
   }
 
   parent.add(bGroup);
-}
-
-/**
- * Builds a flat-faceted, glacially striated Manhattan Schist bedrock outcrop geometry
- * (non-indexed with crisp per-facet surface normals).
- */
-function buildManhattanSchistGeometry() {
-  const base = new THREE.DodecahedronGeometry(5.6, 1);
-  const nonIndexed = base.index ? base.toNonIndexed() : base;
-  const pos = nonIndexed.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    let vx = pos.getX(i);
-    let vy = pos.getY(i);
-    let vz = pos.getZ(i);
-
-    // Flatten sub-surface base and sculpt stepped glacial striation ridges along NE-SW axis
-    if (vy < -0.6) {
-      vy = -0.6;
-    } else {
-      const ridge = Math.sin(vx * 0.55 + vz * 0.35) * 0.65 + Math.cos(vx * 0.9 - vz * 0.7) * 0.35;
-      const stepShelf = Math.round((vy + ridge * 0.4) * 1.25) / 1.25;
-      vy = vy * 0.55 + stepShelf * 0.45;
-      vx += Math.sin(vz * 0.6 + vy * 0.4) * 0.55;
-      vz += Math.cos(vx * 0.5 - vy * 0.3) * 0.45;
-    }
-    pos.setXYZ(i, vx, vy, vz);
-  }
-  nonIndexed.computeVertexNormals();
-  return nonIndexed;
 }
 
 /**
@@ -557,7 +528,7 @@ function createWaterfrontPierMaterials() {
     const row = floor(wp.y.div(0.32));
     const boards = mix(mix(color(0x5b4533), color(0x8b6b4d), hash(vec2(row, floor(wp.x.div(3.6).add(hash(vec2(row, 7.0))))))),
       color(0x2a2119), lines(wp.y, 0.32, 0.014));
-    const lawn = lawnColorNode(nature.meadow);
+    const lawn = lawnColorNode();
     // Sports turf with white soccer markings drawn in the field box's own 0..1 top-face uv
     const fwF = max(max(fwidth(lu.x), fwidth(lu.y)), 0.0001);
     const fieldLine = (d) => smoothstep(fwF.add(0.006), 0.006, abs(d));
@@ -1538,8 +1509,10 @@ function buildCityGrid(scene) {
   // =========================================================================
   // 3. PARK LAWN MATERIALS (the harbor islands themselves are built in boroughs.js)
   // =========================================================================
-  const cpLawnMat = createParkLawnMaterial(false);
-  const cpMeadowMat = createParkLawnMaterial(true);
+  // One lawn for every park (js/park-materials.js): what makes Sheep Meadow a kept lawn and the Ramble a wood's floor is
+  // the park field, not the material
+  const cpLawnMat = createGroundLawnMaterial();
+  const cpMeadowMat = cpLawnMat;
 
   // =========================================================================
   // 4. RAISED SIDEWALKS & GRANITE CURBSTONES: every real curb island of Manhattan (city-config.js BLOCKS, from the
@@ -1559,7 +1532,7 @@ function buildCityGrid(scene) {
     const leaves = texture(nature.meadow, vec2(positionWorld.x.add(positionWorld.z), positionWorld.y.mul(1.3)).div(1.4)).rgb;
     const clumps = smoothstep(0.2, 0.8, fract(sin(dot(floor(positionWorld.xz.mul(0.8)), vec2(12.9898, 78.233))).mul(43758.5453)));
     const sides = leaves.mul(mix(vec3(0.42, 0.52, 0.34), vec3(0.6, 0.7, 0.44), clumps));
-    const crown = lawnColorNode(nature.meadow).mul(mix(vec3(0.6, 0.7, 0.5), vec3(0.78, 0.86, 0.62), clumps));
+    const crown = lawnColorNode().mul(mix(vec3(0.72, 0.84, 0.6), vec3(0.94, 1.03, 0.74), clumps));
     // Shade toward the foot of the hedge, where the leaves thin out
     medianHedgeMat.colorNode = mix(sides.mul(smoothstep(0.15, 0.75, positionWorld.y.sub(0.2)).mul(0.45).add(0.55)), crown, top);
   }
@@ -1802,15 +1775,10 @@ function buildCityGrid(scene) {
     color: 0xb8afa0,
     roughness: 0.74
   });
-  const cpDriveMat = new THREE.MeshStandardNodeMaterial({
-    color: 0x2f333a,
-    roughness: 0.68
-  });
-  const schistRockMat = new THREE.MeshStandardNodeMaterial({
-    color: 0x4c4e52,
-    roughness: 0.86,
-    metalness: 0.12
-  });
+  // Where paving or water meets the grass, and the schist of the outcrops (js/park-materials.js)
+  const CP_LAWN = 1.2; // between the wood's floor (1.19) and the kept lawns laid over it (1.21)
+  const cpEdgeMat = createParkEdgeMaterial();
+  const schistRockMat = createGroundRockMaterial(CP_LAWN);
   const marbleArchMat = new THREE.MeshStandardNodeMaterial({
     color: 0xd2cbbd,
     roughness: 0.62
@@ -1861,37 +1829,50 @@ function buildCityGrid(scene) {
       group.add(createFlatPolygonMesh(pts, 1.24, waterMat, true));
     }
   }
+  // No lawn runs to the water on a ruled line: a band of mud and pebbles along every shore but the reservoir's
+  group.add(buildParkShores(CPG.water.filter((w) => w.name !== 'Jacqueline Kennedy Onassis Reservoir'), { edge: cpEdgeMat, y: 1.24, lawn: CP_LAWN }));
 
   // The loop drives (East, West, Center & Terrace Drives, car-free) and the four transverse roads crossing the park
   const cpDrives = [];
   const cpTransverses = [];
-  function buildParkDriveRibbon(waypoints, width, y) {
-    for (let i = 0; i < waypoints.length - 1; i++) {
-      const [x1, z1] = waypoints[i];
-      const [x2, z2] = waypoints[i + 1];
-      const dx = x2 - x1;
-      const dz = z2 - z1;
-      const len = Math.hypot(dx, dz) + Math.min(2.5, width * 0.3);
-      if (len < 0.5) continue;
-      const seg = new THREE.Mesh(new THREE.BoxGeometry(width, 0.08, len), cpDriveMat);
-      seg.position.set((x1 + x2) * 0.5, y, (z1 + z2) * 0.5);
-      seg.rotation.y = Math.atan2(dx, dz);
-      seg.receiveShadow = true;
-      group.add(seg);
-    }
-  }
   for (const d of CPG.drives) {
     const wp = [];
     for (let i = 0; i < d.pts.length; i += 2) wp.push([d.pts[i], d.pts[i + 1]]);
     if (wp.length < 2) continue;
-    if (d.transverse) {
-      cpTransverses.push(wp);
-      buildParkDriveRibbon(wp, Math.max(9, d.w || 10), 1.215);
-    } else {
-      cpDrives.push(wp);
-      buildParkDriveRibbon(wp, d.w || 8.5, 1.20);
+    (d.transverse ? cpTransverses : cpDrives).push(wp);
+  }
+  // Ribbons of the streets' own asphalt, a shoulder of trodden earth each side (js/park-ground.js); their lines are
+  // painted with the rest of the island's, once the paint builder exists (section 11)
+  const CP_DRIVE_TOP = 1.24, CP_TRANSVERSE_TOP = 1.255;
+  // and the 70 km of footpaths (OpenStreetMap), paved or, like the bridle path and the trails of the Ramble, earth.
+  // The paths run under the drives where they cross them.
+  const cpWays = [
+    ...CPG.drives.map((d) => ({ pts: d.pts, width: d.transverse ? Math.max(9, d.w || 10) : d.w || 8.5, y: d.transverse ? CP_TRANSVERSE_TOP : CP_DRIVE_TOP })),
+    ...CPG.paths.map(([width, earth, pts]) => ({ pts, width, earth: !!earth, y: earth ? CP_LAWN + 0.022 : 1.228, shoulder: 0.8 }))
+  ];
+  for (const mesh of buildParkWays(cpWays, { asphalt: roadMat, edge: cpEdgeMat, lawn: CP_LAWN })) group.add(mesh);
+  // Trees keep their trunks off the paths (their crowns meet over them): the path segments by 24 m cell
+  const pathCells = new Map();
+  for (const [width, , pts] of CPG.paths) {
+    for (let i = 0; i + 3 < pts.length; i += 2) {
+      const seg = [pts[i], pts[i + 1], pts[i + 2], pts[i + 3], width / 2 + 1.7];
+      for (let ix = Math.floor((Math.min(seg[0], seg[2]) - seg[4]) / 24); ix <= Math.floor((Math.max(seg[0], seg[2]) + seg[4]) / 24); ix++) {
+        for (let iz = Math.floor((Math.min(seg[1], seg[3]) - seg[4]) / 24); iz <= Math.floor((Math.max(seg[1], seg[3]) + seg[4]) / 24); iz++) {
+          const key = ix * 4096 + iz;
+          if (!pathCells.has(key)) pathCells.set(key, []);
+          pathCells.get(key).push(seg);
+        }
+      }
     }
   }
+  const nearPath = (x, z) => {
+    for (const [ax, az, bx, bz, clear] of pathCells.get(Math.floor(x / 24) * 4096 + Math.floor(z / 24)) || []) {
+      const dx = bx - ax, dz = bz - az;
+      const u = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+      if (Math.hypot(x - ax - dx * u, z - az - dz * u) < clear) return true;
+    }
+    return false;
+  };
 
   // Stone arch bridges: Gapstow Bridge over the Pond, Bow Bridge across the Lake (spanning their real headings)
   const gapstow = cpSite('Gapstow Bridge');
@@ -1924,35 +1905,22 @@ function buildCityGrid(scene) {
   bethesdaStatue.position.set(beth.x, 3.8, beth.z);
   group.add(bethesdaStatue);
 
-  // Manhattan Schist glacial outcrops: Umpire Rock (by the Heckscher ballfields), Rat Rock (Billy Johnson Playground),
-  // Vista Rock under Belvedere Castle, a couple near the Pond & the Lake
   const belv = cpSite('Belvedere Castle') || { x: -506, z: -3000 };
-  const rockGeo = buildManhattanSchistGeometry();
-  const rockCoords = [
-    { x: -585, z: -1745, sx: 2.1, sy: 0.78, sz: 1.65 }, // Umpire Rock
-    { x: -430, z: -1690, sx: 1.7, sy: 0.65, sz: 1.40 }, // Rat Rock
-    { x: belv.x - 2, z: belv.z + 6, sx: 2.3, sy: 1.25, sz: 1.85 }, // Vista Rock (under Belvedere Castle)
-    { x: -150, z: -1700, sx: 1.5, sy: 0.62, sz: 1.30 },
-    { x: -690, z: -2700, sx: 1.8, sy: 0.72, sz: 1.50 }
-  ];
-  for (const rc of rockCoords) {
-    const rock = new THREE.Mesh(rockGeo, schistRockMat);
-    rock.position.set(rc.x, 1.05, rc.z);
-    rock.scale.set(rc.sx, rc.sy, rc.sz);
-    rock.rotation.y = rc.x * 0.12;
-    rock.castShadow = true;
-    rock.receiveShadow = true;
-    group.add(rock);
-
-    // Flanking lower glacial schist bedrock shelf
-    const shelf = new THREE.Mesh(rockGeo, schistRockMat);
-    shelf.position.set(rc.x + 5.2, 0.92, rc.z + 3.4);
-    shelf.scale.set(rc.sx * 0.72, rc.sy * 0.52, rc.sz * 0.68);
-    shelf.rotation.y = rc.x * 0.12 + 1.1;
-    shelf.castShadow = true;
-    shelf.receiveShadow = true;
-    group.add(shelf);
-  }
+  // The park's real outcrops (OpenStreetMap: Umpire Rock, Rat Rock, the Hernshead and a hundred unnamed ones), each a
+  // whaleback the glacier left (js/park-plan.js outcrop), as high as it is broad; and Vista Rock, built up under the
+  // castle that stands on it
+  const rockHash = (i) => { const v = Math.sin(i * 127.1 + 3.7) * 43758.5453; return v - Math.floor(v); };
+  const cpRocks = CPG.rocks.map(([x, z, a, b, ang], i) => {
+    const big = Math.max(a, b);
+    return {
+      x, z, rx: a, rz: b, turn: -ang, seed: i + 1,
+      height: Math.min(4.4, Math.max(0.5, 0.3 + 0.2 * Math.min(a, b))) * (0.75 + 0.5 * rockHash(i)),
+      rings: big > 18 ? 20 : big > 8 ? 14 : 10, segments: big > 18 ? 64 : big > 8 ? 48 : 32
+    };
+  });
+  cpRocks.push({ x: belv.x - 2, z: belv.z + 6, rx: 12.9, rz: 10.4, height: 5.75, turn: belv.x * 0.12, seed: 997 });
+  const outcrops = buildOutcrops(cpRocks, { material: schistRockMat, y: CP_LAWN });
+  for (const mesh of outcrops.meshes) group.add(mesh);
 
   // Belvedere Castle overlooking Vista Rock & Turtle Pond (79th St)
   const castleKeep = new THREE.Mesh(new THREE.BoxGeometry(12, 11, 10), cpWallMat);
@@ -1974,7 +1942,8 @@ function buildCityGrid(scene) {
       { minX: beth.x - 24, maxX: beth.x + 28, minZ: beth.z - 12, maxZ: beth.z + 30 }, // Bethesda Terrace & fountain
       { minX: belv.x - 10, maxX: belv.x + 12, minZ: belv.z - 8, maxZ: belv.z + 10 } // Belvedere Castle
     ],
-    circles: rockCoords.map((rc) => ({ x: rc.x + 2, z: rc.z + 1.5, r: 5.6 * Math.max(rc.sx, rc.sz) + 3 })),
+    circles: cpRocks.map((r) => ({ x: r.x, z: r.z, r: Math.max(r.rx, r.rz) * 0.9 + 2 })),
+    nearPath,
     mall: { x: mallX, z0: mallZ0, z1: mallZ0 + MALL_LEN }
   };
 
@@ -2525,6 +2494,7 @@ function buildCityGrid(scene) {
 
   // 11. Manhattan's waterfront edge: esplanades, shore highways & riverside park belts (see buildManhattanWaterfrontEdge)
   const roadPaint = createRoadPaintChunkBuilder('RoadMarkings');
+  paintParkDrives(CPG.drives, roadPaint, { top: CP_DRIVE_TOP, transverseTop: CP_TRANSVERSE_TOP, white: new THREE.Color(0xe6e2d6), yellow: new THREE.Color(0xe8ad22) });
   const highwayLanes = buildManhattanWaterfrontEdge(group, { blockSidewalks, treeSites, lawnMat: cpLawnMat, curbMat, roadMat, roadPaint });
 
   // Batch static sub-meshes by material to reduce per-frame WebGPU draw calls
@@ -2536,7 +2506,7 @@ function buildCityGrid(scene) {
   // roadway, handed over with the footprints)
   const sidewalks = roadSidewalks;
   // Player colliders of the South Street Viaduct's columns, ramps and portal
-  const colliders = (fdrViaduct && fdrViaduct.colliders) || [];
+  const colliders = [...((fdrViaduct && fdrViaduct.colliders) || []), ...outcrops.colliders];
   return { group, sidewalks, footprints, highwayLanes, colliders, roadPaint };
 }
 

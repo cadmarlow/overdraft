@@ -620,6 +620,7 @@ function createGroundMarkMaterial() {
 }
 
 export {
+  flatNormal, not,
   createGroundRoadMaterial, createGroundWalkMaterial, createGroundCurbMaterial, createGutterMaterial, createGroundSoilMaterial,
   createGroundObjectMaterial, createGroundMarkMaterial
 };

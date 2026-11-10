@@ -33,6 +33,7 @@ import { buildRamps } from './ramps.js';
 import { loadWorld } from './world-assets.js';
 import { loadGround } from './ground-assets.js';
 import { buildRoadSurface, buildGroundDressing } from './ground.js';
+import { surveyCentralPark } from './park-ground.js';
 import { loadUrbanLight, urbanSkyVisibility } from './urban-light.js';
 import { loadStorefronts, createStorefronts } from './storefronts.js';
 import { createFacadeKit } from './facade-kit.js';
@@ -154,6 +155,8 @@ async function initApp() {
 
   await showLoadingStage('Préparation des rues…');
   const streetDetails = buildStreetDetails(scene, allColliders);
+  // Central Park's ground can now be told where its trees shade it (js/park-plan.js)
+  surveyCentralPark(streetDetails.treeField.sites, (cityGrid.colliders || []).filter((c) => c.obstacle === 'rock'));
   markInit('streetDetails');
   await showLoadingStage('La ville prend vie…');
   await Promise.all([loadCharacters(), loadCrowd(CROWD_BODIES, CROWD_PROPS), loadCrowdMotion()]);

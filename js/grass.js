@@ -1,12 +1,13 @@
 import * as THREE from 'three/webgpu';
-import { Fn, attributeArray, float, instanceIndex, mix, positionGeometry, sin, smoothstep, texture, time, uniform, vec3 } from 'three/tsl';
-import { nature } from './nature-assets.js';
+import { Fn, attributeArray, float, instanceIndex, mix, positionGeometry, sin, smoothstep, time, uniform, varying, vec3 } from 'three/tsl';
+import { lawnLayers } from './park-materials.js';
 
-// Blades of grass over the lawns near the camera: real geometry, its colour taken from the lawn it grows on. Two rings of
-// cells follow the camera, the inner one thick with fine tufts, the outer one thinner with wider ones. Lawns are found
+// Blades of grass over the lawns near the camera: real geometry, its colour and its vigour taken from the lawn it grows
+// on (js/park-materials.js lawnLayers): tall where the lawn is lush, short and straw where it is worn, none on bare earth.
+// Two rings of cells follow the camera, the inner one thick with fine tufts, the outer one thinner with wider ones. Lawns are found
 // by material (`userData.lawn`, or `userData.lawnVariant` for the shared ground), so any lawn gets its grass.
 
-const BLADE_HEIGHT = 0.17;
+const BLADE_HEIGHT = 0.13;
 const FADE_FROM = 46, FADE_TO = 62; // metres: where the outer ring shrinks into the turf
 
 // A tuft: `blades` tapering blades fanned round its foot, two segments each, bent over with height
@@ -37,6 +38,10 @@ function createGrassMaterial(store, camera) {
   const tuft = store.element(instanceIndex); // x, y, z, seed
   const tip = positionGeometry.y;
   const seed = tuft.w;
+  // What the lawn is like at the tuft's foot, worked out once a vertex
+  const lawn = lawnLayers(tuft.xz);
+  // (a kept lawn is mown short)
+  const vigour = lawn.bare.oneMinus().mul(mix(float(1.0), float(0.6), lawn.wear)).mul(mix(float(1.0), float(0.8), lawn.canopy)).mul(mix(float(1.0), float(0.5), lawn.kept));
   mat.positionNode = Fn(() => {
     const p = positionGeometry;
     const yaw = seed.mul(6.2832);
@@ -44,18 +49,19 @@ function createGrassMaterial(store, camera) {
     const size = seed.mul(7.13).fract().mul(0.7).add(0.65);
     const away = tuft.xz.sub(camera.xz).length();
     const fade = smoothstep(float(FADE_TO), float(FADE_FROM), away);
-    const h = p.y.mul(BLADE_HEIGHT).mul(size).mul(fade);
+    const h = p.y.mul(BLADE_HEIGHT).mul(size).mul(fade).mul(vigour);
     const local = vec3(p.x.mul(c).sub(p.z.mul(s)), h, p.x.mul(s).add(p.z.mul(c)));
     // the wind runs through the lawn in waves
     const wave = sin(time.mul(1.9).add(tuft.x.mul(0.5)).add(tuft.z.mul(0.37))).mul(0.5).add(0.5);
     const lean = wave.mul(0.05).add(sin(time.mul(5.2).add(seed.mul(40.0))).mul(0.012)).mul(p.y).mul(p.y);
     return tuft.xyz.add(local).add(vec3(lean.mul(0.86), 0, lean.mul(0.51)));
   })();
-  const ground = texture(nature.meadow, tuft.xz.div(3.1)).rgb;
+  const green = varying(lawn.green, 'vLawnGreen');
   const hue = seed.mul(13.7).fract();
   mat.colorNode = Fn(() => {
     const t = tip.clamp(0, 1);
-    return ground.mul(mix(float(0.5), mix(float(1.0), float(1.3), hue), t)).mul(vec3(1.06, 1.04, 0.8));
+    // dark at the foot, where the blades shade each other; the tips catch the light, some yellower than others
+    return green.mul(mix(float(0.62), mix(float(0.95), float(1.18), hue), t)).mul(mix(vec3(1.0), vec3(1.08, 1.04, 0.86), hue.mul(t)));
   })();
   return mat;
 }

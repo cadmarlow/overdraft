@@ -16,5 +16,6 @@ for (const [name, folder] of Object.entries(BARK)) {
 for (const [name, id] of Object.entries({ lawn: 'Grass001', meadow: 'Grass005' })) {
   const base = path.join(RAW, id, `${id}_2K-JPG_`);
   await sharp(`${base}Color.jpg`).resize(1024, 1024).webp({ quality: 84, effort: 5 }).toFile(path.join(OUT, `${name}_c.webp`));
-  await sharp(`${base}NormalGL.jpg`).resize(1024, 1024).webp({ quality: 84, effort: 5 }).toFile(path.join(OUT, `${name}_n.webp`));
+  // (the meadow photograph only breaks the lawn's repeats, in colour: no normal map)
+  if (name === 'lawn') await sharp(`${base}NormalGL.jpg`).resize(1024, 1024).webp({ quality: 84, effort: 5 }).toFile(path.join(OUT, `${name}_n.webp`));
 }

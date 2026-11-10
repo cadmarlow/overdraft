@@ -1,5 +1,4 @@
 import * as THREE from 'three/webgpu';
-import { nature } from './nature-assets.js';
 import { world } from './world-assets.js';
 import { ground } from './ground-assets.js';
 import { urbanSkyVisibility } from './urban-light.js';
@@ -58,9 +57,6 @@ import {
   mrt,
   If,
   sqrt,
-  specularColor,
-  specularColorBlended,
-  specularF90,
   dFdx, dFdy, normalMap,
   cross
 } from 'three/tsl';
@@ -1630,16 +1626,6 @@ const pavingJoints = Fn(([style, wx, wz]) => {
   return mix(mix(hexJoint, granJoint, isGranite), blueJoint, step(1.5, style));
 });
 
-const LAWN_METRES = 3.1; // what one repeat of the turf photograph covers
-const lawnColorNode = (photo) => Fn(() => {
-  const wp = positionWorld.xz;
-  const near = texture(photo, wp.div(LAWN_METRES)).rgb;
-  const far = texture(photo, wp.div(LAWN_METRES * 5.3).add(0.37)).rgb;
-  const patch = noise2D(wp.mul(0.045)).mul(0.6).add(noise2D(wp.mul(0.19)).mul(0.4));
-  const tone = mix(vec3(0.9, 0.86, 0.6), vec3(1.12, 1.16, 0.9), smoothstep(0.25, 0.75, patch));
-  return near.mul(far.mul(1.1).add(0.45)).mul(tone);
-})();
-
 /**
  * NYC Parks Paths & Pedestrian Plaza Paving TSL Material: one shared material (one batched draw call) whose
  * paving style is picked per mesh through its uv.x:
@@ -2789,31 +2775,6 @@ function createWaterMaterial() {
 }
 
 /**
- * Central Park & Manhattan Park Lush Multi-Octave Turf, Clover & Mowing Stripes TSL Material
- */
-function createParkLawnMaterial(isMeadow = false) {
-  const mat = new THREE.MeshStandardNodeMaterial({
-    metalness: 0.0,
-    roughness: 0.9
-  });
-  mat.userData.lawn = true;
-
-  // Photographed turf at two scales, so its repeats never line up, broken into patches of drier and lusher grass
-  mat.colorNode = lawnColorNode(nature.meadow);
-  mat.normalNode = surfaceNormal(nature.meadowNormal, positionWorld.xz.div(LAWN_METRES), 0.8);
-
-  // Grass is a canopy of blades that shadow each other, not a flat dielectric: at grazing angles a plain F0 = 0.04 /
-  // F90 = 1 Fresnel mirrors the sky and turns lawns teal, so weaken the specular and cap its grazing rise
-  mat.setupSpecular = function () {
-    specularColor.assign(vec3(0.025));
-    specularColorBlended.assign(vec3(0.025));
-    specularF90.assign(0.3);
-  };
-
-  return mat;
-}
-
-/**
  * Synthesizes a 256x256 procedural domain-warped multi-octave turbulent smoke/steam cloud texture
  * for camera-facing SpriteNodeMaterial particles (following webgpu_particles.html):
  * - R: local 3D cloud billow illumination (top-left warm sun catch)
@@ -3154,8 +3115,6 @@ export {
   createRoadPaintMaterial,
   createBillboardMaterial,
   createWaterMaterial,
-  createParkLawnMaterial,
-  lawnColorNode,
   createSteamMaterial,
   createGodRayMaterial,
   createContactShadowMaterial,

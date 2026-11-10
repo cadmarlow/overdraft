@@ -9,7 +9,7 @@ par le jeu. `sharp` vient de `tools/world/node_modules` (`cd tools/world && npm 
 node tools/ground/build-ground.mjs <dossier de travail>
 ```
 
-Télécharge depuis [Poly Haven](https://polyhaven.com) (CC0) les cartes 2K de six surfaces et d’une photo aérienne, puis
+Télécharge depuis [Poly Haven](https://polyhaven.com) (CC0) les cartes 2K de neuf surfaces et d’une photo aérienne, puis
 écrit pour chacune deux fichiers de 1024 px :
 
 - `<nom>_c.webp` : couleur, et hauteur dans l'alpha ;
@@ -23,7 +23,13 @@ Télécharge depuis [Poly Haven](https://polyhaven.com) (CC0) les cartes 2K de s
 | `concrete` | granular_concrete | les dalles de trottoir |
 | `trowel` | brushed_concrete | les dalles anciennes, la pierre bleue, les bordures en béton |
 | `setts` | cobblestone_floor_08 | la bande de pavés de granit le long des bordures |
+| `dirt` | park_dirt | la terre battue des parcs : sous les arbres, le long des allées |
+| `litter` | forest_leaves_03 | les feuilles mortes, sous le couvert |
+| `rock` | lichen_rock | le schiste des affleurements de Central Park |
 | `macro` | aerial_asphalt_01 | 30 m de chaussée vus d'en haut, pour les changements de ton |
+
+Les trois dernières ne servent que par leur couleur et leur hauteur : elles sont livrées sans carte de normales
+(`"normal": false` dans `ground.json`).
 
 `ground.json` note ce que couvre chaque photo en mètres et sa couleur moyenne : les shaders divisent par cette moyenne
 puis fixent eux-mêmes le ton, donc changer de photo ne change pas la clarté d'une rue.

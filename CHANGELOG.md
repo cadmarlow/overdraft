@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.9.16 — Green Shoots — 10 novembre 2026
+
+Les parcs. Central Park n'était qu'une moquette vert fluo traversée de rubans bleu marine. Il a maintenant ses
+sentiers, ses rochers et un sol qui change avec ce qui s'y passe. Les autres pelouses de la ville suivent.
+
+### Central Park
+
+- **70 km de sentiers réels** (OpenStreetMap, 1 167 tronçons) : bitume pour la plupart, terre battue pour la piste
+  cavalière et les pistes des bois. Les arbres s'écartent de leur tracé et leurs couronnes se rejoignent au-dessus.
+- **110 affleurements de schiste réels**, d'Umpire Rock aux rochers sans nom : chacun est un dos de baleine laissé par
+  le glacier, à sa place et à sa taille, avec lichen, mousse et paillettes de mica. Ils remplacent cinq blocs
+  anguleux. On ne les traverse plus.
+- **Les allées carrossables** sont dans le bitume des rues, avec leurs lignes peintes. Les transversales ont leur
+  double ligne jaune.
+- **Plus de bord tracé à la règle** : un accotement de terre et de gravillons longe chaque allée, une bande de boue et
+  de galets chaque berge. L'herbe les grignote.
+
+### Les pelouses
+
+- **Le parc se connaît** : une carte de 2 m de côté par case dit, pour tout Central Park, où les arbres font de
+  l'ombre, où passent les allées, où est l'eau et quelles pelouses sont entretenues. Elle est calculée au chargement,
+  à partir des arbres réellement plantés.
+- **L'herbe en dépend.** Drue et tondue en bandes sur Sheep Meadow et la Great Lawn. Clairsemée sous les arbres, où
+  chaque tronc se tient dans son cercle de terre et de feuilles mortes. En paille le long des allées et autour des
+  rochers, là où tout le monde marche. En boue au bord de l'eau.
+- **Des verts naturels** à la place du vert fluo : herbe grasse, herbe sèche, trèfle, par plaques de toutes tailles.
+- **Un relief dans la lumière** : le sol reste plat, mais son ombrage ondule comme un terrain vallonné.
+- **Les brins d'herbe** prennent la couleur et la vigueur de la pelouse où ils poussent : courts sur une pelouse
+  tondue, absents sur la terre nue.
+- Les squares, Bryant Park, les quais et les terre-pleins prennent la même herbe, sans la carte : ils devinent.
+
+### Sous le capot
+
+- `js/park-plan.js` (carte du parc, rubans, berges, rochers) est pur et testé dans `tests/park-plan.test.cjs`.
+  `js/park-ground.js` fabrique les maillages, `js/park-materials.js` les matériaux.
+- `tools/build-geodata.mjs` ajoute les sentiers et les rochers à `js/nyc-geodata.js` (+110 Ko). Le reste du
+  fichier est régénéré à l'identique.
+- Trois photos de plus dans `assets/ground` (terre, feuilles mortes, roche), livrées sans carte de normales ; celle
+  de l'ancienne pelouse est retirée. 0,7 Mo de plus au total.
+- Coût mesuré dans la page, pelouse contre aplat de couleur sur trois vues : 0,2 ms au plus.
+
+### Limites connues
+
+- Le parc reste plat : les rochers sont des bosses posées sur un sol horizontal, et on bute dessus au lieu d'y grimper.
+- La nuit, le parc est noir : ses lampadaires n'éclairent pas encore le sol.
+- Pas de bancs ni de lampadaires le long des nouveaux sentiers, et les passants n'y marchent pas.
+- Les petits ponts des sentiers ne sont pas construits : le chemin s'arrête au bord de l'eau et reprend en face.
+- Hors de Central Park, les pelouses ne savent pas où sont leurs arbres.
+
 ## 0.9.15 — After Hours — 10 novembre 2026
 
 - **Écran d’ouverture.** Sacha Roux sur les quais de l’East River, sous la pluie, avec le pont de Brooklyn et Manhattan à l’horizon. L’illustration reste à l’écran pendant le chargement et jusqu’au lancement de la partie ou à l’ouverture du menu principal.

@@ -73,6 +73,46 @@
       "Rob Tuytel"
     ]
   },
+  "dirt": {
+    "id": "park_dirt",
+    "metres": 3,
+    "mean": [
+      0.1986,
+      0.1341,
+      0.051
+    ],
+    "normal": false,
+    "authors": [
+      "Christopher Melani"
+    ]
+  },
+  "litter": {
+    "id": "forest_leaves_03",
+    "metres": 2.3,
+    "mean": [
+      0.0719,
+      0.0469,
+      0.0187
+    ],
+    "normal": false,
+    "authors": [
+      "Rob Tuytel",
+      "Dimitrios Savva"
+    ]
+  },
+  "rock": {
+    "id": "lichen_rock",
+    "metres": 2,
+    "mean": [
+      0.0701,
+      0.0558,
+      0.04
+    ],
+    "normal": false,
+    "authors": [
+      "Rico Cilliers"
+    ]
+  },
   "macro": {
     "id": "aerial_asphalt_01",
     "metres": 30,

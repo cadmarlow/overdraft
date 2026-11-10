@@ -946,6 +946,7 @@ function buildStreetDetails(scene, colliders = []) {
       }
       for (const r of cpClear.rects) if (x > r.minX - 2.5 && x < r.maxX + 2.5 && z > r.minZ - 2.5 && z < r.maxZ + 2.5) return true;
       for (const c of cpClear.circles) if (Math.hypot(x - c.x, z - c.z) < c.r) return true;
+      if (cpClear.nearPath && cpClear.nearPath(x, z)) return true;
       return false;
     };
     const SP = 13;

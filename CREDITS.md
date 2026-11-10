@@ -40,7 +40,9 @@ brick_wall_09 by Rob Tuytel and Matterfield. (Until 0.9.13 the streets used asph
 concrete_floor_worn_001 by Dimitrios Savva and Rico Cilliers.)
 The ground (since 0.9.14, `assets/ground`, made by `tools/ground`) is from Poly Haven (CC0): asphalt_pit_lane, asphalt_track and
 tarred_gravel by Dimitrios Savva, granular_concrete by Dario Barresi and Michael Jenkins, brushed_concrete by Dario Barresi and
-Dimitrios Savva, aerial_asphalt_01 and cobblestone_floor_08 by Rob Tuytel. The wear masks, the manhole covers, grates, cellar doors and pads and the
+Dimitrios Savva, aerial_asphalt_01 and cobblestone_floor_08 by Rob Tuytel; and for the parks (since 0.9.16) park_dirt by Christopher Melani,
+forest_leaves_03 by Rob Tuytel and Dimitrios Savva, lichen_rock by Rico Cilliers. Central Park's footpaths and rock
+outcrops are from © OpenStreetMap contributors (ODbL). The wear masks, the manhole covers, grates, cellar doors and pads and the
 road symbols and stains (`objects_*.webp`, `marks.webp`, `masks_*.webp`) are drawn by the project's own tools.
 Street props are from Poly Haven (CC0): fire_hydrant by Gonçalo Felício, metal_trash_can by GurJas Studios, trashbag by
 Benny Weimer, planter_box_01 and utility_box_01 by James Ray Cock, concrete_road_barrier by Amal Kumar.

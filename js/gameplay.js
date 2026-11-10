@@ -45,8 +45,8 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.15';
-const BUILD_NAME = 'After Hours';
+const BUILD = '0.9.16';
+const BUILD_NAME = 'Green Shoots';
 const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
 // The neighbourhoods as the opening card names them (city-config.js districtAt)
 const DISTRICT_NAMES = {
@@ -1646,6 +1646,7 @@ export class Game {
     if (h.kind === 'ground') return h.y > 0.12 ? 'concrete' : 'asphalt';
     const c = h.target;
     if (c?.obstacle === 'tree') return 'wood';
+    if (c?.obstacle === 'rock') return 'concrete';
     if (c?.round) return c.obstacle === 'table' ? 'wood' : 'metal';
     return 'concrete';
   }

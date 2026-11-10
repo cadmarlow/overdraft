@@ -3,8 +3,12 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.15 — After Hours**. Sacha Roux ouvre le jeu sur les quais de l’East River, avec un écran illustré et
-« La dette », un thème original qui mêle cordes, cuivres et rythme hip-hop. L’écran reste en place jusqu’à votre choix.
+Version **0.9.16 — Green Shoots**. Les parcs sont refaits. Central Park a ses 70 km de sentiers réels, ses 110
+affleurements de schiste et des pelouses qui savent où elles sont : drues et tondues sur Sheep Meadow, clairsemées et
+jonchées de feuilles sous les arbres, en paille le long des allées, en boue au bord de l'eau.
+
+La **0.9.15 — After Hours** a ouvert le jeu sur les quais de l’East River, avec un écran illustré et « La dette », un
+thème original qui mêle cordes, cuivres et rythme hip-hop. L’écran reste en place jusqu’à votre choix.
 
 La **0.9.14 — Ground Floor** a refait le sol de la ville : chaque chaussée connaît ses voies et s'use là où l'on
 roule, les trottoirs sont des dalles coulées une à une derrière des bordures aux angles arrondis, et tout ce que New York

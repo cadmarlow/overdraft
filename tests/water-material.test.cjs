@@ -16,7 +16,7 @@ const sliceBetween = (startToken, endToken) => {
 };
 
 const pulseAndBox = sliceBetween('const filteredPulse = Fn(', '// Keep distant lit windows');
-const waterFnSrc = sliceBetween('function createWaterMaterial()', '/**\n * Central Park & Manhattan Park');
+const waterFnSrc = sliceBetween('function createWaterMaterial()', '/**\n * Synthesizes a 256x256 procedural');
 
 const env = {
   posWorld: [-1200, -2.2, 500],

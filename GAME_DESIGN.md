@@ -372,4 +372,5 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.13** | **Market Order** | Manette Xbox en jeu et dans les menus : combat, arsenal, conduite, vol, téléphone, garage, boutiques et carte. |
 | **0.9.14** | **Ground Floor** | Le sol : chaussées découpées en voies avec l'usure là où l'on roule, rustines, couloirs de bus, trottoirs en dalles, bordures à nez d'acier et angles arrondis, plaques, grilles et trappes en relief, peinture écaillée. |
 | **0.9.15** | **After Hours** | Écran titre illustré sur l’East River, ouverture sur le dossier de Sacha et thème original « La dette ». |
+| **0.9.16** | **Green Shoots** | Les parcs : pelouses qui savent où sont l'ombre, les allées et l'eau, 70 km de sentiers réels dans Central Park, ses 110 affleurements de schiste, allées en bitume aux accotements de terre, berges. |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |

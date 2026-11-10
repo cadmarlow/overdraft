@@ -7,9 +7,9 @@ import {
   createChryslerCrownMaterial,
   createBillboardMaterial,
   createDressedStoneMaterial,
-  createLobbyGlassMaterial,
-  createParkLawnMaterial
+  createLobbyGlassMaterial
 } from './tsl-materials.js';
+import { createGroundLawnMaterial } from './park-materials.js';
 import { batchStaticGroupMeshes } from './city-grid.js';
 
 let bryantParkLawn;
@@ -648,7 +648,7 @@ function buildLandmarks(scene) {
     lawnWall.receiveShadow = true;
     bpGroup.add(lawnWall);
 
-    const lawnGrassMat = createParkLawnMaterial();
+    const lawnGrassMat = createGroundLawnMaterial();
     const lawn = new THREE.Mesh(new THREE.BoxGeometry(38, 0.28, 48), lawnGrassMat);
     lawn.position.set(-13, 0.92, 0);
     lawn.receiveShadow = true;
