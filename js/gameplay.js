@@ -1237,7 +1237,7 @@ export class Game {
   }
 
   isAiming() {
-    return (this.state === 'onFoot' || this.state === 'surfing') && (this.aimHeld || this.aimToggle || this.gamepad?.aim) && this.weaponId !== 'fists';
+    return (this.state === 'onFoot' || this.state === 'surfing') && Boolean(this.aimHeld || this.aimToggle || this.gamepad?.aim) && this.weaponId !== 'fists';
   }
 
   toggleAimAssist() {
@@ -1334,8 +1334,8 @@ export class Game {
   updateWeapons(dt) {
     const w = this.weapon, slot = this.weapons[this.weaponId];
     const handling = HANDLING[w.id];
-    const fireHeld = this.fireHeld || this.gamepad?.fire;
-    const firePressed = this.firePressed || this.gamepad?.firePressed;
+    const fireHeld = this.fireHeld || Boolean(this.gamepad?.fire);
+    const firePressed = this.firePressed || Boolean(this.gamepad?.firePressed);
     if (firePressed && this.gamepad) this.gamepad.bufferedShot = !this.firePressed && !!handling;
     // Carry fractional cadence forward while an automatic trigger is held, without accumulating paused shots.
     this.cooldown = Math.max(w.auto && fireHeld ? -Math.min(dt, 0.05) : 0, this.cooldown - dt);
@@ -1390,7 +1390,7 @@ export class Game {
     if (firePressed && !drawn && handling) this.triggerBuffer = 0.5;
     const shooting = onFoot && !this.arsenal.open && (w.auto ? fireHeld : handling ? this.triggerBuffer > 0 : firePressed);
     // Drive-by: aim out of the driver's window with a one-handed or compact weapon
-    const driveBy = this.canDriveBy && !this.arsenal.open && (this.aimHeld || this.gamepad?.aim);
+    const driveBy = Boolean(this.canDriveBy && !this.arsenal.open && (this.aimHeld || this.gamepad?.aim));
     this.world.ignoreCar = this.state === 'driving' ? this.car : null;
     if (driveBy) {
       this.hud.setCrosshair(true, w.spread + 0.02);
