@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.9.22 — Circuit Breaker — 11 novembre 2026
+
+- Le calcul initial de la circulation rend régulièrement la main au navigateur. Les recherches de trottoirs,
+  d'obstacles et de passages piétons utilisent des index distincts ; les voies et leurs virages sont conservés.
+- Corrige une découpe côtière qui subdivisait aussi des triangles sans intersection réelle avec la chaussée.
+  Les géométries indexées intactes sont conservées, évitant 259 084 triangles de sol inutiles dans la scène mesurée.
+- Vérification en Chrome isolé, WebGPU HAUTE : trois ouvertures de la production puis trois du correctif,
+  avec entrée en jeu et déplacement au clavier sur les trois essais corrigés. Le blocage continu de 23,7 à
+  25,7 secondes pendant la circulation devient des tâches dont la plus longue mesurée dure 271 ms.
+  Un lancement de contrôle de la 0.9.20 mesure 9,8 secondes de blocage sur cette phase : la 0.9.21 l'a aggravée.
+- Le plantage `RESULT_CODE_HUNG` signalé n'a pas été reproduit dans ces essais. La préparation graphique
+  bloque encore plusieurs secondes ; ni la disparition de tous les plantages ni la résolution du ralentissement
+  global ne sont établies. Aucun changement de qualité graphique pour masquer le problème.
+- Validation : 987 tests, 986 réussis, un ignoré, aucun échec ; build de production réussi. Comparaison des voies
+  et virages avant/après, et contrôle de la réactivité du calcul incrémental avec la géographie de Manhattan.
+
 ## 0.9.21 — Clearing — 11 novembre 2026
 
 - Tour complémentaire des deux rives : correction des débordements des modèles de Pier 59 (Chelsea) et Pier 34

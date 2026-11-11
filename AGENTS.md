@@ -46,7 +46,7 @@ Les versions portent des noms de la finance : 0.2 Opening Bell, 0.3 Margin Call,
 0.6 Prime Real Estate, 0.7 Bull Run, 0.8 Hostile Takeover, 0.9 Leverage, 0.9.3 Main Street, 0.9.4 Momentum, 0.9.5 Due Diligence,
 0.9.6 Footfall, 0.9.7 Curb Appeal, 0.9.8 Revaluation, 0.9.9 Break Even, 0.9.10 Price Action, 0.9.11 Short Squeeze,
 0.9.12 Blue Chips, 0.9.13 Market Order, 0.9.14 Ground Floor, 0.9.15 After Hours, 0.9.16 Green Shoots,
-0.9.17 Stop Loss, 0.9.18 Dry Powder, 0.9.19 Growth Equity, 0.9.20 Slippage, 0.9.21 Clearing.
+0.9.17 Stop Loss, 0.9.18 Dry Powder, 0.9.19 Growth Equity, 0.9.20 Slippage, 0.9.21 Clearing, 0.9.22 Circuit Breaker.
 Prochaine : 1.0 Closing Bell (voir `GAME_DESIGN.md`).
 
 Une nouvelle version met à jour, ensemble :

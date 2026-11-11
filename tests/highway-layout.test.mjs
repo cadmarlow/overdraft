@@ -67,6 +67,37 @@ test('terrain subtraction preserves attributes and removes only the carriageway'
   assert.deepEqual(subtractRoadQuad([[0,0,0],[1,0,0],[1,0,1]],q),[]);
 });
 
+test('a road outside a triangle never fragments it despite overlapping bounding boxes', () => {
+  const q=[[-2,0,-2],[2,0,-2],[2,0,2],[-2,0,2]];
+  for(const triangle of [
+    [[1,.22,5,11],[5,.22,1,12],[5,.22,5,13]],
+    [[1,.22,5,11],[5,.22,5,13],[5,.22,1,12]],
+    [[2,.22,2,11],[5,.22,2,12],[2,.22,5,13]]
+  ]) {
+    const pieces=subtractRoadQuad(triangle,q);
+    assert.equal(pieces.length,1,'no extra polygons outside the road or at a touching corner');
+    assert.equal(pieces[0],triangle,'keep every original vertex and attribute without interpolation');
+  }
+});
+
+test('terrain outside the carriageway retains its indexed geometry', async () => {
+  const THREE = await import('../vendor/three/build/three.core.js');
+  const { loadModule } = await import('./helpers/module.cjs');
+  const { cutRoadGround } = loadModule(readFileSync(new URL('../js/road-ground-cut.js', import.meta.url), 'utf8'), {
+    imports: { 'three/webgpu': THREE, './road-corridor.js': { subtractRoadQuad } }
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position',new THREE.Float32BufferAttribute([1,.22,5,5,.22,1,5,.22,5],3));
+  geometry.setIndex([0,1,2]);
+  const mesh = new THREE.Mesh(geometry,new THREE.MeshBasicMaterial()),group = new THREE.Group();
+  group.add(mesh);
+  const corridor=createRoadCorridor([{west:true,z0:-2,step:4,x:[0,0]}],2);
+  assert.ok(corridor.query(1,5,1,5).length,'the broad phase must consider this road');
+  assert.equal(cutRoadGround(group,corridor),0);
+  assert.equal(mesh.geometry,geometry,'do not replace and expand a mesh that does not intersect the road');
+  assert.equal(mesh.geometry.index.count,3);
+});
+
 test('wheels and terrain share the exact curved reservation; decks remain solid beyond the shore', () => {
   const road=createRoadCorridor([{west:true,z0:0,step:10,x:[0,10,10]}],3),ground=createGroundSurfaces(),hit={};
   ground.add(rect(-30,30,-30,30),.22);

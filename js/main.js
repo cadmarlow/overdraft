@@ -48,7 +48,7 @@ import { createAmbientEvents } from './ambient-events.js';
 import { createBirds } from './birds.js';
 import { getIslandBoundsAtZ } from './city-config.js';
 import { STREET } from './street-geodata.js';
-import { buildRoadNetwork } from './road-network.js';
+import { buildRoadNetworkAsync } from './road-network.js';
 import { setTreeDetail } from './trees.js';
 import { createGrass } from './grass.js';
 import { currentLevel, FramePacer } from './quality.js';
@@ -174,7 +174,8 @@ async function initApp() {
   // Elevated building sections that clear even a bus don't obstruct ground traffic.
   const grass = quality.grass ? createGrass(scene, scene, new THREE.Vector3(0, 10, 140)) : null;
   // The road network first: the street furniture lines its curbs, then the traffic drives it
-  const roadNetwork = buildRoadNetwork(cityGrid.sidewalks, [
+  await showLoadingStage('Préparation de la circulation…');
+  const roadNetwork = await buildRoadNetworkAsync(cityGrid.sidewalks, [
     ...cityGrid.footprints,
     ...streetDetails.footprints,
     ...allColliders.filter((c) => !c.obb && (c.minY ?? 0) < 3.5)

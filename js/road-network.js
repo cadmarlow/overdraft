@@ -25,17 +25,35 @@ const LANE_CLEAR = 1.2; // half width each lane keeps free of obstacles
 const CROSSWALK = 2.5; // depth between an intersection box and its stop lines
 const SHORE_MARGIN = 6;
 
-function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs = sidewalks) {
+function* roadNetworkSteps(sidewalks, obstacles, signalIntersections = [], curbs = sidewalks) {
   // 1. Spatial hash of ground footprints: curbs bound the roads, everything else also blocks pedestrians
-  const hash = new Map();
+  // Keep each query's candidates separate. Testing every building and street prop while looking for a curb
+  // dominated startup, even though those objects could never satisfy the query. Membership is immutable here;
+  // furniture added later goes through the same insertion path.
+  const hashes = { layout: new Map(), curb: new Map(), blocked: new Map(), walk: new Map(), street: new Map() };
+  const MEDIANS = BLOCKS.filter((b) => b.median);
+  const medianBox = (r) => MEDIANS.some((b) => Math.abs(b.minX - r.minX) < 0.6 && Math.abs(b.maxX - r.maxX) < 0.6 && Math.abs(b.minZ - r.minZ) < 0.6 && Math.abs(b.maxZ - r.maxZ) < 0.6);
   const cellKey = (ix, iz) => (ix + 512) * 1024 + iz + 512;
 
   function insert(r) {
+    const targets = [];
+    if (r.layout) targets.push(hashes.layout);
+    if (r.curb) targets.push(hashes.curb);
+    if (!r.layout && !r.pedestrianOnly) targets.push(hashes.blocked);
+    if (!r.layout && !r.curb) {
+      targets.push(hashes.walk);
+      if (!r.pedestrianOnly && (r.maxX - r.minX < 50 || r.maxZ - r.minZ < 50) && !medianBox(r)) targets.push(hashes.street);
+    }
+    // These static bounds come from many unrelated systems. A uniform record keeps the millions of bounds
+    // checks monomorphic instead of repeatedly looking up properties on building, prop and curb objects.
+    const bounds = { minX: r.minX, maxX: r.maxX, minZ: r.minZ, maxZ: r.maxZ, polygon: r.polygon };
     for (let ix = Math.floor(r.minX / CELL); ix <= Math.floor(r.maxX / CELL); ix++) {
       for (let iz = Math.floor(r.minZ / CELL); iz <= Math.floor(r.maxZ / CELL); iz++) {
         const k = cellKey(ix, iz);
-        if (!hash.has(k)) hash.set(k, []);
-        hash.get(k).push(r);
+        for (const hash of targets) {
+          if (!hash.has(k)) hash.set(k, []);
+          hash.get(k).push(bounds);
+        }
       }
     }
   }
@@ -43,17 +61,20 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
   // vehicle may go: irregular blocks and park sidewalks are not covered by those rectangles.
   for (const r of sidewalks) insert({ ...r, layout: true });
   for (const r of curbs) insert({ ...r, curb: true });
-  for (const r of obstacles) insert(r);
+  for (let i = 0; i < obstacles.length; i++) {
+    if (i % 256 === 0) yield;
+    insert(obstacles[i]);
+  }
 
-  // Calls fn(rect) for every footprint overlapping the box until fn returns true
-  function query(minX, maxX, minZ, maxZ, fn) {
+  // Test exact outlines only in the relevant index. The optional visitor runs after geometric overlap.
+  function query(hash, minX, maxX, minZ, maxZ, visit = null) {
     for (let ix = Math.floor(minX / CELL); ix <= Math.floor(maxX / CELL); ix++) {
       for (let iz = Math.floor(minZ / CELL); iz <= Math.floor(maxZ / CELL); iz++) {
         const list = hash.get(cellKey(ix, iz));
         if (!list) continue;
         for (const r of list) {
           if (r.minX < maxX && r.maxX > minX && r.minZ < maxZ && r.maxZ > minZ
-            && (!r.polygon || polygonBoxOverlaps(r.polygon, (minX + maxX) / 2, (minZ + maxZ) / 2, (maxX - minX) / 2, (maxZ - minZ) / 2)) && fn(r)) return true;
+            && (!r.polygon || polygonBoxOverlaps(r.polygon, (minX + maxX) / 2, (minZ + maxZ) / 2, (maxX - minX) / 2, (maxZ - minZ) / 2)) && (!visit || visit(r))) return true;
         }
       }
     }
@@ -68,15 +89,14 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
     return true;
   }
 
-  const blocked = (minX, maxX, minZ, maxZ) => !onLand(minX, maxX, minZ, maxZ) || query(minX, maxX, minZ, maxZ, (r) => !r.layout && !r.pedestrianOnly);
-  const walkable = (minX, maxX, minZ, maxZ) => onLand(minX, maxX, minZ, maxZ) && !query(minX, maxX, minZ, maxZ, (r) => !r.layout && !r.curb);
-  const onSidewalk = (x, z) => query(x, x, z, z, (r) => r.curb);
+  const blocked = (minX, maxX, minZ, maxZ) => !onLand(minX, maxX, minZ, maxZ) || query(hashes.blocked, minX, maxX, minZ, maxZ);
+  const walkable = (minX, maxX, minZ, maxZ) => onLand(minX, maxX, minZ, maxZ) && !query(hashes.walk, minX, maxX, minZ, maxZ);
+  const onSidewalk = (x, z) => query(hashes.curb, x, x, z, z);
   // Centreline streets (4b) use the actual curb outline across the full lane width. Large park bounding boxes and
   // divided-road medians can include real streets: curbs exclude the park itself; medians use their own outline.
-  const MEDIANS = BLOCKS.filter((b) => b.median);
-  const medianBox = (r) => MEDIANS.some((b) => Math.abs(b.minX - r.minX) < 0.6 && Math.abs(b.maxX - r.maxX) < 0.6 && Math.abs(b.minZ - r.minZ) < 0.6 && Math.abs(b.maxZ - r.maxZ) < 0.6);
   const medianCells = new Map(); // 64 m cells -> the medians reaching into them
   for (const b of MEDIANS) {
+    yield;
     for (let ix = Math.floor((b.minX - 2) / 64); ix <= Math.floor((b.maxX + 2) / 64); ix++) {
       for (let iz = Math.floor((b.minZ - 2) / 64); iz <= Math.floor((b.maxZ + 2) / 64); iz++) {
         const k = ix * 100000 + iz;
@@ -104,9 +124,9 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
     return false;
   }
   const blockedOnStreet = (x, z, clear) => !onLand(x - clear, x + clear, z - clear, z + clear) ||
-    query(x - clear, x + clear, z - clear, z + clear, (r) => r.curb) ||
+    query(hashes.curb, x - clear, x + clear, z - clear, z + clear) ||
     nearMedian(x, z, clear) ||
-    query(x - clear, x + clear, z - clear, z + clear, (r) => !r.layout && !r.curb && !r.pedestrianOnly && (r.maxX - r.minX < 50 || r.maxZ - r.minZ < 50) && !medianBox(r));
+    query(hashes.street, x - clear, x + clear, z - clear, z + clear);
 
   // 2. Avenue corridors: the most common curb-to-curb gap around each avenue's nominal x along its own stretches
   //    (CSCL: an avenue only exists between its ends, e.g. Irving Pl 14th-20th St, so it never claims a neighbour's
@@ -116,6 +136,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
   //    of each direction of travel (southbound = +z, whose right is -x).
   const avenues = [];
   for (const ave of ALL_AVENUES) {
+    yield;
     if (ave.isHighway) continue;
     const segs = ave.segs || [{ z0: ave.minZ, z1: ave.maxZ, dir: ave.dir }];
     // the avenue's stretch at z (or the nearest one within an intersection's reach of its ends)
@@ -133,12 +154,12 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
     };
     const votes = new Map();
     for (let z = Z_MIN; z <= Z_MAX; z += 2) {
+      yield;
       if (!segAt(z)) continue;
       let left = -Infinity;
       let right = Infinity;
       let inside = false;
-      query(ave.x - 20, ave.x + 20, z, z, (r) => {
-        if (!r.layout) return false;
+      query(hashes.layout, ave.x - 20, ave.x + 20, z, z, (r) => {
         if (r.maxX <= ave.x) left = Math.max(left, r.maxX);
         else if (r.minX >= ave.x) right = Math.min(right, r.minX);
         else inside = true;
@@ -183,6 +204,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
     const x = (left + right) / 2;
     const free = new Uint8Array(Z_MAX - Z_MIN + 1);
     for (let i = 0; i < free.length; i++) {
+      yield;
       const z = Z_MIN + i;
       const set = lanesAt(z);
       if (!set) continue;
@@ -204,6 +226,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
   const pieces = [];
   const runs = new Map();
   for (let i = 0; i <= Z_MAX - Z_MIN; i++) {
+    yield;
     const z = Z_MIN + i;
     const seen = new Set();
     let prev = null;
@@ -248,6 +271,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
 
   // One-way or two-way from the nearest named street inside the gap (majors and wide gaps are two-way)
   for (const p of pieces) {
+    yield;
     const measured = measurePiece(p);
     if (measured && measured.half >= 3.6 && Math.abs(measured.z - p.z) < 3) {
       p.z = measured.z;
@@ -277,6 +301,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
     return n;
   }
   for (const p of pieces) {
+    yield;
     p.half ??= (p.gap + 1) / 2; // the gap counts the free 1 m steps between the curbs (measured above where it could be)
     p.from = nodeAt(p.a, p.z);
     p.to = nodeAt(p.b, p.z);
@@ -287,8 +312,8 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
   //     the street centreline graph (GEO.roadGraph, tools/geo-roadgraph.mjs), minus the links the grid corridors above
   //     already carry. Its junctions join the grid where they meet it (at a grid intersection, on an avenue corridor or a
   //     cross street); a street's bends get shape nodes, so every edge stays straight.
-  const genRuns = centrelineStreets();
-  function centrelineStreets() {
+  const genRuns = yield* centrelineStreets();
+  function* centrelineStreets() {
     const RG = GEO.roadGraph;
     const runs = [];
     if (!RG) return runs;
@@ -338,6 +363,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
     // Links the grid already carries: most of their length runs along an avenue (north-south) or a cross street
     const links = [];
     for (const [a, b, ni, w, lanes, dir, inner] of RG.links) {
+      yield;
       const pts = [pos[a]];
       for (let k = 0; k < inner.length; k += 2) pts.push({ x: inner[k], z: inner[k + 1] });
       pts.push(pos[b]);
@@ -357,6 +383,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
     const sum = new Map();
     const counted = new Set();
     for (const l of links) {
+      yield;
       for (const i of [l.a, l.b]) {
         if (counted.has(i)) continue;
         counted.add(i);
@@ -437,6 +464,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
     }
     const DEG = Math.PI / 180;
     for (const l of links) {
+      yield;
       const A = junction(find(l.a));
       const B = junction(find(l.b));
       if (A === B) continue;
@@ -487,6 +515,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
     edges.push({ from, to, axis, x0, z0, dx, dz, rx: -dz, rz: dx, span, half, lanes: open.sort((p, q) => p - q), moves: [], park, bike });
   }
   for (const a of avenues) {
+    yield;
     a.nodes.sort((m, n) => m.z - n.z);
     for (let k = 0; k + 1 < a.nodes.length; k++) {
       const n0 = a.nodes[k];
@@ -501,6 +530,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
     }
   }
   for (const p of pieces) {
+    yield;
     // a cross street runs between its two avenue nodes, through any centreline junctions on it (see 4b)
     const chain = [p.from, ...(p.mids || []).sort((m, n) => m.x - n.x), p.to];
     for (let k = 0; k + 1 < chain.length; k++) {
@@ -536,12 +566,14 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
   const travel = (r) => (r.fwd.length ? [r.from, r.to] : [r.to, r.from]);
   const oneWays = new Map(); // node -> next node -> the one-way run from one to the other
   for (const r of genRuns) {
+    yield;
     if (!r.fwd.length === !r.back.length) continue;
     const [a, b] = travel(r);
     if (!oneWays.has(a)) oneWays.set(a, new Map());
     oneWays.get(a).set(b, r);
   }
   for (const r of genRuns) {
+    yield;
     if (!r.fwd.length === !r.back.length || r.divided) continue;
     const [a, b] = travel(r);
     const o = oneWays.has(b) && oneWays.get(b).get(a);
@@ -560,6 +592,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
     if (r.half >= 7.25) r.axis = o.axis = 'ave'; // as wide as a major road (see lanesOf)
   }
   for (const r of genRuns) {
+    yield;
     if (r.fwd.length) addEdgeGeneral(r.from, r.to, r.axis, r.fwd, r.half, r.divided, r.fwdPark);
     if (r.back.length) addEdgeGeneral(r.to, r.from, r.axis, r.back, r.half, r.divided, r.backPark);
   }
@@ -568,6 +601,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
   const keptEdge = new Map();
   const edgeRank = (e) => (e.general ? 0 : 1000) + e.lanes.length * 10 + e.half / 100;
   for (const e of edges) {
+    yield;
     let to = keptEdge.get(e.from);
     if (!to) keptEdge.set(e.from, (to = new Map()));
     const o = to.get(e.to);
@@ -869,6 +903,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
   }
   for (const e of edges) e.from.out.push(e);
   for (const e of edges) {
+    yield;
     const n = e.lanes.length;
     for (const f of e.to.out) {
       if (f.to === e.from || e.dx * f.dx + e.dz * f.dz < -0.5) continue;
@@ -976,6 +1011,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
   // a link that can't keep clear even so is dropped.
   const inOf = new Map();
   for (const e of edges) {
+    yield;
     if (!inOf.has(e.to)) inOf.set(e.to, []);
     inOf.get(e.to).push(e);
   }
@@ -1016,6 +1052,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
   }
   const inTheWayOut = new Set();
   for (const e of edges) {
+    yield;
     if (!e.squeezed || !e.from.shape || !inTheWay(e)) continue;
     while (e.len > 6 && inTheWay(e)) e.len = Math.max(5.5, e.len - 1);
     if (inTheWay(e)) inTheWayOut.add(e); // even so
@@ -1045,24 +1082,27 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
   }
   console.info(`[roads] centreline edges: ${genCreated} with clear lanes, ${genShortKept} long enough, ${genShortKept - genLost.length} connected`);
   for (const e of edges) {
+    yield;
     e.moves = e.moves.filter((m) => kept.has(m.to));
     serveEveryLane(e);
   }
   // Repositioning junction ends above can change their curves. Validate the final geometry, including the formerly
   // unchecked lane ends; an impossible exit must remove its lane, never authorize a path through a sidewalk.
   for (const e of edges) {
+    yield;
     e.moves.forEach(m => { m.out = m.out.map((j, i) => j >= 0 && pathClear(e, i, m.to, j) ? j : -1); });
     e.clearLanes = e.lanes.map(o => {
       const steps = Math.max(1, Math.ceil(e.len));
       for (let k = 0; k <= steps; k++) {
         const s = e.len * k / steps, x = e.sx + e.dx * s + e.rx * o, z = e.sz + e.dz * s + e.rz * o;
-        if (query(x - LANE_CLEAR, x + LANE_CLEAR, z - LANE_CLEAR, z + LANE_CLEAR, r => r.curb)) return false;
+        if (query(hashes.curb, x - LANE_CLEAR, x + LANE_CLEAR, z - LANE_CLEAR, z + LANE_CLEAR)) return false;
       }
       return true;
     });
   }
   let changed = true;
   while (changed) {
+    yield;
     changed = false;
     const maps = new Map();
     for (const e of edges) {
@@ -1089,6 +1129,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
 
   for (const n of nodes) n.in = n.out = null;
   for (const e of edges) {
+    yield;
     (e.from.out || (e.from.out = [])).push(e);
     (e.to.in || (e.to.in = [])).push(e);
   }
@@ -1097,6 +1138,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
 
   // 8. Signalized intersections are exactly the ones with signal heads (street-details.js)
   for (const s of signalIntersections) {
+    yield;
     const n = nodes.find((m) => Math.abs(m.x - s.x) < 6 && Math.abs(m.z - s.z) < 6); // same tolerance as nodeAt
     if (n) n.signal = true;
   }
@@ -1109,6 +1151,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
   computeArms(edges);
   for (const n of nodes) sidesAndGroups(n);
   for (const e of edges) {
+    yield;
     e.inSide = e.inArm.side; // the side of e.to it arrives over
     e.outSide = e.outArm.side; // the side of e.from it leaves over
     e.axisIndex = e.inArm.group; // its right-of-way group at e.to
@@ -1118,6 +1161,7 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
     e.clz = flip ? -e.rz : e.rz;
   }
   for (const e of edges) {
+    yield;
     e.opposite = e.to.in.find((o) => o !== e && o.axisIndex === e.axisIndex && o.dx * e.dx + o.dz * e.dz < -0.7) || null;
   }
 
@@ -1134,6 +1178,28 @@ function buildRoadNetwork(sidewalks, obstacles, signalIntersections = [], curbs 
   // Street furniture placed after the roads were laid out (sidewalk-furniture.js) still gets in the pedestrians' way
   const addObstacle = (r) => insert(r);
   return { nodes, edges, paintEdges, connector, curvePoint, walkable, onSidewalk, isRoadClear, addObstacle };
+}
+
+// The synchronous entry remains available to offline tools and isolated tests. Browser startup advances the
+// same generator in short tasks so input, loading feedback and Chrome's responsiveness checks can run.
+function buildRoadNetwork(...args) {
+  const steps = roadNetworkSteps(...args);
+  let step;
+  do { step = steps.next(); } while (!step.done);
+  return step.value;
+}
+
+async function buildRoadNetworkAsync(...args) {
+  const steps = roadNetworkSteps(...args);
+  let deadline = performance.now() + 12;
+  for (;;) {
+    const step = steps.next();
+    if (step.done) return step.value;
+    if (performance.now() < deadline) continue;
+    if (globalThis.scheduler?.yield) await globalThis.scheduler.yield();
+    else await new Promise(resolve => setTimeout(resolve, 0));
+    deadline = performance.now() + 12;
+  }
 }
 
 // The largest strongly connected set of `list` (a Set), going on from item e to the items next(e)
@@ -1256,4 +1322,4 @@ function curvePoint(c, s, out) {
   return out;
 }
 
-export { buildRoadNetwork, CROSSWALK };
+export { buildRoadNetwork, buildRoadNetworkAsync, CROSSWALK };

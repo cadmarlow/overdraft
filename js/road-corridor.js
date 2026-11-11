@@ -71,6 +71,10 @@ function subtractRoadQuad(vertices, quad) {
     if (no.length >= 3) outside.push(no);
     inside = yes;
   }
+  // Bounding boxes may overlap while the polygons miss each other. The half-plane walk can still split the
+  // triangle along an edge's infinite extension: discard those provisional pieces when nothing was removed.
+  // Keep the original reference too, so cutRoadGround does not expand an untouched indexed mesh.
+  if (inside.length < 3) return [vertices];
   return outside;
 }
 

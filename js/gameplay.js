@@ -47,8 +47,8 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.21';
-const BUILD_NAME = 'Clearing';
+const BUILD = '0.9.22';
+const BUILD_NAME = 'Circuit Breaker';
 const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
 // The neighbourhoods as the opening card names them (city-config.js districtAt)
 const DISTRICT_NAMES = {
