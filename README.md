@@ -3,7 +3,12 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.21 — Clearing**. Les routes côtières contournent les bâtiments, dégagent les trottoirs et partagent
+Version **0.9.22 — Circuit Breaker**. Le calcul initial de la circulation est découpé en tâches courtes pour
+laisser le navigateur répondre pendant le chargement. Les recherches d'obstacles sont allégées et la découpe
+côtière conserve les triangles qui ne touchent pas la route. Le plantage signalé au chargement n'a pas été
+reproduit ; la préparation graphique reste coûteuse et le ralentissement global n'est pas déclaré résolu.
+
+La **0.9.21 — Clearing** a repris les routes côtières : elles contournent les bâtiments, dégagent les trottoirs et partagent
 leur tracé avec le trafic et le sol physique. Les quais et les rambardes de Battery soutiennent et arrêtent les voitures.
 
 La **0.9.20 — Slippage** conserve ses commandes. À la manette Xbox : **A maintenu = frein à main**, **RB = nitro ou wheeling**,

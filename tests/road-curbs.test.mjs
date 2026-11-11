@@ -3,9 +3,9 @@ import test from 'node:test';
 import { BLOCKS } from '../js/city-config.js';
 import { curbOutline } from '../js/ground-plan.js';
 import { groundFootprint } from '../js/ground-surfaces.js';
-import { buildRoadNetwork } from '../js/road-network.js';
+import { buildRoadNetwork, buildRoadNetworkAsync } from '../js/road-network.js';
 
-test('Manhattan traffic keeps every lane and turn off the real curb islands, without orphaned lanes', { timeout: 90000 }, () => {
+test('Manhattan traffic keeps every lane and turn off the real curb islands, without orphaned lanes', { timeout: 90000 }, async () => {
   // Use only rectangular blocks to infer the grid: its inferred lanes must still respect all the irregular blocks
   // and parks that the separate curb survey supplies. This reproduces the missing-cover failure with real geography.
   const layout = BLOCKS.filter(b => b.rect && !b.median && b.park < 0.6).map(b => ({ minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ }));
@@ -33,4 +33,13 @@ test('Manhattan traffic keeps every lane and turn off the real curb islands, wit
     }
   }
   assert.ok(curves > 11000, `turn coverage collapsed: ${curves}`);
+  let beats = 0;
+  const timer = setInterval(() => beats++, 1);
+  let incremental;
+  try { incremental = await buildRoadNetworkAsync(layout, [], [], curbs); }
+  finally { clearInterval(timer); }
+  assert.ok(beats > 1, 'browser startup must service other tasks while building the real city');
+  const snapshot = network => network.edges.map(e => ({ sx: e.sx, sz: e.sz, len: e.len, lanes: e.lanes,
+    moves: e.moves.map(m => ({ to: m.to.id, out: m.out })) }));
+  assert.deepEqual(snapshot(incremental), snapshot(n), 'incremental startup preserves every lane and turn');
 });
