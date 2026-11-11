@@ -9,6 +9,7 @@ import { BODY_SPECS, carStyleCode, buildLightbarGeometry, createLightbarMaterial
 import { carModels, carSpecs, trafficMaterial, withWheels } from './car-assets.js';
 import { shuntBody } from './car-physics.js';
 import { highwaySpeedProfile } from './highway-driving.js';
+import { TRAFFIC_LEVELS, readTrafficDensity, trafficSubset, resizeHighwayTraffic } from './traffic-density.js';
 import {
   BUS_SPEC,
   buildLoftedBusBodyGeometry,
@@ -420,6 +421,8 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
     buses.push(b);
   }
   const vehicles = [...cars, ...buses];
+  const vehiclePool = [...vehicles];
+  let density = 'high';
   group.add(busBodyInst, busHeaderInst, busWheelLeftInst, busWheelRightInst);
 
   // =========================================================================
@@ -2147,9 +2150,34 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
     v.move = null;
   }
 
+  function setDensity(id) {
+    if (!Object.hasOwn(TRAFFIC_LEVELS, id) || id === density) return;
+    density = id;
+    const scale = TRAFFIC_LEVELS[id].scale;
+    const selected = [...trafficSubset(cars, scale), ...trafficSubset(buses, scale)];
+    const active = new Set(selected);
+    for (const v of vehiclePool) {
+      if (active.has(v)) continue;
+      removeVehicle(v);
+      v.claimed = false;
+      v.serving = null;
+      v.stopAt = -1;
+      v.dwell = 0;
+      v.hazard = false;
+    }
+    vehicles.splice(0, vehicles.length, ...selected);
+    vehicleCursor = 0;
+    // Clear lane and crossing reservations before the next spawn attempt or pedestrian crossing.
+    buildOccupancy();
+  }
+
+  setDensity(readTrafficDensity());
+
   return {
     group,
     update,
+    setDensity,
+    get density() { return density; },
     setCollisionListener,
     cars,
     buses,
@@ -2303,7 +2331,11 @@ function createHighwayTraffic(scene, lanes, traffic) {
       cars.push(car);
       counts[kind]++;
     }
+    lane.carPool = [...lane.cars];
   }
+  const carPool = [...cars];
+  let density = 'high';
+  let densityFocus = null;
 
   // Per body type: [near (with wheels, casts shadows), mid (wheel-less), far (lofted proxy)] instanced meshes sharing
   // the traffic's cached car material (per-instance paintColor & carState)
@@ -2500,6 +2532,7 @@ function createHighwayTraffic(scene, lanes, traffic) {
   }
 
   function update(dt, camera, entity, mode) {
+    densityFocus = entity?.position || camera.position;
     // 1. Car following (IDM) in every lane, the player counting as a leader
     const pl = entity && mode !== 'helicopter' && mode !== 'plane' ? {
       x: entity.position.x, y: entity.position.y, z: entity.position.z,
@@ -2509,6 +2542,7 @@ function createHighwayTraffic(scene, lanes, traffic) {
     for (const lane of lanes) {
       const list = lane.cars;
       const n = list.length;
+      if (n === 0) continue;
       const pIn = pl ? playerInLane(lane, pl) : null;
       for (let k = 0; k < n; k++) {
         const c = list[k];
@@ -2715,7 +2749,17 @@ function createHighwayTraffic(scene, lanes, traffic) {
     for (const body of traffic.extraBodies) if (body.mesh?.visible && body !== entity) collideWith(body, body.halfW ?? 0.86, body.halfL ?? 2.18);
   }
 
-  return { group, update, cars, lanes };
+  function setDensity(id) {
+    if (!Object.hasOwn(TRAFFIC_LEVELS, id) || id === density) return;
+    density = id;
+    for (const lane of lanes) resizeHighwayTraffic(lane, TRAFFIC_LEVELS[id].scale, densityFocus);
+    const active = new Set(lanes.flatMap(lane => lane.cars));
+    // Preserve the array held by positional audio; inactive cars cost no simulation, contacts or sound queries.
+    cars.splice(0, cars.length, ...carPool.filter(car => active.has(car)));
+  }
+
+  setDensity(traffic.density);
+  return { group, update, cars, lanes, setDensity, get density() { return density; } };
 }
 
 export { createTrafficSystem, createHighwayTraffic, FLEET_STYLES };

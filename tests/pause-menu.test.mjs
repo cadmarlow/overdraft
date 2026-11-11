@@ -50,3 +50,15 @@ test('native dialogs keep browser defaults without leaking keys to gameplay over
     }
   } finally { delete globalThis.document; }
 });
+
+test('traffic selection applies both traffic systems and persists without saving or reloading the game', () => {
+  const { menu, calls } = setup();
+  menu.game.traffic = { setDensity(id) { calls.push(['street', id]); } };
+  menu.game.highway = { setDensity(id) { calls.push(['highway', id]); } };
+  menu.worldChanged = message => calls.push(['status', message]);
+  menu.selectTraffic('none');
+  assert.deepEqual(calls, [['street', 'none'], ['highway', 'none'], ['store', 'overdraft:traffic', 'none'], ['status', 'Circulation : aucun.']]);
+  calls.length = 0;
+  menu.selectTraffic('invalid');
+  assert.deepEqual(calls, []);
+});

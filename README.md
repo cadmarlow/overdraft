@@ -12,10 +12,19 @@ mains libres l'avion garde sa pente, et le palonnier seul (A / E) fait un virage
 et l'eau sont de vrais obstacles ; les figures (looping, tonneau, rase-mottes, passage sous un pont, atterrissage)
 rapportent de l'argent. Les deux modèles sont sous CC BY 4.0 (voir `CREDITS.md`).
 
-La **0.9.22 — Circuit Breaker** découpe le calcul initial de la circulation en tâches courtes pour
+La **0.9.23 — Free Float** permet de régler la densité de circulation depuis le menu pause.
+
+La **0.9.22 — Circuit Breaker** a découpé le calcul initial de la circulation en tâches courtes pour
 laisser le navigateur répondre pendant le chargement. Les recherches d'obstacles sont allégées et la découpe
 côtière conserve les triangles qui ne touchent pas la route. Le plantage signalé au chargement n'a pas été
 reproduit ; la préparation graphique reste coûteuse et le ralentissement global n'est pas déclaré résolu.
+
+**Échap → Ambiance → Circulation** permet maintenant de choisir **Aucun, Faible, Moyen ou Dense**.
+Le choix est mémorisé et s'applique dès la reprise, sans rechargement. Faible conserve environ un quart du trafic,
+Moyen la moitié, Dense la quantité d'origine. Le réglage concerne les voitures et bus des rues et des voies rapides ;
+les voitures garées, le véhicule du joueur et ceux des missions et poursuites restent présents.
+Réduire la circulation allège réellement la simulation et le rendu. Le gain en images par seconde dépend de la scène ;
+ce réglage ne réduit pas le coût des bâtiments, des piétons ou des voitures garées.
 
 La **0.9.21 — Clearing** a repris les routes côtières : elles contournent les bâtiments, dégagent les trottoirs et partagent
 leur tracé avec le trafic et le sol physique. Les quais et les rambardes de Battery soutiennent et arrêtent les voitures.
@@ -268,6 +277,12 @@ au joueur et certaines grandes portions de parc restent à aménager.
 npm test
 npm run build
 ```
+
+Pour vérifier le réglage de circulation, lancer un Chrome de test sans fenêtre, avec un `--user-data-dir` distinct,
+`--remote-debugging-port=9347 --disable-gpu-vsync --disable-frame-rate-limit`, puis
+`node tools/qa-traffic.mjs 9347 /tmp/overdraft-traffic-qa high` (ou `balanced`). Le script ouvre son propre onglet,
+utilise les vraies entrées clavier/souris CDP, coupe la manette dans cet onglet et laisse les captures et mesures
+dans le dossier indiqué. Le profil Chrome doit être réservé aux tests : il mémorise des préférences de test.
 
 Le build statique est généré dans `dist/`. `tools/radio-preview.html` permet d'écouter les stations.
 

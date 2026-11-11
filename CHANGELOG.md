@@ -46,13 +46,34 @@
   jet sur Central Park West (environ 230 m) ; looping, tonneau, passage sous un pont, Mach 1, saut en parachute,
   changement d'avion en vol, pause et rechargement en vol. Le bus audio de vol est mesuré actif dans le jeu
   (hélice, réacteur, postcombustion) et muet hors d'un avion.
-- Validation : 1 058 tests, 1 021 réussis, 37 ignorés (outils hors ligne non installés dans le worktree : SDK de l'Architecte, `tools/cars`), aucun échec ; build de production réussi, `assets/aircraft` livré dans `dist/`.
+- Validation : 1 065 tests, 1 028 réussis, 37 ignorés (outils hors ligne non installés dans le worktree : SDK de l'Architecte, `tools/cars`), aucun échec ; build de production réussi, `assets/aircraft` livré dans `dist/`.
 - **Non vérifié ou faible** : le son n'a été écouté par personne, seulement mesuré. Vue du ciel, la ville coûte
   environ trois fois plus de temps de carte graphique que depuis la rue (vue fixe à 240 m, sans avion : c'est le
   rendu de la ville, pas les avions) ; les images par seconde en vol n'ont pas pu être certifiées, une autre
   instance du jeu occupant la même carte graphique pendant les mesures. Les ailerons du jet et l'orientation de
   sa roue avant ne sont pas animés. Les ailes passent à travers les voitures garées. Un avion laissé sur une
   avenue est poussé par la circulation. Central Park West garde des marches de 1,25 m aux transversales du parc.
+## 0.9.23 — Free Float — 11 novembre 2026
+
+- Menu pause **Ambiance → Circulation** : **Aucun, Faible, Moyen, Dense**. Choix mémorisé, appliqué à la reprise
+  sans rechargement et indépendant de la qualité graphique. Faible conserve environ 25 % du trafic, Moyen 50 %,
+  Dense la quantité d'origine (200 voitures et 20 bus autour du joueur, plus la circulation des voies rapides).
+- Les véhicules retirés quittent la simulation, les collisions, les réservations des voies et le rendu.
+  Les voitures garées, le véhicule du joueur et les véhicules des missions ou poursuites restent présents.
+  Les modèles sont préparés au chargement : réaugmenter le trafic réutilise les mêmes ressources ; sur les voies
+  rapides, les nouvelles voitures s'insèrent dans les espaces disponibles en gardant 30 m autour du joueur.
+- Contrôle reproductible : `node tools/qa-traffic.mjs 9347 /tmp/overdraft-traffic-qa high` dans un Chrome de test
+  dédié, avec `--disable-gpu-vsync --disable-frame-rate-limit`. Le script contrôle le menu avec les entrées CDP,
+  la reprise, la persistance après rechargement, puis compare les quatre niveaux de jour à résolution fixe.
+- Validation de cet ajout : 994 tests, 993 réussis et un ignoré, aucun échec ; build réussi. Chrome isolé,
+  WebGPU HAUTE, contrôle visuel du menu à 1440 × 900 et 1280 × 720, conduite par vraies touches, passage à zéro,
+  retour au trafic dense et persistance après rechargement, sans erreur JavaScript ni WebGPU.
+- Mesures sur le FDR, à 13 h, en HAUTE, 1440 × 900, échelle 100 %, Mac sur secteur : deux fenêtres de huit secondes
+  en Dense donnent 34,2 et 36,6 images/s ; deux fenêtres sans circulation donnent 37,9 et 38,0 images/s.
+  La simulation rues (piétons compris) + voies rapides passe d'environ 1,5–1,7 ms à 0,22–0,25 ms par image.
+  Faible : 38,8 images/s ; Moyen : 38,0. Ces essais courts montrent un gain, sans établir un classement précis entre
+  les niveaux intermédiaires. La scène reste sous 60 images/s. Missions complètes, manette physique, autres quartiers,
+  qualité ÉQUILIBRÉE et autonomie sur batterie non requalifiés par cet ajout.
 
 ## 0.9.22 — Circuit Breaker — 11 novembre 2026
 
