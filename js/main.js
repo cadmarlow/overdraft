@@ -32,6 +32,7 @@ import { loadNature } from './nature-assets.js';
 import { loadTrees } from './tree-assets.js';
 import { treeUniforms } from './tree-materials.js';
 import { loadCars } from './car-assets.js';
+import { loadAircraftModels } from './aircraft-assets.js';
 import { buildRamps } from './ramps.js';
 import { loadWorld } from './world-assets.js';
 import { loadGround } from './ground-assets.js';
@@ -140,7 +141,9 @@ async function initApp() {
   // 3. Build Manhattan Geography, Iconic Landmarks, Blocks, Street Details & Traffic
   await showLoadingStage('Préparation des rues et des quais…');
   await Promise.all([loadNature(), loadTrees(), loadWorld(), loadGround(), loadClutter(), loadCars(undefined, { surveyedReflections: quality.id === 'high' }),
-    loadStorefronts(), loadUrbanLight({ reflections: quality.id === 'high' }), loadCalibreKit()]);
+    loadStorefronts(), loadUrbanLight({ reflections: quality.id === 'high' }), loadCalibreKit(),
+    // (without its aircraft the game still plays: the garage's two tiles would be empty air)
+    loadAircraftModels().catch((error) => console.warn(`[aircraft] ${error.message}`))]);
   setTreeDetail(quality.trees);
   const cityGrid = buildCityGrid(scene);
   markInit('cityGrid');
@@ -849,6 +852,8 @@ async function initApp() {
   // Smoke, flashes, rain, beacons: effects draw their colour and leave the reflections' normals alone, or the ambient
   // occlusion darkens the whole square each is drawn on (js/effect-outputs.js). Whatever was made without saying so is
   // caught here, before its shader is compiled, and then a few hundred objects a frame for what is made later.
+  // the aircraft wear their models before the shaders are compiled, so nothing compiles on the first take-off
+  await Promise.all(Object.values(controllerManager.aircraft).map((a) => a.model.ready));
   sealEffects(scene);
   const sweepEffects = effectSweeper(scene);
   if (renderer.backend.isWebGPUBackend) await precompileShaders();

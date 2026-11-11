@@ -98,7 +98,7 @@ class Aviation {
         }
         case 'gearCollapse': {
           g.damageCar(a, 30, 'crash');
-          if (piloted) { g.camera.addShake(1); g.toast('Train arraché', 'Trop dur : posez-la sur le ventre.'); }
+          if (piloted) { g.camera.addShake(1); g.toast('Train arraché', 'Posé trop dur : elle finit sur le ventre.'); }
           g.audio.flight?.crunch(1);
           break;
         }
@@ -173,7 +173,7 @@ class Aviation {
     if (a.flight.agl < 900) {
       g.birds?.scatter(p.x, p.z, 400);
       g.traffic.pedestrians.panic(p.x, p.z, 220, 10);
-      g.parking?.alarms?.(p.x, p.z, 260);
+      this.alarms(p.x, p.z, 260, 6);
     }
   }
 
@@ -191,6 +191,7 @@ class Aviation {
   update(dt) {
     const g = this.game, a = this.piloted;
     for (const craft of Object.values(this.craft)) {
+      if (craft !== a) craft.inside = false;
       if (craft.sinkT > 0 && craft.flight.ditched) {
         // a ditched aircraft floats for a while, then goes down by the nose
         craft.sinkT -= dt;
@@ -214,7 +215,7 @@ class Aviation {
       const loud = b.tune.engine === 'jet' ? 1 + b.ab : 0.6;
       g.birds?.scatter(p.x, p.z, 60 * loud);
       if (b.agl < 40) g.traffic.pedestrians.panic(p.x, p.z, 22 * loud, 6);
-      if (b.ab > 0.5 && b.agl < 60) g.parking?.alarms?.(p.x, p.z, 45);
+      if (b.ab > 0.5 && b.agl < 60 && Math.random() < 0.5) this.alarms(p.x, p.z, 45, 1);
     }
     // On short final over a street, or rolling fast along one: the drivers ahead see it coming and get out of the way
     this.clearT = (this.clearT ?? 0) - dt;
@@ -272,6 +273,15 @@ class Aviation {
     else if (s.inverted < 0) s.inverted = Math.min(0, s.inverted + dt);
   }
 
+  // Car alarms set off in the streets around (x, z): the city's own voice answering the noise (audio-ambience.js)
+  alarms(x, z, radius, count) {
+    const audio = this.game.audio;
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2, d = Math.sqrt(Math.random()) * radius;
+      audio.ambienceEvent?.('alarm', x + Math.cos(a) * d, 0.8, z + Math.sin(a) * d);
+    }
+  }
+
   // Something solid right above the aircraft with air between: a bridge deck, a skyway, an overhang
   overhead(a) {
     const c = this.game.controllers, p = a.position;
@@ -321,7 +331,8 @@ class Aviation {
   launch(a, { x, y, z, heading, speed = 0, ground = false }) {
     const t = a.flight.tune;
     a.destroyed = false; a.crashed = false; a.sinkT = 0;
-    if (ground) placeAircraft(a, { x, y, z, heading, speed: 0, throttle: 0, onGround: true });
+    // (on its wheels: on whatever surface is really there, a park lawn stands a good metre above the street)
+    if (ground) placeAircraft(a, { x, y: this.env.ground(x, z, (y ?? 0) + 4), z, heading, speed: 0, throttle: 0, onGround: true });
     // whatever the player was doing a moment ago, the aircraft arrives at a speed it flies well at
     else placeAircraft(a, { x, y, z, heading, speed: clamp(speed, t.vStall * (t.engine === 'jet' ? 2.7 : 2.1), a.drive.speed * (t.engine === 'jet' ? 0.6 : 0.85)), throttle: 0.75 });
     this.airT = ground ? 0 : 9;

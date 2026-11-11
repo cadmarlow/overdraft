@@ -209,7 +209,7 @@ class Garage extends QuickStrip {
   plane(id, from) {
     const g = this.game;
     const plane = this.prepare(g.controllers.aircraft[id]);
-    const y = from.flying && this.airIsClear(from) ? from.y : this.clearAltitude(from.x, from.z);
+    const y = from.flying && this.airIsClear(from) ? from.y : this.clearAltitude(from.x, from.z, from.heading, id === 'jet' ? 1800 : 700);
     g.aviation.launch(plane, { x: from.x, y, z: from.z, heading: from.heading, speed: from.flying ? from.speed : 0 });
     return plane;
   }
@@ -220,10 +220,15 @@ class Garage extends QuickStrip {
     return !this.game.controllers.nearColliders(x, z, 120).some((c) => (c.maxY ?? 0) > y - CLEARANCE);
   }
 
-  // Clear of the tallest building within a few seconds of flight
-  clearAltitude(x, z) {
+  // Clear of the tallest building around, and of whatever stands along the first seconds of the flight: a tower a
+  // kilometre ahead is ten seconds away in a jet (`ahead` metres of the way it is heading)
+  clearAltitude(x, z, heading = 0, ahead = 0) {
+    const colliders = this.game.controllers, sin = Math.sin(heading), cos = Math.cos(heading);
     let top = 0;
-    for (const c of this.game.controllers.nearColliders(x, z, 400)) top = Math.max(top, c.maxY ?? 0);
+    for (const c of colliders.nearColliders(x, z, 400)) top = Math.max(top, c.maxY ?? 0);
+    for (let d = 300; d <= ahead; d += 300) {
+      for (const c of colliders.nearColliders(x + sin * d, z + cos * d, 220)) top = Math.max(top, c.maxY ?? 0);
+    }
     return Math.max(FLOOR_ALTITUDE, top + CLEARANCE);
   }
 

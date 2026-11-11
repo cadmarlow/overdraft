@@ -1,0 +1,303 @@
+{
+  "classic": {
+    "name": "Hauturier · Bourrasque",
+    "source": "prop-stearman-sa3d/57035fcd89e7496aa712ca1b522700fd.glb",
+    "keep": "(corps|elice|aileron.*|Layer11)_\\(1\\)",
+    "nose": "-z",
+    "up": "+y",
+    "fit": { "axis": "x", "size": 9.8 },
+    "origin": [0, -0.0374, 0.9478],
+    "stance": { "wheels": ["wheelL", "wheelR"], "axle": 0.95, "tyre": -1.52 },
+    "uv1": true,
+    "parts": [
+      { "drop": true, "nodes": "elice.*fer_elices" },
+      { "part": "prop", "bone": "prop", "material": "paint", "nodes": "elice.*black", "uv": [0.002, 0.002], "uv1": [0.195, 0.244] },
+      { "part": "rudder", "bone": "rudder", "material": "paint", "nodes": "aileron-AR-vert" },
+      { "part": "elevatorL", "bone": "elevatorL", "material": "paint", "nodes": "aileron-AR-ga" },
+      { "part": "elevatorR", "bone": "elevatorR", "material": "paint", "nodes": "aileron-AR-dr" },
+      { "part": "aileronLL", "bone": "aileronLL", "material": "paint", "nodes": "aileron-AV-bas-ga" },
+      { "part": "aileronLR", "bone": "aileronLR", "material": "paint", "nodes": "aileron-AV-bas-dr" },
+      { "part": "aileronUL", "bone": "aileronUL", "material": "paint", "nodes": "aileron-AV-haut-ga" },
+      { "part": "aileronUR", "bone": "aileronUR", "material": "paint", "nodes": "Layer11" },
+      { "part": "wheelL", "bone": "wheelL", "material": "paint", "nodes": "corps.*AVION", "inside": [0.55, -1.6, 0.6, 1, -0.95, 1.3], "sides": true },
+      { "part": "wheelTail", "bone": "wheelTail", "material": "paint", "nodes": "corps.*AVION", "inside": [-0.06, -0.45, -5.25, 0.07, -0.08, -4.88] },
+      { "part": "tailFork", "bone": "castor", "material": "paint", "nodes": "corps.*AVION", "inside": [-0.1, -0.32, -5.12, 0.11, 0.04, -4.88] },
+      { "part": "pilot", "tag": "goggles", "material": "pilot", "nodes": "corps.*AVION", "inside": [-0.25, 0.55, -1.58, 0.25, 0.9, -1.2], "tris": [800, 900] },
+      { "part": "pilot", "material": "pilot", "nodes": "corps.*AVION", "inside": [-0.25, 0.55, -1.58, 0.25, 0.9, -1.2] },
+      { "drop": true, "nodes": "corps.*AVION", "inside": [-0.25, 0.55, -0.37, 0.25, 0.9, 0.03] },
+      { "part": "pilot", "material": "pilot", "nodes": "corps.*PERSOS", "centre": [-1, -1, -3, 1, 2, -0.6] },
+      { "drop": true, "nodes": "corps.*PERSOS" },
+      { "part": "pilot", "material": "pilot", "nodes": "corps.*VERRE", "tris": [1, 40], "centre": [-1, -1, -3, 1, 2, -0.6], "uv": [0.002, 0.002], "uv1": [0.195, 0.244] },
+      { "drop": true, "nodes": "corps.*VERRE", "tris": [1, 40] },
+      { "part": "glass", "material": "glass", "nodes": "corps.*VERRE" },
+      { "part": "body", "material": "paint", "nodes": "corps.*AVION" }
+    ],
+    "bones": {
+      "castor": { "pivot": [0.005, -0.05, -4.99], "axis": [0, 1, 0] },
+      "prop": { "pivot": [null, null, null], "axis": [0, 0, 1] },
+      "rudder": { "edge": "+z", "axis": [0, -1, 0], "angle": 28 },
+      "elevatorL": { "edge": "+z", "axis": [1, 0, 0], "angle": 25 },
+      "elevatorR": { "edge": "+z", "axis": [1, 0, 0], "angle": 25 },
+      "aileronLL": { "edge": "+z", "axis": [1, 0, 0], "angle": 25 },
+      "aileronUL": { "edge": "+z", "axis": [1, 0, 0], "angle": 25 },
+      "aileronLR": { "edge": "+z", "axis": [-1, 0, 0], "angle": 25 },
+      "aileronUR": { "edge": "+z", "axis": [-1, 0, 0], "angle": 25 },
+      "wheelL": { "wheel": true, "round": true, "sides": true },
+      "wheelTail": { "wheel": true, "round": true, "parent": "castor" }
+    },
+    "points": {
+      "wheelL": { "wheel": "wheelL" },
+      "wheelR": { "wheel": "wheelR" },
+      "wheelTail": { "wheel": "wheelTail" },
+      "nose": { "of": "prop", "at": "max-z", "x": 0 },
+      "tail": { "of": "rudder", "at": "min-z", "x": 0 },
+      "tipUL": { "of": "body", "at": "max-x", "box": [3, 0.9, -3, 6, 1.5, 3] },
+      "tipLL": { "of": "body", "at": "max-x", "box": [3, -0.9, -3, 6, -0.2, 3] },
+      "belly": { "of": "body", "at": "min-y", "box": [-0.3, -1.2, -1.5, 0.3, 0, 1.2] },
+      "finTop": { "of": ["body", "rudder"], "at": "max-y", "box": [-0.5, 0, -6, 0.5, 2, -4] },
+      "eye": { "of": "goggles", "at": "max-z", "x": 0, "dz": -0.03 },
+      "seat": { "of": "pilot", "at": "centre", "box": [-0.4, -0.3, -1.75, 0.4, 0.2, -1.25], "x": 0 },
+      "lightL": { "of": "body", "at": "max-x", "box": [3, 0.9, -3, 6, 1.5, 3], "dx": -0.02 },
+      "lightTail": { "of": "rudder", "at": "max-y", "x": 0 },
+      "exhaustL": [0.36, -0.36, 1.45]
+    },
+    "mirrorPoints": ["tipUL", "tipLL", "lightL", "exhaustL"],
+    "propeller": { "bone": "prop", "material": "blade", "radius": 1.3, "root": 0.09, "blades": 2, "chord": 0.19, "pitch": 1.5, "forward": 0.02 },
+    "materials": {
+      "paint": {
+        "source": "AVION",
+        "maps": {
+          "c": { "from": "base" },
+          "n": {
+            "make": "fabric",
+            "panels": [
+              { "note": "upper wing, underside", "rect": [498, 0, 995, 77], "pitch": 15.5, "sag": 0.08 },
+              { "note": "upper wing, top", "rect": [498, 77, 995, 154], "pitch": 15.5, "sag": 0.08 },
+              { "note": "lower wing, underside, one side", "rect": [0, 226, 221, 300], "pitch": 15.5, "phase": 248.5, "sag": 0.08 },
+              { "note": "lower wing, underside, other side", "rect": [273, 226, 497, 300], "pitch": 15.5, "phase": 248.5, "sag": 0.08 },
+              { "note": "lower wing, top, right", "rect": [579, 352, 799, 433], "pitch": 15.5, "phase": 579, "sag": 0.08 },
+              { "note": "lower wing, top, left", "rect": [358, 352, 578, 433], "pitch": 15.5, "phase": 578, "sag": 0.08 },
+              { "note": "tailplane, top", "rect": [800, 359, 952, 413], "pitch": 12.7, "sag": 0.075 },
+              { "note": "tailplane, underside", "rect": [855, 236, 1008, 289], "pitch": 12.7, "sag": 0.075 },
+              { "note": "rear fuselage, left side: flats between the stringers", "rect": [14, 398, 170, 446], "across": "v", "pitch": 8, "sag": 0.05, "tape": 0, "edge": 0.1 },
+              { "note": "rear fuselage, right side", "rect": [512, 204, 668, 252], "across": "v", "pitch": 8, "sag": 0.05, "tape": 0, "edge": 0.1 }
+            ]
+          },
+          "ao": { "from": ["occlusion.r", "occlusion.r", "occlusion.r"], "uv": 1, "levels": [20, 175] }
+        },
+        "erase": [
+          { "note": "left side: the lettering itself, whole", "rect": [544, 221, 609, 236], "from": [150, 0], "feather": 2 },
+          { "note": "left side: the number on the yellow, whole", "rect": [659, 212, 688, 245], "from": [60, 0], "feather": 2 },
+          { "note": "left side: the blue band, whole", "rect": [609, 211, 658, 244], "from": [1, -114], "feather": 1 },
+          { "note": "right side: the lettering itself, whole", "rect": [51, 414, 109, 431], "from": [150, 0], "feather": 2 },
+          { "note": "right side: the number on the yellow, whole", "rect": [161, 404, 187, 440], "from": [50, 0], "feather": 2 },
+          { "note": "right side: the blue band, whole", "rect": [110, 404, 160, 440], "from": [500, -307], "feather": 1 },
+          { "note": "left side: lettering and number over the blue band", "rect": [608, 209, 659, 247], "keep": [[47, 58, 146], [245, 238, 92]], "tol": 45, "from": [1, -114] },
+          { "note": "left side: lettering on the yellow", "rect": [540, 214, 609, 246], "keep": [[245, 238, 92], [47, 58, 146]], "tol": 70, "from": [150, 0] },
+          { "note": "left side: number on the yellow", "rect": [657, 209, 690, 247], "keep": [[245, 238, 92], [47, 58, 146]], "tol": 70, "from": [60, 0] },
+          { "note": "left side: small number by the nose", "rect": [838, 217, 858, 231], "keep": [[245, 238, 92]], "tol": 60, "from": [0, -11] },
+          { "note": "left side: type on the fin, blue part", "rect": [512, 259, 531, 272], "keep": [[74, 86, 182]], "tol": 50, "from": [0, -14] },
+          { "note": "left side: type on the fin, yellow part", "rect": [529, 259, 541, 272], "keep": [[245, 238, 92]], "tol": 70, "from": [0, -12] },
+          { "note": "right side: lettering and number over the blue band", "rect": [109, 402, 161, 442], "keep": [[47, 58, 146], [245, 238, 92]], "tol": 45, "from": [500, -307] },
+          { "note": "right side: lettering on the yellow", "rect": [50, 412, 110, 433], "keep": [[245, 238, 92], [47, 58, 146]], "tol": 70, "from": [150, 0] },
+          { "note": "right side: number on the yellow", "rect": [159, 402, 188, 442], "keep": [[245, 238, 92], [47, 58, 146]], "tol": 70, "from": [50, 0] },
+          { "note": "right side: small number by the nose", "rect": [341, 412, 359, 425], "keep": [[245, 238, 92]], "tol": 60, "from": [0, 11] },
+          { "note": "right side: type on the fin, blue part", "rect": [15, 453, 34, 465], "keep": [[74, 86, 182]], "tol": 50, "from": [0, -13] },
+          { "note": "right side: type on the fin, yellow part", "rect": [32, 453, 43, 465], "keep": [[245, 238, 92]], "tol": 70, "from": [0, -12] }
+        ]
+      },
+      "pilot": { "source": "PERSOS", "maps": { "c": { "same": "classic_paint_c.webp" }, "ao": { "same": "classic_paint_ao.webp", "uv": 1 } }, "set": { "color": [0.5, 0.5, 0.5] } },
+      "glass": { "maps": {} },
+      "blade": { "maps": { "c": { "make": "blade", "size": 512, "height": 64 } } }
+    }
+  },
+  "jet": {
+    "name": "Corsaire · Tramontane",
+    "source": "jet-f104/96e60f2f463b4b1c8822079f1b2e21eb.glb",
+    "nose": "+z",
+    "up": "+y",
+    "fit": { "axis": "z", "size": 16.7 },
+    "origin": [0, 1.6053, -1.9599],
+    "stance": { "wheels": ["wheelL", "wheelR"], "axle": -0.85, "tyre": -1.95 },
+    "parts": [
+      { "part": "glass", "material": "glass", "nodes": "Glass" },
+      { "part": "gearL", "bone": "wheelL", "material": "mech", "nodes": "Part_2", "inside": [1.14, -2.01, -1.25, 1.42, -1.27, -0.44], "sides": true },
+      { "part": "doorMainL", "bone": "doorMainL", "material": "mech", "nodes": "Part_2", "centre": [1.15, -1.245, -1.045, 1.32, -1.084, -0.493], "sides": true },
+      { "part": "gearL", "bone": "gearL", "material": "mech", "nodes": "Part_2", "centre": [0.34, -2.06, -1.245, 1.25, -0.853, -0.493], "sides": true },
+      { "part": "doorMainL", "bone": "doorMainL", "material": "skin", "nodes": "Part_1", "tris": [780, 780], "centre": [0, -3, -3, 3, 3, 3], "sides": true },
+      { "part": "doorFwdL", "bone": "doorFwdL", "material": "skin", "nodes": "Part_1", "tris": [360, 360], "centre": [0, -3, -3, 3, 3, 3], "sides": true },
+      { "part": "doorNoseL", "bone": "doorNoseL", "material": "skin", "nodes": "Part_1", "tris": [300, 300], "centre": [0, -3, 2, 1, 3, 6], "sides": true },
+      { "part": "doorNoseL", "bone": "doorNoseL", "material": "mech", "nodes": "Part_2", "tris": [74, 74], "centre": [0.09, -1.33, 3.45, 0.24, -1.11, 4.1], "sides": true },
+      { "part": "gearNose", "bone": "wheelNose", "material": "mech", "nodes": "Part_2", "inside": [-0.07, -2.006, 3.662, 0.07, -1.545, 4.163] },
+      { "part": "gearNose", "bone": "gearNose", "material": "mech", "nodes": "Part_2", "centre": [-0.2, -1.906, 3.7, 0.2, -0.944, 4.163] },
+      {
+        "part": "nozzle",
+        "material": "mech",
+        "nodes": "^(Plane|Circle)",
+        "centre": [-1, -1.2, -6.6, 1, 0.8, -6.05],
+        "ring": { "centre": [0, -0.2159], "count": 17, "prefix": "nozzle", "hinge": -5.981, "phase": -0.066 }
+      },
+      { "part": "stabilator", "bone": "stabilator", "material": "skin", "nodes": "Part_1", "tris": [278, 278] },
+      { "part": "rudder", "bone": "rudder", "material": "skin", "nodes": "Part_1", "tris": [262, 262] },
+      { "part": "flapL", "bone": "flapL", "material": "skin", "nodes": "Part_1", "tris": [176, 176], "centre": [0, -3, -4, 3, 3, 0], "sides": true },
+      { "part": "brakeL", "bone": "brakeL", "material": "skin", "nodes": "Part_1", "tris": [51, 51], "centre": [0, -3, -5, 3, 3, 0], "sides": true },
+      { "part": "body", "tag": "skin", "material": "skin", "nodes": "Part_1" },
+      { "part": "body", "tag": "headrest", "material": "mech", "nodes": "Part_2", "tris": [68, 68], "inside": [-0.15, -0.02, 4.65, 0.15, 0.25, 4.82] },
+      { "part": "body", "tag": "mech", "material": "mech", "nodes": "Part_2|^Plane|^Circle" }
+    ],
+    "bones": {
+      "gearNose": { "pivot": [0, -0.803, 3.929], "axis": [-1, 0, 0], "swing": 100, "shrink": 0.72 },
+      "wheelNose": { "wheel": true, "parent": "gearNose" },
+      "gearL": { "pivot": [0.089, -0.99, -0.844], "to": [0.42, -0.904, 0.2076], "carry": "wheelL", "sides": true },
+      "wheelL": { "wheel": true, "parent": "gearL", "flat": true, "sides": true },
+      "doorMainL": { "pivot": [0.69, -0.79, null], "axis": [0, 0, -1], "closed": 112.5, "sides": true },
+      "doorFwdL": { "pivot": [0.075, -1.2, null], "axis": [0, 0, -1], "open": 92, "sides": true },
+      "doorNoseL": { "pivot": [0.255, -1.1026, null], "axis": [0, 0, -1], "closed": 68, "sides": true },
+      "stabilator": { "pivot": [0, 1.589, -6.201], "axis": [1, 0, 0], "angle": 14 },
+      "rudder": { "edge": "+z", "axis": [0, -1, 0], "angle": 20 },
+      "flapL": { "edge": "+z", "axis": [-1, 0, 0], "angle": 35, "sides": true },
+      "brakeL": { "edge": "+z", "axis": [0, -1, 0], "open": 50, "sides": true }
+    },
+    "points": {
+      "wheelL": { "wheel": "wheelL" },
+      "wheelR": { "wheel": "wheelR" },
+      "wheelNose": { "wheel": "wheelNose" },
+      "nose": { "of": "*", "at": "max-z", "x": 0 },
+      "tail": { "of": "*", "at": "min-z", "x": 0 },
+      "tipL": { "of": "skin", "at": "max-x" },
+      "belly": { "of": "skin", "at": "min-y", "box": [-0.6, -3, -1, 0.6, 0, 6] },
+      "ventral": { "of": "mech", "at": "min-y", "box": [-0.1, -3, -5, 0.1, 0, -1] },
+      "finTop": { "of": "*", "at": "max-y", "x": 0 },
+      "nozzle": { "of": ["mech", "nozzle"], "at": "min-z", "radius": true, "depth": 0.06, "box": [-0.7, -0.9, -7, 0.7, 0.5, -5.5], "x": 0, "y": -0.216 },
+      "lightL": { "of": "skin", "at": "max-x", "dx": -0.02 },
+      "lightTail": { "of": "stabilator", "at": "min-z", "x": 0 },
+      "eye": { "of": "headrest", "at": "centre", "x": 0, "dy": -0.02, "dz": 0.27 },
+      "seat": { "of": "headrest", "at": "centre", "x": 0, "dy": -0.54, "dz": 0.17 }
+    },
+    "mirrorPoints": ["tipL", "lightL"],
+    "materials": {
+      "skin": {
+        "source": "Material.001",
+        "maps": { "c": { "from": "base" }, "n": { "from": "normal" }, "orm": { "from": ["occlusion.r", "metalRough.g", "metalRough.b"] } },
+        "erase": [
+          { "note": "left side: U.S. AIR FORCE", "rect": [371, 294, 393, 410], "dark": 95, "from": [19, 0] },
+          { "note": "right side: U.S. AIR FORCE", "rect": [537, 286, 558, 401], "dark": 95, "from": [17, 0] },
+          {
+            "note": "left side: the squadron badge at the tip of the white flash, from the bare metal beside it",
+            "poly": [[371.5, 308], [370.4, 312], [367.5, 314.9], [363.5, 316], [359.5, 314.9], [356.6, 312], [355.5, 308], [356.6, 304], [359.5, 301.1], [363.5, 300], [367.5, 301.1], [370.4, 304]],
+            "from": [14, 1],
+            "feather": 2
+          },
+          {
+            "note": "left side: the rest of the badge and the squadron motto, along the white flash",
+            "poly": [[361.1, 309], [337.5, 377], [330.5, 377], [353.2, 309]],
+            "keep": [228, 228, 228],
+            "tol": 32,
+            "feather": 1,
+            "fill": { "c": [226, 226, 226], "orm": [255, 46, 2] }
+          },
+          {
+            "note": "right side: the squadron badge at the tip of the white flash, from the bare metal beside it",
+            "poly": [
+              [536.2, 380.7],
+              [535.1, 384.7],
+              [532.2, 387.6],
+              [528.2, 388.7],
+              [524.2, 387.6],
+              [521.3, 384.7],
+              [520.2, 380.7],
+              [521.3, 376.7],
+              [524.2, 373.8],
+              [528.2, 372.7],
+              [532.2, 373.8],
+              [535.1, 376.7]
+            ],
+            "from": [13, 0],
+            "feather": 2
+          },
+          {
+            "note": "right side: the rest of the badge and the squadron motto, along the white flash",
+            "poly": [[504, 318], [530.1, 382], [514.4, 382], [499.1, 318]],
+            "keep": [228, 228, 228],
+            "tol": 32,
+            "feather": 1,
+            "fill": { "c": [226, 226, 226], "orm": [255, 46, 2] }
+          },
+          {
+            "note": "left side: what is left of the badge",
+            "rect": [344, 297, 375, 331],
+            "match": [[45, 95, 200], [205, 40, 45], [60, 120, 215], [150, 60, 90]],
+            "tol": 50,
+            "heal": true,
+            "feather": 1
+          },
+          {
+            "note": "right side: what is left of the badge",
+            "rect": [511, 360, 540, 392],
+            "match": [[45, 95, 200], [205, 40, 45], [60, 120, 215], [150, 60, 90]],
+            "tol": 50,
+            "heal": true,
+            "feather": 1
+          },
+          { "note": "fin, one side: the serial", "rect": [704, 90, 725, 186], "dark": 118, "heal": true, "grain": 9, "feather": 1 },
+          { "note": "fin, other side: the serial", "rect": [848, 130, 869, 233], "dark": 118, "heal": true, "grain": 9, "feather": 1 },
+          { "note": "fuselage star and bar, first copy: upper half", "rect": [37, 555, 121, 581], "sharp": "t", "from": [0, 53] },
+          { "note": "fuselage star and bar, first copy: lower half", "rect": [37, 579, 121, 607], "from": [0, 28] },
+          { "note": "fuselage star and bar, second copy: upper half", "rect": [288, 680, 371, 701], "sharp": "t", "from": [0, 43] },
+          { "note": "fuselage star and bar, second copy: lower half", "rect": [288, 699, 371, 723], "from": [0, 25] },
+          { "note": "an end of the bar on the intake", "rect": [86, 417, 104, 440], "heal": true, "feather": 1 },
+          { "note": "the other end of the bar on the intake", "rect": [38, 492, 57, 512], "heal": true, "feather": 1 },
+          { "note": "half of the star on the intake lip, first copy", "rect": [679, 360, 705, 405], "sharp": "r", "from": [-24, 17] },
+          { "note": "its bleed above", "rect": [694, 338, 705, 362], "sharp": "r", "from": [-14, 0] },
+          { "note": "its bleed below", "rect": [694, 403, 705, 426], "sharp": "r", "from": [-14, 0] },
+          { "note": "half of the star on the intake lip, second copy: upper half", "rect": [607, 611, 627, 634], "from": [0, 43] },
+          { "note": "half of the star on the intake lip, second copy: lower half", "rect": [607, 632, 627, 656], "from": [0, 22] },
+          { "note": "its bleed", "rect": [583, 590, 610, 676], "match": [[26, 30, 66]], "tol": 45, "bright": 243, "from": [25, 0] },
+          {
+            "note": "wing: the end of the bar that lies over the tip stripes, from along the stripes",
+            "poly": [[178.5, 939], [194.6, 947.1], [186.1, 964.1], [170.1, 956]],
+            "from": [-14, -7],
+            "feather": 1
+          },
+          {
+            "note": "wing: the star and bar, from the clean wing inboard",
+            "poly": [
+              [213.9, 868.4],
+              [229.9, 876.5],
+              [220.3, 897],
+              [225.7, 905.1],
+              [228, 917],
+              [225, 928.8],
+              [217.4, 938.2],
+              [206.5, 943.5],
+              [196.8, 944.1],
+              [194.2, 948],
+              [178.1, 939.9],
+              [179.7, 935.5],
+              [174.3, 927.4],
+              [172, 915.5],
+              [175, 903.7],
+              [182.6, 894.3],
+              [193.5, 889],
+              [203.2, 888.4]
+            ],
+            "from": [-57, -50]
+          },
+          {
+            "note": "wing: the F of USAF where it lies over the tip stripe, from further along the stripe",
+            "dark": 80,
+            "from": [-50, -26],
+            "poly": [[322, 824.1], [373, 847.7], [373, 866], [322, 839.9]],
+            "feather": 1
+          },
+          { "note": "wing: USAF", "poly": [[321, 841.4], [372, 867.6], [372, 950], [288, 950], [288, 906], [300, 880]], "dark": 80, "from": [50, 32], "feather": 1 }
+        ]
+      },
+      "mech": {
+        "source": "Material",
+        "maps": { "c": { "from": "base" }, "n": { "from": "normal" }, "orm": { "from": ["occlusion.r", "metalRough.g", "metalRough.b"] } }
+      },
+      "glass": { "maps": {} }
+    }
+  }
+}

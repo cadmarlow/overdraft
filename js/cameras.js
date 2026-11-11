@@ -396,7 +396,8 @@ class CameraSystem {
     // isolated pillar ends; keep that trim intact in cockpit view and restore the usual plane on every exit.
     const carCockpit = !this.cinematic && this.activePresetId === 'pov' && entity.type === 'car'
       && !entity.moto && !entity.boat && !entity.bicycle;
-    const near = carCockpit ? 0.06 : entity.type === 'person' ? 0.12 : 0.35;
+    // (an aircraft's cockpit too: its sills and its panel are a hand's breadth from the pilot's eyes)
+    const near = carCockpit || (this.activePresetId === 'pov' && entity.flight) ? 0.06 : entity.type === 'person' ? 0.12 : 0.35;
     if (this.camera.near !== near) { this.camera.near = near; this.camera.updateProjectionMatrix(); }
     if (this.cinematic) { this.updateCinematic(dt); return; }
     if (this.still) { this.updateStill(dt); return; }
@@ -792,6 +793,7 @@ class CameraSystem {
     this.flying = true;
     this.aimBlend = 0;
     this.followEntity = null; // the chase framing picks up from here once out of the aircraft
+    a.inside = pov; // seen from the pilot's eyes, the pilot is not drawn (aircraft.js)
     const V = b.airspeed, speed = Math.hypot(b.vx, b.vy, b.vz);
     const nose = _an.set(r[6], r[7], r[8]), bodyUp = _au.set(r[3], r[4], r[5]);
     // where it is going: between the nose and the flight path
@@ -860,7 +862,10 @@ class CameraSystem {
       look.copy(pos).addScaledVector(d, 60);
     } else {
       const anchor = _aa.copy(a.position).addScaledVector(bodyUp, a.cameraTargetOffset?.y ?? 0.6);
-      const dist = Math.max(4, a.chaseDistance * this.zoomMultiplier * (action ? 0.7 : 1) * (1 + 0.22 * Math.sqrt(rush)) + s.pull);
+      // the lens widens with speed and the camera closes in as it does (a dolly zoom): the world rushes, the
+      // aircraft keeps its size in the picture (at Mach 1 it had shrunk to a tenth of the screen's width)
+      const lens = Math.tan(28 * Math.PI / 180) / Math.tan((56 + s.fov) * Math.PI / 360);
+      const dist = Math.max(4, a.chaseDistance * this.zoomMultiplier * (action ? 0.7 : 1) * (1 + 0.22 * Math.sqrt(rush)) * (0.45 + 0.55 * lens) + s.pull);
       const height = a.chaseHeight * this.zoomMultiplier * (action ? 0.42 : 1) * (1 - 0.25 * rush) - s.sink;
       pos.copy(anchor).addScaledVector(d, -Math.cos(pitch) * dist).addScaledVector(s.u, height + Math.sin(pitch) * dist * 0.85);
       look.copy(anchor).addScaledVector(d, (10 + V * 0.06) * (1 - looking)).addScaledVector(s.u, 1.2 * (1 - looking));

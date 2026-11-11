@@ -1,0 +1,170 @@
+<!doctype html>
+<meta charset="utf-8"><title>Avions</title>
+<style>html,body{margin:0;height:100%;background:#1b2026;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"../vendor/three/build/three.webgpu.js","three/webgpu":"../vendor/three/build/three.webgpu.js","three/tsl":"../vendor/three/build/three.tsl.js","three/addons/":"../vendor/three/examples/jsm/"}}</script>
+<script type="module">
+// The aircraft of assets/aircraft, drawn by the game's own module (js/aircraft-assets.js) under a daylight close to the
+// game's: a sun with shadows, a sky that the metal reflects, a ground with a metre grid at the height of the tyres.
+// See tools/aircraft/README.md.
+//   ?kind=classic|jet
+//   &cam=<azimuth>:<elevation>:<distance>   degrees round from behind (0 = chase, 90 = from the pilot's left, 180 = from
+//                                           ahead), degrees up, metres;  &target=x,y,z (aircraft frame)  &fov=35
+//   &gear=0..1 &pitch= &roll= &yaw= (-1..1) &power=0..1 &ab=0..1 &flaps= &brake= &spin= (wheel, radians) &steer=
+//   &ridden=0 (nobody aboard)  &crashed=1  &engine=1 (dead)  &airspeed=  &air=1 (in flight: no ground)
+//   &frames=240   steps of 1/60 s posed before the picture (the propeller needs a moment to reach its speed)
+//   &bank= &climb= (degrees: the aircraft's attitude)   &sun=<azimuth>:<elevation>
+//   &marks=1      the measured points (yellow) and every bone's pivot and axis (red)
+//   &bones=1      each part in the colour of its bone, to check what was cut out
+//   &flipn=1      the other normal-map convention (to compare)   &demo=1   everything moves, endlessly
+//   &mrt=1        drawn as the game draws at its highest quality: a scene pass that also writes normals and
+//                 metalness/roughness (what the propeller disc must stay out of, and the glass must not);
+//                 &show=normal|metalRough shows one of those instead of the picture
+// The title becomes "done" once the picture is drawn.
+import * as THREE from 'three/webgpu';
+import { attribute, color, float, fract, metalness, mix, mrt, normalView, normalWorld, output, pass, positionWorld, roughness, smoothstep, vec2, vec3 } from 'three/tsl';
+import { buildAircraftModel } from '../js/aircraft-assets.js';
+import { disableEffectOutputs } from '../js/effect-outputs.js';
+
+const q = new URLSearchParams(location.search);
+// without the reflection outputs the effects have nothing to keep out of (as main.js does at the lower qualities)
+if (q.get('mrt') !== '1') disableEffectOutputs();
+
+const num = (key, fallback) => (q.has(key) ? Number(q.get(key)) : fallback);
+const kind = q.get('kind') || 'classic';
+const [az, el, dist] = (q.get('cam') || '25:14:18').split(':').map(Number);
+const target = (q.get('target') || '0,0,0').split(',').map(Number);
+const W = innerWidth, H = innerHeight;
+
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+renderer.setPixelRatio(1);
+renderer.setSize(W, H);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true;
+document.body.prepend(renderer.domElement);
+await renderer.init();
+
+const scene = new THREE.Scene();
+scene.matrixWorldAutoUpdate = false; // as in the game: whatever moves says so
+const [sunAz, sunEl] = (q.get('sun') || '215:52').split(':').map((v) => Number(v) * Math.PI / 180);
+const sunDir = new THREE.Vector3(Math.sin(sunAz) * Math.cos(sunEl), Math.sin(sunEl), -Math.cos(sunAz) * Math.cos(sunEl));
+{
+  // sky: what the paint and the bare metal reflect, and the background
+  const dome = new THREE.Scene();
+  const sky = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide });
+  const up = normalWorld.y.negate();
+  // below the horizon: the ground's own grey when standing on it, haze when flying
+  sky.colorNode = mix(mix(color(q.get('air') === '1' ? 0x8fa3b5 : 0x7d776e), color(0xcfdcea), smoothstep(-0.06, 0.06, up)), color(0x4f86cf), smoothstep(0.04, 0.85, up)).mul(1.15);
+  dome.add(new THREE.Mesh(new THREE.SphereGeometry(60, 48, 24), sky));
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(3.2, 16, 8), new THREE.MeshBasicNodeMaterial());
+  lamp.material.colorNode = color(0xfff1dc).mul(26);
+  lamp.position.copy(sunDir).multiplyScalar(50);
+  dome.add(lamp);
+  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(dome, 0.01).texture;
+  scene.environmentIntensity = 0.6;
+  const back = new THREE.Mesh(new THREE.SphereGeometry(400, 48, 24), sky);
+  back.frustumCulled = false;
+  scene.add(back);
+}
+const sun = new THREE.DirectionalLight(0xfff0dc, 6);
+sun.position.copy(sunDir).multiplyScalar(40);
+sun.castShadow = true;
+sun.shadow.mapSize.set(4096, 4096);
+Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 14, bottom: -14, near: 1, far: 90 });
+sun.shadow.normalBias = 0.03; sun.shadow.radius = 1.5;
+scene.add(sun, sun.target, new THREE.HemisphereLight(0xcbd8ec, 0xc4a488, 1.8));
+
+const model = buildAircraftModel(kind);
+await model.ready;
+const points = model.points;
+scene.add(model.root);
+
+const air = q.get('air') === '1';
+const groundY = points.wheelL ? points.wheelL[1] : -1.5;
+if (!air) {
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400).rotateX(-Math.PI / 2), new THREE.MeshStandardNodeMaterial({ roughness: 0.92, metalness: 0 }));
+  const line = (v, width) => smoothstep(width, 0, fract(v.add(0.5)).sub(0.5).abs());
+  const metre = line(positionWorld.x, 0.012).max(line(positionWorld.z, 0.012)), five = line(positionWorld.x.div(5), 0.006).max(line(positionWorld.z.div(5), 0.006));
+  ground.material.colorNode = mix(vec3(0.24, 0.245, 0.25), vec3(0.42, 0.43, 0.44), metre.mul(0.6).max(five));
+  ground.position.y = groundY;
+  ground.receiveShadow = true;
+  scene.add(ground);
+}
+
+if (q.get('flipn') === '1') model.root.traverse((o) => { if (o.material?.normalMap) { o.material = o.material.clone(); o.material.normalScale.set(1, -1); } });
+if (q.get('bones') === '1') {
+  // each part in the colour of the bone it hangs on
+  const tint = new THREE.MeshStandardNodeMaterial({ roughness: 0.6, metalness: 0, side: THREE.DoubleSide });
+  const id = float(attribute('skinIndex', 'uvec4').x);
+  tint.colorNode = mix(vec3(0.55), vec3(fract(id.mul(0.618)), fract(id.mul(0.371).add(0.3)), fract(id.mul(0.829).add(0.6))).mul(0.85).add(0.1), smoothstep(0.4, 0.6, id));
+  model.root.traverse((o) => { if (o.isSkinnedMesh) o.material = tint; });
+}
+if (q.get('marks') === '1') {
+  const dot = (p, colour, size) => { const m = new THREE.Mesh(new THREE.SphereGeometry(size, 12, 8), new THREE.MeshBasicNodeMaterial({ color: colour, depthTest: false })); m.position.fromArray(p); m.renderOrder = 10; model.root.add(m); };
+  for (const [name, p] of Object.entries(points)) if (Array.isArray(p)) dot(p, name.startsWith('light') ? 0x30ff60 : 0xffe000, 0.035);
+  for (const r of Object.values(model.bones)) {
+    dot(r.spec.pivot, 0xff2020, 0.022);
+    const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3().fromArray(r.spec.pivot), new THREE.Vector3().fromArray(r.spec.pivot).addScaledVector(r.axis, 0.3)]);
+    const l = new THREE.Line(g, new THREE.LineBasicNodeMaterial({ color: 0xff2020, depthTest: false })); l.renderOrder = 10; model.root.add(l);
+  }
+}
+
+// the aircraft entity as the game hands it to pose()
+const a = {
+  crashed: q.get('crashed') === '1', ridden: q.has('ridden') ? q.get('ridden') !== '0' : undefined,
+  flight: {
+    power: num('power', 0), ab: num('ab', 0), gear: num('gear', 1), flaps: num('flaps', 0), brake: num('brake', 0),
+    stickPitch: num('pitch', 0), stickRoll: num('roll', 0), stickYaw: num('yaw', 0),
+    wheels: [{ spin: num('spin', 0), angle: 0 }, { spin: num('spin', 0), angle: 0 }, { spin: num('spin', 0), angle: num('steer', 0) }],
+    onGround: !air, airspeed: num('airspeed', air ? 60 : 0), damage: { engine: num('engine', 0), gear: 0 }
+  }
+};
+model.root.rotation.set(-num('climb', 0) * Math.PI / 180, 0, -num('bank', 0) * Math.PI / 180, 'YXZ');
+
+const camera = new THREE.PerspectiveCamera(num('fov', 35), W / H, 0.05, 900);
+const A = az * Math.PI / 180, E = el * Math.PI / 180;
+camera.position.set(target[0] + Math.sin(A) * Math.cos(E) * dist, target[1] + Math.sin(E) * dist, target[2] - Math.cos(A) * Math.cos(E) * dist);
+camera.lookAt(target[0], target[1], target[2]);
+scene.updateMatrixWorld(true);
+camera.updateMatrixWorld(true);
+
+let render = () => renderer.render(scene, camera);
+if (q.get('mrt') === '1') {
+  // the game's scene pass at quality HAUTE (main.js)
+  const scenePass = pass(scene, camera);
+  const sceneMRT = mrt({ output, normal: normalView, metalRough: vec2(metalness, roughness) });
+  sceneMRT.setBlendMode('normal', new THREE.BlendMode(THREE.MaterialBlending));
+  sceneMRT.setBlendMode('metalRough', new THREE.BlendMode(THREE.MaterialBlending));
+  scenePass.setMRT(sceneMRT);
+  const pipeline = new THREE.RenderPipeline(renderer, scenePass.getTextureNode(q.get('show') || 'output'));
+  render = () => pipeline.render();
+}
+
+const frames = num('frames', 240);
+for (let i = 0; i < frames; i++) model.pose(a, 1 / 60);
+model.root.updateMatrixWorld(true);
+render();
+await new Promise((r) => setTimeout(r, 300));
+model.pose(a, 1 / 60);
+model.root.updateMatrixWorld(true);
+render();
+document.title = 'done';
+
+if (q.get('demo') === '1') {
+  // everything that moves, moving: to look at, not to measure
+  let last = performance.now(), t = 0;
+  const f = a.flight;
+  const loop = (now) => {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now; t += dt;
+    f.stickPitch = Math.sin(t * 1.3); f.stickRoll = Math.sin(t * 0.9 + 1); f.stickYaw = Math.sin(t * 0.7 + 2);
+    f.power = 0.5 + 0.5 * Math.sin(t * 0.35); f.ab = f.power > 0.95 ? 1 : 0;
+    f.gear = Math.max(0, Math.min(1, 0.5 + Math.sin(t * 0.5) * 0.9)); f.flaps = f.gear; f.brake = Math.max(0, Math.sin(t * 0.6));
+    for (const w of f.wheels) w.spin += dt * 20;
+    f.wheels[2].angle = Math.sin(t) * 0.5;
+    model.pose(a, dt);
+    model.root.updateMatrixWorld(true);
+    render();
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}
+</script>

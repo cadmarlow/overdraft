@@ -31,6 +31,13 @@ https://sketchfab.com/3d-models/ak-12-f78ad7ae10ad4335b3ad81be3ec15bb0 ; "M67 Fr
 https://sketchfab.com/3d-models/m67-fragmentation-grenade-26eda181849f4d188f69105302fd7b65 (the last four under CC BY 4.0,
 https://creativecommons.org/licenses/by/4.0/). What was changed is listed in assets/weapons/LICENSE-weapons.md.
 
+The aircraft (since 0.9.24) are, modified for the game: "BOEING-STEARMAN MODEL 75" by Stéphane Agullo (sa3d),
+https://sketchfab.com/3d-models/boeing-stearman-model-75-57035fcd89e7496aa712ca1b522700fd ; "F-104 Starfighter" by
+Mikhail Zelenov (Mikhail_Zelenov), https://sketchfab.com/3d-models/f-104-starfighter-96e60f2f463b4b1c8822079f1b2e21eb
+(both under CC BY 4.0, https://creativecommons.org/licenses/by/4.0/). The game shows them under invented names
+(Hauturier · Bourrasque, Corsaire · Tramontane), without their insignia, lettering or serials. What was changed is
+listed in assets/aircraft/LICENSE-aircraft.md. Their sound is synthesised in js/audio-flight.js.
+
 Leaves and turf are from ambientCG (CC0): https://ambientcg.com (LeafSet004, LeafSet009, LeafSet010, LeafSet014, LeafSet016,
 LeafSet022, LeafSet024, Grass001, Grass005). The honey locusts' fronds are the leaves of the Jacaranda Tree model by
 Rico Cilliers (guidance: Rob Tuytel), from Poly Haven (CC0): https://polyhaven.com/a/jacaranda_tree.

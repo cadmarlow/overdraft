@@ -49,8 +49,8 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.22';
-const BUILD_NAME = 'Circuit Breaker';
+const BUILD = '0.9.24';
+const BUILD_NAME = 'Flight to Quality';
 const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
 // The neighbourhoods as the opening card names them (city-config.js districtAt)
 const DISTRICT_NAMES = {
@@ -468,7 +468,7 @@ export class Game {
       <div id="intro-bars" aria-hidden="true"><i></i><i></i></div>
       <div id="intro-card" aria-hidden="true"><span>MANHATTAN · NEW YORK</span><strong>Midtown</strong><em>5e Avenue</em></div>
       ${pauseMenuMarkup(BUILD)}
-      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · ${BUILD_NAME}</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Thème d’ouverture « La dette » composé pour OVERDRAFT, avec des instruments de Versilian Studios (CC0). La radio et les effets sont générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap. Mobilier urbain : registres publics de la ville et de la MTA (bouches d’incendie, arrêts et abris de bus, kiosques, arceaux, bancs, bornes, parcmètres, échafaudages, terrasses).</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : KiW, razor24, meeww, ziedarchi, lael.eugenio, cenobyte, Tomaso, Jiaxing, Lexyc16, Myedsu, kekomag et Eric Chadwick / DGG. Modèles sous CC BY 4.0, modifiés pour OVERDRAFT.</p><p>Armes : « Service Pistol » de Mateusz Sadek (Poly Haven, CC0) ; « AK-12 » et « Remington 870 with Magpul furniture » de rwroclav, « MP7 » de Harry / habbottcapps, « M67 Fragmentation Grenade » de FJH (Sketchfab, CC BY 4.0). Réorientées, découpées en pièces mobiles et débarrassées de leurs marquages pour le jeu.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
+      <dialog id="credits-dialog"><button id="close-credits" aria-label="Fermer les crédits">×</button><h2>OVERDRAFT</h2><p>Version ${BUILD} · ${BUILD_NAME}</p><p>Basé sur Slop New York par Mr.doob.<br>Rendu Three.js, WebGPU et TSL. Thème d’ouverture « La dette » composé pour OVERDRAFT, avec des instruments de Versilian Studios (CC0). La radio et les effets sont générés en temps réel.</p><p>Données : NYC Open Data, MTA et © contributeurs OpenStreetMap (ODbL). Boutiques : registres publics des vitrines et des restaurants de New York, noms inventés. Immeubles : registre foncier PLUTO de la ville (NYC Planning) et volumes OpenStreetMap. Mobilier urbain : registres publics de la ville et de la MTA (bouches d’incendie, arrêts et abris de bus, kiosques, arceaux, bancs, bornes, parcmètres, échafaudages, terrasses).</p><p>Enseignes : polices Google Fonts (SIL OFL, Apache 2.0).</p><p>Voitures : KiW, razor24, meeww, ziedarchi, lael.eugenio, cenobyte, Tomaso, Jiaxing, Lexyc16, Myedsu, kekomag et Eric Chadwick / DGG. Modèles sous CC BY 4.0, modifiés pour OVERDRAFT.</p><p>Armes : « Service Pistol » de Mateusz Sadek (Poly Haven, CC0) ; « AK-12 » et « Remington 870 with Magpul furniture » de rwroclav, « MP7 » de Harry / habbottcapps, « M67 Fragmentation Grenade » de FJH (Sketchfab, CC BY 4.0). Réorientées, découpées en pièces mobiles et débarrassées de leurs marquages pour le jeu.</p><p>Avions : « BOEING-STEARMAN MODEL 75 » de Stéphane Agullo et « F-104 Starfighter » de Mikhail Zelenov (Sketchfab, CC BY 4.0). Remis à l’échelle, découpés en pièces mobiles, repeints sans cocardes ni immatriculations, et rebaptisés Bourrasque et Tramontane.</p><a href="./CREDITS.md" target="_blank" rel="noopener">Sources et licences ↗</a></dialog>
       <button id="mobile-interact" class="touch-interact" hidden>F <span>VÉHICULE</span></button>
     `);
     this.driveInstruments = new DriveInstruments(document.getElementById('drive-gauge'));
@@ -2936,6 +2936,8 @@ export class Game {
       this.controllers.streetWalls(car.position.x, car.position.z, street);
     }
     for (const vehicle of this.allCars) {
+      // (an aircraft's mesh takes its whole attitude from its flight, in the controllers: a heading alone would undo it)
+      if (vehicle.flight) continue;
       if (vehicle.door) vehicle.door.rotation.y = -vehicle.doorOpen;
       vehicle.mesh.position.copy(vehicle.position); vehicle.mesh.rotation.y = vehicle.heading;
       if (vehicle.moto) poseMotorbike(vehicle, dt, vehicle === car && this.state === 'driving' && this.controllers.keys.sprint);

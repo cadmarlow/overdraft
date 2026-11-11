@@ -1981,7 +1981,10 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
     focusX = focusPos ? focusPos.x : 0;
     focusZ = focusPos ? focusPos.z : 140;
     // a jump of the camera (teleport, first frame): everything far away can be placed anywhere around it
-    const jump = Math.hypot(focusX - lastFocusX, focusZ - lastFocusZ) > 140;
+    // (a fighter covers that in less than half a second: one slow frame at Mach 1 is not a teleport, and placing
+    // every car and every pedestrian again made the next frame slow too)
+    const reach = playerEntity?.flight ? Math.max(140, playerEntity.flight.airspeed * 1.2) : 140;
+    const jump = Math.hypot(focusX - lastFocusX, focusZ - lastFocusZ) > reach;
     lastFocusX = focusX;
     lastFocusZ = focusZ;
     refreshNear();

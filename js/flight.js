@@ -37,7 +37,7 @@ const BASE = {
   flapLift: 0.45, flapStall: -0.03, sideSlope: 0.45,
   idle: 0.06, spoolUp: 2.5, spoolDown: 2.5, lapse: 1,
   alphaMax: 0.25, alphaMin: -0.14, gMax: 5.5, gMin: -2.5,
-  rollRate: 2.4, rollK: 9, level: 1.5, dihedral: 0.5,
+  rollRate: 2.4, rollK: 9, level: 1.5, dihedral: 0.5, lean: 0.75,
   pitchK: 46, pitchD: 11, pitchDamp: 0.8,
   yawK: 16, yawD: 6.5, yawDamp: 0.9, rudderSlip: 0.2, rudderPower: 1.6, adverse: 0,
   stickRate: 4.5, stickBack: 7, stickRoll: 4,
@@ -52,7 +52,7 @@ const AIRCRAFT = {
   // A 1930s radial-engined biplane: light on its wings, flies at a jog, turns inside a city block, floats onto an avenue.
   // The big propeller swings the nose with power, the ailerons drag the nose the wrong way, and the tail sits on a wheel.
   classic: {
-    engine: 'prop', mass: 1150, area: 27.6, span: 9.8, length: 7.6,
+    engine: 'prop', mass: 1150, area: 27.6, span: 9.8, length: 7.7,
     alpha0: -0.035, clSlope: 4.6, stall: 0.295, clPlate: 1.05,
     cd0: 0.052, induced: 0.062, cdGear: 0, cdFlaps: 0, flapLift: 0, cdPlate: 1.8,
     power: 335000, staticThrust: 5600, propEff: 0.8, disc: 0.9, spoolUp: 3.2, spoolDown: 3.6, idle: 0.03, lapse: 1,
@@ -62,30 +62,31 @@ const AIRCRAFT = {
     qRef: 560, wash: 0.5, torque: 0.5, pfactor: 0.07, turbulence: 1.6, sideSlope: 0.55,
     stickRate: 4.2, stickBack: 6.5, stickRoll: 4,
     kx: 1.5, ky: 2.3, kz: 1.9,
-    tail: true, vRotate: 24, alphaClimb: 0.15, alphaGround: 0.17, alphaRun: 0.035,
+    tail: true, vRotate: 24, alphaClimb: 0.15, alphaGround: 0.184, alphaRun: 0.035,
     gearSink: 7.5, crashSink: 10.5, strikeSpeed: 14,
     gear: [
-      { x: 1.08, y: -1.52, z: 0.95, hz: 2.6, damp: 0.5, travel: 0.22, brake: true },
-      { x: -1.08, y: -1.52, z: 0.95, hz: 2.6, damp: 0.5, travel: 0.22, brake: true },
-      { x: 0, y: -0.62, z: -4.35, hz: 3.4, damp: 0.6, travel: 0.1, steer: -1, castor: 0.55 }
+      // measured on the model (assets/aircraft/classic.bin `points`; tests/aircraft-fit.test.mjs holds them together)
+      { x: 0.78, y: -1.52, z: 0.95, hz: 2.6, damp: 0.5, travel: 0.22, brake: true },
+      { x: -0.78, y: -1.52, z: 0.95, hz: 2.6, damp: 0.5, travel: 0.22, brake: true },
+      { x: 0, y: -0.4, z: -5.07, hz: 3.4, damp: 0.6, travel: 0.1, steer: -1, castor: 0.55 }
     ],
     hull: [
-      { kind: 'nose', x: 0, y: 0, z: 2.6 }, { kind: 'prop', x: 0, y: -0.95, z: 2.75 }, { kind: 'tail', x: 0, y: 0.1, z: -4.7 },
-      { kind: 'tipL', x: 4.75, y: 1.05, z: 0.35 }, { kind: 'tipR', x: -4.75, y: 1.05, z: 0.35 },
-      { kind: 'tipL', x: 4.4, y: -0.55, z: 0.75 }, { kind: 'tipR', x: -4.4, y: -0.55, z: 0.75 },
-      { kind: 'belly', x: 0, y: -0.7, z: 0 }, { kind: 'fin', x: 0, y: 1.25, z: -4.2 }
+      { kind: 'nose', x: 0, y: 0.03, z: 2.2 }, { kind: 'prop', x: 0, y: -1.24, z: 2 }, { kind: 'tail', x: 0, y: 0.55, z: -5.45 },
+      { kind: 'tipL', x: 4.85, y: 1.09, z: -0.2 }, { kind: 'tipR', x: -4.85, y: 1.09, z: -0.2 },
+      { kind: 'tipL', x: 4.85, y: -0.49, z: -0.2 }, { kind: 'tipR', x: -4.85, y: -0.49, z: -0.2 },
+      { kind: 'belly', x: 0, y: -0.63, z: -0.08 }, { kind: 'fin', x: 0, y: 1.28, z: -4.96 }
     ]
   },
   // A single-engine fighter: heavy for its wing, quick only when it is fast, with a reheat that pushes harder than it
   // weighs. It turns on g, not on rudder: nine tonnes carving at 28° a second, and the speed pays for every degree.
   jet: {
-    engine: 'jet', mass: 9200, area: 28, span: 9.5, length: 15,
+    engine: 'jet', mass: 9200, area: 28, span: 5.93, length: 16.7,
     alpha0: 0, clSlope: 3.9, stall: 0.44, clPlate: 1.15,
     cd0: 0.06, induced: 0.105, cdGear: 0.045, cdFlaps: 0.05, cdBrake: 0.12, cdPlate: 1.5,
     flapLift: 0.4, sideSlope: 0.35,
     thrust: 45000, afterburner: 85000, spoolUp: 0.9, spoolDown: 1.3, idle: 0.08, lapse: 0.75,
     alphaMax: 0.4, alphaMin: -0.17, gMax: 8, gMin: -3,
-    rollRate: 4.6, rollK: 11, level: 1.2, dihedral: 0.15,
+    rollRate: 4.6, rollK: 11, level: 1.2, dihedral: 0.15, lean: 1,
     pitchK: 62, pitchD: 13.5, yawK: 22, yawD: 8, rudderSlip: 0.08, rudderPower: 1.2,
     qRef: 3600, turbulence: 0.45, muBrake: 0.8,
     stickRate: 5, stickBack: 8, stickRoll: 3,
@@ -93,14 +94,15 @@ const AIRCRAFT = {
     wave: 0.5, waveHigh: 8.5, ram: 0.9, gearTime: 2.4, vRotate: 68, alphaClimb: 0.2, alphaGround: 0,
     gearSink: 8, crashSink: 11, strikeSpeed: 18,
     gear: [
-      { x: 1.2, y: -1.95, z: -0.85, hz: 2.4, damp: 0.55, travel: 0.3, brake: true },
-      { x: -1.2, y: -1.95, z: -0.85, hz: 2.4, damp: 0.55, travel: 0.3, brake: true },
-      { x: 0, y: -1.95, z: 3.6, hz: 2.6, damp: 0.6, travel: 0.25, steer: 1 }
+      // measured on the model (assets/aircraft/jet.bin `points`)
+      { x: 1.284, y: -1.95, z: -0.85, hz: 2.4, damp: 0.55, travel: 0.3, brake: true },
+      { x: -1.284, y: -1.95, z: -0.85, hz: 2.4, damp: 0.55, travel: 0.3, brake: true },
+      { x: 0, y: -1.968, z: 3.93, hz: 2.6, damp: 0.6, travel: 0.25, steer: 1 }
     ],
     hull: [
-      { kind: 'nose', x: 0, y: -0.1, z: 7.6 }, { kind: 'tail', x: 0, y: 0, z: -7.2 },
-      { kind: 'tipL', x: 4.7, y: -0.05, z: -1.9 }, { kind: 'tipR', x: -4.7, y: -0.05, z: -1.9 },
-      { kind: 'belly', x: 0, y: -0.95, z: 0.5 }, { kind: 'belly', x: 0, y: -0.85, z: -4.5 }, { kind: 'fin', x: 0, y: 3.1, z: -5.9 }
+      { kind: 'nose', x: 0, y: -0.68, z: 9.5 }, { kind: 'tail', x: 0, y: 1.59, z: -7.05 },
+      { kind: 'tipL', x: 2.96, y: -0.885, z: -0.92 }, { kind: 'tipR', x: -2.96, y: -0.885, z: -0.92 },
+      { kind: 'belly', x: 0, y: -1.16, z: 1.03 }, { kind: 'belly', x: 0, y: -1.55, z: -1.85 }, { kind: 'fin', x: 0, y: 1.83, z: -5.85 }
     ]
   }
 };
@@ -131,6 +133,7 @@ function createFlight(kind, overrides = null) {
     hull: t.hull.map((p) => ({ ...p, contact: false })),
     damage: { wingL: 0, wingR: 0, engine: 0, gear: 0 },
     windX: 0, windY: 0, windZ: 0, gustT: 0, gx: 0, gy: 0, gz: 0,
+    path: null, pathT: 0, // the slope it holds hands off (sine of it), and how long the stick has been let go
     thrust: 0, lift: 0, drag: 0,
     events: []
   };
@@ -164,10 +167,11 @@ function placeAircraft(a, at = {}) {
   refreshAxes(b);
   b.vx = b.r[6] * speed; b.vy = b.r[7] * speed; b.vz = b.r[8] * speed;
   b.wx = b.wy = b.wz = 0;
+  b.airspeed = speed; b.mach = speed / SOUND; b.alpha = b.beta = 0; b.g = b.gSmooth = 1; b.stall = b.buffet = 0;
   b.throttle = b.power = at.throttle ?? 0.7;
   b.ab = 0;
   b.stickPitch = b.stickRoll = b.stickYaw = 0;
-  b.ditched = false; b.sonic = false; b.gearHold = 0; b.line = null;
+  b.ditched = false; b.sonic = false; b.gearHold = 0; b.line = null; b.path = null; b.pathT = 0;
   b.damage.wingL = b.damage.wingR = b.damage.engine = b.damage.gear = 0;
   const grounded = !!at.onGround;
   b.gear = b.gearTarget = grounded || !t.gearTime ? 1 : 0;
@@ -386,6 +390,7 @@ function substep(a, b, t, h, env, near, gust) {
     // (a tail-dragger keeps its tail up while the wing could still fly, or it skips back into the air)
     const run = t.alphaRun ?? t.alphaGround;
     trim = going ? (V > t.vRotate ? t.alphaClimb : run) : V > t.vStall * 0.85 ? run : t.alphaGround;
+    b.path = null; b.pathT = 0;
   } else {
     // hands off it holds its path: the lift a straight line needs, shared by however the wings are banked
     const cg = V > 1 ? Math.sqrt(Math.max(0, 1 - dy * dy)) : 1; // cos of the path's slope
@@ -396,14 +401,32 @@ function substep(a, b, t, h, env, near, gust) {
     // left alone in a dive it eases out of it; left alone too slow in a climb it lowers its nose to keep flying
     const ease = dy < 0 && c > 0 ? clamp(-dy * 1.3, 0, 0.65) : 0;
     const sag = dy > 0 ? smooth(t.vStall * 1.35, t.vStall * 1.05, V) * 0.7 : 0;
-    trim = a0 + clamp(cg * share + ease - sag, -1.2, 2.2) * weight / qS / t.clSlope;
+    // and it keeps the slope it was left on: what a turn, a slip and the lag of the nose take from the lift is given
+    // back (flown with the rudder alone, a turn lost forty metres in eight seconds and went on sinking afterwards)
+    let fix = 0;
+    // (not on the way up from the runway: left alone there, the climb goes on steepening until it clears the roofs)
+    const leaving = b.agl < 25 && b.offT < 6;
+    if (Math.abs(b.stickPitch) > 0.05 || c < 0.3 || V < t.vStall * 0.8 || leaving) { b.path = null; b.pathT = 0; }
+    else if (b.path === null) { if ((b.pathT += h) > 0.4) b.path = dy; } // the nose settles first
+    else {
+      // the slope held follows what the aircraft does by itself: out of a dive, down from a climb it cannot keep
+      const pace = G / Math.max(V, 20) * h;
+      if (b.path < 0) b.path = Math.min(0, b.path + clamp(-b.path * 1.3, 0, 0.65) * pace);
+      else if (sag > 0) b.path = Math.max(0, b.path - sag * pace);
+      fix = clamp((b.path - dy) * clamp(V / 12, 4, 22), -0.35, 0.5);
+    }
+    trim = a0 + clamp((cg + fix) * share + ease - sag, -1.2, 2.2) * weight / qS / t.clSlope;
   }
   trim = clamp(trim, lower, upper * 0.94);
   const s = b.stickPitch;
   const want = s >= 0 ? lerp(trim, Math.max(trim, upper), s) : lerp(trim, Math.min(trim, lower), -s);
   // nose-up acceleration; the stalled wing shakes the stick loose
+  // (hands off, the damping lets through the turning of the nose that the path itself asks for: without it the nose
+  // lags in every turn and the wing gives a tenth less than it was asked)
+  const follow = onWheels || V < 8 ? 0
+    : (1 - smooth(0.05, 0.4, Math.abs(s))) * clamp((Fx * nx + Fy * ny + Fz * nz) / t.mass / V, -0.6, 0.6);
   let pitchAcc = t.pitchK * tail * wrap(want - alpha) * moving - t.pitchD * Math.min(1, tail + 0.1) * alphaRate
-    - t.pitchDamp * (-b.wx) * (1 + 2 * (1 - moving));
+    - t.pitchDamp * (-b.wx - follow) * (1 + 2 * (1 - moving));
 
   // roll: a rate, plus the wing's own wish to fly level when nobody is asking
   const stalled = smooth(t.stall - 0.03, t.stall + 0.08, Math.abs(alpha));
@@ -414,7 +437,7 @@ function substep(a, b, t, h, env, near, gust) {
     const steep = 1 - smooth(0.75, 0.95, Math.abs(fy));
     const free = (1 - smooth(0.04, 0.3, Math.abs(b.stickRoll))) * (1 - smooth(0.12, 0.45, Math.abs(b.stickPitch)));
     // the rudder alone flies a gentle banked turn
-    const lean = -b.stickYaw * 0.75 * (1 - smooth(0.04, 0.3, Math.abs(b.stickRoll)));
+    const lean = -b.stickYaw * t.lean * (1 - smooth(0.04, 0.3, Math.abs(b.stickRoll)));
     const to = Math.abs(b.stickYaw) > 0.05 ? lean : 0;
     const assist = Math.abs(b.stickYaw) > 0.05 ? (1 - smooth(0.04, 0.3, Math.abs(b.stickRoll))) : free;
     rollCmd += clamp(-(bank - to) * t.level, -1.1, 1.1) * assist * steep * Math.min(1, auth * 1.5);
@@ -427,7 +450,10 @@ function substep(a, b, t, h, env, near, gust) {
   if (t.torque) rollAcc += t.torque * b.power * (1 - Math.min(1, auth)) * (onWheels ? 0 : 1);
 
   // yaw: the fin points it into the air it meets; the rudder holds a slip
-  const slip = -b.stickYaw * t.rudderSlip * (onWheels ? 0 : 1);
+  // (flown with the rudder alone the turn is the bank's, nearly co-ordinated: a full slip held in a bank drags the
+  // nose down; with the ailerons in hand the rudder is a rudder again, for slips and flat turns)
+  const alone = 1 - smooth(0.04, 0.3, Math.abs(b.stickRoll));
+  const slip = -b.stickYaw * t.rudderSlip * (onWheels ? 0 : 1 - 0.8 * alone);
   // (on its wheels the tyres hold the line: a crosswind must not swing it round on the take-off run)
   const vane = onWheels ? 0.15 : 1;
   let yawAcc = (t.yawK * Math.min(1, auth) * (beta - slip) + t.yawD * Math.min(1, auth + 0.05) * betaRate) * vane - t.yawDamp * b.wy
@@ -513,7 +539,8 @@ function substep(a, b, t, h, env, near, gust) {
         const hit = -cvy;
         // nose first, or too hard: that is the end of it
         const nose = (c.kind === 'nose' || c.kind === 'prop') && speed > 22 && fy < -0.2;
-        if (hit > t.crashSink || nose || (speed > 45 && !down && c.kind !== 'belly' && c.kind !== 'tail')) {
+        // (on its back at speed too: the fin is the first thing to touch; a wing tip dragging is only a wing tip)
+        if (hit > t.crashSink || nose || (speed > 45 && c.kind === 'fin')) {
           a.crashed = true; b.events.push({ type: 'crash', cause: 'ground', speed: Math.hypot(b.vx, b.vy, b.vz), x: cxp, y: gy, z: czp });
           return 1;
         }

@@ -323,6 +323,12 @@ Le joueur doit pouvoir changer de monture sans jamais chercher un véhicule : le
 à pied, voiture, moto, vélo, hélicoptère ou avion. Ce que le garage fournit y retourne ; une voiture volée reste dans la
 rue. Le ciel de Manhattan devient ainsi un terrain de jeu : un saut en parachute depuis l’avion est toujours possible.
 
+Deux avions, deux sensations (0.9.24). La **Bourrasque** est lente, légère et vivante : elle se pilote au ras des
+toits, se pose sur une pelouse et écrit dans le ciel avec son fumigène. La **Tramontane** est lourde et brutale : elle
+ne vole bien que vite, encaisse 8 g, et tout Manhattan défile en vingt secondes de postcombustion. Les deux partagent
+le même modèle de vol physique ; seules leurs masses, leurs ailes et leurs moteurs changent. Les aides de pilotage
+existent pour que le clavier suffise, jamais pour voler à la place du joueur.
+
 ## Les corps
 
 Les personnes viennent de la bibliothèque Microsoft Rocketbox : de vrais modèles d’artistes, peints à la main, avec leurs
@@ -406,4 +412,5 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.20** | **Slippage** | Xbox : frein à main sur A, nitro sur RB ; retour sonore de marche arrière et pneus bloqués au frein à main plus perceptibles. |
 | **0.9.21** | **Clearing** | Tracés côtiers continus contrôlés contre les bâtiments, sols et circulation alignés, quais et rambardes solides ; audit reproductible des deux rives. |
 | **0.9.22** | **Circuit Breaker** | Correctif de chargement : calcul de circulation incrémental, recherches d'obstacles ciblées et suppression des subdivisions de terrain inutiles. Le crash signalé et le ralentissement global restent à confirmer résolus. |
+| **0.9.24** | **Flight to Quality** | Pilotage refait : modèle de vol à corps rigide, deux avions neufs (biplan Bourrasque, chasseur Tramontane), caméra de vol, cockpit et viseur tête haute, instruments, effets, son, collisions avec la ville et figures récompensées. |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |

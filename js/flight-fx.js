@@ -59,6 +59,10 @@ class Ribbon {
     const h = this.history;
     this.on += ((at ? strength : 0) - this.on) * (1 - Math.exp(-dt * 6));
     this.clock += dt;
+    // starting again after a pause, what was left of the last trail goes: a ribbon cannot have a gap in it, and would
+    // draw a sheet from where it stopped to where it starts
+    if (at && !this.laying) h.length = 0;
+    this.laying = !!at;
     if (at && dt > 0) {
       const head = h[0];
       if (!head || this.clock - head.t >= this.every) {
@@ -111,6 +115,9 @@ function createFlame() {
   const group = new THREE.Group();
   group.name = 'Afterburner';
   const power = uniform(0);
+  // looked at straight down its axis from behind (the chase camera's place) a flame is a small ring of light round
+  // the nozzle, not a disc that hides the aircraft: `aside` falls towards 0 as the eye lines up with it
+  const aside = uniform(1);
   const make = (radius, length, hot, cool, strength) => {
     const profile = [];
     for (let i = 0; i <= 14; i++) { const t = i / 14; profile.push(new THREE.Vector2(radius * (1 - t * 0.82) * (1 + 0.12 * Math.sin(t * 22)), -t * length)); }
@@ -124,16 +131,16 @@ function createFlame() {
     const depth = float(1).sub(normalView.dot(positionViewDirection).abs()).mul(0.75).add(0.35);
     const body = float(1).sub(v).pow(1.35);
     m.colorNode = mix(vec3(...hot), vec3(...cool), smoothstep(0.0, 0.8, v)).mul(strength).mul(diamonds.mul(1.25).add(0.3)).mul(flicker);
-    m.opacityNode = body.mul(depth).mul(power).mul(flicker).mul(float(1).sub(smoothstep(0.0, 0.06, v).oneMinus().mul(0.5)));
+    m.opacityNode = body.mul(depth).mul(power).mul(flicker).mul(float(1).sub(smoothstep(0.0, 0.06, v).oneMinus().mul(0.5))).mul(aside).mul(0.75);
     const mesh = new THREE.Mesh(g, m);
     mesh.frustumCulled = false;
     mesh.renderOrder = 986;
     return mesh;
   };
-  group.add(make(0.47, 8.2, [1.0, 0.5, 0.16], [0.85, 0.2, 0.04], 0.85));
-  group.add(make(0.3, 5.6, [0.5, 0.66, 1.0], [1.0, 0.55, 0.22], 1.5));
+  group.add(make(0.47, 5.6, [1.0, 0.46, 0.14], [0.8, 0.18, 0.04], 0.6));
+  group.add(make(0.3, 3.9, [0.45, 0.6, 1.0], [1.0, 0.5, 0.2], 1.05));
   group.visible = false;
-  return { group, power };
+  return { group, power, aside };
 }
 
 // The ring the sound barrier leaves behind: a disc of condensation that opens and thins
@@ -159,9 +166,9 @@ class FlightFx {
     this.vortexL = new Ribbon(scene, { points: 46, life: 1.5, width: 0.035, grow: 0.16, most: 0.3, alpha: 0.5, every: 0.028, drift: 0.12, cloud: 0.25 });
     this.vortexR = new Ribbon(scene, { points: 46, life: 1.5, width: 0.035, grow: 0.16, most: 0.3, alpha: 0.5, every: 0.028, drift: 0.12, cloud: 0.25 });
     // the biplane's display smoke: laid for ten seconds, a hundred metres of it in every loop
-    this.smoke = new Ribbon(scene, { points: 190, life: 11, width: 0.22, grow: 0.42, most: 3.4, alpha: 0.6, color: 0xf2f1ec, every: 0.055, drift: 0.55, cloud: 0.75 });
+    this.trail = 0; // metres flown since the last puff of display smoke, of soot
+    this.haze = 0;
     // a jet's soot at dry power
-    this.soot = new Ribbon(scene, { points: 70, life: 2.6, width: 0.3, grow: 0.9, most: 2.2, alpha: 0.16, color: 0x3a3c40, every: 0.035, drift: 0.4, cloud: 0.7 });
     this.flame = createFlame();
     scene.add(this.flame.group);
     this.ring = createShockRing();
@@ -175,8 +182,15 @@ class FlightFx {
 
   // The named points of the aircraft's model, or what the physics knows when the model has not said
   point(a, name, out) {
-    const m = a.model?.points?.[name], hull = a.flight.tune.hull;
-    if (m) return aircraftPoint(a, m[0], m[1], m[2], out);
+    // (the biplane's vortices leave its upper wing; its smoke, the left exhaust)
+    const points = a.model?.points, hull = a.flight.tune.hull;
+    const m = points?.[name] || points?.[{ tipL: 'tipUL', tipR: 'tipUR', exhaust: 'exhaustL' }[name]];
+    if (m && Number.isFinite(m[0])) return aircraftPoint(a, m[0], m[1], m[2], out);
+    if (name === 'engine' && points) {
+      // where a hurt engine smokes from: behind the propeller, or the middle of the jet's back end
+      const at = points.propHub ? [0, points.propHub[1], points.propHub[2] - 0.7] : points.nozzle ? [0, points.nozzle[1] + 0.3, points.nozzle[2] + 2.2] : [0, 0, 0];
+      return aircraftPoint(a, at[0], at[1], at[2], out);
+    }
     const jet = a.flight.tune.engine === 'jet';
     const tip = (kind) => hull.find((p) => p.kind === kind);
     const f = name === 'tipL' ? tip('tipL') : name === 'tipR' ? tip('tipR') : name === 'nozzle' ? { x: 0, y: jet ? 0 : -0.2, z: -a.halfL + (jet ? 0.3 : 1) }
@@ -233,11 +247,15 @@ class FlightFx {
     r.mesh.quaternion.setFromUnitVectors(_q.set(0, 0, 1), _d);
     r.mesh.visible = true;
     r.vx = b.vx * 0.15; r.vy = b.vy * 0.15; r.vz = b.vz * 0.15;
-    // the cone bursts off the fuselage
+    // the cone bursts off the fuselage: a disc of vapour thrown outward and left behind in a third of a second
+    // (it thins before the eye: the camera follows twenty metres behind and would fly through a white wall)
     for (let i = 0; i < 36; i++) {
-      const ang = Math.random() * 6.28, rad = rand(2, 6);
-      aircraftPoint(a, Math.cos(ang) * rad, Math.sin(ang) * rad, rand(-3, 1), _p);
-      this.fx.smokeParticle(_p.x, _p.y, _p.z, b.vx * 0.5, b.vy * 0.5, b.vz * 0.5, rand(1.5, 3), rand(0.35, 0.7), 1.0 * this.fx.level, 0.45, { grow: 6, drag: 2, gravity: 0 });
+      const ang = Math.random() * 6.28, rad = rand(2, 5), z = rand(-3, 1), out = rand(14, 30) / rad;
+      aircraftPoint(a, 0, 0, z, _d);
+      aircraftPoint(a, Math.cos(ang) * rad, Math.sin(ang) * rad, z, _p);
+      const p = this.fx.smokeParticle(_p.x, _p.y, _p.z, b.vx * 0.9 + (_p.x - _d.x) * out, b.vy * 0.9 + (_p.y - _d.y) * out, b.vz * 0.9 + (_p.z - _d.z) * out,
+        rand(1.5, 3), rand(0.25, 0.45), 1.0 * this.fx.level, 0.4, { grow: 6, drag: 1.2, gravity: 0 });
+      p.near = 16;
     }
   }
 
@@ -247,13 +265,12 @@ class FlightFx {
     const a = aviation.piloted;
     const warm = this.warm++ < 6; // drawn once behind the loading screen so the shaders compile
     const light = clamp(fx.level ?? 1, 0.12, 1);
-    for (const r of [this.vortexL, this.vortexR, this.smoke, this.soot]) r.light.value = light;
+    for (const r of [this.vortexL, this.vortexR]) r.light.value = light;
     const wind = game.vertical?.wind?.at?.(cam.x, cam.y, cam.z, _wind) || null;
     if (wind) { wind.x *= 0.5; wind.z *= 0.5; }
     if (a !== this.craft) {
       this.craft = a;
-      for (const r of [this.vortexL, this.vortexR, this.soot]) r.reset();
-      if (!a) this.smoke.on = 0; // smoke already laid stays in the sky
+      for (const r of [this.vortexL, this.vortexR]) r.reset();
     }
     // the shock ring opens whether or not anyone still flies
     const ring = this.ring;
@@ -269,7 +286,7 @@ class FlightFx {
 
     const flame = this.flame;
     if (!a) {
-      for (const r of [this.vortexL, this.vortexR, this.soot, this.smoke]) r.update(null, 0, dt, cam, wind, warm);
+      for (const r of [this.vortexL, this.vortexR]) r.update(null, 0, dt, cam, wind, warm);
       flame.group.visible = warm;
       if (warm) { flame.power.value = 0.001; flame.group.position.copy(cam).y -= 300; flame.group.updateMatrixWorld(true); }
       this.streaks.update(cam, this.vel.set(0, 0, 0), 0, null, dt);
@@ -286,9 +303,30 @@ class FlightFx {
     this.vortexR.update(vortex > 0.03 ? this.point(a, 'tipR', _q) : null, vortex, dt, cam, wind, warm);
     // display smoke (biplane) and soot (jet)
     const smoking = !jet && aviation.smoke && b.power > 0.12 && !a.crashed;
-    this.smoke.update(smoking ? this.point(a, 'exhaust', _p) : null, 1, dt, cam, wind, warm);
-    const sooty = jet && b.power > 0.55 && b.ab < 0.3 && b.damage.engine < 1;
-    this.soot.update(sooty ? this.point(a, 'nozzle', _p) : null, smooth(0.55, 1, b.power), dt, cam, wind, warm);
+    // The display smoke is a string of puffs, one every metre and a half of flight whatever the frame rate: each
+    // billows, takes the sun, and hangs in the sky for ten seconds. A loop is drawn whole before it starts to fade.
+    if (smoking) {
+      this.point(a, 'exhaust', _p);
+      this.trail += V * dt;
+      for (let back = this.trail % 1.3; this.trail >= 1.3; this.trail -= 1.3, back += 1.3) {
+        const k = back / Math.max(V, 1);
+        const p = fx.billow(fx.smokeParticle(_p.x - b.vx * k + rand(-0.12, 0.12), _p.y - b.vy * k - 0.25 + rand(-0.12, 0.12), _p.z - b.vz * k + rand(-0.12, 0.12),
+          b.vx * 0.06 + rand(-0.5, 0.5), b.vy * 0.06 + rand(-0.3, 0.5), b.vz * 0.06 + rand(-0.5, 0.5), rand(2.1, 2.7), rand(8, 9.5), 0.97 * light, 0.8, { grow: 0.8, drag: 1.4, gravity: -0.04 }));
+        // (what shows of a puff is two fifths of its size: smaller than this, seen from the side, the trail was a
+        // string of beads; it spreads as it ages, as the oil smoke of a display does)
+        p.fadeOut = p.max * 0.5; p.fadeIn = 7; p.lit = 0.22; p.near = 16;
+      }
+    } else this.trail = 0;
+    // a jet at high dry power leaves a thin brown haze; the reheat burns it clean
+    const sooty = jet && b.power > 0.55 && b.ab < 0.3 && b.damage.engine < 1 && !warm;
+    if (sooty) {
+      this.point(a, 'nozzle', _p);
+      this.haze += V * dt;
+      for (; this.haze >= 5; this.haze -= 5) {
+        fx.smokeParticle(_p.x + rand(-0.2, 0.2), _p.y + rand(-0.2, 0.2), _p.z + rand(-0.2, 0.2), b.vx * 0.1, b.vy * 0.1 + 0.3, b.vz * 0.1,
+          rand(0.8, 1.2), rand(1.6, 2.6), 0.2 * light, 0.1 * smooth(0.55, 1, b.power), { grow: 1.6, drag: 1.2, gravity: -0.1 });
+      }
+    } else this.haze = 0;
 
     // reheat
     const burn = jet ? b.ab : 0;
@@ -297,8 +335,12 @@ class FlightFx {
       this.point(a, 'nozzle', flame.group.position);
       flame.group.quaternion.set(b.q[0], b.q[1], b.q[2], b.q[3]);
       const radius = (a.model?.points?.nozzleRadius ?? 0.5) / 0.46;
-      flame.group.scale.set(radius, radius, (0.55 + 0.45 * burn) * (1 + 0.25 * b.mach));
+      flame.group.scale.set(radius, radius, (0.6 + 0.4 * burn) * (1 + 0.15 * b.mach));
       flame.power.value = warm && burn < 0.02 ? 0.001 : burn * 0.9;
+      // how squarely the eye is behind it
+      _d.set(cam.x - flame.group.position.x, cam.y - flame.group.position.y, cam.z - flame.group.position.z).normalize();
+      const along = Math.abs(_d.x * b.r[6] + _d.y * b.r[7] + _d.z * b.r[8]);
+      flame.aside.value = 1 - 0.8 * smooth(0.8, 0.995, along);
       flame.group.updateMatrixWorld(true);
     }
 

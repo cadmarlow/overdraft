@@ -37,7 +37,7 @@ const BLANK = Object.freeze({ x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, size: 0, le
   r: 0, g: 0, b: 0, alpha: 1, drag: 0, gravity: 0, streak: 0, mode: BILLBOARD, code: 0, core: 0, roll: 0, spin: 0,
   fadeIn: 8, fadeOut: 0, fadePow: 0.7, floor: -Infinity, bounce: 0.3, rest: false, turb: 0, seed: 0, lit: 0, hard: 0,
   fresh: false, stain: 0, tracer: false, length: 0, stretch: 0, ax: 0, ay: 0, az: 0, bx: 0, by: 0, bz: 0, ox: 0, oy: 0, oz: 0,
-  dist: 0, total: 0, speed: 0 });
+  dist: 0, total: 0, speed: 0, near: 0 });
 
 // Per weapon: the shapes its flash is cut from and how big, bright and smoky a shot is
 const FLASH = {
@@ -1118,6 +1118,9 @@ class EffectsSystem {
 
       if (blended) {
         alpha = p.alpha * Math.min(1, p.fadeIn ? (p.max - p.life) * p.fadeIn : 1, p.life / p.fadeOut);
+        // smoke that the camera may fly through (an aircraft's own trail) thins within `near` metres of the eye, so
+        // that going through it is a veil across the picture and not a white screen
+        if (p.near) { const d = Math.hypot(cx - p.x, cy - p.y, cz - p.z); if (d < p.near) alpha *= Math.max(0, (d - p.near * 0.3) / (p.near * 0.7)); }
         A[a] = p.r; A[a + 1] = p.g; A[a + 2] = p.b;
       } else {
         alpha = p.alpha * Math.pow(t, p.fadePow);

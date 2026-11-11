@@ -56,6 +56,7 @@ class FlightInstruments {
     this.last = {};
     this.telemetry = {};
     this.shown = null;
+    this.buildHeadUp(parent || document.body);
   }
 
   text(id, value) {
@@ -107,6 +108,51 @@ class FlightInstruments {
     const pitch = Math.max(-60, Math.min(60, t.pitch * 180 / Math.PI));
     n['fl-ball'].style.transform = `rotate(${(t.roll * 180 / Math.PI).toFixed(1)}deg) translateY(${(pitch * 1.1).toFixed(1)}px)`;
     this.warn(t.pullUp ? 'REMONTEZ' : t.stall ? 'DÉCROCHAGE' : t.dead && !t.onGround ? 'MOTEUR COUPÉ' : '');
+    this.headUp(a, t, aviation);
+  }
+
+  // The fighter's head-up display, in the cockpit view: a pitch ladder that stays on the real horizon, the flight path
+  // marker where the aircraft is actually going, speed and height either side. One degree of it is one degree of the
+  // picture: the ladder's font size is the lens's pixels per degree, and every rung is placed in em.
+  buildHeadUp(parent) {
+    const hud = this.hud = document.createElement('div');
+    hud.id = 'flight-hud';
+    const rungs = [];
+    for (let d = -90; d <= 90; d += 10) {
+      const label = d === 0 ? '' : String(Math.abs(d));
+      rungs.push(`<i class="${d === 0 ? 'hz' : d < 0 ? 'dn' : 'up'}" style="top:${90 - d}em"><b>${label}</b><b>${label}</b></i>`);
+    }
+    hud.innerHTML = `<div class="fh-clip"><div id="fh-ladder">${rungs.join('')}</div></div>
+      <i class="fh-water"></i><i id="fh-path"></i>
+      <span class="fh-box fh-left"><b id="fh-speed">000</b><small>KM/H</small></span>
+      <span class="fh-box fh-right"><b id="fh-alt">0</b><small>M</small></span>
+      <span class="fh-top"><b id="fh-heading">000</b></span>
+      <span class="fh-notes"><b id="fh-mach"></b><b id="fh-g"></b><b id="fh-state"></b></span>`;
+    parent.append(hud);
+    for (const n of hud.querySelectorAll('[id]')) this.nodes[n.id] = n;
+    this.view = null;
+  }
+
+  headUp(a, t, aviation) {
+    const camera = aviation?.game?.camera, pov = camera?.activePresetId === 'pov' && t.jet;
+    const view = pov ? 'pov' : 'out';
+    if (this.view !== view) { this.view = view; document.body.dataset.flightView = view; }
+    if (!pov) return;
+    const n = this.nodes, b = a.flight;
+    // pixels per degree of the lens in use
+    const ppd = window.innerHeight / (camera.camera.fov || 72);
+    if (Math.abs((this.last.ppd || 0) - ppd) > 0.15) { this.last.ppd = ppd; n['fh-ladder'].style.fontSize = `${ppd.toFixed(2)}px`; }
+    const pitch = t.pitch * 180 / Math.PI, roll = t.roll * 180 / Math.PI;
+    n['fh-ladder'].style.transform = `rotate(${roll.toFixed(2)}deg) translateY(${pitch.toFixed(2)}em)`;
+    // where it is going: below the nose by the angle of attack, aside by the slip (in the aircraft's own frame)
+    const alpha = Math.max(-14, Math.min(22, b.alpha * 180 / Math.PI)), beta = Math.max(-12, Math.min(12, b.beta * 180 / Math.PI));
+    n['fh-path'].style.transform = `translate(${(-beta * ppd).toFixed(1)}px, ${(alpha * ppd).toFixed(1)}px)`;
+    this.text('fh-speed', String(t.speed).padStart(3, '0'));
+    this.text('fh-alt', String(t.altitude));
+    this.text('fh-heading', String(t.heading).padStart(3, '0'));
+    this.text('fh-mach', `M ${t.mach.toFixed(2).replace('.', ',')}`);
+    this.text('fh-g', `G ${t.g.toFixed(1).replace('.', ',').replace('-', '−')}`);
+    this.text('fh-state', t.reheat > 0.3 ? 'PC' : t.gear === 'down' ? 'TRAIN' : t.gear === 'moving' ? 'TRAIN …' : '');
   }
 
   // One word across the screen while it matters

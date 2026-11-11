@@ -1,5 +1,59 @@
 # Changelog
 
+## 0.9.24 — Flight to Quality — 11 novembre 2026
+
+- **Deux avions neufs** remplacent l'ancien, chacun avec son caractère. La **Hauturier · Bourrasque** est un biplan
+  d'école des années 40 : moteur en étoile de 335 kW, décrochage à 76 km/h, train classique à roulette de queue,
+  fumigène. Elle décolle et se pose sur une pelouse de Central Park. La **Corsaire · Tramontane** est un chasseur à
+  postcombustion : décrochage à 200 km/h, train rentrant, 8 g, et le mur du son à basse altitude.
+- **Modèle de vol à corps rigide** (`js/flight.js`, sans dépendance) : portance selon l'incidence avec décrochage,
+  traînée induite, effet de sol, hélice limitée en puissance ou réacteur avec postcombustion, mur de traînée
+  transsonique, roues suspendues avec freins et direction, points de contact de la cellule, amerrissage. L'ancien
+  modèle arcade de 71 lignes disparaît.
+- **Le clavier suffit** : mains libres, l'avion garde sa pente et se remet à plat ; le palonnier seul (A / E) fait un
+  virage incliné sans perdre d'altitude ; la limite d'incidence et de facteur de charge empêche de décrocher en
+  tirant ; le train et les volets suivent la phase de vol ; au roulage, l'avion tient son axe.
+- **Caméra de vol** : poursuite qui suit la trajectoire, recule à l'accélération, s'enfonce sous les g et élargit
+  son champ avec la vitesse sans laisser l'avion rapetisser ; vue action liée au roulis ; cockpit avec, sur le jet,
+  un viseur tête haute calé sur l'horizon réel. Voile gris puis noir sous facteur de charge, voile rouge en g négatifs.
+- **Instruments** : gaz, vitesse, altitude, variomètre, facteur de charge, cap, horizon artificiel, état de la
+  cellule ; alertes REMONTEZ, DÉCROCHAGE et MOTEUR COUPÉ.
+- **Effets** : flamme de postcombustion, tourbillons de bout d'aile, condensation sur les ailes sous facteur de
+  charge, cône de vapeur transsonique et anneau au passage de Mach 1, fumigène qui dessine les figures dans le ciel,
+  embruns au ras de l'eau, poussière et fumée de gomme au toucher des roues, fumée et feu des avaries.
+- **Son** entièrement synthétisé (`js/audio-flight.js`) : moteur en étoile et hélice, réacteur et postcombustion,
+  vent relatif, buffeting, alarmes, train, toucher des roues, tôle, amerrissage, bang supersonique.
+- **Le monde résiste** : immeubles, tabliers des ponts (on passe dessous), lacs de Central Park, rivières. Un bout
+  d'aile qui touche arrache l'aile, un choc lent cabosse, un choc rapide détruit. Posé sur l'eau, l'avion flotte
+  puis coule. La circulation ne rencontre un avion que lorsqu'il roule.
+- **Figures récompensées** : looping, tonneau, vol dos, rase-mottes entre les immeubles, passage sous un pont, mur du
+  son, atterrissage de velours, posé sur un toit, amerrissage réussi.
+- **Garage** : deux tuiles, BOURRASQUE et TRAMONTANE. L'avion apparaît en vol dans un couloir dégagé (700 m devant
+  le biplan, 1 800 m devant le jet). F en vol : saut en parachute.
+- **Commandes** — clavier : Z / S piquer et cabrer, Q / D roulis, A / E palonnier, Espace / C gaz, Maj
+  postcombustion ou pleins gaz, Ctrl freins (aérofreins sur le jet), X train (jet) ou fumigène (biplan), V caméra.
+  Manette Xbox : LS piloter, RT / LT gaz, LB / RB palonnier, A postcombustion, B freins, X train ou fumigène,
+  Y quitter. Rappel dans le menu pause.
+- **Modèles** : « BOEING-STEARMAN MODEL 75 » de Stéphane Agullo et « F-104 Starfighter » de Mikhail Zelenov
+  (Sketchfab, CC BY 4.0), importés par `tools/aircraft` dans `assets/aircraft` (3,4 Mo) : remis à l'échelle,
+  découpés en pièces mobiles (hélice, roues, train, gouvernes, tuyère), cocardes, inscriptions et immatriculations
+  effacées. Détail dans `assets/aircraft/LICENSE-aircraft.md`.
+- Corrige au passage : la boucle d'affichage des véhicules imposait leur cap aux avions à chaque image (assiette
+  fausse à l'extérieur, cockpit déchiré en virage) ; un avion en rase-mottes était traité comme une voiture de neuf
+  mètres de large par la circulation ; les tabliers des ponts n'avaient aucune collision pour ce qui vole.
+- Vérification en Chrome isolé, WebGPU HAUTE, vraies touches : décollage du biplan depuis une pelouse de Central
+  Park (environ 95 m de roulage) et atterrissage au même endroit (toucher à 1,3 m/s, 110 m d'arrêt) ; décollage du
+  jet sur Central Park West (environ 230 m) ; looping, tonneau, passage sous un pont, Mach 1, saut en parachute,
+  changement d'avion en vol, pause et rechargement en vol. Le bus audio de vol est mesuré actif dans le jeu
+  (hélice, réacteur, postcombustion) et muet hors d'un avion.
+- Validation : 1 058 tests, 1 021 réussis, 37 ignorés (outils hors ligne non installés dans le worktree : SDK de l'Architecte, `tools/cars`), aucun échec ; build de production réussi, `assets/aircraft` livré dans `dist/`.
+- **Non vérifié ou faible** : le son n'a été écouté par personne, seulement mesuré. Vue du ciel, la ville coûte
+  environ trois fois plus de temps de carte graphique que depuis la rue (vue fixe à 240 m, sans avion : c'est le
+  rendu de la ville, pas les avions) ; les images par seconde en vol n'ont pas pu être certifiées, une autre
+  instance du jeu occupant la même carte graphique pendant les mesures. Les ailerons du jet et l'orientation de
+  sa roue avant ne sont pas animés. Les ailes passent à travers les voitures garées. Un avion laissé sur une
+  avenue est poussé par la circulation. Central Park West garde des marches de 1,25 m aux transversales du parc.
+
 ## 0.9.22 — Circuit Breaker — 11 novembre 2026
 
 - Le calcul initial de la circulation rend régulièrement la main au navigateur. Les recherches de trottoirs,

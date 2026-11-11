@@ -45,3 +45,22 @@ body.hud-minimized #flight-gauge{opacity:0}
 #flight-alert.danger{color:#ff5a3c}
 @keyframes fl-blink{0%{opacity:1}55%{opacity:.18}}
 @media(max-width:760px){#flight-gauge{right:14px;bottom:30px;transform:scale(.74);transform-origin:bottom right}body[data-flight] #vehicle-name{bottom:205px}}
+/* The fighter's head-up display (cockpit view): 1em of the ladder is one degree of the lens */
+#flight-hud{position:fixed;left:50%;top:50%;width:46vh;height:46vh;margin:-23vh 0 0 -23vh;z-index:6;display:none;pointer-events:none;color:#8dffa6;font:600 11px/1 ui-monospace,Menlo,Consolas,monospace;text-shadow:0 0 4px #0a3a16,0 0 1px #000;filter:drop-shadow(0 0 2px #1c8a3a88)}
+body[data-flight=jet][data-flight-view=pov][data-game-state=driving] #flight-hud{display:block}
+body.in-menu #flight-hud,body.in-intro #flight-hud,body.hud-minimized #flight-hud{display:none!important}
+.fh-clip{position:absolute;inset:6% 16%;overflow:hidden}
+#fh-ladder{position:absolute;left:0;right:0;top:50%;height:180em;margin-top:-90em;font-size:12px;will-change:transform;transform-origin:50% 50%}
+#fh-ladder i{position:absolute;left:24%;right:24%;height:0;border-top:1.5px solid currentColor;display:flex;justify-content:space-between}
+#fh-ladder i:before{content:'';position:absolute;left:38%;right:38%;top:-3px;height:5px;background:transparent;border-top:0}
+#fh-ladder i.up,#fh-ladder i.dn{-webkit-mask:linear-gradient(90deg,#000 0 36%,transparent 36% 64%,#000 64%);mask:linear-gradient(90deg,#000 0 36%,transparent 36% 64%,#000 64%)}
+#fh-ladder i.dn{border-top-style:dashed}
+#fh-ladder i.hz{left:2%;right:2%;-webkit-mask:linear-gradient(90deg,#000 0 42%,transparent 42% 58%,#000 58%);mask:linear-gradient(90deg,#000 0 42%,transparent 42% 58%,#000 58%)}
+#fh-ladder i b{font:600 10px/1 ui-monospace,Menlo,Consolas,monospace;transform:translateY(-12px)}
+.fh-water{position:absolute;left:50%;top:50%;width:34px;height:8px;margin:-1px 0 0 -17px;border-top:1.5px solid currentColor;-webkit-mask:linear-gradient(90deg,#000 0 34%,transparent 34% 66%,#000 66%);mask:linear-gradient(90deg,#000 0 34%,transparent 34% 66%,#000 66%)}
+#fh-path{position:absolute;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:1.5px solid currentColor;border-radius:50%;will-change:transform;box-shadow:-14px 0 0 -6px currentColor,14px 0 0 -6px currentColor,0 -12px 0 -6px currentColor}
+.fh-box{position:absolute;top:50%;margin-top:-13px;border:1.5px solid currentColor;padding:5px 7px;display:flex;align-items:baseline;gap:5px;font-size:15px;font-variant-numeric:tabular-nums;background:#06140a30}
+.fh-box small{font-size:7px;letter-spacing:.1em;opacity:.8}
+.fh-left{left:0}.fh-right{right:0}
+.fh-top{position:absolute;left:50%;top:0;transform:translateX(-50%);border:1.5px solid currentColor;padding:4px 8px;font-size:13px;font-variant-numeric:tabular-nums;background:#06140a30}
+.fh-notes{position:absolute;left:0;bottom:8%;display:grid;gap:5px;font-size:11px;letter-spacing:.06em}

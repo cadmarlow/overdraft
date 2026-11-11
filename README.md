@@ -3,7 +3,16 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.22 — Circuit Breaker**. Le calcul initial de la circulation est découpé en tâches courtes pour
+Version **0.9.24 — Flight to Quality**. Le pilotage est refait de fond en comble : un modèle de vol à corps rigide
+(décrochage, effet de sol, facteur de charge, roues suspendues), une caméra de vol, un cockpit, des instruments,
+des effets et un son propres aux avions. Deux appareils neufs sortent du garage (G) : la **Hauturier · Bourrasque**,
+biplan d'école qui se pose sur une pelouse de Central Park et dessine ses loopings au fumigène, et la
+**Corsaire · Tramontane**, chasseur à postcombustion qui passe le mur du son entre les tours. Le clavier suffit :
+mains libres l'avion garde sa pente, et le palonnier seul (A / E) fait un virage propre. Les immeubles, les ponts
+et l'eau sont de vrais obstacles ; les figures (looping, tonneau, rase-mottes, passage sous un pont, atterrissage)
+rapportent de l'argent. Les deux modèles sont sous CC BY 4.0 (voir `CREDITS.md`).
+
+La **0.9.22 — Circuit Breaker** découpe le calcul initial de la circulation en tâches courtes pour
 laisser le navigateur répondre pendant le chargement. Les recherches d'obstacles sont allégées et la découpe
 côtière conserve les triangles qui ne touchent pas la route. Le plantage signalé au chargement n'a pas été
 reproduit ; la préparation graphique reste coûteuse et le ralentissement global n'est pas déclaré résolu.
@@ -142,7 +151,7 @@ Cliquez dans la vue pour verrouiller la souris ; Échap la libère et ouvre le m
 | ZQSD / WASD / flèches | Se déplacer |
 | Tab | Sélecteur d'armes (souris, pavé tactile ou clavier) |
 | 1 à 7 | Choisir une arme directement (7 : le grappin) |
-| G | Garage rapide : quinze voitures, à pied, moto, vélo, bateau, hélicoptère et avion |
+| G | Garage rapide : quinze voitures, à pied, moto, vélo, bateau, hélicoptère, biplan et jet |
 | Souris | Regarder |
 | Espace (maintenu) | Courir |
 | Maj | Sauter ; face à un rebord à portée, l'escalader |
@@ -179,7 +188,7 @@ Un hélicoptère se pose sur n'importe quel toit ; F en sort sans sauter.
 |---|---|
 | ZQSD / WASD | Accélérer, freiner, tourner |
 | Hélicoptère | Z/S avancer, Q/D pivoter, Espace monter, C descendre, F sauter |
-| Avion | Z/S piquer ou cabrer, Q/D virer, Espace et C pour les gaz, F sauter |
+| Avion | Z/S piquer ou cabrer, Q/D roulis, A/E palonnier (virage facile), Espace et C pour les gaz, Maj postcombustion (jet) ou pleins gaz (biplan), Ctrl freins, X train (jet) ou fumigène (biplan), V caméra et cockpit, F sauter en parachute |
 | Espace | Frein à main |
 | Clic droit + clic gauche | Tirer par la vitre (pistolet, pistolet-mitrailleur) |
 | Maj (moto) | Wheeling |
@@ -206,7 +215,8 @@ dans les menus. **A** valide, **B** revient, **LB / RB** changent d’onglet dan
 | Grappin et vol libre | RB sortir ou ranger le grappin, RT le tirer. X sauter, ouvrir la wingsuit en chute libre ou lâcher le grappin. Y ouvrir ou larguer le parapente, LS et RS dirigent |
 | Au volant | LS direction, RT accélérateur, LT frein puis marche arrière, A frein à main, RB nitro ou wheeling, L3 klaxon, R3 regarder derrière, B remettre le véhicule d’aplomb à l’arrêt, Y descendre |
 | Tir embarqué | Tenir X pour viser par la vitre, RT pour tirer, B pour recharger. X sort le pistolet si l’arme en main ne convient pas |
-| Avion / hélicoptère | LS piloter, RT / LT augmenter ou réduire les gaz / monter ou descendre, Y quitter |
+| Avion | LS piquer, cabrer et roulis, RT / LT gaz, LB / RB palonnier, A postcombustion ou pleins gaz, B freins, X train (jet) ou fumigène (biplan), Y sauter ou descendre |
+| Hélicoptère | LS piloter, RT / LT monter ou descendre, Y quitter |
 | Partout | ↑ téléphone, ↓ carte, View bref caméra, View tenu garage, Menu pause, A passer les séquences de mission |
 | Radio (à bord) | ← / → station précédente / suivante |
 | Carte | LS déplacer, LT / RT dézoomer / zoomer, A placer un repère au centre, X recentrer, B fermer |
@@ -310,7 +320,9 @@ défauts inconnus à l'échelle de toute la ville reste à mesurer sur des séan
 | `js/grass.js`, `js/nature-assets.js` | Brins d'herbe et textures d'herbe |
 | `js/world-assets.js`, `js/street-clutter.js` | Surfaces de la ville, objets de rue |
 | `js/ragdoll.js` | Chutes physiques des corps |
-| `js/airplane.js`, `js/flight.js` | Avion et parachute (modèles), modèle de vol |
+| `js/flight.js` | Modèle de vol à corps rigide des avions (aucune dépendance) |
+| `js/aviation.js`, `js/aircraft.js`, `js/aircraft-assets.js` | Pilotage, dégâts et figures ; les deux appareils ; chargement de leurs modèles (`assets/aircraft`, `tools/aircraft`) |
+| `js/flight-fx.js`, `js/flight-instruments.js`, `js/audio-flight.js` | Effets de vol, instruments et viseur tête haute, son des avions |
 | `js/quality.js` | Niveaux graphiques, rythme des images, résolution adaptative |
 | `js/actors.js` | Personnages armés (police, équipages, cibles) |
 | `js/architect*.js`, `js/repro-link.js`, `tools/architecte/` | Testeur, capteurs, tickets et atelier ; développement local uniquement |
