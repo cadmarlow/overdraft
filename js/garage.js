@@ -19,11 +19,11 @@ const CHOICES = [
   { id: 'bicycle', label: 'VÉLO', icon: 'i-bike' },
   { id: 'boat', label: 'BATEAU', icon: 'i-boat' },
   { id: 'helicopter', label: 'HÉLICO', icon: 'i-heli' },
-  { id: 'plane', label: 'AVION', icon: 'i-plane' },
+  { id: 'classic', label: 'BOURRASQUE', sub: 'BIPLAN', icon: 'i-plane', name: 'HAUTURIER BOURRASQUE', spec: 'MOTEUR EN ÉTOILE 450 CH  ·  240 KM/H  ·  VOLTIGE' },
+  { id: 'jet', label: 'TRAMONTANE', sub: 'JET', icon: 'i-plane', name: 'CORSAIRE TRAMONTANE', spec: 'POSTCOMBUSTION  ·  MACH 1,25  ·  8 G' },
   ...CAR_CATALOG.filter(c => !['sedan', 'muscle', 'sport', 'super'].includes(c.kind))
     .map(c => ({ id: c.kind, label: c.type, icon: 'i-car' }))
 ];
-const PLANE_START_SPEED = 62;
 const FLOOR_ALTITUDE = 200; // a plane summoned from the ground starts above this, and above whatever is around
 const CLEARANCE = 45;
 const JUMP_DISTANCE = 30; // past this the camera cuts to the new vehicle instead of gliding there
@@ -34,7 +34,7 @@ class Garage extends QuickStrip {
       name: 'garage', label: 'Changer de véhicule', hotkey: 'G', closeCode: 'KeyG', icon: 'i-walk',
       tiles: CHOICES.map(c => {
         const car = CAR_CATALOG.find(v => v.kind === (c.id === 'car' ? 'sedan' : c.id));
-        return `${QuickStrip.icon(c.icon)}<span>${car?.model || c.label}</span><small>${car ? c.label : 'EXPLORATION'}</small>`;
+        return `${QuickStrip.icon(c.icon)}<span>${car?.model || c.label}</span><small>${car ? c.label : c.sub || 'EXPLORATION'}</small>`;
       })
     });
     this.panel.setAttribute('aria-label', 'Garage : choisir un véhicule');
@@ -51,7 +51,7 @@ class Garage extends QuickStrip {
     const g = this.game;
     if (g.state !== 'driving') return 'foot';
     const car = g.car;
-    return car.moto ? 'moto' : car.boat ? 'boat' : car.bicycle ? 'bicycle' : car.mode || (car.kind === 'sedan' ? 'car' : GARAGE_KINDS.has(car.kind) ? car.kind : 'car');
+    return car.flight ? car.kind : car.moto ? 'moto' : car.boat ? 'boat' : car.bicycle ? 'bicycle' : car.mode || (car.kind === 'sedan' ? 'car' : GARAGE_KINDS.has(car.kind) ? car.kind : 'car');
   }
 
   get currentIndex() { return CHOICES.findIndex((c) => c.id === this.current); }
@@ -70,8 +70,8 @@ class Garage extends QuickStrip {
     const choice = CHOICES[i];
     const entry = CAR_CATALOG.find(c => c.kind === (choice.id === 'car' ? 'sedan' : choice.id));
     const car = entry && this.game.rides.find(c => c.pooled && c.kind === entry.kind);
-    this.info.querySelector('strong').textContent = entry ? `${entry.brand} ${entry.model}` : choice.label;
-    this.info.querySelector('small').textContent = car
+    this.info.querySelector('strong').textContent = entry ? `${entry.brand} ${entry.model}` : choice.name || choice.label;
+    this.info.querySelector('small').textContent = choice.spec ? choice.spec : car
       ? `${entry.drive}  ·  ${car.tune.mass.toLocaleString('fr-FR')} KG  ·  ${car.tune.gears.length} RAPPORTS  ·  ${car.tune.torque} NM`
       : this.game.gamepad?.using ? 'CROIX : CHOISIR · A : PRENDRE LE VOLANT · B : FERMER'
         : 'FLÈCHES : CHOISIR  ·  ENTRÉE : PRENDRE LE VOLANT  ·  G : FERMER';
@@ -107,7 +107,7 @@ class Garage extends QuickStrip {
     const g = this.game;
     if (g.state === 'driving') {
       const c = g.car;
-      return { x: c.position.x, y: c.position.y, z: c.position.z, heading: c.heading, speed: c.speed || 0, driving: true, flying: !!c.air && c.position.y > 3 };
+      return { x: c.position.x, y: c.position.y, z: c.position.z, heading: c.heading, speed: c.speed || 0, driving: true, flying: c.flight ? g.aviation.airborne(c) : !!c.air && c.position.y > 3 };
     }
     const p = g.person;
     return { x: p.position.x, y: p.position.y, z: p.position.z, heading: g.camera.footYaw, speed: 0, driving: false, flying: g.state === 'falling' };
@@ -121,7 +121,7 @@ class Garage extends QuickStrip {
     if (id === 'boat') this.board(this.boat(from), from);
     else if (id === 'car' || id === 'moto' || id === 'bicycle' || GARAGE_KINDS.has(id)) this.board(this.groundVehicle(id, from, left), from);
     else if (id === 'helicopter') this.board(this.helicopter(from), from);
-    else this.board(this.plane(from), from);
+    else this.board(this.plane(id, from), from);
     g.state = 'driving';
   }
 
@@ -205,15 +205,12 @@ class Garage extends QuickStrip {
     return heli;
   }
 
-  plane(from) {
+  // An aircraft appears already flying: where the player was if that was in clear air, else above the rooftops
+  plane(id, from) {
     const g = this.game;
-    const plane = this.prepare(g.controllers.entities.plane);
-    plane.position.set(from.x, from.flying && this.airIsClear(from) ? from.y : this.clearAltitude(from.x, from.z), from.z);
-    plane.heading = from.heading;
-    plane.speed = Math.max(from.speed, PLANE_START_SPEED);
-    plane.pitch = plane.roll = 0;
-    plane.throttle = 0.65;
-    plane.onGround = false;
+    const plane = this.prepare(g.controllers.aircraft[id]);
+    const y = from.flying && this.airIsClear(from) ? from.y : this.clearAltitude(from.x, from.z);
+    g.aviation.launch(plane, { x: from.x, y, z: from.z, heading: from.heading, speed: from.flying ? from.speed : 0 });
     return plane;
   }
 

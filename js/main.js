@@ -6,8 +6,8 @@ import DenoiseNode from 'three/addons/tsl/display/DenoiseNode.js';
 import { createPostProcessing } from './post-processing.js';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
 import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js';
-import { buildCityGrid } from './city-grid.js';
-import { buildBoroughs, boroughLandAt } from './boroughs.js';
+import { buildCityGrid, centralParkClearings } from './city-grid.js';
+import { buildBoroughs, boroughLandAt, bridgeDeckAt } from './boroughs.js';
 import { buildLandmarks } from './landmarks.js';
 import { buildCityBlocks } from './buildings.js';
 import { buildStreetDetails } from './street-details.js';
@@ -221,6 +221,8 @@ async function initApp() {
   const jumpRamps = buildRamps(scene);
   const controllerManager = new ThirdPersonControllerManager(scene, [...allColliders, ...streetDetails.obstacles, ...jumpRamps.colliders]);
   controllerManager.landAt = boroughLandAt;
+  controllerManager.bridgeDeckAt = bridgeDeckAt;
+  controllerManager.parkWater = centralParkClearings?.water || [];
   controllerManager.groundSurfaces = cityGrid.groundSurfaces;
   parking.attach(controllerManager);
   // Pigeons on the sidewalks, gulls over the rivers, rats at night (birds.js); made before the shaders compile
@@ -974,7 +976,8 @@ async function initApp() {
     if (air) treeUniforms.wind.value.set(Math.sin(air.dir), Math.cos(air.dir), air.base, air.gust);
     lightingSystem.update(cameraSystem.currentPos, cameraSystem.camera, now);
     mapSystem.update();
-    audioSystem.update(dt, elapsed, cameraSystem.camera, lightingSystem.activePresetId === 'midnight', gameplay.active || liveShop);
+    audioSystem.update(dt, elapsed, cameraSystem.camera, lightingSystem.activePresetId === 'midnight', gameplay.active || liveShop,
+      cameraSystem.activePresetId === 'pov' ? 'pov' : 'chase');
     updateSceneCulling(cameraSystem.camera.position);
     // Traffic collisions can move the player after controller updates; finalize moving hierarchies here.
     for (const root of dynamicRoots) root.updateMatrixWorld();

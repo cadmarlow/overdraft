@@ -25,7 +25,9 @@ import { Atmosphere } from './atmosphere.js';
 import { ShopSystem } from './shops.js';
 import { createMotorbike, poseMotorbike } from './motorbike.js';
 import { PauseMenu, pauseMenuMarkup } from './pause-menu.js';
-import { stepPlane } from './flight.js';
+import { Aviation } from './aviation.js';
+import { FlightFx } from './flight-fx.js';
+import { FlightInstruments } from './flight-instruments.js';
 import { Garage } from './garage.js';
 import { collapse } from './ragdoll.js';
 import { Arsenal } from './arsenal.js';
@@ -67,7 +69,7 @@ const CAR_NAMES = {
   ...FLEET_NAMES,
   moto: ['BRISANT', 'VANDALE 650', 'MOTO / SPORTIVE'], boat: ['HAUTURIER', 'MOUETTE', 'HORS-BORD / BIMOTEUR'],
   bicycle: ['COURSIER', 'VÉLO', 'VÉLO / URBAIN'], helicopter: ['GRÉVILLE', 'LIBELLULE', 'HÉLICOPTÈRE / BITURBINE'],
-  plane: ['HAUTURIER', 'STERNE', 'AVION / MONOMOTEUR']
+  classic: ['HAUTURIER', 'BOURRASQUE', 'BIPLAN / MOTEUR EN ÉTOILE'], jet: ['CORSAIRE', 'TRAMONTANE', 'CHASSEUR / POSTCOMBUSTION']
 };
 const FLEET_MAX = 12;
 const WHEEL_STEP = 12; // pixels of scrolling to the next weapon
@@ -76,7 +78,6 @@ const EJECT_ALTITUDE = 20; // a crash above this throws the pilot clear, under a
 // Health a car loses to a crash at this closing speed (m/s): nothing at a parking knock, a few points at 50 km/h, about a
 // tenth at 90, a quarter at 130, half at 200. A car survives a good chase; it is bullets and blasts that set it alight.
 const crashDamage = (speed) => 0.17 * Math.max(0, speed - 9) ** 1.5;
-const IDLE_STICK = { pitch: 0, roll: 0, throttle: 0 };
 const WRECK_MAX = 6; // burnt-out vehicles left standing at once: the oldest goes when a seventh burns
 const WRECKS_PER_KIND = 2; // of one model
 const DEBUG = new URLSearchParams(location.search).has('debug');
@@ -182,7 +183,7 @@ export class Game {
         spec: { doors: [0.2, -0.2], zFront: 0.9, zRear: -0.9 }, drive: { speed: 19 } }),
       Object.assign(controllers.entities.helicopter, shared, { kind: 'helicopter', mode: 'helicopter', air: true, hp: 100, halfW: 1.3, halfL: 3.6,
         spec: { doors: [1.2, 0], zFront: 3.2, zRear: -6 }, drive: { speed: 52 } }),
-      Object.assign(controllers.entities.plane, shared, { hp: 100 })
+      ...Object.values(controllers.aircraft).map((a) => Object.assign(a, shared, { hp: 100 }))
     ];
     for (const ride of this.rides) this.park(ride);
     controllers.entities.cyclist.helmet.visible = false;
@@ -274,6 +275,9 @@ export class Game {
     try { this.aimAssist.enabled = localStorage.getItem('overdraft:aimAssist') !== '0'; } catch { /* storage optional */ }
     this.assistTargets = [];
     this.vertical = new Vertical(this);
+    // Flying an aircraft (aviation.js): the controllers hand it the player's stick before the camera moves
+    this.aviation = new Aviation(this, { fx: new FlightFx(scene, this.fx, this.driveFx), instruments: new FlightInstruments(document.getElementById('drive-gauge')?.parentNode) });
+    controllers.updatePlane = (dt) => this.aviation.fly(dt);
     this.roofPolice = new RoofPolice(this);
     this.skyRings = new SkyRings(scene);
     this.director = new MissionDirector(this);
@@ -500,7 +504,8 @@ export class Game {
       }
       if (!this.active) return;
       if (e.code === 'KeyG') this.garage.toggle();
-      if (e.code === 'KeyE') this.vertical.toggleGrapple();
+      if (e.code === 'KeyE' && !this.aviation.piloted) this.vertical.toggleGrapple();
+      if (e.code === 'KeyX' && this.aviation.piloted) this.aviation.toggleGear();
       if (e.code === 'KeyX' && this.state === 'onFoot' && (HANDLING[this.weaponId] || this.drawForAim())) {
         this.aimToggle = !this.aimToggle;
       }
@@ -660,7 +665,8 @@ export class Game {
       let hints;
       if (this.state === 'driving') {
         const car = this.car;
-        hints = car.air ? [k(['LS'], 'Piloter'), k(['RT', 'LT'], car.mode === 'plane' ? 'Gaz + / −' : 'Monter / descendre'), k(['Y'], 'Quitter'), k(['←', '→'], 'Radio')]
+        hints = car.flight ? [k(['LS'], 'Piloter'), k(['RT', 'LT'], 'Gaz + / −'), k(['LB', 'RB'], 'Palonnier'), k(['A'], car.flight.tune.afterburner ? 'Postcombustion' : 'Pleins gaz'), k(['X'], car.flight.tune.afterburner ? 'Train' : 'Fumigène'), k(['Y'], 'Quitter')]
+          : car.air ? [k(['LS'], 'Piloter'), k(['RT', 'LT'], 'Monter / descendre'), k(['Y'], 'Quitter'), k(['←', '→'], 'Radio')]
           : [k(['LS'], 'Diriger'), k(['RT', 'LT'], 'Gaz / frein'), k(['Y'], 'Descendre'),
             ...(!car.boat ? [k(['A'], 'Frein à main'), ...(!car.bicycle ? [k(['RB'], car.moto ? 'Wheeling' : 'Nitro')] : [])] : []),
             ...(!car.bicycle ? [k(['X', 'RT'], 'Tir embarqué'), wheel] : []), k(['←', '→'], 'Radio')];
@@ -676,7 +682,8 @@ export class Game {
     const armed = this.weaponId !== 'fists';
     const end = [k(['G'], 'Garage'), k(['V'], 'Caméra'), k(['M'], 'Carte'), k(['ÉCHAP'], 'Menu')];
     const air = { helicopter: [k(['Z', 'S'], 'Avancer'), k(['Q', 'D'], 'Pivoter'), k(['ESPACE'], 'Monter'), k(['C'], 'Descendre')],
-      plane: [k(['Z', 'S'], 'Piquer / Cabrer'), k(['Q', 'D'], 'Virer'), k(['ESPACE'], 'Gaz +'), k(['C'], 'Gaz −')] };
+      plane: [k(['Z', 'S'], 'Piquer / Cabrer'), k(['Q', 'D'], 'Roulis'), k(['A', 'E'], 'Palonnier'), k(['ESPACE', 'C'], 'Gaz + / −'),
+        ...(this.car.flight?.tune.afterburner ? [k(['MAJ'], 'Postcombustion'), k(['X'], 'Train')] : [k(['MAJ'], 'Pleins gaz'), k(['X'], 'Fumigène')])] };
     const flying = this.state === 'driving' && this.car.air;
     this.ui['game-keybar'].innerHTML = flying ? [...air[this.car.mode], k(['F'], 'Sauter'), k(['T'], 'Radio'), ...end].join('')
       : this.vertical?.owns(this.state) ? this.vertical.keybar(k, end).join('')
@@ -1254,9 +1261,8 @@ export class Game {
 
   // Left alone, a plane glides on until it falls or lands; a helicopter drops
   flyAbandoned(c, dt) {
-    if (c.mode === 'plane') {
-      if (!c.onGround || c.speed > 0.01) stepPlane(c, IDLE_STICK, dt, this.controllers.planeEnvironment);
-    } else {
+    if (c.flight) this.aviation.drift(c, dt);
+    else {
       // a helicopter left on a roof stays there
       const floor = this.controllers.roofHeight(c.position.x, c.position.z, c.position.y - 0.25, 0.3) + 0.25;
       if (c.position.y <= floor + 0.001) return;
@@ -2072,7 +2078,7 @@ export class Game {
     const { x, y, z } = car.position;
     const heading = car.heading;
     const playerInside = car === this.car && (this.state === 'driving' || this.state === 'entering' || this.state === 'exiting');
-    const ejected = playerInside && !!car.air && y > EJECT_ALTITUDE;
+    const ejected = playerInside && !!car.air && (car.flight ? car.flight.agl : y) > EJECT_ALTITUDE && car.crashCause !== 'building';
     if (ejected) this.bailOut();
     if (car.police) {
       this.wanted.retire(this.wanted.units.find((u) => u.car === car));
@@ -2448,7 +2454,11 @@ export class Game {
   interact() {
     // a jump only when there is air under the aircraft: set down on a roof, it is an ordinary exit
     const air = this.car.position;
-    if (this.active && this.state === 'driving' && this.car.air && air.y - this.controllers.getGroundHeight(air.x, air.z, 'helicopter', air.y) > 3) { this.bailOut(); return; }
+    if (this.active && this.state === 'driving' && this.car.flight) {
+      // out of an aircraft in flight under a canopy; off a ditched one into the river
+      if (this.aviation.airborne(this.car)) { this.bailOut(); return; }
+      if (this.car.flight.ditched && this.controllers.afloat(air.x, air.z)) { this.car.ridden = false; this.enterWater(air.x + Math.cos(this.car.heading) * 2.5, air.z - Math.sin(this.car.heading) * 2.5); return; }
+    } else if (this.active && this.state === 'driving' && this.car.air && air.y - this.controllers.getGroundHeight(air.x, air.z, 'helicopter', air.y) > 3) { this.bailOut(); return; }
     if (this.active && this.calibre?.interact()) return;
     if (this.active && this.vertical.interact()) return;
     if (!this.active || !canInteract(this.state, this.car.speed)) {
@@ -2519,7 +2529,7 @@ export class Game {
   bailOut() {
     const car = this.car, p = this.person;
     const h = car.heading;
-    if (car.mode === 'plane') car.throttle = 0;
+    if (car.flight) car.flight.throttle = 0;
     car.ridden = false;
     this.transition = null;
     p.inVehicle = false;
@@ -2533,7 +2543,7 @@ export class Game {
     this.audio.ui('pass');
     // High enough, the jump is a free fall (and the wingsuit is a key away); low, the canopy opens at once
     const height = p.position.y - this.controllers.getGroundHeight(p.position.x, p.position.z, 'person', p.position.y);
-    const speed = car.mode === 'plane' ? car.speed ?? 0 : (car.speed ?? 0) * 0.6;
+    const speed = car.flight ? Math.min(car.speed ?? 0, 70) : (car.speed ?? 0) * 0.6;
     if (height > 60) {
       this.vertical.startFreefall(Math.sin(h) * speed, Math.min(0, car.verticalSpeed ?? 0) - 2, Math.cos(h) * speed);
       return;
@@ -2756,7 +2766,7 @@ export class Game {
     const pad = this.gamepad?.using;
     const radio = pad ? '← → : radio' : 'T : radio';
     const drive = pad ? 'A : frein à main · RB : nitro' : 'Maj : nitro · Espace : frein à main';
-    const hint = car.police ? 'Véhicule de police : ils ne vous lâcheront pas.' : car.mode === 'plane' ? 'Trop lent, il décroche : gardez de la vitesse.' : car.body ? `${drive} · ${radio}` : radio;
+    const hint = car.police ? 'Véhicule de police : ils ne vous lâcheront pas.' : car.flight ? (car.flight.tune.afterburner ? (pad ? 'A : postcombustion · X : train' : 'Maj : postcombustion · X : train') : (pad ? 'X : fumigène · lâchez tout, elle se remet à plat' : 'X : fumigène · lâchez tout, elle se remet à plat')) : car.body ? `${drive} · ${radio}` : radio;
     this.toast(car.label2 || `${brand} ${model}`, hint);
   }
 
@@ -2957,6 +2967,7 @@ export class Game {
       if (clear) clear.value = vehicle === car && person.inVehicle && this.camera.activePresetId !== 'pov' ? (choreography ? choreography.sample.glass : 1) : 0;
     }
     this.vertical.draw(dt);
+    this.aviation.update(dt);
     this.skyRings.update();
     this.garage.update();
     this.arsenal.update();
@@ -2980,8 +2991,9 @@ export class Game {
       const small = document.createElement('small'); small.textContent = offer.sub; span.append(small);
       return;
     }
-    const airborne = this.state === 'driving' && car.air && car.position.y > 3;
-    const showExit = this.state === 'driving' && this.active && (airborne || Math.abs(car.speed) < 1.5);
+    const airborne = this.state === 'driving' && car.air && (car.flight ? this.aviation.airborne(car) : car.position.y > 3);
+    // in an aircraft in flight the way out is on the key bar: no card across the sky
+    const showExit = this.state === 'driving' && this.active && (car.flight ? !airborne && Math.abs(car.speed) < 1.5 : airborne || Math.abs(car.speed) < 1.5);
     prompt.classList.toggle('visible', Boolean(this.candidate || showExit));
     const span = prompt.querySelector('span');
     if (this.candidate) {

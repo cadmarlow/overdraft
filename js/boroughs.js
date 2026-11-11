@@ -2706,6 +2706,7 @@ function buildDeck(B, spec, f, profile, mats, steel, opts) {
   const n = Math.max(12, Math.ceil(L / 5));
   const trussH = opts.trussH;
   const drop = opts.trussBelow || 0;
+  BRIDGE_DECKS.push({ ax: spec.a.x, az: spec.a.z, ux: dir.x, uz: dir.z, L, half: W / 2 + 1, profile, below: 2.6 + drop, above: Math.max(3, trussH) });
   const pts = [];
   for (let i = 0; i <= n; i++) pts.push(i / n);
   for (let i = 0; i < n; i++) {
@@ -2808,6 +2809,24 @@ function buildCables(B, spec, f, profile, mats, steel, o) {
 // Manhattan footing of the bridge approaches: raised sidewalk blocks (approach columns stand only on blocks, never in a
 // roadway) and the colliders handed to traffic / pedestrians / the player. Set by buildBoroughs.
 let bridgeSite = { sidewalks: [], colliders: [] };
+
+// The roadways of the bridges, for what flies (aviation.js): a deck is solid from under its girders to the top of its
+// trusses, and there is air to fly through beneath it. Filled as each deck is built (buildDeck).
+const BRIDGE_DECKS = [];
+
+/** The bridge deck over (x, z): writes out.bottom / out.top (metres) and returns true, or false over open water */
+function bridgeDeckAt(x, z, out) {
+  for (const d of BRIDGE_DECKS) {
+    const rx = x - d.ax, rz = z - d.az;
+    const t = (rx * d.ux + rz * d.uz) / d.L;
+    if (t <= 0 || t >= 1 || Math.abs(rz * d.ux - rx * d.uz) > d.half) continue;
+    const y = d.profile(t);
+    if (y < 1) continue;
+    out.bottom = y - d.below; out.top = y + d.above;
+    return true;
+  }
+  return false;
+}
 
 function onManhattan(p) {
   return !landAt(p.x, p.z) && pointInPolygon(MANHATTAN_COASTLINE, p.x, p.z);
@@ -3347,6 +3366,7 @@ function buildBoroughs(scene, { sidewalks = [] } = {}) {
   // East River bridges, and the Roosevelt Island Tramway beside the Queensboro Bridge (before the island's trees,
   // which keep out from under its cabins)
   bridgeSite = { sidewalks, colliders: [] };
+  BRIDGE_DECKS.length = 0;
   const bridgeMats = createBridgeMaterials();
   const bridgeParts = createPartCollector();
   const tram = buildRooseveltTram(group, bridgeParts, lm);
@@ -3364,4 +3384,4 @@ function buildBoroughs(scene, { sidewalks = [] } = {}) {
   return { group, ridgeHeightAt, landAt, colliders: bridgeSite.colliders.concat(tram.colliders), update: tram.update };
 }
 
-export { buildBoroughs, ridgeHeightAt, landAt as boroughLandAt };
+export { buildBoroughs, ridgeHeightAt, landAt as boroughLandAt, bridgeDeckAt };

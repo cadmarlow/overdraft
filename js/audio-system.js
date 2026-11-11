@@ -1,5 +1,6 @@
 import { createSynthResources, createMotorVoice, setControlRate } from './audio-synthesis.js';
 import { DriveAudio } from './audio-drive.js';
+import { FlightAudio } from './audio-flight.js';
 import { createEventResources, playEvent, createWindVoice } from './audio-events.js';
 import { createAmbienceVoice } from './audio-ambience.js';
 import { CityAudioSources } from './audio-sources.js';
@@ -84,6 +85,7 @@ class CityAudioSystem {
     this.acoustics = new CityAcoustics(simulation.controllerManager);
     this.onStateChange = onStateChange;
     this.context = null;
+    this.flight = null; // the aircraft's voice and its one-shots (audio-flight.js), once the context exists
     this.ready = false;
     this.disposed = false;
     this.supported = !!(globalThis.AudioContext || globalThis.webkitAudioContext);
@@ -183,6 +185,7 @@ class CityAudioSystem {
     this.flat = context.createGain();
     this.flat.connect(this.master);
     this.drive = new DriveAudio(context, this.resources, this.flat);
+    this.flight = new FlightAudio(context, this.resources, this.flat);
     this.music = context.createGain();
     this.music.connect(this.master);
     this.onInitialize?.(context);
@@ -454,9 +457,12 @@ class CityAudioSystem {
     if (this.emit('horn', { id: entity, ...entity.position, heading: entity.heading, seed: 4 }, { intensity: 0.7 })) this.lastHorn = now;
   }
 
-  update(dt, elapsed, camera, night = false, playing = true) {
+  // `view`: 'chase' or 'pov', for the voice of an aircraft in hand
+  update(dt, elapsed, camera, night = false, playing = true, view = 'chase') {
     if (!this.ready || !this.enabled || this.context?.state !== 'running' || document.hidden) return;
-    this.drive?.update(this.sources.controllers.getActiveEntity(), playing);
+    const active = this.sources.controllers.getActiveEntity();
+    this.drive?.update(active, playing);
+    this.flight?.update(playing && active?.type === 'plane' && active.flight ? active : null, dt, view);
     this.accumulator += dt;
     if (this.accumulator < 0.1) return;
     dt = Math.min(this.accumulator, 0.25);
@@ -587,6 +593,7 @@ class CityAudioSystem {
     this.reset();
     this.wind?.dispose(true);
     this.ambience?.dispose(true);
+    this.flight?.dispose();
     for (const node of [this.mix, this.compressor, this.master, this.reflections, this.reverb, this.reflectionFilter]) node?.disconnect();
     if (this.context) {
       this.context.onstatechange = null;

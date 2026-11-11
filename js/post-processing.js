@@ -65,6 +65,7 @@ function createPostProcessing(renderer, sceneColor, reflections, sceneTexture = 
   const fringe = uniform(0); // gameplay keeps clean window and sign edges, including on a trackpad orbit
   const aoStrength = uniform(0.92);
   const vignetteAmount = uniform(0.10);
+  const strain = uniform(new THREE.Vector2(0, 0)); // x: grey-out under positive g, y: red-out under negative g (0..1)
   const sharpness = uniform(0.28); // unsharp mask, clamped to the neighbourhood so it never rings
   // The sun's rays: where the sun is on screen (0..1, y up), and how much of its rays show (in frame, by day, clear)
   const sunUV = uniform(new THREE.Vector2(0.5, 0.5));
@@ -153,7 +154,13 @@ function createPostProcessing(renderer, sceneColor, reflections, sceneTexture = 
     const aspect = screenSize.x.div(screenSize.y);
     const radius = length(screenUV.sub(0.5).mul(vec2(aspect, 1))).div(length(vec2(aspect, 1).mul(0.5)));
     const vignette = float(1).sub(smoothstep(0.32, 1.02, radius).mul(vignetteAmount));
-    return vec4(color.mul(vignette), 1.0);
+    // What hard g does to a pilot's eyes (aviation.js): under a long pull the colour drains and the edges of sight
+    // close in; hanging in the straps the blood goes the other way and the picture reddens
+    const light = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    const drained = mix(color, vec3(light), strain.x.mul(0.8));
+    const closing = smoothstep(mix(float(1.25), float(0.16), strain.x), mix(float(1.7), float(0.72), strain.x), radius);
+    const red = mix(drained, vec3(light.mul(1.5), light.mul(0.14), light.mul(0.1)), strain.y.mul(0.75).mul(smoothstep(0.0, 0.9, radius).mul(0.6).add(0.4)));
+    return vec4(red.mul(vignette).mul(float(1).sub(closing)), 1.0);
   })();
 
   // The graded frame once more as a texture, so the last step can look at each pixel's neighbours: a little acutance
@@ -200,7 +207,7 @@ function createPostProcessing(renderer, sceneColor, reflections, sceneTexture = 
   }
 
   applyPreset('golden');
-  return { outputNode, applyPreset, applyLook, setSun, speedBlur, eye, aoStrength, fringe, vignetteAmount, sharpness, sunShafts, shaftTint };
+  return { outputNode, applyPreset, applyLook, setSun, speedBlur, eye, aoStrength, fringe, vignetteAmount, strain, sharpness, sunShafts, shaftTint };
 }
 
 export { createPostProcessing, LOOKS as GRADE_LOOKS };

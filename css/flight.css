@@ -1,0 +1,47 @@
+/* The pilot's panel (js/flight-instruments.js): shown instead of the car's cluster while an aircraft is flown */
+#flight-gauge{position:fixed;bottom:48px;right:34px;z-index:7;display:none;width:300px;padding:12px 14px 10px;background:linear-gradient(125deg,#07100ce0,#0b1518b8);border:1px solid #ffffff25;border-radius:5px;box-shadow:0 4px 22px #0003;contain:layout style;color:var(--paper);font-family:Arial,Helvetica,sans-serif}
+body[data-flight][data-game-state=driving] #flight-gauge{display:block}
+body[data-flight] #drive-gauge{display:none!important}
+body[data-flight] #vehicle-name{bottom:228px}
+body.in-menu #flight-gauge,body.in-intro #flight-gauge,body.in-menu #flight-alert,body.in-intro #flight-alert{opacity:0!important;pointer-events:none!important}
+body.hud-minimized #flight-gauge{opacity:0}
+.fl-top{display:flex;align-items:center;gap:8px;font:700 7px/1.5 Arial,sans-serif;letter-spacing:.12em;color:#ffffff7d}
+.fl-lever{position:relative;flex:1;height:5px;background:#ffffff18;overflow:hidden;isolation:isolate}
+.fl-lever i{position:absolute;inset:0;transform-origin:left;transform:scaleX(0)}
+#fl-power{background:var(--lime)}
+#fl-reheat{background:linear-gradient(90deg,#ffb054,#ff6a2e);mix-blend-mode:normal;opacity:.95}
+.fl-lever b{position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 6px,#0a141a 6px 8px);pointer-events:none}
+.fl-lamps{display:flex;gap:4px}
+.fl-lamps i{font-size:6.5px;font-style:normal;border:1px solid #ffffff20;border-radius:2px;padding:1px 4px;color:#ffffff50;letter-spacing:.08em}
+.fl-lamps i.none{display:none}
+.fl-lamps i.active{color:#d9f3a0;border-color:#cde68f;background:#9fc24a2b}
+#fl-pc.active{color:#ffd9a8;border-color:#ffb054;background:#ff7a2e3d}
+#fl-gear.moving{color:#ffd393;border-color:#ffc275;background:#cf8f1928}
+.fl-main{display:flex;align-items:center;gap:13px;padding:11px 0 10px}
+.fl-adi{position:relative;flex:0 0 76px;width:76px;height:76px;border-radius:50%;overflow:hidden;border:1px solid #ffffff38;background:#0b1518;isolation:isolate}
+#fl-ball{position:absolute;left:-62px;top:-162px;width:200px;height:400px;background:linear-gradient(#3f7fc4 0,#9cc6ea 49.6%,#f4f6ef 49.6% 50.4%,#8a6a45 50.4%,#4d3a26 100%);will-change:transform}
+#fl-ball b{position:absolute;left:70px;right:70px;top:0;bottom:0;background:repeating-linear-gradient(#ffffff00 0 10px,#ffffffb0 10px 11px);-webkit-mask:linear-gradient(transparent 28%,#000 34% 66%,transparent 72%);mask:linear-gradient(transparent 28%,#000 34% 66%,transparent 72%);opacity:.75}
+.fl-adi>i{position:absolute;left:14px;right:14px;top:50%;height:2px;margin-top:-1px;background:linear-gradient(90deg,#ffd24a 0 34%,transparent 34% 66%,#ffd24a 66%);box-shadow:0 0 0 1px #0007}
+.fl-adi>i:after{content:'';position:absolute;left:50%;top:-2px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:#ffd24a;box-shadow:0 0 0 1px #0007}
+.fl-speed{flex:1;display:grid;grid-template-columns:auto auto;align-items:baseline;justify-content:start;column-gap:5px}
+#fl-speed{font-size:50px;font-weight:700;letter-spacing:-.07em;font-variant-numeric:tabular-nums;line-height:.95;font-style:italic}
+.fl-speed span{font-size:7px;letter-spacing:.1em;color:#ffffff9b}
+#fl-mach{grid-column:1/3;font-size:8px;letter-spacing:.14em;color:#ffb054;min-height:10px;font-weight:700}
+.fl-side{display:grid;gap:5px;min-width:84px}
+.fl-side span{display:grid;grid-template-columns:36px 1fr auto;align-items:baseline;gap:3px}
+.fl-side small{font-size:6px;letter-spacing:.12em;color:#ffffff75}
+.fl-side b{font-size:13px;font-variant-numeric:tabular-nums;text-align:right;font-weight:700;color:var(--paper)}
+.fl-side em{font-size:6px;font-style:normal;color:#ffffff75;letter-spacing:.06em;min-width:15px}
+#fl-g.hard{color:#ff9a7a}
+.fl-bottom{display:flex;align-items:center;gap:12px;border-top:1px solid #ffffff18;padding-top:8px;font-size:6.5px;letter-spacing:.1em;color:#ffffff8c}
+.fl-bottom b{font-size:9px;color:var(--paper);font-variant-numeric:tabular-nums;letter-spacing:0}
+.fl-health{display:flex;align-items:center;gap:5px;flex:1}
+.fl-health i{height:3px;background:#ffffff18;flex:1}
+#fl-health{display:block;width:100%;height:100%;transform-origin:left;background:#d9edbc}
+#fl-health.low{background:#ff725c}
+/* One word across the sky while it matters: only opacity moves */
+#flight-alert{position:fixed;left:50%;top:27%;transform:translateX(-50%);z-index:8;font:800 21px/1 Arial,Helvetica,sans-serif;letter-spacing:.42em;padding-left:.42em;color:#ffd24a;text-shadow:0 2px 14px #000b;opacity:0;pointer-events:none}
+#flight-alert.show{animation:fl-blink .7s steps(1) infinite}
+#flight-alert.danger{color:#ff5a3c}
+@keyframes fl-blink{0%{opacity:1}55%{opacity:.18}}
+@media(max-width:760px){#flight-gauge{right:14px;bottom:30px;transform:scale(.74);transform-origin:bottom right}body[data-flight] #vehicle-name{bottom:205px}}

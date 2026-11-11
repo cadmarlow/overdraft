@@ -192,8 +192,9 @@ class GamepadControls {
       return;
     }
 
-    const wheel = g.arsenal;
-    if (edge(LB)) wheel.press('gamepad');
+    // in an aircraft the bumpers are the rudder pedals, not the weapon wheel
+    const wheel = g.arsenal, piloting = !!g.aviation?.piloted;
+    if (edge(LB) && !piloting) wheel.press('gamepad');
     if (wheel.open) {
       this.controller.clearGamepadInput();
       this.clearCombat();
@@ -234,6 +235,9 @@ class GamepadControls {
         else g.resetStoppedVehicle();
       }
       if (edge(X) && !g.canDriveBy && !g.car.bicycle && g.weapons.pistol) g.selectWeapon('pistol');
+    } else if (piloting) {
+      if (edge(X)) g.aviation.toggleGear();
+      if (edge(R3)) this.camera.resetOrbit();
     } else {
       if (edge(RB)) g.vertical.toggleGrapple();
       if (edge(L3) && onFoot) g.toggleAimAssist();
@@ -263,8 +267,11 @@ class GamepadControls {
     this.controller.setGamepadInput('up', jump || Math.max(0, vertical));
     this.controller.setGamepadInput('jump', jump);
     this.controller.setGamepadInput('run', mode === 'person' && held(A));
-    this.controller.setGamepadInput('sprint', driving && held(RB));
-    this.controller.setGamepadInput('handbrake', driving && held(A));
+    this.controller.setGamepadInput('sprint', (driving && held(RB)) || (piloting && held(A)));
+    this.controller.setGamepadInput('lever', piloting ? Math.max(0, -vertical) : 0);
+    this.controller.setGamepadInput('yawLeft', piloting && held(LB));
+    this.controller.setGamepadInput('yawRight', piloting && held(RB));
+    this.controller.setGamepadInput('handbrake', (driving && held(A)) || (piloting && held(B)));
     this.controller.setGamepadInput('down', driving ? held(R3) : Math.max(0, -vertical));
     this.camera.applyGamepadInput(look.x, look.y, 0, dt);
   }

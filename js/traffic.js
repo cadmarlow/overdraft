@@ -1988,7 +1988,9 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
     updateView(camera);
 
     // a body held up by a rope or riding a roof (vertical.js) is above the traffic, not in its way
-    player.active = Boolean(playerEntity && activeMode !== 'helicopter' && playerEntity.position.y < 2.6 && !playerEntity.suspended);
+    // (an aircraft is in the traffic's way only while it stands or rolls on its wheels)
+    player.active = Boolean(playerEntity && activeMode !== 'helicopter' && !playerEntity.suspended
+      && (playerEntity.flight ? playerEntity.flight.onGround : playerEntity.position.y < 2.6));
     if (playerEntity) {
       const heading = playerEntity.heading || 0;
       const speed = playerEntity.speed || 0;
@@ -2000,7 +2002,8 @@ function createTrafficSystem(scene, sidewalks, obstacles, signalIntersections, b
       player.vx = player.fx * speed + (playerEntity.vx || 0);
       player.vz = player.fz * speed + (playerEntity.vz || 0);
     }
-    player.halfW = activeMode === 'cyclist' ? 0.35 : activeMode === 'person' ? 0.32 : playerEntity?.halfW ?? 0.86;
+    // (of an aircraft the traffic meets the fuselage and the wheels: the wings pass over a car's roof)
+    player.halfW = activeMode === 'cyclist' ? 0.35 : activeMode === 'person' ? 0.32 : playerEntity?.roadHalfW ?? playerEntity?.halfW ?? 0.86;
     player.halfL = activeMode === 'cyclist' ? 0.85 : activeMode === 'person' ? 0.32 : playerEntity?.halfL ?? 2.18;
 
     // 1. Cars & buses

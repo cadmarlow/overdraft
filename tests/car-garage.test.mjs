@@ -78,7 +78,7 @@ function harness() {
 
 test('garage preserves the first nine shortcuts while exposing every body and a valid current tile', () => {
   const { garage, game, CHOICES } = harness();
-  assert.equal(CHOICES.length, 21);
+  assert.equal(CHOICES.length, 22);
   assert.deepEqual(Array.from(CHOICES.slice(0, 9), c => c.id), ['foot', 'car', 'muscle', 'sport', 'super', 'moto', 'bicycle', 'boat', 'helicopter']);
   assert.equal(new Set(CHOICES.map(c => c.id)).size, CHOICES.length);
   for (const entry of CAR_CATALOG) {
@@ -88,7 +88,8 @@ test('garage preserves the first nine shortcuts while exposing every body and a 
     garage.update();
   }
   for (const [flags, expected] of [[{ kind: 'cruiser' }, 'car'], [{ bicycle: true, mode: 'cyclist' }, 'bicycle'],
-    [{ moto: true }, 'moto'], [{ boat: true }, 'boat'], [{ mode: 'helicopter' }, 'helicopter'], [{ mode: 'plane' }, 'plane']]) {
+    [{ moto: true }, 'moto'], [{ boat: true }, 'boat'], [{ mode: 'helicopter' }, 'helicopter'],
+    [{ mode: 'plane', kind: 'classic', flight: {} }, 'classic'], [{ mode: 'plane', kind: 'jet', flight: {} }, 'jet']]) {
     game.controllers.entities.car = flags;
     assert.equal(garage.current, expected); assert.ok(garage.currentIndex >= 0);
   }
@@ -145,7 +146,7 @@ test('opening, arrow navigation and selection operate on the whole grid with the
   garage.show();
   assert.equal(game.modal, true); assert.equal(garage.panel.hidden, false); assert.equal(garage.sel, 0);
   const press = code => garage.key({ code, preventDefault() {}, stopImmediatePropagation() {} });
-  press('ArrowUp'); assert.equal(garage.sel, 14);
+  press('ArrowUp'); assert.equal(garage.sel, 15);
   press('ArrowDown'); assert.equal(garage.sel, 0);
   press('ArrowLeft'); assert.equal(garage.sel, CHOICES.length - 1);
   assert.match(garage.info.querySelector('strong').textContent, /FRET/);

@@ -1859,10 +1859,13 @@ function buildCityGrid(scene) {
 
   // Water: the Lake, the Jacqueline Kennedy Onassis Reservoir (raised in its stone basin, ringed by the running
   // track), Harlem Meer, the Pond, Turtle Pond, the Pool & Conservatory Water
-  const cpWaterPolys = [];
+  const cpWaterPolys = [], cpWaterBodies = [];
   for (const w of CPG.water) {
     const pts = flatPts(w.ring);
     cpWaterPolys.push(pts);
+    // for what lands on it (controllers.js parkWaterAt): its outline, its level and its bounds
+    cpWaterBodies.push({ name: w.name, pts, y: w.name === 'Jacqueline Kennedy Onassis Reservoir' ? 1.58 : 1.24,
+      minX: Math.min(...pts.map((p) => p.x)), maxX: Math.max(...pts.map((p) => p.x)), minZ: Math.min(...pts.map((p) => p.z)), maxZ: Math.max(...pts.map((p) => p.z)) });
     if (w.name === 'Jacqueline Kennedy Onassis Reservoir') {
       const track = offsetPolygon(pts, -6);
       if (track) {
@@ -1985,6 +1988,7 @@ function buildCityGrid(scene) {
   const gap = cpSite('Pulitzer Fountain') || { x: -32, z: -1327 };
   centralParkClearings = {
     polygons: [...cpLawnPolys, ...cpWaterPolys],
+    water: cpWaterBodies,
     drives: [...cpDrives, ...cpTransverses],
     transverseZ: [],
     rects: [

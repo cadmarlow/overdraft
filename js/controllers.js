@@ -25,8 +25,7 @@ import {
 } from './helicopter.js';
 import { PersonCrowd, PersonRig } from './pedestrians.js';
 import { HEADLIGHTS, createVehicleHeadlight, placeVehicleHeadlight } from './vehicle-lights.js';
-import { createPlane, posePlane } from './airplane.js';
-import { stepPlane } from './flight.js';
+import { createAircraft, poseAircraft } from './aircraft.js';
 import { polygonContact, roofAt, roofColliderAt } from './building-collision.js';
 import { rampRise } from './ramps.js';
 import { WATER, stepBoat } from './boat.js';
@@ -262,7 +261,11 @@ class ThirdPersonControllerManager {
       handbrake: false,
       // on foot (gameplay.js): Space runs, Shift jumps; in vehicles Space and Shift keep up/sprint
       run: false,
-      jump: false
+      jump: false,
+      // aircraft (aviation.js): the rudder pedals and the throttle lever's way down
+      yawLeft: false,
+      yawRight: false,
+      lever: false
     };
 
     this.entities = {
@@ -270,10 +273,12 @@ class ThirdPersonControllerManager {
       car: this.createCarEntity(),
       cyclist: this.createCyclistEntity(),
       helicopter: this.createHelicopterEntity(),
-      plane: createPlane(scene)
+      plane: createAircraft(scene, 'classic')
     };
+    // Every aircraft there is; entities.plane is whichever one is being flown (setMode)
+    this.aircraft = { classic: this.entities.plane, jet: createAircraft(scene, 'jet') };
 
-    Object.values(this.entities).forEach((ent) => {
+    [...Object.values(this.entities), this.aircraft.jet].forEach((ent) => {
       if (ent.mesh) {
         ent.mesh.traverse((child) => {
           if (
@@ -318,7 +323,10 @@ class ThirdPersonControllerManager {
       sprint: ['ShiftLeft', 'ShiftRight'],
       handbrake: ['ControlLeft', 'ControlRight'],
       run: ['Space'],
-      jump: ['ShiftLeft', 'ShiftRight']
+      jump: ['ShiftLeft', 'ShiftRight'],
+      yawLeft: ['KeyQ'],
+      yawRight: ['KeyE'],
+      lever: ['KeyC']
     };
     // a key may drive several actions (Space: up in the air and at the wheel, run on foot)
     const actionsByCode = new Map();
@@ -392,6 +400,8 @@ class ThirdPersonControllerManager {
 
   setMode(mode) {
     if (!this.entities[mode]) return;
+    // the aircraft boarded is the one flown
+    if (mode === 'plane' && this.entities.car?.flight) this.entities.plane = this.entities.car;
     this.activeMode = mode;
     const active = this.entities[mode];
     if (active.mesh) active.mesh.visible = true;
@@ -1337,13 +1347,13 @@ class ThirdPersonControllerManager {
     } else if (this.activeMode === 'plane') {
       this.updatePlane(dt);
     }
-    posePlane(this.entities.plane, dt);
-
     for (const key of Object.keys(this.entities)) {
       const e = this.entities[key];
+      if (e.flight) continue; // an aircraft's mesh takes its whole attitude (aircraft.js)
       e.mesh.position.copy(e.position);
       e.mesh.rotation.y = e.heading;
     }
+    for (const a of Object.values(this.aircraft)) if (a.mesh.visible) poseAircraft(a, dt);
     // The walker's contact shadow lies on the surface under them, shrinking as they rise, gone from a few metres up
     // (it used to ride under the feet into the air: a dark square under a jump, a parachute, a wingsuit)
     const walker = this.entities.person;
@@ -1574,23 +1584,58 @@ class ThirdPersonControllerManager {
     for (const pedal of b.pedals) pedal.rotation.x = -b.pedalPhase;
   }
 
-  // The stick for the player's plane, then the shared flight model (airplane.js)
-  updatePlane(dt) {
-    if (dt <= 0) return;
-    const k = this.keys;
-    const axis = (plus, minus) => (plus ? Number(plus) : 0) - (minus ? Number(minus) : 0);
-    stepPlane(this.entities.plane, { pitch: axis(k.backward, k.forward), roll: axis(k.left, k.right), throttle: axis(k.up, k.down) }, dt, this.planeEnvironment);
+  // The player's aircraft is flown by gameplay (aviation.js sets this to its own fly())
+  updatePlane() {}
+
+  // The level of the park lake or reservoir at (x, z), or null on dry land (city-grid.js hands over the outlines)
+  parkWaterAt(x, z) {
+    for (const w of this.parkWater || []) {
+      if (x < w.minX || x > w.maxX || z < w.minZ || z > w.maxZ) continue;
+      let inside = false;
+      const ring = w.pts;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const a = ring[i], b = ring[j];
+        if ((a.z > z) !== (b.z > z) && x < a.x + (b.x - a.x) * (z - a.z) / (b.z - a.z)) inside = !inside;
+      }
+      if (inside) return w.y;
+    }
+    return null;
   }
 
-  // What a plane can run into; gameplay.js flies abandoned planes through the same checks
-  get planeEnvironment() {
-    return this._planeEnvironment ??= {
-      ground: (x, z) => this.getGroundHeight(x, z, 'car'),
-      water: (x, z) => this.overWater(x, z),
-      hit: (pos) => {
-        const body = collisionBody('helicopter', 3, 0);
-        const contact = this._buildingContact ??= { nx: 0, nz: 0, depth: 0 };
-        for (const c of this.nearColliders(pos.x, pos.z, 9)) if (buildingContact(c, pos.x, pos.y, pos.z, body, contact)) return true;
+  // What an aircraft can touch (flight.js): the surface under a point, open water, a wall in the way
+  get flightWorld() {
+    if (this._flightWorld) return this._flightWorld;
+    const hit = { nx: 0, ny: 1, nz: 0, grip: 1, rough: 0, y: 0, curb: false };
+    const contact = { nx: 0, nz: 0, depth: 0 }, deck = { bottom: 0, top: 0 };
+    const body = { car: false, sin: 0, cos: 1, hx: 0, hz: 0, radius: 0.45, extX: 0.45, extZ: 0.45, bottom: -0.35, top: 0.35 };
+    return this._flightWorld = {
+      waterLevel: WATER,
+      gust: 0,
+      // the street, a deck, a pier, a roof at or under y, or the land across the river
+      ground: (x, z, y) => {
+        const keep = this._groundVehicleY;
+        this._groundVehicleY = y;
+        this.carGround(x, z, hit);
+        this._groundVehicleY = keep;
+        let g = hit.y;
+        if (g < -30) g = this.landAt?.(x, z) ? 0 : -40;
+        // a lake is not a lawn: its bed is well under its surface
+        else if (g < 4 && this.parkWaterAt(x, z) !== null) g -= 4;
+        return Math.max(g, this.roofHeight(x, z, y, 0.9));
+      },
+      // the level of the water at (x, z): the rivers and the harbour, or a lake of the park; false over land
+      water: (x, z) => (this.afloat(x, z) ? WATER : this.parkWaterAt(x, z) ?? false),
+      solid: (x, y, z, out) => {
+        // a bridge's roadway, girders to truss tops (boroughs.js): there is air under it, none through it
+        if (this.bridgeDeckAt?.(x, z, deck) && y > deck.bottom && y < deck.top) { out.nx = 0; out.nz = 0; out.depth = 0; return true; }
+        for (const c of this.nearColliders(x, z, 1.5)) {
+          if (c.breakable || c.parked !== undefined) continue;
+          // lamp posts, sign posts and scaffold poles are too thin to stop a wing (trees and rocks do)
+          if (c.round && c.round < 0.25 && c.obstacle !== 'tree') continue;
+          // just under a roof's surface is the roof, not the wall: the wheels and the belly deal with it
+          if (c.roof && y > c.maxY - 1.3) continue;
+          if (buildingContact(c, x, y, z, body, contact)) { out.nx = contact.nx; out.nz = contact.nz; out.depth = contact.depth; return true; }
+        }
         return false;
       }
     };

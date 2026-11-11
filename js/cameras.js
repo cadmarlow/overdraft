@@ -3,6 +3,9 @@ import { bryantParkLawn } from './landmarks.js';
 import { polygonBoxOverlaps } from './building-collision.js';
 
 let _flyDir, _flyHit, _flyBox, _flyRay; // made on the first flight
+// Scratch vectors of the aircraft camera (updateAircraft)
+const _an = new THREE.Vector3(), _au = new THREE.Vector3(), _af = new THREE.Vector3(), _av = new THREE.Vector3(), _at = new THREE.Vector3(), _ax = new THREE.Vector3();
+const _ar = new THREE.Vector3(), _ad = new THREE.Vector3(), _aa = new THREE.Vector3(), _ay = new THREE.Vector3(0, 1, 0);
 
 // Chase, action, cockpit, fixed-location and aerial cameras, with mouse/touch orbit and zoom.
 
@@ -397,6 +400,7 @@ class CameraSystem {
     if (this.camera.near !== near) { this.camera.near = near; this.camera.updateProjectionMatrix(); }
     if (this.cinematic) { this.updateCinematic(dt); return; }
     if (this.still) { this.updateStill(dt); return; }
+    if (entity.flight && this.getActivePreset().category === 'follow') { this.updateAircraft(dt, elapsed, entity); return; }
     if (this.flightView && (this.activePresetId === 'chase' || this.activePresetId === 'action')) { this.updateFlight(dt, entity); return; }
     this.flying = false;
     const desiredPos = this._desiredPos;
@@ -771,6 +775,142 @@ class CameraSystem {
     if (Math.abs(this.camera.fov - fov) > 0.05) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
     this.followEntity = null; // the chase framing picks up from here once the flight is over
     this.aimBlend = 0;
+  }
+
+  // An aircraft: the camera flies formation on it. Its frame follows the flight path with a lag (the nose is seen working
+  // against the path, a turn swings the tail out), is carried through a loop without ever flipping, and leans a little
+  // with the bank; thrust drops it back, g sinks it under the aircraft, speed widens the lens and shakes it. 'action' is
+  // locked to the aircraft's own roll, close in; 'pov' sits at the pilot's eyes.
+  updateAircraft(dt, elapsed, a) {
+    const b = a.flight, r = b.r;
+    const s = this.air ??= { f: new THREE.Vector3(0, 0, 1), u: new THREE.Vector3(0, 1, 0), entity: null, pull: 0, pullVel: 0, speed: 0, acc: 0, sink: 0, fov: 0, t: 0, punch: 0 };
+    if (!_flyRay) { _flyDir = new THREE.Vector3(); _flyHit = new THREE.Vector3(); _flyBox = new THREE.Box3(); _flyRay = new THREE.Ray(); }
+    const h = Math.max(0, Math.min(dt, 0.1));
+    const action = this.activePresetId === 'action', pov = this.activePresetId === 'pov';
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const ease = (lo, hi, x) => { const t = clamp((x - lo) / (hi - lo), 0, 1); return t * t * (3 - 2 * t); };
+    this.flying = true;
+    this.aimBlend = 0;
+    this.followEntity = null; // the chase framing picks up from here once out of the aircraft
+    const V = b.airspeed, speed = Math.hypot(b.vx, b.vy, b.vz);
+    const nose = _an.set(r[6], r[7], r[8]), bodyUp = _au.set(r[3], r[4], r[5]);
+    // where it is going: between the nose and the flight path
+    const F = _af.copy(nose);
+    if (speed > 8 && !b.onGround && !pov) F.multiplyScalar(0.4).addScaledVector(_av.set(b.vx, b.vy, b.vz), 0.6 / speed).normalize();
+    if (s.entity !== a || !this.initialized) {
+      s.entity = a;
+      s.f.copy(F);
+      s.u.copy(action || pov ? bodyUp : _ay);
+      s.u.addScaledVector(s.f, -s.u.dot(s.f));
+      if (s.u.lengthSq() < 1e-4) s.u.copy(bodyUp);
+      s.u.normalize();
+      s.pull = s.pullVel = s.acc = s.sink = s.punch = 0;
+      s.speed = a.speed;
+      this.initialized = true;
+    }
+    if (this.userOrbitTimer > 0 && !this.isDragging) this.userOrbitTimer = Math.max(0, this.userOrbitTimer - dt);
+    if (!this.isDragging && this.userOrbitTimer <= 0) {
+      this.orbitYawOffset -= Math.round(this.orbitYawOffset / (Math.PI * 2)) * (Math.PI * 2);
+      this.orbitYawOffset += -this.orbitYawOffset * (1 - Math.exp(-dt * 2.2));
+      this.orbitPitchOffset += (0.09 - this.orbitPitchOffset) * (1 - Math.exp(-dt * 2.2));
+    }
+    this.orbitPitchOffset = clamp(this.orbitPitchOffset, -0.9, 1.1);
+    if (h > 0) {
+      // forward follows with a lag; up is carried along without twist, then eased to the horizon or to the aircraft's own
+      s.f.lerp(F, 1 - Math.exp(-h * (pov ? 40 : action ? 9 : 5.5))).normalize();
+      s.u.addScaledVector(s.f, -s.u.dot(s.f));
+      if (s.u.lengthSq() < 1e-6) s.u.copy(bodyUp).addScaledVector(s.f, -bodyUp.dot(s.f));
+      s.u.normalize();
+      // near the vertical the horizon is no guide: there the camera rolls with the aircraft
+      const steep = ease(0.6, 0.92, Math.abs(s.f.y));
+      const k = pov || action ? 1 : 0.3 + 0.7 * steep;
+      const T = _at.copy(_ay).multiplyScalar(1 - k).addScaledVector(bodyUp, k);
+      T.addScaledVector(s.f, -T.dot(s.f));
+      if (T.lengthSq() > 0.02) {
+        T.normalize();
+        const angle = Math.atan2(_ax.crossVectors(s.u, T).dot(s.f), s.u.dot(T));
+        const rate = pov ? 40 : action ? 8 : 3.2, most = h * (pov ? 30 : action ? 6 : 2.6);
+        s.u.applyAxisAngle(s.f, clamp(angle * (1 - Math.exp(-h * rate)), -most, most));
+      }
+      // thrust and drag move the camera along the path (a spring); g sinks it under the aircraft
+      const acc = clamp((a.speed - s.speed) / h, -40, 40);
+      s.speed = a.speed;
+      s.acc += (acc - s.acc) * (1 - Math.exp(-h * 6));
+      const wanted = clamp(s.acc * 0.16, -2.2, 4.5);
+      const omega = 5.5, x = s.pull - wanted, j = s.pullVel + omega * x, decay = Math.exp(-omega * h);
+      s.pull = wanted + (x + j * h) * decay;
+      s.pullVel = (s.pullVel - omega * j * h) * decay;
+      s.sink += (clamp((b.gSmooth - 1) * 0.3, -0.9, 2.4) - s.sink) * (1 - Math.exp(-h * 3.5));
+      s.punch *= Math.exp(-h * 2.5);
+      s.t += h;
+    }
+    const top = a.drive?.speed || 100, rush = clamp(V / top, 0, 1);
+    const right = _ar.crossVectors(s.f, s.u).normalize(); // the view's right
+    // free look: the mouse swings the camera round the aircraft, and lets go after a moment
+    const yaw = this.orbitYawOffset, pitch = this.orbitPitchOffset - 0.09;
+    const d = _ad.copy(s.f).applyAxisAngle(s.u, yaw);
+    const looking = clamp(Math.abs(Math.atan2(Math.sin(yaw), Math.cos(yaw))) / 1.2, 0, 1);
+    const pos = this.currentPos, look = this.currentLookAt;
+    if (pov) {
+      const e = a.eye || [0, 0.8, 0];
+      pos.set(a.position.x + e[0] * r[0] + e[1] * r[3] + e[2] * r[6], a.position.y + e[0] * r[1] + e[1] * r[4] + e[2] * r[7], a.position.z + e[0] * r[2] + e[1] * r[5] + e[2] * r[8]);
+      // the head sinks into the seat under g
+      pos.addScaledVector(bodyUp, -clamp((b.gSmooth - 1) * 0.012, -0.03, 0.08));
+      d.applyAxisAngle(_ax.crossVectors(d, s.u).normalize(), -pitch);
+      look.copy(pos).addScaledVector(d, 60);
+    } else {
+      const anchor = _aa.copy(a.position).addScaledVector(bodyUp, a.cameraTargetOffset?.y ?? 0.6);
+      const dist = Math.max(4, a.chaseDistance * this.zoomMultiplier * (action ? 0.7 : 1) * (1 + 0.22 * Math.sqrt(rush)) + s.pull);
+      const height = a.chaseHeight * this.zoomMultiplier * (action ? 0.42 : 1) * (1 - 0.25 * rush) - s.sink;
+      pos.copy(anchor).addScaledVector(d, -Math.cos(pitch) * dist).addScaledVector(s.u, height + Math.sin(pitch) * dist * 0.85);
+      look.copy(anchor).addScaledVector(d, (10 + V * 0.06) * (1 - looking)).addScaledVector(s.u, 1.2 * (1 - looking));
+      // nothing solid between the aircraft and the camera
+      _flyDir.subVectors(pos, anchor);
+      const length = _flyDir.length();
+      if (length > 0.05) {
+        _flyDir.divideScalar(length);
+        _flyRay.origin.copy(anchor);
+        _flyRay.direction.copy(_flyDir);
+        let distance = length;
+        for (const c of this.controllerManager.nearColliders(anchor.x, anchor.z, length + 3)) {
+          if (c.parked !== undefined || c.breakable) continue;
+          _flyBox.min.set(c.minX - 0.3, (c.minY ?? 0) - 0.1, c.minZ - 0.3);
+          _flyBox.max.set(c.maxX + 0.3, c.maxY + 0.3, c.maxZ + 0.3);
+          if (_flyBox.containsPoint(anchor)) continue;
+          if (_flyRay.intersectBox(_flyBox, _flyHit)) distance = Math.min(distance, Math.max(2.5, anchor.distanceTo(_flyHit) - 0.4));
+        }
+        if (distance < length) pos.copy(anchor).addScaledVector(_flyDir, distance);
+      }
+      pos.y = Math.max(pos.y, b.groundY > -30 ? b.groundY + 0.7 : -1.2);
+    }
+    this.camera.position.copy(pos);
+    // the air shakes the camera: slow and quick swaying, not noise; harder near the stall, in reheat and through Mach 1
+    const rumble = b.onGround ? Math.min(1, Math.abs(a.speed) / 60) * 0.02 : 0;
+    const buffet = (0.006 + rush * rush * 0.022 + b.buffet * 0.11 + b.ab * 0.035 + rumble) * (pov ? 0.35 : 1) * (this.isDragging ? 0.3 : 1);
+    const t = s.t;
+    this.camera.position.addScaledVector(right, (Math.sin(t * 6.1) + 0.5 * Math.sin(t * 13.7 + 1.3) + 0.3 * Math.sin(t * 31)) * buffet)
+      .addScaledVector(s.u, (Math.sin(t * 7.3 + 0.4) * 0.7 + Math.sin(t * 17.9) * 0.35 + 0.3 * Math.sin(t * 37 + 2)) * buffet);
+    this.camera.up.copy(s.u);
+    this.camera.lookAt(look);
+    this.camera.up.set(0, 1, 0);
+    if (this.shake > 0.001) {
+      const k = this.shake * this.shake;
+      this._shakeOffset.set((Math.random() - 0.5) * k, (Math.random() - 0.5) * k, (Math.random() - 0.5) * k);
+      this.camera.position.add(this._shakeOffset);
+      this.camera.rotateZ((Math.random() - 0.5) * k * 0.05);
+      this.shake *= Math.exp(-dt * 6);
+    }
+    const wide = pov ? rush * 9 + b.ab * 4 + s.punch : Math.pow(rush, 1.15) * 20 + b.ab * 7 + s.punch;
+    s.fov += (wide - s.fov) * (1 - Math.exp(-h * (wide > s.fov ? 2.6 : 4)));
+    // the blur of speed (main.js reads speedFov) belongs to things passing close: high up the picture stays sharp
+    this.speedFov = s.fov * (0.2 + 0.8 * clamp(1 - (b.agl - 40) / 260, 0, 1));
+    const fov = (pov ? 72 : 56) + s.fov;
+    if (Math.abs(this.camera.fov - fov) > 0.05) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
+  }
+
+  // A kick of the lens (degrees): the afterburner lighting, the sound barrier going by
+  punchFov(degrees) {
+    if (this.air) this.air.punch = Math.min(14, this.air.punch + degrees);
   }
 
   // The boom follows the route, while the car remains free to yaw inside the frame. A bounded lens change and a
