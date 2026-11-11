@@ -406,4 +406,5 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.20** | **Slippage** | Xbox : frein à main sur A, nitro sur RB ; retour sonore de marche arrière et pneus bloqués au frein à main plus perceptibles. |
 | **0.9.21** | **Clearing** | Tracés côtiers continus contrôlés contre les bâtiments, sols et circulation alignés, quais et rambardes solides ; audit reproductible des deux rives. |
 | **0.9.22** | **Circuit Breaker** | Correctif de chargement : calcul de circulation incrémental, recherches d'obstacles ciblées et suppression des subdivisions de terrain inutiles. Le crash signalé et le ralentissement global restent à confirmer résolus. |
+| **0.9.23** | **Free Float** | Menu pause : circulation Aucun / Faible / Moyen / Dense, mémorisée, pour les rues et les voies rapides ; réduction réelle de la simulation et du rendu. |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |

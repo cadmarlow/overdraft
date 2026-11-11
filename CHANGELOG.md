@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.9.23 — Free Float — 11 novembre 2026
+
+- Menu pause **Ambiance → Circulation** : **Aucun, Faible, Moyen, Dense**. Choix mémorisé, appliqué à la reprise
+  sans rechargement et indépendant de la qualité graphique. Faible conserve environ 25 % du trafic, Moyen 50 %,
+  Dense la quantité d'origine (200 voitures et 20 bus autour du joueur, plus la circulation des voies rapides).
+- Les véhicules retirés quittent la simulation, les collisions, les réservations des voies et le rendu.
+  Les voitures garées, le véhicule du joueur et les véhicules des missions ou poursuites restent présents.
+  Les modèles sont préparés au chargement : réaugmenter le trafic réutilise les mêmes ressources ; sur les voies
+  rapides, les nouvelles voitures s'insèrent dans les espaces disponibles en gardant 30 m autour du joueur.
+- Contrôle reproductible : `node tools/qa-traffic.mjs 9347 /tmp/overdraft-traffic-qa high` dans un Chrome de test
+  dédié, avec `--disable-gpu-vsync --disable-frame-rate-limit`. Le script contrôle le menu avec les entrées CDP,
+  la reprise, la persistance après rechargement, puis compare les quatre niveaux de jour à résolution fixe.
+- Validation de cet ajout : 994 tests, 993 réussis et un ignoré, aucun échec ; build réussi. Chrome isolé,
+  WebGPU HAUTE, contrôle visuel du menu à 1440 × 900 et 1280 × 720, conduite par vraies touches, passage à zéro,
+  retour au trafic dense et persistance après rechargement, sans erreur JavaScript ni WebGPU.
+- Mesures sur le FDR, à 13 h, en HAUTE, 1440 × 900, échelle 100 %, Mac sur secteur : deux fenêtres de huit secondes
+  en Dense donnent 34,2 et 36,6 images/s ; deux fenêtres sans circulation donnent 37,9 et 38,0 images/s.
+  La simulation rues (piétons compris) + voies rapides passe d'environ 1,5–1,7 ms à 0,22–0,25 ms par image.
+  Faible : 38,8 images/s ; Moyen : 38,0. Ces essais courts montrent un gain, sans établir un classement précis entre
+  les niveaux intermédiaires. La scène reste sous 60 images/s. Missions complètes, manette physique, autres quartiers,
+  qualité ÉQUILIBRÉE et autonomie sur batterie non requalifiés par cet ajout.
+
 ## 0.9.22 — Circuit Breaker — 11 novembre 2026
 
 - Le calcul initial de la circulation rend régulièrement la main au navigateur. Les recherches de trottoirs,

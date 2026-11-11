@@ -1,5 +1,6 @@
 import { currentLevel, setLevel } from './quality.js';
 import { getLocationLabel } from './city-config.js';
+import { TRAFFIC_LEVELS, saveTrafficDensity } from './traffic-density.js';
 
 const PREFERENCES_KEY = 'overdraft:menu';
 const GRAPHICS = {
@@ -31,6 +32,7 @@ function pauseMenuMarkup(build) {
         </div><aside class="pm-aside"><p class="pm-kicker">LE PROFIL EN DÉTAIL</p><h3 id="pm-quality-title"></h3><p id="pm-quality-description"></p><div class="pm-comparison">${['Reflets', 'Ombres', 'Végétation', 'Résolution adaptative'].map((label, i) => `<div class="pm-comparison-row"><span>${label}</span><strong id="pm-quality-value-${i}"></strong></div>`).join('')}</div><p class="pm-setting-note" id="pm-reload-note">Appliquer enregistre votre progression et recharge la partie. Les véhicules du garage se rappellent avec G.</p><p class="pm-setting-note">La fluidité dépend de la scène et de l’alimentation du Mac.</p></aside></div></section>
         <section class="pm-panel" id="pm-panel-world" role="tabpanel" aria-labelledby="pm-tab-world" hidden><div class="pm-layout"><div class="pm-main">
           <p class="pm-kicker">L’ATMOSPHÈRE DE VOTRE PARTIE</p><h2 class="pm-heading">Changez<br><em>l’ambiance.</em></h2>
+          <div class="pm-setting"><div class="pm-setting-heading"><h3>Circulation</h3><p>Moins de trafic peut améliorer la fluidité. Dense correspond à la circulation d’origine.</p></div>${choices('data-traffic', Object.entries(TRAFFIC_LEVELS).map(([id, level]) => [id, level.name]))}<p class="pm-setting-note">Voitures et bus des rues et voies rapides. Les véhicules garés, votre véhicule et ceux des missions ou des poursuites restent présents. Choix mémorisé, effectif dès la reprise.</p></div>
           <div class="pm-setting"><div class="pm-setting-heading"><h3>Heure de la journée</h3><p id="pm-hour-label">Choisissez la lumière de Manhattan.</p></div>${choices('data-game-time', [['golden', 'Soleil bas'], ['midday', 'Midi'], ['twilight', 'Crépuscule'], ['midnight', 'Nuit']])}</div>
           <div class="pm-setting"><div class="pm-setting-heading"><h3>Météo</h3><p>Un choix direct, sans faire défiler tous les états.</p></div>${choices('data-weather', Object.entries(WEATHER))}</div>
           <div class="pm-setting"><div class="pm-setting-heading"><h3>Horloge</h3><p>Gardez une lumière précise ou laissez la journée avancer.</p></div>${choices('data-clock', [['run', 'Temps qui passe'], ['hold', 'Heure figée']])}</div>
@@ -121,6 +123,13 @@ class PauseMenu {
     this.preferences = { weather: this.game.weatherMode || 'auto', clockRunning: this.game.atmosphere.running };
     try { localStorage.setItem(PREFERENCES_KEY, JSON.stringify(this.preferences)); } catch { /* Optional preferences. */ }
   }
+  selectTraffic(id) {
+    if (!Object.hasOwn(TRAFFIC_LEVELS, id)) return;
+    this.game.traffic.setDensity(id);
+    this.game.highway.setDensity(id);
+    saveTrafficDensity(id);
+    this.worldChanged(`Circulation : ${TRAFFIC_LEVELS[id].name.toLowerCase()}.`);
+  }
   sync() {
     const g = this.game, money = n => `${Math.round(n || 0).toLocaleString('fr-FR')} $`;
     this.root.dataset.playing = String(g.playing);
@@ -139,6 +148,7 @@ class PauseMenu {
   }
   syncWorld() {
     const g = this.game;
+    for (const b of this.root.querySelectorAll('[data-traffic]')) b.setAttribute('aria-pressed', String(b.dataset.traffic === g.traffic.density));
     for (const b of this.root.querySelectorAll('[data-weather]')) b.setAttribute('aria-pressed', String(b.dataset.weather === (g.weatherMode || 'auto')));
     for (const b of this.root.querySelectorAll('[data-game-time]')) b.setAttribute('aria-pressed', String(Math.abs(g.atmosphere.hour - HOURS[b.dataset.gameTime]) < 0.1));
     for (const b of this.root.querySelectorAll('[data-sound]')) { b.setAttribute('aria-pressed', String((b.dataset.sound === 'on') === g.audio.enabled)); b.disabled = !g.audio.supported; }
@@ -159,6 +169,7 @@ class PauseMenu {
   click(e) {
     const b = e.target.closest('button'); if (!b || b.disabled) return;
     if (b.dataset.pauseTab) this.selectTab(b.dataset.pauseTab, true);
+    else if (b.dataset.traffic) this.selectTraffic(b.dataset.traffic);
     else if (b.dataset.quality) this.selectQuality(b.dataset.quality);
     else if (b.id === 'pm-quality-apply') this.applyQuality();
     else if (b.id === 'pm-quality-reset') this.selectQuality(this.applied);
