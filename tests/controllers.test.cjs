@@ -73,6 +73,21 @@ test('feet and all vehicle modes use the same park surface as wheel suspension',
   assert.equal(hit.y, 0.22);
 });
 
+test('car wheels stand on the visible pier outside the bulkhead and fall only beyond its actual deck', async () => {
+  const { createGroundSurfaces } = await import('../js/ground-surfaces.js');
+  const { controller } = keyboardHarness({ blockAt: () => null });
+  controller.groundSurfaces = createGroundSurfaces();
+  controller.groundSurfaces.add([{ x: 0, z: 0 }, { x: 20, z: 0 }, { x: 20, z: 80 }, { x: 0, z: 80 }], 0.12,
+    { deck: true, curb: false });
+  controller.overWater = () => true;
+  const hit = {};
+  controller.carGround(10, 40, hit);
+  assert.equal(hit.y, 0.12);
+  assert.equal(hit.curb, false);
+  controller.carGround(20.01, 40, hit);
+  assert.equal(hit.y, -40);
+});
+
 test('CALIBRE floors override outdoor surfaces at street level without replacing building roofs', async () => {
   const { createGroundSurfaces } = await import('../js/ground-surfaces.js');
   const { CALIBRE, calibreLocal, calibreZone } = await import('../js/calibre-plan.js');

@@ -225,3 +225,14 @@ test('mouse hover and zoom buttons remain available without a pan', () => {
   h.zoomOut.dispatch('click');
   assert.equal(h.map.viewZoom, 1);
 });
+
+test('coastal map lines use the same corrected corridor as the drivable highway', () => {
+  const routes = [{ west: false, z0: 900, step: 3, x: [1284, 1285, 1286] }];
+  const old = { name: 'Franklin D Roosevelt Dr', raw: 'FRANKLIN D ROOSEVELT DR', highway: true, pts: [{ x: 1340, z: 900 }, { x: 1342, z: 906 }] };
+  const { MAP_ROADS } = loadModule(source + '\nexport { MAP_ROADS };', {
+    imports: { './nyc-geodata.js': { GEO: {} }, './city-config.js': { ROADS: [old] }, './highway-layout.js': { HIGHWAY_ROUTES: routes } }
+  });
+  assert.equal(MAP_ROADS.length, 1);
+  assert.equal(MAP_ROADS[0].name, 'FDR Drive');
+  assert.deepEqual(Array.from(MAP_ROADS[0].pts, p => [p.x, p.z]), [[1284,900],[1285,903],[1286,906]]);
+});

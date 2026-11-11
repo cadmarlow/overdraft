@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { highwayX, highwayScale } from './highway-layout.js';
 import { ISLAND_BOUNDS, getIslandBoundsAtZ, streetZ, isTypingInField, districtAt, getLocationLabel } from './city-config.js';
 import { angleDelta, doorPosition, smooth, clamp, canInteract, validPosition } from './interaction-state.js';
 import { CharacterModel, LOOKS } from './characters.js';
@@ -46,8 +47,8 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.20';
-const BUILD_NAME = 'Slippage';
+const BUILD = '0.9.21';
+const BUILD_NAME = 'Clearing';
 const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
 // The neighbourhoods as the opening card names them (city-config.js districtAt)
 const DISTRICT_NAMES = {
@@ -289,6 +290,7 @@ export class Game {
     this.setupCollisions();
     this.jets = []; // broken hydrants
     controllers.onPropHit = (prop, car) => this.knockProp(prop, car);
+    this.applyTestSpawn();
     if (new URLSearchParams(location.search).has('qa')) window.__playground = window.__game = this;
     // The title menu looks down the avenue from the air, over the player; the opening flight lands from there
     this.intro = false;
@@ -300,6 +302,27 @@ export class Game {
         new THREE.Vector3(p.x + s * 230, 90, p.z + c * 230)
       );
     }
+  }
+
+  // An explicit local test link starts at the reported FDR facade after restoring the player's progression.
+  // The garage uses an already compiled car; this practice session never writes over the regular save.
+  applyTestSpawn() {
+    if (!['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) ||
+      new URLSearchParams(location.search).get('spawn') !== 'fdr') return;
+    this.testSpawn = true;
+    const z = 1020, x = highwayX(false, z) + 5.55 * highwayScale(false, z);
+    const heading = Math.atan2(highwayX(false, z - 3) - highwayX(false, z + 3), -6);
+    this.teleportPlayer(x - 12, z + 12);
+    this.person.heading = this.camera.footYaw = heading;
+    this.garage.summon('hatch');
+    this.controllers.teleportActiveTo(x, z, heading);
+    this.person.position.copy(this.car.position);
+    this.camera.resetForTeleport();
+    this.camera.initialized = false;
+    this.atmosphere.setHour(12);
+    this.atmosphere.setWeather('clear', true);
+    this.atmosphere.running = false;
+    this.atmosphere.lockWeather = true;
   }
 
   // ---- The opening ------------------------------------------------------------------------------------------------------
@@ -586,6 +609,13 @@ export class Game {
     this.setPaused(false);
     this.audio.setEnabled(this.audio.enabled);
     this.ui['play-button'].firstChild.textContent = 'REPRENDRE LA PARTIE ';
+    if (first && this.testSpawn) {
+      this.camera.menuDolly = null;
+      this.camera.resetForTeleport();
+      this.camera.initialized = false;
+      this.toast('Test FDR · 30e Rue', 'Voie nord · Z / RT pour passer devant l’immeuble · Essai sans sauvegarde');
+      return;
+    }
     if (first) {
       // the long opening for a new game, and once for each new build of the game; a short dive otherwise
       let seen = null;
@@ -2988,7 +3018,7 @@ export class Game {
 
   // ---- Saving ------------------------------------------------------------------------------------------------------
   save() {
-    if (this.resetting || this.transition || this.state === 'dead' || this.state === 'busted' || this.architect?.lab?.running) return false;
+    if (this.testSpawn || this.resetting || this.transition || this.state === 'dead' || this.state === 'busted' || this.architect?.lab?.running) return false;
     try {
       const p = this.person;
       const fleet = this.fleet.filter((c) => !c.mission && !c.destroyed && !c.mode && !c.pooled);

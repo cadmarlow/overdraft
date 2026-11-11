@@ -15,9 +15,10 @@ function groundFootprint(poly) {
 
 function createGroundSurfaces() {
   const cells = new Map();
-  function add(poly, height, { grip = 1, rough = 0.006, curb = true, plane = null } = {}) {
+  let roadCorridor = null;
+  function add(poly, height, { grip = 1, rough = 0.006, curb = true, plane = null, deck = false, road = false } = {}) {
     if (poly.length < 3) return;
-    const surface = { ...groundFootprint(poly), height, grip, rough, curb, plane };
+    const surface = { ...groundFootprint(poly), height, grip, rough, curb, plane, deck, road };
     for (let x = Math.floor(surface.minX / CELL); x <= Math.floor(surface.maxX / CELL); x++) {
       for (let z = Math.floor(surface.minZ / CELL); z <= Math.floor(surface.maxZ / CELL); z++) {
         const k = x * 1048576 + z;
@@ -55,21 +56,28 @@ function createGroundSurfaces() {
     }
     return false;
   }
-  function sample(x, z, out) {
+  function sample(x, z, out, maxDeckHeight = Infinity) {
+    if (roadCorridor?.contains(x, z)) {
+      Object.assign(out, { y: 0, grip: 1, rough: 0.0035, curb: false, nx: 0, ny: 1, nz: 0, deck: false });
+      return true;
+    }
     let best = null, height = -Infinity;
     for (const s of cells.get(key(x, z)) || []) {
       if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
       const p = s.plane;
       const y = p ? s.height - ((x - p.x) * p.nx + (z - p.z) * p.nz) / p.ny : s.height;
-      if (y <= height || !contains(s.polygon.outer, x, z)) continue;
+      if (s.deck && y > maxDeckHeight) continue;
+      if (best?.road && !s.road) continue;
+      if ((y <= height && !(s.road && !best?.road)) || !contains(s.polygon.outer, x, z)) continue;
       best = s; height = y;
     }
     if (!best) return false;
     out.y = height; out.grip = best.grip; out.rough = best.rough; out.curb = best.curb;
+    out.deck = best.deck;
     out.nx = best.plane?.nx ?? 0; out.ny = best.plane?.ny ?? 1; out.nz = best.plane?.nz ?? 0;
     return true;
   }
-  return { add, addTriangles, sample };
+  return { add, addTriangles, sample, setRoadCorridor: corridor => { roadCorridor = corridor; } };
 }
 
 // The wall's visible outer edge and the lawn's inset enclose its solid coping. Split long edges so collision cells
@@ -90,4 +98,23 @@ function groundBoundaryColliders(outer, inner, minY, maxY) {
   return colliders;
 }
 
-export { createGroundSurfaces, groundFootprint, groundBoundaryColliders };
+// Match visible railing runs, retaining access gaps and splitting long stretches for the collision grid.
+function groundRailColliders(segments, minY, height, halfWidth = 0.12) {
+  const colliders = [];
+  for (const [ax, az, bx, bz] of segments) {
+    const length = Math.hypot(bx - ax, bz - az);
+    if (length < 0.01) continue;
+    const nx = -(bz - az) / length * halfWidth, nz = (bx - ax) / length * halfWidth;
+    const count = Math.ceil(length / 24);
+    for (let i = 0; i < count; i++) {
+      const a = { x: ax + (bx - ax) * i / count, z: az + (bz - az) * i / count };
+      const b = { x: ax + (bx - ax) * (i + 1) / count, z: az + (bz - az) * (i + 1) / count };
+      const poly = [{ x: a.x + nx, z: a.z + nz }, { x: b.x + nx, z: b.z + nz },
+        { x: b.x - nx, z: b.z - nz }, { x: a.x - nx, z: a.z - nz }];
+      colliders.push({ ...groundFootprint(poly), minY, maxY: minY + height, obstacle: 'wall' });
+    }
+  }
+  return colliders;
+}
+
+export { createGroundSurfaces, groundFootprint, groundBoundaryColliders, groundRailColliders };

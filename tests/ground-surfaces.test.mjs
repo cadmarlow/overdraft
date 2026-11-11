@@ -63,3 +63,15 @@ test('traffic excludes large park sidewalks and exact irregular outlines while l
   assert.equal(network.isRoadClear(-0.5, -2, 1), true);
   assert.equal(network.isRoadClear(-0.5, 50, 1), false, 'the body width must clear the curb, not only its centre');
 });
+
+test('coastal railings stop a car along the whole drawn run and preserve the ferry access gap', async () => {
+  const { groundRailColliders } = await import('../js/ground-surfaces.js');
+  const walls = groundRailColliders([[0,0,0,100],[0,110,0,150]],-.04,1.1);
+  const body = { car:true,hx:.9,hz:2.3,sin:1,cos:0 };
+  for(let z=1;z<149;z++) {
+    if(z>=99&&z<=111)continue;
+    assert.ok(walls.some(w=>polygonContact(w.polygon,-1,z,body,null)),`railing z=${z}`);
+  }
+  assert.ok(walls.every(w=>!polygonContact(w.polygon,-1,105,body,null)));
+  assert.ok(walls.every(w=>Math.max(w.maxX-w.minX,w.maxZ-w.minZ)<=24&&w.maxY===1.06));
+});

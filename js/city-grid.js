@@ -44,7 +44,7 @@ import {
 import { createGroundRoadMaterial, createGroundWalkMaterial, createGroundCurbMaterial } from './ground-materials.js';
 import { buildIslands } from './ground.js';
 import { curbOutline } from './ground-plan.js';
-import { createGroundSurfaces, groundFootprint, groundBoundaryColliders } from './ground-surfaces.js';
+import { createGroundSurfaces, groundFootprint, groundBoundaryColliders, groundRailColliders } from './ground-surfaces.js';
 import { lawnColorNode, createGroundLawnMaterial, createParkEdgeMaterial, createGroundRockMaterial } from './park-materials.js';
 import { buildParkWays, buildParkShores, buildOutcrops, paintParkDrives } from './park-ground.js';
 import {
@@ -61,6 +61,10 @@ import {
 } from './tsl-materials.js';
 import { createRoadPaintChunkBuilder } from './road-paint.js';
 import { GEO } from './nyc-geodata.js';
+import { sampleShore, southernShoreRails } from './highway-shore.js';
+import { highwayCorridor, highwayGroundCut, highwayX, highwayScale } from './highway-layout.js';
+import { cutRoadGround } from './road-ground-cut.js';
+import { fitPierToRoad } from './road-corridor.js';
 
 // Live construction data consumed by the building and street-detail builders after buildCityGrid().
 let centralParkClearings;
@@ -744,7 +748,7 @@ function pierHullGeometry(len, beam, depth, bowFrac = 0.28, sternFrac = 0.06, do
 
 // Waterfront piers: builds every WATERFRONT_PIERS entry: concrete decks on timber piles with fenders, railings and
 // lamps, plus each pier's landmark structures. All static parts go through one batcher (~1 draw call per material).
-function buildWaterfrontPiers(group) {
+function buildWaterfrontPiers(group, colliders) {
   const M = createWaterfrontPierMaterials();
   for (const [k, m] of Object.entries(M)) if (m && m.isMaterial) m.name = 'waterfrontPier.' + k;
   const B = createPierBoxBatcher();
@@ -808,7 +812,8 @@ function buildWaterfrontPiers(group) {
       x0 = p.cx - dx * h;
       z0 = p.cz - dz * h;
     }
-    const F = frame(x0, z0, theta);
+    const fitted = fitPierToRoad(highwayGroundCut, { x: x0, z: z0, dx: Math.cos(theta), dz: -Math.sin(theta), length: p.length, halfWidth: p.width / 2 });
+    const F = frame(fitted.x, fitted.z, theta);
     const inWater = (u, s) => { const x = F.wx(u, s), sx = shoreAt(F.wz(u, s)); return west ? x < sx : x > sx; };
     let u0 = 0; // extend the deck inland until it meets the bulkhead across its whole width
     for (const s of [-p.width / 2, 0, p.width / 2]) {
@@ -816,20 +821,43 @@ function buildWaterfrontPiers(group) {
       while (u > -40 && inWater(u, s)) u -= 0.5;
       u0 = Math.min(u0, u - 0.5);
     }
-    return Object.assign(F, { L: p.length, hw: p.width / 2, u0, west });
+    return Object.assign(F, { L: fitted.length, hw: p.width / 2, u0, west });
   };
 
   // Steel pipe railing with posts every 3 m along both sides (+ optional seaward end)
+  const pierRailCollider = (F, u0, u1, s0, s1, y) => {
+    const poly = [[u0, s0], [u1, s0], [u1, s1], [u0, s1]].map(([u, s]) => ({ x: F.wx(u, s), z: F.wz(u, s) }));
+    colliders.push({ ...groundFootprint(poly), minY: y, maxY: y + 1.1, obstacle: 'wall' });
+  };
+  const railRuns = (F, a, b, fixed, alongU) => {
+    const result = [];
+    let start = null;
+    for (let t = a; t < b; t += 1) {
+      const end = Math.min(b, t + 1), mid = (t + end) / 2;
+      const u = alongU ? mid : fixed, s = alongU ? fixed : mid;
+      const clear = !highwayCorridor.contains(F.wx(u, s), F.wz(u, s), 0.8);
+      if (clear && start === null) start = t;
+      if (!clear && start !== null) { result.push([start, t]); start = null; }
+    }
+    if (start !== null) result.push([start, b]);
+    return result;
+  };
   const railing = (F, u0, u1, s0, s1, y, end = true) => {
     for (const s of [s0 + 0.12, s1 - 0.12]) {
-      F.box(PA, u0, u1, y + 1.04, y + 1.1, s - 0.05, s + 0.05, 9);
-      F.box(PA, u0, u1, y + 0.52, y + 0.56, s - 0.02, s + 0.02, 9);
-      for (let u = u0; u <= u1 + 0.01; u += 3) F.box(PA, u - 0.04, u + 0.04, y, y + 1.06, s - 0.04, s + 0.04, 9, true);
+      for (const [a, b] of railRuns(F, u0, u1, s, true)) {
+        for (let u = a; u < b; u += 12) pierRailCollider(F, u, Math.min(u + 12, b), s - 0.08, s + 0.08, y);
+        F.box(PA, a, b, y + 1.04, y + 1.1, s - 0.05, s + 0.05, 9);
+        F.box(PA, a, b, y + 0.52, y + 0.56, s - 0.02, s + 0.02, 9);
+        for (let u = a; u <= b + 0.01; u += 3) F.box(PA, u - 0.04, u + 0.04, y, y + 1.06, s - 0.04, s + 0.04, 9, true);
+      }
     }
     if (end) {
       const u = u1 - 0.12;
-      F.box(PA, u - 0.05, u + 0.05, y + 1.04, y + 1.1, s0 + 0.12, s1 - 0.12, 9);
-      F.box(PA, u - 0.02, u + 0.02, y + 0.52, y + 0.56, s0 + 0.12, s1 - 0.12, 9);
+      for (const [a, b] of railRuns(F, s0 + 0.12, s1 - 0.12, u, false)) {
+        for (let s = a; s < b; s += 12) pierRailCollider(F, u - 0.08, u + 0.08, s, Math.min(s + 12, b), y);
+        F.box(PA, u - 0.05, u + 0.05, y + 1.04, y + 1.1, a, b, 9);
+        F.box(PA, u - 0.02, u + 0.02, y + 0.52, y + 0.56, a, b, 9);
+      }
       for (let s = s0 + 3.1; s < s1 - 1; s += 3) F.box(PA, u - 0.04, u + 0.04, y, y + 1.06, s - 0.04, s + 0.04, 9, true);
     }
   };
@@ -846,6 +874,8 @@ function buildWaterfrontPiers(group) {
   // Pier deck on timber piles: concrete slab, shadowed under-deck, fender wales & piles, railings, lamps
   const deck = (F, u0, u1, s0, s1, o = {}) => {
     const y = o.y ?? DY;
+    addStreetGround([[u0, s0], [u1, s0], [u1, s1], [u0, s1]].map(([u, s]) => ({ x: F.wx(u, s), z: F.wz(u, s) })), y,
+      { curb: false, deck: true });
     F.box(GR, u0, u1, y - 0.85, y, s0, s1, o.surface ?? 0);
     F.box(PA, u0 + 0.5, u1 - 0.5, -2.9, y - 0.85, s0 + 0.5, s1 - 0.5, 12);
     const ua = Math.max(u0, 2);
@@ -1494,6 +1524,12 @@ function buildCityGrid(scene) {
   }));
   const seawallMesh = createExtrudedPolygonMesh(seawallPolygon, -2.35, 2.31, seawallMat, true, false);
   group.add(seawallMesh);
+  // The narrow visible coping continues round Battery beyond the two sampled waterfront strips.
+  for (let i = 0; i < MANHATTAN_COASTLINE.length; i++) {
+    const j = (i + 1) % MANHATTAN_COASTLINE.length;
+    const points = [MANHATTAN_COASTLINE[i], MANHATTAN_COASTLINE[j], seawallPolygon[j], seawallPolygon[i]];
+    streetGroundSurfaces.addTriangles(points.flatMap(p => [p.x, -0.04, p.z]), [0,1,2,0,2,3], { curb: false, deck: true });
+  }
 
   // Unified Manhattan Roadway Asphalt Deck (Y = 0.0) following true Manhattan coastline
   const roadMat = createGroundRoadMaterial();
@@ -2373,18 +2409,13 @@ function buildCityGrid(scene) {
         else if (!nearCastle(px, pz, 4)) treeSites.push({ x: px - o.x * 4.0, y: COPING_TOP, z: pz - o.z * 4.0, scale: 0.85 + prand(px, pz, 7) * 0.25, species: prand(pz, px, 8) < 0.6 ? 0 : 1, tier: 1 });
       }
     }
-    // Iron railing 0.6 m in from the bulkhead on the coping, gapped at the ferry terminal
-    const railSegs = [];
-    for (let i = 0; i + 1 < tip.length; i++) {
-      const a = tip[i];
-      const b = tip[i + 1];
-      const o = edgeO(a, b);
-      const A = { x: a.x - o.x * 0.6, z: a.z - o.z * 0.6 };
-      const B = { x: b.x - o.x * 0.6, z: b.z - o.z * 0.6 };
-      if (inTerminal((A.x + B.x) / 2, (A.z + B.z) / 2)) continue;
-      railSegs.push([A.x, A.z, B.x, B.z]);
+    // Continue both rivers' railings round the whole southern tip, including the approaches omitted by the old
+    // Battery-only decoration. The ferry terminal keeps its access gap. Render and collide the exact same runs.
+    const railSegs = southernShoreRails(C, getIslandBoundsAtZ, inTerminal);
+    if (railSegs.length) {
+      parkFenceGeos.push(buildFenceStripGeometry(railSegs, COPING_TOP, 1.1));
+      groundColliders.push(...groundRailColliders(railSegs, COPING_TOP, 1.1));
     }
-    if (railSegs.length) parkFenceGeos.push(buildFenceStripGeometry(railSegs, COPING_TOP, 1.1));
   }
 
   // One merged lawn mesh & one alpha-tested iron fence mesh for every small park
@@ -2506,14 +2537,17 @@ function buildCityGrid(scene) {
   // Concrete decks on timber piles with fenders, railings & lanterns, plus each pier's real structures:
   // cruise terminals, Chelsea Piers, Pier 57, Little Island, Pier 40, the Intrepid, the 79th St Boat Basin,
   // Pier 17, the Wavertree, Pier 15, Pier 11 and the Staten Island Ferry Whitehall Terminal (see buildWaterfrontPiers)
-  buildWaterfrontPiers(group);
+  buildWaterfrontPiers(group, groundColliders);
 
   // 9 & 10. The East River bridges, harbor islands and the surrounding boroughs are built by boroughs.js
 
   // 11. Manhattan's waterfront edge: esplanades, shore highways & riverside park belts (see buildManhattanWaterfrontEdge)
   const roadPaint = createRoadPaintChunkBuilder('RoadMarkings');
   paintParkDrives(CPG.drives, roadPaint, { top: CP_DRIVE_TOP, transverseTop: CP_TRANSVERSE_TOP, white: new THREE.Color(0xe6e2d6), yellow: new THREE.Color(0xe8ad22) });
-  const highwayLanes = buildManhattanWaterfrontEdge(group, { blockSidewalks, treeSites, lawnMat: cpLawnMat, curbMat, roadMat, roadPaint });
+  cutRoadGround(group, highwayGroundCut, [waterMat, roadMat]);
+  streetGroundSurfaces.setRoadCorridor(highwayCorridor);
+  const waterfrontColliders = [];
+  const highwayLanes = buildManhattanWaterfrontEdge(group, { blockSidewalks, treeSites, lawnMat: cpLawnMat, curbMat, roadMat, roadPaint, waterfrontColliders });
 
   // Batch static sub-meshes by material to reduce per-frame WebGPU draw calls
   batchStaticGroupMeshes(group, new Set([waterMat, roadMat, cpLawnMat, cpMeadowMat]));
@@ -2524,7 +2558,7 @@ function buildCityGrid(scene) {
   // roadway, handed over with the footprints)
   const sidewalks = roadSidewalks;
   // Player colliders of the viaduct, park rocks and retaining walls
-  const colliders = [...((fdrViaduct && fdrViaduct.colliders) || []), ...outcrops.colliders, ...groundColliders];
+  const colliders = [...((fdrViaduct && fdrViaduct.colliders) || []), ...outcrops.colliders, ...groundColliders, ...waterfrontColliders];
   return { group, sidewalks, curbs, groundSurfaces: streetGroundSurfaces, footprints, highwayLanes, colliders, roadPaint };
 }
 
@@ -2548,7 +2582,7 @@ function buildCityGrid(scene) {
  * South of the Williamsburg Bridge the FDR leaves the strip for the South Street Viaduct (buildSouthStreetViaduct).
  * Everything is merged into a handful of meshes and keeps clear of the bridge towers standing near the shore.
  */
-function buildManhattanWaterfrontEdge(group, { blockSidewalks, treeSites, lawnMat, curbMat, roadMat, roadPaint }) {
+function buildManhattanWaterfrontEdge(group, { blockSidewalks, treeSites, lawnMat, curbMat, roadMat, roadPaint, waterfrontColliders }) {
   const STEP = 3; // shore sampling (m of z)
   const HWY_W = 15.2; // 0.4 shoulder, 2 x 3.3 m lanes, 1.2 m median, 2 x 3.3 m lanes, 0.4 shoulder
   const COPING_Y = -0.04; // seawall coping top (section 2)
@@ -2591,51 +2625,6 @@ function buildManhattanWaterfrontEdge(group, { blockSidewalks, treeSites, lawnMa
   // Rows every STEP m of z: shore x `s`, inland sign `sgn` (x = s + sgn * d) and the strip width W to the nearest raised
   // sidewalk block (cross-street gaps take their neighbours'), min-filtered then smoothed so lanes and belts flow along
   // the shore. landF(z) slides the highway from the river side (0) to the block side (1); the park belts take the rest.
-  function sampleShore(west, z0, z1, landF) {
-    const sgn = west ? 1 : -1;
-    const edgeD = (b, s) => (west ? b.cx - b.w / 2 - s : s - b.cx - b.w / 2);
-    const near = blockSidewalks.filter((b) => edgeD(b, shoreX(b.cz, west)) < 80);
-    const rows = [];
-    for (let z = z0; z <= z1 + 1e-6; z += STEP) {
-      const s = shoreX(z, west);
-      let W = 40;
-      for (const b of near) if (Math.abs(z - b.cz) < b.d / 2 + 9) W = Math.min(W, edgeD(b, s));
-      rows.push({ z, s, sgn, west, raw: W });
-    }
-    const n = rows.length;
-    const at = (i) => rows[Math.min(n - 1, Math.max(0, i))];
-    rows.forEach((r, i) => { let m = Infinity; for (let k = -8; k <= 8; k++) m = Math.min(m, at(i + k).raw); r.min = m; });
-    rows.forEach((r, i) => {
-      let sum = 0;
-      for (let k = -5; k <= 5; k++) sum += at(i + k).min;
-      r.W = sum / 11;
-      r.d0 = 0.6 + Math.max(0, r.W - 0.4 - HWY_W - 0.6) * landF(r.z); // river-side edge of the highway
-      r.k = Math.min(1, Math.max(0.85, (r.W - r.d0 - 0.05) / HWY_W)); // narrower lanes where the strip is short
-      r.river = r.d0 - 0.5 - 0.4 >= 3.4 ? [0.4, r.d0 - 0.5] : null; // belt between the greenway and the highway
-      r.land = r.W - 0.3 - (r.d0 + HWY_W + 0.5) >= 3.4 ? [r.d0 + HWY_W + 0.5, r.W - 0.3] : null; // belt by the blocks
-    });
-    // Short pinches (a block corner within ~10 m of the shore for less than ~60 m of the smoothed W) don't break the
-    // highway: its markings, barrier and traffic lanes carry on there at the narrowest lane width, past the corner
-    for (let i = 0; i < n;) {
-      if (H(rows[i], HWY_W) <= rows[i].W + 0.1) { i++; continue; }
-      let j = i;
-      let rawMin = Infinity;
-      for (; j < n && H(rows[j], HWY_W) > rows[j].W + 0.1; j++) rawMin = Math.min(rawMin, rows[j].raw);
-      if (i > 0 && j < n && j - i <= 20 && rawMin >= 9.5) for (let k = i; k < j; k++) rows[k].W = H(rows[k], HWY_W) + 0.4;
-      i = j;
-    }
-    // Where a block front stands well back from the smoothed strip (a receding front, the wider shore of a cove), the
-    // belt by the blocks reaches out to its curb instead of leaving bare asphalt; not across the cross streets, and
-    // not for small set-backs along Riverside Park's wall
-    for (const r of rows) {
-      let front = Infinity;
-      for (const b of near) if (Math.abs(r.z - b.cz) < b.d / 2 - 1) front = Math.min(front, edgeD(b, r.s));
-      const a = r.land ? r.land[0] : r.d0 + HWY_W + 0.5;
-      if (front < Infinity && front - 1.2 - (r.land ? r.land[1] : a) >= (west && r.z < -350 ? 14 : 8)) r.land = [a, front - 1.2];
-    }
-    return rows;
-  }
-
   // ---- Merged geometry accumulators -------------------------------------------------------------------------------
   const makeAcc = () => ({ pos: [], nor: [], uv: [] });
   const P = (r, d, y = 0) => new THREE.Vector3(X(r, d), y, r.z);
@@ -2701,6 +2690,8 @@ function buildManhattanWaterfrontEdge(group, { blockSidewalks, treeSites, lawnMa
     runs(pts, (i, a, b, start, end) => {
       const dir = new THREE.Vector3().subVectors(b, a).normalize();
       const n = new THREE.Vector3(-dir.z, 0, dir.x);
+      const footprint = [off(a, n, -0.3, 0), off(b, n, -0.3, 0), off(b, n, 0.3, 0), off(a, n, 0.3, 0)];
+      waterfrontColliders.push({ ...groundFootprint(footprint), minY: 0, maxY: 0.82, obstacle: 'wall' });
       for (const sd of [-1, 1]) {
         const hint = n.clone().multiplyScalar(sd).setY(0.3);
         for (let k = 0; k + 1 < JERSEY.length; k++) {
@@ -2762,6 +2753,12 @@ function buildManhattanWaterfrontEdge(group, { blockSidewalks, treeSites, lawnMa
       const len = a.distanceTo(b);
       const top = COPING_Y + 1.1;
       quad(fence, a, b, b.clone().setY(top), a.clone().setY(top), new THREE.Vector3(-rows[i].sgn, 0, 0), u, u + len);
+      const dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz);
+      const nx = -dz / L * 0.08, nz = dx / L * 0.08;
+      waterfrontColliders.push({ ...groundFootprint([
+        { x: a.x + nx, z: a.z + nz }, { x: b.x + nx, z: b.z + nz },
+        { x: b.x - nx, z: b.z - nz }, { x: a.x - nx, z: a.z - nz }
+      ]), minY: COPING_Y, maxY: top, obstacle: 'wall' });
       u += len;
     });
   }
@@ -2833,9 +2830,18 @@ function buildManhattanWaterfrontEdge(group, { blockSidewalks, treeSites, lawnMa
   const [er0, er1] = parkZRange('John V. Lindsay East River Park', [streetZ(12), 4150]);
   const [cs0, cs1] = [streetZ(90), streetZ(84)]; // Carl Schurz Park
   const WEST_END_Z = 6000; // Route 9A dives into the Battery Park Underpass at Battery Place
-  const westRows = sampleShore(true, CUT_Z + 40, WEST_END_Z, (z) => smooth(streetZ(66), streetZ(59) + 60, z));
+  const westRows = sampleShore(true, CUT_Z + 40, WEST_END_Z, (z) => smooth(streetZ(66), streetZ(59) + 60, z), { blockSidewalks, shoreX });
   const eastRows = sampleShore(false, CUT_Z + 40, 6150, (z) =>
-    Math.max(smooth(er0 - 60, er0, z) * (1 - smooth(er1 - 50, er1, z)), smooth(cs0 - 40, cs0, z) * (1 - smooth(cs1, cs1 + 40, z))));
+    Math.max(smooth(er0 - 60, er0, z) * (1 - smooth(er1 - 50, er1, z)), smooth(cs0 - 40, cs0, z) * (1 - smooth(cs1, cs1 + 40, z))), { blockSidewalks, shoreX });
+  // The entire section follows the audited centreline: road, paint, median, lamps and traffic move together.
+  // Original green belts can remain outside it, but never grow across the newly reserved carriageway.
+  for (const r of [...westRows, ...eastRows]) {
+    r.k = highwayScale(r.west, r.z);
+    r.d0 = (highwayX(r.west, r.z) - r.s) * r.sgn - HWY_W * r.k / 2;
+    r.W = Math.max(r.W, H(r, HWY_W) + 0.8);
+    if (r.river) { r.river[1] = Math.min(r.river[1], r.d0 - 0.6); if (r.river[1] - r.river[0] < 3.4) r.river = null; }
+    if (r.land) { r.land[0] = Math.max(r.land[0], H(r, HWY_W) + 0.6); if (r.land[1] - r.land[0] < 3.4) r.land = null; }
+  }
   // South of VIA_Z the FDR leaves the strip for the South Street Viaduct: no at-grade carriageway or park belts there,
   // the esplanade carries on
   const VIA_Z = 4250;
@@ -2848,6 +2854,11 @@ function buildManhattanWaterfrontEdge(group, { blockSidewalks, treeSites, lawnMa
   for (const rows of [westRows, eastRows]) {
     const isWest = rows[0].west;
     railing(rows, -5.8);
+    // The coping is a real deck beyond the bulkhead, supporting wheels as well as feet.
+    for (let i = 1; i < rows.length; i++) {
+      const a = rows[i - 1], b = rows[i];
+      addStreetGround([P(a, -6), P(b, -6), P(b, 0.2), P(a, 0.2)], COPING_Y, { curb: false, deck: true });
+    }
     paintLine(rows, () => -0.45, 0.1, WHITE);
     paintLine(rows, () => -3.2, 0.1, WHITE);
     paintLine(rows, () => -1.82, 0.1, YELLOW, 6, 0.5);
@@ -2873,13 +2884,6 @@ function buildManhattanWaterfrontEdge(group, { blockSidewalks, treeSites, lawnMa
   // keeps its lots clear
   const iJoin = eastRows.findIndex((r) => r.via) - 1;
   const join = P(eastRows[iJoin], H(eastRows[iJoin], 7.6));
-  const pierBoxes = WATERFRONT_PIERS.filter((p) => p.side === 'east' && p.kind !== 'whitehall' && p.z > VIA_Z).map((p) => {
-    const th = Math.atan2(shoreX(p.z + 14, false) - shoreX(p.z - 14, false), 28); // as the piers' own frames
-    const ux = Math.cos(th);
-    const uz = -Math.sin(th);
-    const x0 = shoreX(p.z, false);
-    return { cx: x0 + ux * (p.length / 2 + 0.5), cz: p.z + uz * (p.length / 2 + 0.5), ux, uz, hl: p.length / 2, hw: p.width / 2 + 1 };
-  });
   const underSpots = [];
   // Its columns stand in the shore strip (short of the nearest block, as sampleShore's raw W) or on a block, never in a
   // street
@@ -2892,7 +2896,7 @@ function buildManhattanWaterfrontEdge(group, { blockSidewalks, treeSites, lawnMa
   const groundOK = (x, z) => inStrip(x, z) ||
     blockSidewalks.some((b) => Math.abs(x - b.cx) < b.w / 2 - 1 && Math.abs(z - b.cz) < b.d / 2 - 1);
   const viaduct = buildSouthStreetViaduct(group, {
-    start: { x: join.x, z: join.z }, shoreX: (z) => shoreX(z, false), obstacles: towers.concat(pierBoxes), zEnd: 6330,
+    start: { x: join.x, z: join.z }, zEnd: 6330,
     quad, makeAcc, roadMat, lawnMat, paint, WHITE, YELLOW, lightSpots: highwaySpots, underSpots, groundOK
   });
   for (let i = treeSites.length - 1; i >= 0; i--) {
@@ -3055,22 +3059,20 @@ function buildManhattanWaterfrontEdge(group, { blockSidewalks, treeSites, lawnMa
  * Seaport piers, comes back down to grade (~7 %) at Whitehall and dives into the Battery Park Underpass: a covered,
  * lawn-topped portal (buildUnderpassPortal) whose dark mouth swallows the cars; their lanes carry on underground to
  * West St's portal on the other side of the Battery (joined by buildManhattanWaterfrontEdge).
- * The centre line runs D0 m inland of the smoothed shore and swerves smoothly around the bridge piers, anchorages and
- * pier buildings in the way; it starts on the at-grade highway's centre line (`start`).
- * opts: { start {x, z}, shoreX(z), obstacles [oriented boxes {cx, cz, ux, uz, hl, hw}], zEnd, quad & makeAcc (from
+ * The centre line follows the shared, surveyed clearance plan, joined to the at-grade highway at `start`.
+ * opts: { start {x, z}, zEnd, quad & makeAcc (from
  *   buildManhattanWaterfrontEdge), roadMat, lawnMat, paint (road paint accumulator), WHITE, YELLOW, lightSpots (median
  *   highway lights [x, y, z, yaw]), underSpots (lamps under the deck, same format; the tunnel's ceiling lights get a
  *   fifth element 'tunnel'), groundOK(x, z) (whether a column may stand there: not in a street) }
  * Returns { lane(o): centre line (Vector3s, southbound order, without the start point, 4.7 m down at the far end of
  *   the portal) of the lane `o` m from the river edge of the at-grade carriageway, boxes: keep-clear oriented boxes
- *   along the structure, keepOut(x, z, margin), colliders: player AABBs {minX, maxX, minZ, maxZ, maxY} of the columns,
- *   the ramps on fill and the portal, portalMats: the portal's { conc, dark, shade } materials }
+ *   along the structure, keepOut(x, z, margin), colliders: columns, exact parapets and portal volumes,
+ *   portalMats: the portal's { conc, dark, shade } materials }
  */
 function buildSouthStreetViaduct(group, opts) {
-  const { start, shoreX, obstacles, zEnd, quad, makeAcc, roadMat, lawnMat, paint, WHITE, YELLOW, lightSpots, underSpots } = opts;
+  const { start, zEnd, quad, makeAcc, roadMat, lawnMat, paint, WHITE, YELLOW, lightSpots, underSpots } = opts;
   const groundOK = opts.groundOK || (() => true);
   const HALF = 7.9; // deck half-width: 2 + 2 lanes, median, shoulders and parapets
-  const D0 = 9.0; // centre line inland of the shore: the river parapet stands ~1 m inland, the esplanade stays open
   const RISE = 7.6; // road level on the viaduct
   const FILL_Y = 4.0; // lower ramps run on retained fill between concrete walls
   const SLAB = 0.75; // concrete deck slab & fascia
@@ -3086,32 +3088,7 @@ function buildSouthStreetViaduct(group, opts) {
   };
 
   // ---- Centre line ------------------------------------------------------------------------------------------------
-  // Polylines of Vector2(x, z): even arc-length spacing, moving average (ends pinned), inland unit normals
-  function resample(pts, step) {
-    const out = [pts[0].clone()];
-    let need = step;
-    for (let i = 1; i < pts.length; i++) {
-      const a = pts[i - 1];
-      const len = a.distanceTo(pts[i]);
-      let at = 0;
-      while (len - at >= need) {
-        at += need;
-        out.push(a.clone().lerp(pts[i], at / len));
-        need = step;
-      }
-      need -= len - at;
-    }
-    return out;
-  }
-  function smoothPts(pts, r) {
-    const n = pts.length;
-    return pts.map((p, i) => {
-      const w = Math.min(r, i, n - 1 - i);
-      const c = new THREE.Vector2();
-      for (let k = -w; k <= w; k++) c.add(pts[i + k]);
-      return c.multiplyScalar(1 / (2 * w + 1));
-    });
-  }
+  // Inland normals of the shared audited centreline.
   const normals = (pts) => pts.map((p, i) => {
     const a = pts[Math.max(0, i - 1)];
     const b = pts[Math.min(pts.length - 1, i + 1)];
@@ -3119,52 +3096,16 @@ function buildSouthStreetViaduct(group, opts) {
     return new THREE.Vector2(-t.y, t.x); // west of a southbound east shore: inland
   });
 
-  // The shore every 2 m of arc, smoothed over ~±35 m
-  let coast = [];
-  for (let z = start.z; z <= zEnd; z += 1) coast.push(new THREE.Vector2(shoreX(z), z));
-  coast = resample(coast, 2);
-  for (let k = 0; k < 3; k++) coast = smoothPts(coast, 6);
-  const nC = coast.length;
-  const cn = normals(coast);
-
-  // Offset each shore sample needs to keep the deck (+0.5 m) out of the obstacles: the feasible one nearest D0, with
-  // the river parapet at most 3 m out over the seawall coping
-  const req = coast.map((c, i) => {
-    const near = obstacles.filter((o) => Math.hypot(o.cx - c.x, o.cz - c.y) < o.hl + o.hw + 70);
-    if (!near.length) return 0;
-    const fits = (D) => {
-      for (let k = 0; k <= 20; k++) {
-        const w = D - HALF - 0.5 + (k / 20) * (2 * HALF + 1);
-        if (near.some((o) => inBox(o, c.x + cn[i].x * w, c.y + cn[i].y * w))) return false;
-      }
-      return true;
-    };
-    for (let k = 0; k <= 80; k++) {
-      for (const D of k ? [D0 + k * 0.5, D0 - k * 0.5] : [D0]) if (D >= HALF - 3 && fits(D)) return D - D0;
-    }
-    return 0;
-  });
-  // ... spread into smooth swerves (full deviation within 12 m of a conflict, easing back over 75 m) ...
-  const devP = new Float32Array(nC);
-  const devN = new Float32Array(nC);
-  req.forEach((r, i) => {
-    if (!r) return;
-    for (let j = Math.max(0, i - 44); j <= Math.min(nC - 1, i + 44); j++) {
-      const f = r * (1 - ss((Math.abs(j - i) * 2 - 12) / 75));
-      if (r > 0) devP[j] = Math.max(devP[j], f);
-      else devN[j] = Math.min(devN[j], f);
-    }
-  });
-  // ... blended in from the at-grade centre line over the first 50 m
-  const dStart = (start.x - coast[0].x) * cn[0].x + (start.z - coast[0].y) * cn[0].y;
-  let path = coast.map((c, j) => {
-    const D = D0 + devP[j] + devN[j] + (dStart - D0) * (1 - ss((j * 2) / 50));
-    return new THREE.Vector2(c.x + cn[j].x * D, c.y + cn[j].y * D);
-  });
+  // The surveyed clearance plan also owns the elevated alignment; a second shoreline approximation would
+  // reintroduce the same building conflicts at the Seaport and the Battery.
+  const path = [];
+  for (let z = start.z; z <= zEnd; z += 3) path.push(new THREE.Vector2(highwayX(false, z), z));
   path[0].set(start.x, start.z);
-  path = smoothPts(resample(path, 3), 2);
   const nP = path.length;
   const pn = normals(path);
+  // At-grade rows end on a constant-z section; rotating the first deck section leaves triangular sidewalk gaps
+  // beneath its outer lanes. Match that row exactly, then transition to perpendicular viaduct sections.
+  pn[0].set(-highwayScale(false, start.z), 0);
   const S = [0];
   for (let i = 1; i < nP; i++) S.push(S[i - 1] + path[i].distanceTo(path[i - 1]));
   const L = S[nP - 1];
@@ -3333,19 +3274,15 @@ function buildSouthStreetViaduct(group, opts) {
   for (let i = iMouth; i < nP; i++) portalFrames.push({ x: path[i].x, z: path[i].y, nx: pn[i].x, nz: pn[i].y, y: Y[i], half: HALF });
   buildUnderpassPortal(portalFrames, { deck, conc, roof, dark, shade }, quad, underSpots, colliders);
 
-  // Player colliders: the ramps on fill once the road is ~0.35 m up (four boxes across every segment; the columns are
-  // added with the bents, the portal's by buildUnderpassPortal)
+  // Physical deck and parapets follow the same cross-sections as the mesh. The former full-width ramp boxes
+  // blocked the player even though ambient traffic drove above them.
   for (let i = 0; i < iMouth; i++) {
-    if (elevated(i) || Math.max(Y[i], Y[i + 1]) < 0.35) continue;
-    const hw = 7.9;
-    const top = Math.max(Y[i], Y[i + 1]) + 0.85;
-    for (let k = 0; k < 4; k++) {
-      const w0 = -hw + (k * hw) / 2;
-      const pts = [V(i, w0, 0), V(i, w0 + hw / 2, 0), V(i + 1, w0, 0), V(i + 1, w0 + hw / 2, 0)];
-      colliders.push({
-        minX: Math.min(...pts.map((p) => p.x)), maxX: Math.max(...pts.map((p) => p.x)),
-        minZ: Math.min(...pts.map((p) => p.z)), maxZ: Math.max(...pts.map((p) => p.z)), maxY: top
-      });
+    const a = V(i, -7.38, Y[i]), b = V(i + 1, -7.38, Y[i + 1]);
+    const c = V(i + 1, 7.38, Y[i + 1]), d = V(i, 7.38, Y[i]);
+    streetGroundSurfaces.addTriangles([...a, ...b, ...c, ...d], [0, 1, 2, 0, 2, 3], { curb: false, deck: true, road: true });
+    for (const [w0, w1] of [[-7.9, -7.38], [-0.3, 0.3], [7.38, 7.9]]) {
+      const poly = [V(i, w0, 0), V(i + 1, w0, 0), V(i + 1, w1, 0), V(i, w1, 0)];
+      colliders.push({ ...groundFootprint(poly), minY: Math.min(Y[i], Y[i + 1]), maxY: Math.max(Y[i], Y[i + 1]) + 0.85, obstacle: 'wall' });
     }
   }
 
@@ -3395,7 +3332,7 @@ function buildSouthStreetViaduct(group, opts) {
     }
     return out;
   };
-  return { lane, boxes, keepOut: (x, z, m = 0) => boxes.some((o) => inBox(o, x, z, m)), path, req, length: L, colliders, portalMats };
+  return { lane, boxes, keepOut: (x, z, m = 0) => boxes.some((o) => inBox(o, x, z, m)), path, length: L, colliders, portalMats };
 }
 
 // =====================================================================================================================

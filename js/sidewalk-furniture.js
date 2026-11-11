@@ -1,4 +1,6 @@
 import * as THREE from 'three/webgpu';
+import { highwayCorridor } from './highway-layout.js';
+import { overlapsTrafficLanes } from './road-corridor.js';
 import { blockAt, districtAt, nearestRoads } from './city-config.js';
 import { polygonContains } from './building-collision.js';
 import { createKitMaterials, createKitParts, TILES, SITE } from './sidewalk-kit.js';
@@ -318,6 +320,7 @@ function createSidewalkFurniture(scene, o) {
     const t = Math.max(4, Math.min(c.e.len - 4, c.t));
     if (h < 0.6) {
       const centre = curbPoint(c, t, -1.3); // in the roadway, 1.3 m off the curb face
+      if (highwayCorridor.contains(centre.x, centre.z, 4)) continue;
       if (blockAt(centre.x, centre.z) || blockAt(curbPoint(c, t - 3, -1.3).x, curbPoint(c, t - 3, -1.3).z) || blockAt(curbPoint(c, t + 3, -1.3).x, curbPoint(c, t + 3, -1.3).z)) continue;
       const ry = Math.atan2(c.e.dx, c.e.dz) + Math.PI / 2;
       place('diningShed', centre.x, 0, centre.z, ry);
@@ -506,11 +509,14 @@ function createSidewalkFurniture(scene, o) {
   // you can stand on), green parapet boards along the curb and the ends, string lights underneath; a dumpster at the
   // curb with its cones and a portable toilet for some
   function buildShed(w, h, wi) {
+    const depth = Math.min(3.6, w.width - 0.5);
     // A playable storefront keeps its whole entrance and sign clear of scaffold bays and overhead decks.
+    // Check the full shed width: the old sidewalk may have been cut by the shared highway reservation.
     for (let t = 0; t <= w.len; t += 0.5) {
       if (reserved(w.ax + w.ux * t + w.nx * 0.35, w.az + w.uz * t + w.nz * 0.35, 0.5)) return;
+      const d = 0.35 + depth / 2;
+      if (!isOnSidewalk(w.ax + w.ux * t + w.nx * d, w.az + w.uz * t + w.nz * d, depth / 2 + 0.6)) return;
     }
-    const depth = Math.min(3.6, w.width - 0.5);
     const inner = 0.35, outer = inner + depth;
     const start = 0.3, end = w.len - 0.3, run = end - start;
     const bays = Math.max(1, Math.round(run / 2.4)), bay = run / bays;
@@ -553,7 +559,14 @@ function createSidewalkFurniture(scene, o) {
     if (h(30 + wi) < 0.32 && run > 12) {
       const t = start + run * (0.3 + h(31 + wi) * 0.4), d = w.width + 1.3;
       const q = { x: w.ax + w.ux * t + w.nx * d, z: w.az + w.uz * t + w.nz * d };
-      if (!blockAt(q.x, q.z) && !blockAt(q.x + w.nx * 1.0, q.z + w.nz * 1.0)) {
+      const worksite = { outer: [[-4.2,-1.2],[4.2,-1.2],[4.2,1.6],[-4.2,1.6]]
+        .map(([t,d]) => ({ x: q.x + w.ux*t + w.nx*d, z: q.z + w.uz*t + w.nz*d })), holes: [] };
+      const nearbyEdges = new Set();
+      for (let ix=Math.floor((q.x-5)/ECELL);ix<=Math.floor((q.x+5)/ECELL);ix++)
+        for (let iz=Math.floor((q.z-5)/ECELL);iz<=Math.floor((q.z+5)/ECELL);iz++)
+          for (const e of edgeCells.get(ix*100003+iz)||[]) nearbyEdges.add(e);
+      if (!highwayCorridor.contains(q.x, q.z, 5) && !overlapsTrafficLanes(worksite, nearbyEdges)
+        && !blockAt(q.x, q.z) && !blockAt(q.x + w.nx * 1.0, q.z + w.nz * 1.0)) {
         const steel = SITE.dumpster[Math.floor(h(35 + wi) * SITE.dumpster.length)], band = SITE.band[h(36 + wi) < 0.5 ? 0 : 1];
         place('dumpster', q.x, 0, q.z, along, null, 1, 1, 1, [...steel, ...band]);
         solid(boxCollider(q.x, q.z, 6.0, 2.2, along, 1.6, 'dumpster'));

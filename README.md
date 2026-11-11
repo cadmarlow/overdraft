@@ -3,7 +3,10 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.20 — Slippage**. À la manette Xbox : **A maintenu = frein à main**, **RB = nitro ou wheeling**,
+Version **0.9.21 — Clearing**. Les routes côtières contournent les bâtiments, dégagent les trottoirs et partagent
+leur tracé avec le trafic et le sol physique. Les quais et les rambardes de Battery soutiennent et arrêtent les voitures.
+
+La **0.9.20 — Slippage** conserve ses commandes. À la manette Xbox : **A maintenu = frein à main**, **RB = nitro ou wheeling**,
 **LT = frein puis marche arrière**. Un léger sifflement accompagne la marche arrière ; les pneus bloqués au frein
 à main deviennent plus audibles et laissent plus tôt de petites traces et de la fumée.
 
@@ -240,6 +243,11 @@ Ouvrir http://localhost:5173. Paramètres utiles :
 - `?renderer=webgl` : mode de compatibilité.
 - `?debug=1` : un clic sur la carte téléporte le joueur.
 - `?qa=1` : expose `window.__game` pour les tests automatisés.
+- `?spawn=fdr` (local uniquement) : essai en Ressac sur la voie nord corrigée du FDR, à l’approche de la 30e Rue, à midi ; la sauvegarde habituelle reste intacte.
+
+Le [contrôle des routes côtières](tools/highways/README.md) fournit aussi un tour reproductible des deux rives,
+avec captures, contrôle du sol et des collisions, et essais des rambardes. Les portails de Battery restent fermés
+au joueur et certaines grandes portions de parc restent à aménager.
 
 ```sh
 npm test

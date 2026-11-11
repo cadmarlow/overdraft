@@ -1,4 +1,5 @@
 import { GEO } from './nyc-geodata.js';
+import { HIGHWAY_ROUTES } from './highway-layout.js';
 import {
   ROADS,
   BLOCKS,
@@ -27,6 +28,12 @@ import {
   getLocationLabel,
   isTypingInField
 } from './city-config.js';
+
+const COASTAL_HIGHWAY = /FRANKLIN D ROOSEVELT|FDR|HARLEM RIVER DR|HENRY HUDSON|^WEST ST$|^12 AVE$/;
+const MAP_ROADS = ROADS.filter(r => !(r.highway && COASTAL_HIGHWAY.test(r.raw))).concat(HIGHWAY_ROUTES.map(r => ({
+  name: r.west ? 'West Side Hwy' : 'FDR Drive', highway: true, w: 15.2,
+  pts: r.x.map((x, i) => ({ x, z: r.z0 + i * r.step }))
+})));
 
 // Minimap and full-screen map drawn from the same geography and building footprints as the 3D city.
 // World frame: 1 unit = 1 m, x = Manhattan-grid east, z = grid south. Both maps face grid north,
@@ -246,7 +253,7 @@ function mapLayers() {
   // highways (FDR Drive, West St / West Side Hwy, Harlem River Dr, Henry Hudson Pkwy)
   L.mainRoads = new TiledLayer(1000);
   L.highways = new Path2D();
-  for (const r of ROADS) {
+  for (const r of MAP_ROADS) {
     if (r.highway) {
       if (!/Underpass|Tunnel/.test(r.name)) addLine(L.highways, r.pts);
     } else if (r.w >= 15) L.mainRoads.line(r.pts);
@@ -291,7 +298,7 @@ function footprintLayers(all) {
 // never slide while the map pans), with the direction of the street there (never upside down: vertical names read
 // upwards)
 const ROAD_LABELS = [];
-for (const r of ROADS) {
+for (const r of MAP_ROADS) {
   const text = LABEL_ALIAS[r.name] || r.name;
   if (!text || /^Unnamed/.test(text)) continue;
   const anchors = [];

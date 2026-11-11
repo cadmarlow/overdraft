@@ -404,4 +404,5 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.18** | **Dry Powder** | CALIBRE : 48 armureries où l'on entre, comptoir avec fiches et aperçu sur l'arme, améliorations et finitions, armurier qui défend sa boutique, stand de tir à médailles et remises. |
 | **0.9.19** | **Growth Equity** | Arbres refaits : huit essences jeunes et adultes, espèces et diamètres recensés, niveaux de détail cohérents et vent de la météo. Appuis sur les surfaces réelles, circulation hors des trottoirs, collisions des murs de Central Park et Bryant Park ; intégration avec CALIBRE. |
 | **0.9.20** | **Slippage** | Xbox : frein à main sur A, nitro sur RB ; retour sonore de marche arrière et pneus bloqués au frein à main plus perceptibles. |
+| **0.9.21** | **Clearing** | Tracés côtiers continus contrôlés contre les bâtiments, sols et circulation alignés, quais et rambardes solides ; audit reproductible des deux rives. |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |

@@ -8,6 +8,7 @@ import { HEADLIGHTS, createVehicleHeadlight, placeVehicleHeadlight } from './veh
 import { BODY_SPECS, carStyleCode, buildLightbarGeometry, createLightbarMaterial } from './cars.js';
 import { carModels, carSpecs, trafficMaterial, withWheels } from './car-assets.js';
 import { shuntBody } from './car-physics.js';
+import { highwaySpeedProfile } from './highway-driving.js';
 import {
   BUS_SPEC,
   buildLoftedBusBodyGeometry,
@@ -2257,6 +2258,7 @@ function createHighwayTraffic(scene, lanes, traffic) {
     lane.cum = [0];
     for (let i = 1; i < P.length; i++) lane.cum.push(lane.cum[i - 1] + P[i].distanceTo(P[i - 1]));
     lane.len = lane.cum[P.length - 1];
+    lane.speedProfile = highwaySpeedProfile(P, lane.cum, lane.speed);
     lane.yaw = P.map((p, i) => {
       const a = P[Math.max(0, i - 1)];
       const b = P[Math.min(P.length - 1, i + 1)];
@@ -2270,7 +2272,9 @@ function createHighwayTraffic(scene, lanes, traffic) {
       lane.box.push(Math.min(...run.map((p) => p.x)), Math.max(...run.map((p) => p.x)), Math.min(...run.map((p) => p.z)), Math.max(...run.map((p) => p.z)));
     }
     lane.cars = [];
+    let seedSegment = 0;
     for (let u = rand() * 30; u < lane.len - 12; u += 24 + rand() * 50) {
+      while (seedSegment < P.length - 2 && lane.cum[seedSegment + 1] <= u) seedSegment++;
       const h = rand();
       // Fewer vans than in town: commercial vehicles are barred from the parkways
       const kind = h < 0.2 ? 'taxi' : h < 0.56 ? 'sedan' : h < 0.82 ? 'suv' : h < 0.89 ? 'minivan' : h < 0.95 ? 'pickup' : 'van';
@@ -2279,7 +2283,7 @@ function createHighwayTraffic(scene, lanes, traffic) {
       const spec = carSpecs[kind];
       // (float32 values, so update() can tell whether an instance slot's paint changes by comparing with the buffer)
       const car = {
-        lane, kind, u, v: lane.speed, acc: 0, seg: 0,
+        lane, kind, u, v: lane.speedProfile[seedSegment], acc: 0, seg: seedSegment,
         placed: false, x: 0, y: -1000, z: 0, yaw: 0, prevX: 0, prevZ: 0,
         edge: 'highway', // what the game calls traffic when someone is run over
         halfW: CAR_KINDS[kind].halfWidth, halfL: CAR_KINDS[kind].halfL, mass: CAR_KINDS[kind].mass,
@@ -2520,7 +2524,8 @@ function createHighwayTraffic(scene, lanes, traffic) {
           }
         }
         const sStar = D.s0 + Math.max(0, c.v * D.T + (c.v * dv) / brakeTerm);
-        c.acc = Math.max(-9, D.a * (1 - (c.v / lane.speed) ** 4 - (sStar / Math.max(gap, 0.1)) ** 2));
+        const targetSpeed = lane.speedProfile[Math.min(c.seg, lane.speedProfile.length - 1)];
+        c.acc = Math.max(-9, D.a * (1 - (c.v / targetSpeed) ** 4 - (sStar / Math.max(gap, 0.1)) ** 2));
         if (c.stunned > 0) c.acc = -8; // a driver who has just been hit stands on the brakes
       }
       for (const c of list) {

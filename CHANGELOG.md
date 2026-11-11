@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.9.21 — Clearing — 11 novembre 2026
+
+- Tour complémentaire des deux rives : correction des débordements des modèles de Pier 59 (Chelsea) et Pier 34
+  (Canal Street), et découpe des dalles de quai même quand elles partagent leur géométrie avec un bâtiment haut.
+- Le raccord du viaduc FDR rejoint exactement la section de la chaussée d'approche ; son sol physique remplace
+  l'ancien trottoir, y compris sur les premiers mètres presque plats.
+- Les bennes de chantier et leurs cônes doivent dégager l'emprise entière des voies de circulation ordinaires.
+- Les rambardes de Battery ont désormais des collisions ; leurs approches sont prolongées au sud des deux rives,
+  et la bordure visible du quai soutient les roues autour de la pointe. L'accès au terminal de ferry reste ouvert.
+- Ajout d'un tour reproductible en Chrome isolé : `tools/highways/audit.mjs`, avec rapport des collisions et du sol,
+  captures de 44 points et huit essais de rambardes au clavier. Documentation dans `tools/highways/README.md`.
+- Corrige le tracé de FDR près de la 30e Rue : la chaussée passe à l'ouest du bâtiment, selon l'alignement des
+  chaussées principales du relevé CSCL. L'immeuble conserve son emprise. Les quatre voies restent continues ;
+  les coupures et files d'attente artificielles du premier correctif sont supprimées.
+- Traite la cause sur les deux rives : l'ancienne bande côtière procédurale ignorait les empreintes réelles des
+  bâtiments. Un plan continu contrôlé contre ces empreintes pilote désormais la chaussée, les voies, les marquages,
+  les séparateurs, les lampadaires, le viaduc et la carte. L'outil local est documenté dans `tools/highways/README.md`.
+- Découpe les anciens trottoirs et pelouses dans le passage réservé, synchronise le sol des roues et évite les
+  arbres, terrasses et bennes sur les nouvelles voies. La largeur est conservée dans les courbes, leurs raccords
+  sont lissés et le trafic ralentit à l'approche des virages.
+- Les promenades et tabliers de quai au-delà du trait de berge soutiennent réellement les roues. Les rambardes
+  visibles et séparateurs ont leurs collisions. Les rampes du viaduc portent la voiture au lieu de la bloquer
+  avec une boîte occupant toute la chaussée.
+- Lien local `http://localhost:5173/?spawn=fdr&quality=high` : Ressac alignée sur la voie nord à l'approche de
+  l'immeuble, à midi et par temps dégagé. Cette session n'écrase pas la sauvegarde habituelle.
+- Ce plan reste une adaptation jouable des voies côtières : il ne reconstitue pas toutes les bretelles et tous les
+  niveaux de la voirie réelle. Le tunnel de Battery reste un raccord de trafic non traversable par le joueur ;
+  ses volumes de fermeture préexistants sont identifiés à part. L'ensemble de Manhattan n'a pas été parcouru manuellement.
+- Vérification en Chrome isolé, WebGPU HAUTE, de jour : passage de la Ressac au clavier sur environ 175 m devant
+  le bâtiment signalé ; accélération vers la rambarde du quai sans chute. Balayage de 135 079 positions sur les voies
+  avec un gabarit de fourgon : aucune collision statique hors des deux portails fermés de Battery. Les sept quais
+  de promenade contrôlés renvoient un sol à la hauteur de leur tablier. La cible de 60 images/s n'a pas été remesurée.
+- Validation finale : 983 tests, 982 réussis, un ignoré, aucun échec ; build de production réussi.
+- Tour final : 44 points photographiés en caméra de conduite et 79 794 positions de surface contrôlées ; aucun
+  empiètement ni désaccord de hauteur détecté hors des portails factices de Battery. Les 1 910 points souterrains
+  sont exclus de ce contrôle de surface. Huit essais de choc contre les rambardes du sud et leurs raccords
+  arrêtent la voiture sans chute ; le résultat est mesuré après stabilisation du choc.
+- Contrôle complémentaire des captures de la 10e Rue : en local, chaussée dégagée et roues visibles sur le trafic,
+  passage au clavier jusqu'à la 13e Rue. Les vastes zones dallées voisines restent à aménager : le grand îlot côtier
+  mélange parc et bâti, avec une part de parc de 27 %, sous le seuil de 60 % utilisé pour son traitement paysager.
+  Ce défaut distinct d'occupation du sol n'est pas corrigé. Leur état de publication est indiqué dans le compte rendu de livraison.
+
 ## 0.9.20 — Slippage — 10 novembre 2026
 
 - Xbox : **A maintenu serre le frein à main**, **RB active la nitro ou le wheeling**. LT reste le frein normal puis

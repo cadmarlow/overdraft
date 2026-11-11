@@ -989,13 +989,15 @@ class ThirdPersonControllerManager {
   // What a wheel stands on: the same park surfaces as a walker's feet, and the rounded curbs of ordinary blocks.
   carGround(x, z, hit) {
     hit.nx = 0; hit.ny = 1; hit.nz = 0; hit.grip = 1; hit.rough = 0.0035; hit.y = 0; hit.curb = false;
-    // Past the seawall there is nothing under the wheels
-    if (this.overWater(x, z)) { hit.y = -40; return; }
-    if (this.groundSurfaces?.sample(x, z, hit)) {
+    const maxDeckHeight = (this._groundVehicleY ?? this.entities?.[this.activeMode]?.position.y ?? 0) + 1;
+    if (this.groundSurfaces?.sample(x, z, hit, maxDeckHeight)) {
+      if (this.overWater(x, z) && !hit.deck) { hit.y = -40; return; }
       const rise = rampRise(x, z, hit);
       if (rise) { hit.y += rise; hit.grip = 1; hit.rough = 0.002; }
       return;
     }
+    // Check visible registered decks before rejecting a point beyond the bulkhead.
+    if (this.overWater(x, z)) { hit.y = -40; return; }
     const block = blockAt(x, z);
     if (!block) return;
     if (block.park > 0.6 && !block.median) { hit.grip = 0.66; hit.rough = 0.018; return; }
@@ -1055,7 +1057,8 @@ class ThirdPersonControllerManager {
   streetHeight(x, z, mode = 'person') {
     if (this.swimming && mode === 'person') return WATER - 1.28;
     const hit = this._streetGroundHit ??= {};
-    if (this.groundSurfaces?.sample(x, z, hit)) return hit.y;
+    const maxDeckHeight = (this.entities?.[mode]?.position.y ?? 0) + 1;
+    if (this.groundSurfaces?.sample(x, z, hit, maxDeckHeight)) return hit.y;
     return this.isPointOnSidewalk(x, z) ? ISLAND_BOUNDS.sidewalkHeight : 0.0;
   }
 
@@ -1440,7 +1443,9 @@ class ThirdPersonControllerManager {
     c.body.nitro = nitro ? 1 : 0;
     const world = this._carWorld ??= { grip: 1, waterLevel: WATER, ground: (x, z, hit) => this.carGround(x, z, hit), collide: (car) => this.resolveHorizontalCollision(car.position, 1.35, car) };
     world.grip = this.gripFactor ?? 1;
+    this._groundVehicleY = c.position.y;
     stepCar(c, input, dt, world);
+    this._groundVehicleY = undefined;
     poseCar(c, dt);
   }
 
