@@ -166,7 +166,9 @@ class Garage extends QuickStrip {
     car.summoned = true;
     car.hp = 100;
     car.fallen = false;
-    car.position.set(spot.x, 0, spot.z);
+    const floor = {};
+    const elevation = g.controllers.frontier?.sample(spot.x, spot.z, from.y + .85, floor) ? floor.y : 0;
+    car.position.set(spot.x, elevation, spot.z);
     car.prevX = spot.x; car.prevZ = spot.z;
     car.heading = from.heading;
     car.speed = Math.min(carry, car.drive.speed);
@@ -198,7 +200,9 @@ class Garage extends QuickStrip {
     const g = this.game;
     const heli = this.prepare(g.controllers.entities.helicopter);
     const spot = from.flying ? from : g.safeSpot(from.x, from.z, 5);
-    heli.position.set(spot.x, from.flying ? Math.max(from.y, 12) : 0.25, spot.z);
+    const floor = {};
+    const elevation = g.controllers.frontier?.sample(spot.x, spot.z, from.y + .85, floor) ? floor.y : 0;
+    heli.position.set(spot.x, from.flying ? Math.max(from.y, elevation + 12) : elevation + .25, spot.z);
     heli.heading = from.heading;
     heli.speed = from.flying ? Math.min(from.speed, heli.drive.speed) : 0;
     heli.verticalSpeed = 0;
@@ -217,17 +221,24 @@ class Garage extends QuickStrip {
   // High enough, with nothing standing around at that height
   airIsClear({ x, y, z }) {
     if (y < 60) return false;
-    return !this.game.controllers.nearColliders(x, z, 120).some((c) => (c.maxY ?? 0) > y - CLEARANCE);
+    const controllers = this.game.controllers;
+    const hit = {};
+    if (controllers.frontier?.sample(x, z, Infinity, hit) && hit.y > y - CLEARANCE) return false;
+    return !controllers.nearColliders(x, z, 120).some((c) => (c.maxY ?? 0) > y - CLEARANCE);
   }
 
   // Clear of the tallest building around, and of whatever stands along the first seconds of the flight: a tower a
   // kilometre ahead is ten seconds away in a jet (`ahead` metres of the way it is heading)
   clearAltitude(x, z, heading = 0, ahead = 0) {
     const colliders = this.game.controllers, sin = Math.sin(heading), cos = Math.cos(heading);
-    let top = 0;
+    const hit = {};
+    const terrain = (px, pz) => colliders.frontier?.sample(px, pz, Infinity, hit) ? hit.y : 0;
+    let top = Math.max(0, terrain(x, z));
     for (const c of colliders.nearColliders(x, z, 400)) top = Math.max(top, c.maxY ?? 0);
     for (let d = 300; d <= ahead; d += 300) {
-      for (const c of colliders.nearColliders(x + sin * d, z + cos * d, 220)) top = Math.max(top, c.maxY ?? 0);
+      const px = x + sin * d, pz = z + cos * d;
+      top = Math.max(top, terrain(px, pz));
+      for (const c of colliders.nearColliders(px, pz, 220)) top = Math.max(top, c.maxY ?? 0);
     }
     return Math.max(FLOOR_ALTITUDE, top + CLEARANCE);
   }

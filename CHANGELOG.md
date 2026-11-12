@@ -1,6 +1,63 @@
 # Changelog
 
-## À paraître — Places, campus et promenades de Manhattan
+## 0.9.26 — Scorched Earth — 12 novembre 2026
+
+Le Wasteland. Manhattan est une ville de survivants, et le monde s’arrête à ses quais.
+
+- **L’Hudson est à sec.** Son lit commence au pied du mur des quais, sept mètres sous les rues : boue craquelée, bancs
+  de sable, croûtes de sel, épaves. La rade est un lac de sel. Seul l’East River garde son eau : quatre digues en font
+  les douves de la ville. Les vraies rives de New York portent le reste : falaises des Palisades, mesas, champs de
+  dunes, et les immeubles éventrés de Harlem, de Hoboken, de Brooklyn et du Queens, ensablés jusqu’aux fenêtres.
+- **Le Mur et les portes.** Au nord, la ville finit net sur un mur de conteneurs, de l’Hudson aux douves, percé de la
+  Grande Porte sur l’avenue Adam Clayton Powell. À l’ouest, la 34e Rue traverse la voie rapide, passe la porte des
+  Pompes et descend par une rampe jusqu’au lit du fleuve. Les quatre ponts de l’East River mènent à la rive d’en face.
+  Des tours de guet veillent sur les quais ; le sable a passé le mur en huit brèches, de Manhattanville à la Batterie.
+- **Franchir la limite se voit.** Hors les murs, le ciel se charge de poussière, la brume vire à l’ocre, la lumière et
+  les couleurs changent en trois secondes, le sable file dans le vent et un carton nomme le pays où l’on entre. Depuis
+  la ville, le désert se voit au bout de chaque rue transversale et depuis tous les toits.
+- **Un vrai sol.** Relief façonné une fois pour toutes par `tools/wasteland/build-terrain.mjs` (rives réelles, érosion,
+  routes nivelées), dessiné en niveaux de détail autour de la caméra sur un treillis de 8 m que partagent l’image et
+  les roues. Sable ridé, boue craquelée, sel et strates de roche photographiés (Poly Haven, CC0). Rochers et
+  affleurements numérisés, bois mort, buissons secs, poteaux penchés, bouées échouées, épaves le long des pistes.
+- **La Ceinture.** 47 km d’ancienne route de rive font le tour de l’île par les berges et les digues ; des pistes
+  montent au Haut-Sel par la coupe des Palisades, filent vers le levant et descendent la rade. Les Rouliers, leur
+  dépanneuse à câble et le contrat de la bobine suivent le nouveau pays. La carte et le GPS le connaissent.
+- **Le Cimetière des Coques.** Quinze navires que l’eau a laissés : paquebot au dos brisé, pétroliers, cargos,
+  caboteurs et remorqueurs couchés dans le lit de l’Hudson et sur la rade, enfoncés dans la boue jusqu’aux bouchains.
+  On roule entre eux, on se cogne dedans. Les navires restés à quai (porte-avions, paquebots, ferries) ne flottent
+  plus dans le vide : ils reposent sur le fond, au pied des jetées.
+- **Camps et relais.** Le Relais des Veilleurs, à la Cale, vit autour du cargo échoué de Red Hook ; des camps de
+  Rouliers tiennent les carrefours du dehors : conteneurs, grillages, bâches, fûts où brûle un feu.
+- **La nuit hors les murs.** La lune éclaire le lit et les dunes. Les feux des camps et des portes se voient de très
+  loin, puis éclairent vraiment ce qui les entoure. Les projecteurs du Mur et des tours de guet balaient le fleuve à sec.
+- **Passage à niveau de la porte des Pompes.** La voie rapide de l’ouest s’arrête quand on traverse vers la porte ou
+  qu’on remonte la rampe : ses quatre files attendent de part et d’autre de la route.
+- **Lumières de nuit.** Le moteur n’éclairait que 256 lampes alors que la nuit en allume 272 : les dernières créées
+  restaient éteintes, c’est-à-dire les éclairs des tirs, la lueur des explosions et des feux, et les phares du joueur.
+  Le plafond passe à 320.
+- **Sur l’eau.** Les contrats en bateau de l’acte III et la régate se jouent désormais dans les douves.
+- La caméra suit le sol réel (elle restait à hauteur de rue au fond du lit), les voitures ne se noient plus et ne sont
+  plus freinées par l’eau là où il n’y en a plus, et nul ne passe sous les rues depuis le lit du fleuve.
+
+### Validation de Scorched Earth
+
+- Chrome WebGPU séparé sur M1 Pro, qualité HAUTE, vraies touches CDP : départ de la 34e Rue, porte des Pompes, rampe,
+  lit de l’Hudson d’une traite à 170 km/h sans rien heurter ; carton et bascule d’ambiance au passage. Tournée de
+  jour, au couchant et de nuit : quais, lit, falaises, plateau, Harlem, Grande Porte, rive est, rade, vue aérienne.
+- Images par seconde, échelle fixée à 1, 1600 × 900, sans plafond : 53 à 67 dans le désert (1,7 à 3,7 M de triangles),
+  contre 29 à Midtown, où la ville seule en dessine 14 M. À Midtown, afficher le Wasteland coûte entre 1 et 4 images
+  par seconde (mesure alternée dans la même page).
+- Porte des Pompes : huit traversées à plus de 100 km/h, dans les deux sens. Les quatre files de la voie rapide
+  s’arrêtent à leur ligne à chaque fois. Les chocs restants (trois sur huit) viennent du carrefour de la 12e Avenue,
+  grillé au rouge : c’est la circulation de la ville, pas la voie rapide.
+- Nuit (23 h) : feu du Relais des Veilleurs vu de près (conteneurs et enseigne éclairés), projecteurs de la porte des
+  Pompes, Grande Porte, Cimetière des Coques sous la lune, phares du joueur sur le sable. Les Rouliers ont accroché
+  la voiture au câble pendant l’essai.
+- 1 128 tests réussis, 37 ignorés comme sur la base, aucun échec. Build statique réussi.
+- Non vérifié : le son (personne ne l’a entendu), les missions en bateau rejouées en entier dans les douves, la
+  manette, la marche à pied dans les huit brèches. Voir « ce qui reste faible » dans le compte rendu.
+
+### Places, campus et promenades de Manhattan
 
 - Amsterdam Avenue, de la 110e à la 113e, retrouve un ensemble dessiné autour de la cathédrale : tours inachevées,
   rosace et portails sculptés, parvis en gradins, jardins clos avec entrées, allées, bancs et fontaine de bronze.

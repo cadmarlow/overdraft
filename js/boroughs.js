@@ -50,6 +50,7 @@ import {
   OUTER_BRIDGES,
   streetZ
 } from './city-config.js';
+import { FRONTIER_BRIDGES, saltLandAt } from './wasteland-plan.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // Surrounding land, buildings, harbor islands and bridges, with detailed skyline landmarks.
@@ -259,6 +260,7 @@ function shoreDistIndexed(ix, x, z, reach) {
 // smaller islands (the Rockaways, Jamaica Bay's marshes, Rikers, City Island...): open ground without generic blocks.
 // The horizon fillers beyond the city line sit a little lower than the boroughs they overlap.
 const LAND = [];
+const HARBOR_ISLANDS = new Set(['randalls', 'roosevelt', 'governors', 'liberty', 'ellis', 'millrock']);
 function addLand(id, pts, top, extra = {}) {
   if (!pts || pts.length < 3) return;
   LAND.push({ id, pts, top, bounds: polygonBounds(pts), index: indexPolygon(pts), ...extra });
@@ -371,7 +373,7 @@ function shoreXNear(land, x, z) {
 
 // Coarse distance to Manhattan's shoreline (the detailed island south of the cut), only for level-of-detail decisions:
 // exact (to a 6 m simplification of the shore) within ~3 km of the island, bilinear from an 800 m grid beyond
-const MANHATTAN_DIST_GRID = (() => {
+function buildManhattanDistanceGrid() {
   const cell = 100;
   const minX = -16000;
   const minZ = -26000;
@@ -400,10 +402,11 @@ const MANHATTAN_DIST_GRID = (() => {
     }
   }
   return { cell, minX, minZ, nx, nz, data };
-})();
+}
 
+let manhattanDistanceGrid;
 function distToManhattan(x, z) {
-  const g = MANHATTAN_DIST_GRID;
+  const g = manhattanDistanceGrid ??= buildManhattanDistanceGrid();
   const fx = Math.max(0, Math.min(g.nx - 1.001, (x - g.minX) / g.cell));
   const fz = Math.max(0, Math.min(g.nz - 1.001, (z - g.minZ) / g.cell));
   const i = Math.floor(fx);
@@ -1054,7 +1057,7 @@ function createBulkheadMaterial() {
 
 // Flat land tops (earcut-triangulated shoreline polygons) + vertical bulkhead walls down into the harbor along the real
 // shores (not along the data's straight closures, the borders between land masses or beyond the fogged horizon)
-function buildLandGeometries() {
+function buildLandGeometries(islandsOnly) {
   const topPos = [];
   const topIdx = [];
   const wallPos = [];
@@ -1063,6 +1066,7 @@ function buildLandGeometries() {
   const onManhattanGrid = (x, z) => x > mb.minX && x < mb.maxX && z > mb.minZ && z < mb.maxZ && pointInPolygon(MANHATTAN_COASTLINE, x, z);
 
   for (const land of LAND) {
+    if (islandsOnly && !HARBOR_ISLANDS.has(land.id)) continue;
     const pts = land.pts;
     const base = topPos.length / 3;
     for (const p of pts) topPos.push(p.x, land.top, p.z);
@@ -1167,7 +1171,7 @@ const RIDGE_KEYS = [
 ];
 
 // Per-z table (20 m rows) of the cliff foot x, crest height, cliff width, back-slope reach and the foot's limit
-const RIDGE_TABLE = (() => {
+function buildRidgeTable() {
   const step = 20;
   const n = Math.floor((RIDGE_Z1 - RIDGE_Z0) / step) + 1;
   const ix = NJ_LAND.index;
@@ -1315,7 +1319,7 @@ const RIDGE_TABLE = (() => {
   boxFilter(cw, 3, 3);
   for (let i = 0; i < n; i++) footX[i] = Math.min(footX[i], footMax[i]);
   return { step, n, x: footX, h, cw, back, footMax };
-})();
+}
 
 // Gullies & buttresses: the cliff line wanders a few metres and the crest height breathes (wavelengths the mesh rows
 // resolve), calm where the George Washington Bridge lands on the cliff top and far north where the rows are sparse
@@ -1326,8 +1330,9 @@ function ridgeJitter(z) {
   return all * (9.0 * Math.sin(z * 0.005 + 0.7) + (6.0 * Math.sin(z * 0.0112 + 2.1) + 3.5 * Math.sin(z * 0.022 + 4.0)) * fine);
 }
 
+let ridgeTable;
 function ridgeParamsAt(z) {
-  const T = RIDGE_TABLE;
+  const T = ridgeTable ??= buildRidgeTable();
   const f = Math.max(0, Math.min(T.n - 1.001, (z - RIDGE_Z0) / T.step));
   const i = Math.floor(f);
   const t = f - i;
@@ -1445,7 +1450,7 @@ const BUILD_LANDS = new Set(['nj', 'li', 'upper', 'bronx', 'si']);
 const MAX_BUILD_DIST = 9000;
 
 // World rectangles searched for each zone's blocks: the zone map's extent within reach of Manhattan
-const BUILD_REGIONS = (() => {
+function buildLegacyRegions() {
   const regions = {};
   const sx = (LU.maxX - LU.minX) / LU.w;
   const sz = (LU.maxZ - LU.minZ) / LU.h;
@@ -1465,7 +1470,7 @@ const BUILD_REGIONS = (() => {
     }
   }
   return regions;
-})();
+}
 
 // Waterfront & downtown high-rise clusters (radii in m): blocks inside get podium + tower massing
 const hotspot = (lon, lat, r, h0, h1, p, style) => ({ ...LL(lon, lat), r, h0, h1, p, style });
@@ -1785,13 +1790,14 @@ function placeSignatureTowers(list) {
 }
 
 function generateBoroughBuildings() {
+  const regions = buildLegacyRegions();
   const list = [];
   const stats = {};
   placeSignatureTowers(list);
   stats.signature = list.length;
   const rand = mulberry32(20261007);
   for (const zone of ZONE_LIST) {
-    const reg = BUILD_REGIONS[zone.id];
+    const reg = regions[zone.id];
     if (!reg || zone.id === 'island') continue;
     let umin = Infinity;
     let umax = -Infinity;
@@ -2706,7 +2712,7 @@ function buildDeck(B, spec, f, profile, mats, steel, opts) {
   const n = Math.max(12, Math.ceil(L / 5));
   const trussH = opts.trussH;
   const drop = opts.trussBelow || 0;
-  BRIDGE_DECKS.push({ ax: spec.a.x, az: spec.a.z, ux: dir.x, uz: dir.z, L, half: W / 2 + 1, profile, below: 2.6 + drop, above: Math.max(3, trussH) });
+  BRIDGE_DECKS.push({ id: spec.id, ax: spec.a.x, az: spec.a.z, ux: dir.x, uz: dir.z, L, half: W / 2 + 1, profile, below: 2.6 + drop, above: Math.max(3, trussH) });
   const pts = [];
   for (let i = 0; i <= n; i++) pts.push(i / n);
   for (let i = 0; i < n; i++) {
@@ -2747,13 +2753,14 @@ function buildDeck(B, spec, f, profile, mats, steel, opts) {
         }
       }
     }
-    // Where the deck end is too low to drive under (~4.2 m clearance) it blocks the Manhattan street below
-    if (Math.min(y0, y1) - 2.2 < 4.2) {
+    // At a drivable approach the road itself supplies the top surface. Keep the old solid roadblock
+    // only for a scenic deck, where nothing could legally drive up the ramp.
+    if (!bridgeSite.wasteland && Math.min(y0, y1) - 2.2 < 4.2) {
       const p = at((t0 + t1) * 0.5, 0, 0);
       if (onManhattan(p)) addBridgeCollider(p, dir, L / n, W, Math.max(y0, y1));
     }
     // Deck lamps every 15 m along both parapets
-    if (i % 3 === 0 && y0 > 0.5) {
+    if (i % 3 === 0 && y0 > 0.5 && (!bridgeSite.wasteland || spec.id !== 'williamsburg' || t0 < .60 || i % 12 === 0)) {
       for (const s of [-W * 0.5 + 0.6, W * 0.5 - 0.6]) {
         B.beam(steel, at(t0, s, y0), at(t0, s, y0 + 6), 0.25, 0.25);
         B.block(mats.lamp, at(t0, s * 0.96, y0 + 6.1), dir, 0.9, 0.35, 0.6);
@@ -2822,7 +2829,7 @@ function bridgeDeckAt(x, z, out) {
     if (t <= 0 || t >= 1 || Math.abs(rz * d.ux - rx * d.uz) > d.half) continue;
     const y = d.profile(t);
     if (y < 1) continue;
-    out.bottom = y - d.below; out.top = y + d.above;
+    out.bottom = y - d.below; out.top = y + d.above; out.surface = y; out.id = d.id;
     return true;
   }
   return false;
@@ -2898,7 +2905,7 @@ function buildAnchorage(B, parts, mats, f, ta, len, across, h, gothic) {
   B.block(mats.granite, at(ta, 0, h - 0.9), dir, len + 1.4, 1.8, across + 1.4);
   for (const sg of [-1, 1]) B.block(mats.granite, at(ta, sg * (across * 0.5 - 0.3), h + 0.75), dir, len + 1.4, 1.5, 0.8);
   const p = at(ta, 0, 0);
-  if (onManhattan(p)) addBridgeCollider(p, dir, len + 2.4, across + 2.4, h);
+  if (onManhattan(p)) addBridgeCollider(p, dir, len + 2.4, across + 2.4, h - (bridgeSite.wasteland ? 1 : 0));
 }
 
 /** Williamsburg (riveted lattice towers) & Manhattan (portal-arched towers) suspension bridges. */
@@ -2911,16 +2918,20 @@ function buildSuspensionBridge(group, parts, spec, mats) {
   const steel = isManhattan ? mats.manhattan : mats.williamsburg;
   const [t1, t2] = spec.towers;
   const sideSpan = spec.sideSpan / f.L;
-  const anchor1 = t1 - sideSpan;
+  const anchor1 = t1 - (spec.citySideSpan ?? spec.sideSpan) / f.L;
   const anchor2 = t2 + sideSpan;
-  const profile = makeDeckProfile(spec, anchor1, anchor2, 0.86);
+  const profile = makeDeckProfile(spec, anchor1, anchor2, spec.rampFrac ?? 0.86);
   const trussH = isManhattan ? 7 : 10;
   buildDeck(B, spec, f, profile, mats, steel, { trussH, trussFrom: anchor1, trussTo: anchor2 });
 
   // Masonry anchorages (the roadway crosses their top) and caissons
   const yAnchor = profile(anchor1);
   const [anchorLen, anchorExtra] = spec.anchorage;
-  for (const ta of [anchor1, anchor2]) buildAnchorage(B, parts, mats, f, ta, anchorLen, W + anchorExtra, yAnchor - 0.3, false);
+  for (const ta of [anchor1, anchor2]) {
+    const halfAnchor = (anchorLen + 3.2) / (2 * f.L);
+    const top = bridgeSite.wasteland ? Math.min(profile(ta - halfAnchor), profile(ta + halfAnchor)) : yAnchor;
+    buildAnchorage(B, parts, mats, f, ta, anchorLen, W + anchorExtra, top - 0.45, false);
+  }
   const saddleY = spec.towerH - 2;
   for (const tt of [t1, t2]) {
     B.block(mats.pier, at(tt, 0, 2), dir, 16, 9, W + 12);
@@ -3075,7 +3086,8 @@ function buildQueensboroBridge(group, spec, mats) {
   const W = spec.width;
   const steel = mats.queensboro;
   const T = spec.towers;
-  const profile = makeDeckProfile(spec, T[0], T[3], 0.95);
+  const baseProfile = makeDeckProfile(spec, T[0], T[3], 0.95);
+  const profile = bridgeSite.wasteland ? t => baseProfile(t) + 3.3 * (1 - smooth01(Math.min(1, Math.abs(t * f.L - 185) / 120))) : baseProfile;
   const reach = 0.105;
   const trussFrom = T[0] - reach;
   const trussTo = T[3] + reach;
@@ -3333,55 +3345,63 @@ function createLandmarkMaterials() {
  * columns stand only on blocks. Returns the colliders of the bridge parts standing on Manhattan (anchorages, piers,
  * columns, deck ends too low to drive under).
  */
-function buildBoroughs(scene, { sidewalks = [] } = {}) {
+function buildBoroughs(scene, { sidewalks = [], wasteland = false } = {}) {
   const t0 = performance.now();
   const group = new THREE.Group();
   group.name = 'Boroughs';
 
   // Land, bulkheads & the Palisades ridge (all on the procedural ground shader)
   const landMat = createLandMaterial();
-  const { topGeo, wallGeo } = buildLandGeometries();
+  const { topGeo, wallGeo } = buildLandGeometries(wasteland);
   const landMesh = new THREE.Mesh(topGeo, landMat);
   landMesh.name = 'BoroughLand';
   const wallMesh = new THREE.Mesh(wallGeo, createBulkheadMaterial());
   wallMesh.name = 'BoroughBulkheads';
-  const ridgeMesh = new THREE.Mesh(buildRidgeGeometry(), landMat);
-  ridgeMesh.name = 'Palisades';
-  group.add(landMesh, wallMesh, ridgeMesh);
+  group.add(landMesh, wallMesh);
+  if (!wasteland) {
+    const ridgeMesh = new THREE.Mesh(buildRidgeGeometry(), landMat);
+    ridgeMesh.name = 'Palisades';
+    group.add(ridgeMesh);
+  }
 
   // Buildings (generic grid blocks + skyline signatures + island & landmark buildings) in chunked instanced meshes
   registerLandmarkExclusions();
-  const { list, stats } = generateBoroughBuildings();
+  const { list, stats } = wasteland ? { list: [], stats: {} } : generateBoroughBuildings();
   const parts = createPartCollector();
   const lm = createLandmarkMaterials();
   addIslandBuildings(list);
   buildStatueOfLiberty(parts, lm);
   buildEllisIsland(parts, lm, list);
   buildGovernorsIsland(parts, lm, list, landMat, group);
-  buildBoroughLandmarks(parts, lm, list, group);
+  if (!wasteland) buildBoroughLandmarks(parts, lm, list, group);
   const buildingMat = createBoroughBuildingMaterial();
   for (const mesh of buildBuildingChunks(list, buildingMat, 1200, 'BoroughBuildings')) group.add(mesh);
   parts.build(group);
 
   // East River bridges, and the Roosevelt Island Tramway beside the Queensboro Bridge (before the island's trees,
   // which keep out from under its cabins)
-  bridgeSite = { sidewalks, colliders: [] };
+  bridgeSite = { sidewalks, colliders: [], wasteland };
   BRIDGE_DECKS.length = 0;
   const bridgeMats = createBridgeMaterials();
   const bridgeParts = createPartCollector();
   const tram = buildRooseveltTram(group, bridgeParts, lm);
   buildIslandTrees(group);
-  for (const spec of EAST_RIVER_BRIDGES) {
+  for (const spec of wasteland ? FRONTIER_BRIDGES : EAST_RIVER_BRIDGES) {
     if (spec.type === 'suspension') buildSuspensionBridge(group, bridgeParts, spec, bridgeMats);
     else if (spec.type === 'brooklyn') buildBrooklynBridge(group, bridgeParts, spec, bridgeMats);
     else if (spec.type === 'cantilever') buildQueensboroBridge(group, spec, bridgeMats);
   }
+  // The great bridges still stand, over a river and a strait that are gone
   for (const spec of OUTER_BRIDGES) buildOuterBridge(group, bridgeParts, spec, bridgeMats);
   bridgeParts.build(group, { castShadow: true });
 
   scene.add(group);
   console.info(`[boroughs] ${list.length} buildings ${JSON.stringify(stats)} built in ${(performance.now() - t0).toFixed(0)} ms`);
-  return { group, ridgeHeightAt, landAt, colliders: bridgeSite.colliders.concat(tram.colliders), update: tram.update };
+  return {
+    group, ridgeHeightAt,
+    landAt: wasteland ? (x, z) => saltLandAt(x, z) || HARBOR_ISLANDS.has(landAt(x, z)?.id) : landAt,
+    decks: BRIDGE_DECKS.slice(), colliders: bridgeSite.colliders.concat(tram.colliders), update: tram.update
+  };
 }
 
 export { buildBoroughs, ridgeHeightAt, landAt as boroughLandAt, bridgeDeckAt };

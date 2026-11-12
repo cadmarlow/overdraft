@@ -430,7 +430,9 @@ class ThirdPersonControllerManager {
       ent.position.x = destination.x;
       ent.position.z = destination.z;
       ent.heading = heading;
-      ent.position.y = heli ? altitude : this.getGroundHeight(destination.x, destination.z, this.activeMode);
+      const deck = this._teleportDeckHit ??= {};
+      ent.position.y = heli ? altitude : this.frontier?.deckAt(destination.x, destination.z, Infinity, deck)
+        ? deck.y : this.getGroundHeight(destination.x, destination.z, this.activeMode);
     }
     ent.speed = 0;
     if (this.activeMode === 'person') {
@@ -487,6 +489,7 @@ class ThirdPersonControllerManager {
     const cameraBack = Math.cos(0.09) * entity.chaseDistance;
     const cameraUp = entity.chaseHeight + Math.sin(0.09) * entity.chaseDistance * 0.85;
     const clampPoint = (px, pz) => {
+      if (this.frontier?.landAt(px, pz) || this.frontier?.deckAt(px, pz)) return { x: px, z: pz };
       pz = Math.max(ISLAND_BOUNDS.minZ + (heli ? -6000 : 30), Math.min(ISLAND_BOUNDS.maxZ + margin, pz));
       px = Math.max(ISLAND_BOUNDS.minX - margin, Math.min(ISLAND_BOUNDS.maxX + margin, px));
       if (!heli && getIslandBoundsAtZ) {
@@ -497,9 +500,11 @@ class ThirdPersonControllerManager {
       }
       return { x: px, z: pz };
     };
+    const deck = this._teleportDeckHit ??= {};
     const clear = (p) => {
       if (!p) return false;
-      const baseY = heli ? altitude : this.getGroundHeight(p.x, p.z, this.activeMode);
+      const baseY = heli ? altitude : this.frontier?.deckAt(p.x, p.z, Infinity, deck)
+        ? deck.y : this.getGroundHeight(p.x, p.z, this.activeMode);
       // Keep other player models out of both the arrival and its default chase view. A corridor also prevents a
       // parked car between camera and character from hiding the character even when the camera itself is outside it.
       const viewTop = baseY + Math.max(body[entity.type][1], cameraUp);
@@ -1000,6 +1005,7 @@ class ThirdPersonControllerManager {
   carGround(x, z, hit) {
     hit.nx = 0; hit.ny = 1; hit.nz = 0; hit.grip = 1; hit.rough = 0.0035; hit.y = 0; hit.curb = false;
     const maxDeckHeight = (this._groundVehicleY ?? this.entities?.[this.activeMode]?.position.y ?? 0) + 1;
+    if (this.frontier?.sample(x, z, maxDeckHeight, hit)) return;
     if (this.groundSurfaces?.sample(x, z, hit, maxDeckHeight)) {
       if (this.overWater(x, z) && !hit.deck) { hit.y = -40; return; }
       const rise = rampRise(x, z, hit);
@@ -1019,7 +1025,7 @@ class ThirdPersonControllerManager {
   afloat(x, z) {
     if (!this.overWater(x, z) || this.landAt?.(x, z)) return false;
     // Piers and bridge footings stand in the water
-    for (const c of this.nearColliders(x, z, 2)) if ((c.maxY ?? 0) > 0 && x > c.minX && x < c.maxX && z > c.minZ && z < c.maxZ) return false;
+    for (const c of this.nearColliders(x, z, 2)) if ((c.maxY ?? 0) > 0 && (c.minY ?? 0) < WATER + 3 && x > c.minX && x < c.maxX && z > c.minZ && z < c.maxZ) return false;
     // A pier is solid across its whole width, whatever basins its outline has: its deck covers them
     for (const p of WATERFRONT_PIERS ?? []) {
       const dx = x - p.cx, dz = z - p.cz, ux = Math.cos(p.angle), uz = Math.sin(p.angle);
@@ -1035,7 +1041,7 @@ class ThirdPersonControllerManager {
   getGroundHeight(x, z, mode = 'person', y = 0) {
     const interior = y < 2 ? this.interiorFloor?.(x, z) : null;
     if (interior != null) return interior;
-    const street = this.streetHeight(x, z, mode);
+    const street = this.streetHeight(x, z, mode, y);
     if (y < 2 || (mode !== 'person' && mode !== 'helicopter')) return street;
     return Math.max(street, this.roofHeight(x, z, y));
   }
@@ -1064,11 +1070,13 @@ class ThirdPersonControllerManager {
     return p.footing > 2 ? Math.max(g, p.footing - 0.4) : g;
   }
 
-  streetHeight(x, z, mode = 'person') {
+  streetHeight(x, z, mode = 'person', y = 0) {
     if (this.swimming && mode === 'person') return WATER - 1.28;
     const hit = this._streetGroundHit ??= {};
     const maxDeckHeight = (this.entities?.[mode]?.position.y ?? 0) + 1;
+    if (this.frontier?.sample(x, z, Math.max(maxDeckHeight, y + .65), hit)) return hit.y;
     if (this.groundSurfaces?.sample(x, z, hit, maxDeckHeight)) return hit.y;
+    if (this.frontier?.exterior(x, z) && this.afloat(x, z)) return WATER - 3;
     return this.isPointOnSidewalk(x, z) ? ISLAND_BOUNDS.sidewalkHeight : 0.0;
   }
 
@@ -1139,20 +1147,36 @@ class ThirdPersonControllerManager {
     // The detailed island (the helicopter may roam out over the harbour & the boroughs)
     const heli = mode === 'helicopter';
     const m = heli ? 6000 : 0;
-    pos.x = Math.max(ISLAND_BOUNDS.minX - m, Math.min(ISLAND_BOUNDS.maxX + m, pos.x));
-    pos.z = Math.max(ISLAND_BOUNDS.minZ + (heli ? -6000 : 30), Math.min(ISLAND_BOUNDS.maxZ + m, pos.z));
-    if (!heli && !carEntity?.body && getIslandBoundsAtZ) {
-      const shore = getIslandBoundsAtZ(pos.z);
-      const minShoreX = shore.westX + 8.0;
-      const maxShoreX = shore.eastX - 8.0;
-      if (pos.x < minShoreX) {
-        pos.x = minShoreX;
-        if (carEntity?.body) impactBody(carEntity, pos.x, pos.y + 0.55, pos.z, 1, 0, 0);
-        else if (carEntity && carEntity.speed) carEntity.speed *= 0.4;
-      } else if (pos.x > maxShoreX) {
-        pos.x = maxShoreX;
-        if (carEntity?.body) impactBody(carEntity, pos.x, pos.y + 0.55, pos.z, -1, 0, 0);
-        else if (carEntity && carEntity.speed) carEntity.speed *= 0.4;
+    // Down on the dry bed, Manhattan is a wall: nothing walks or drives in under the streets
+    if (this.frontier?.wall && entity && !heli && pos.y < -1.5) {
+      const ax = pos.x, az = pos.z;
+      if (this.frontier.wall(pos, entity._bedX ?? pos.x, entity._bedZ ?? pos.z)) {
+        const nx = pos.x - ax, nz = pos.z - az, l = Math.hypot(nx, nz) || 1;
+        if (carEntity?.body) impactBody(carEntity, ax, pos.y + 0.55, az, nx / l, 0, nz / l);
+        else if (carEntity?.speed) carEntity.speed *= 0.4;
+      }
+      entity._bedX = pos.x; entity._bedZ = pos.z;
+    }
+    // With the Wasteland round it, the island is no longer where the world ends: the seawall, the Wall and their
+    // gates decide who leaves, and the only fence is the edge of the relief
+    const canCross = !!this.frontier;
+    if (canCross) this.frontier.confine(pos);
+    else {
+      pos.x = Math.max(ISLAND_BOUNDS.minX - m, Math.min(ISLAND_BOUNDS.maxX + m, pos.x));
+      pos.z = Math.max(ISLAND_BOUNDS.minZ + (heli ? -6000 : 30), Math.min(ISLAND_BOUNDS.maxZ + m, pos.z));
+      if (!heli && !carEntity?.body && getIslandBoundsAtZ) {
+        const shore = getIslandBoundsAtZ(pos.z);
+        const minShoreX = shore.westX + 8.0;
+        const maxShoreX = shore.eastX - 8.0;
+        if (pos.x < minShoreX) {
+          pos.x = minShoreX;
+          if (carEntity?.body) impactBody(carEntity, pos.x, pos.y + 0.55, pos.z, 1, 0, 0);
+          else if (carEntity && carEntity.speed) carEntity.speed *= 0.4;
+        } else if (pos.x > maxShoreX) {
+          pos.x = maxShoreX;
+          if (carEntity?.body) impactBody(carEntity, pos.x, pos.y + 0.55, pos.z, -1, 0, 0);
+          else if (carEntity && carEntity.speed) carEntity.speed *= 0.4;
+        }
       }
     }
 
@@ -1453,6 +1477,8 @@ class ThirdPersonControllerManager {
     c.body.nitro = nitro ? 1 : 0;
     const world = this._carWorld ??= { grip: 1, waterLevel: WATER, ground: (x, z, hit) => this.carGround(x, z, hit), collide: (car) => this.resolveHorizontalCollision(car.position, 1.35, car) };
     world.grip = this.gripFactor ?? 1;
+    // Water drags a car only where there is water: the bed of the Hudson lies under the old water line, and is dry
+    world.waterLevel = !this.frontier || this.afloat(c.position.x, c.position.z) ? WATER : undefined;
     this._groundVehicleY = c.position.y;
     stepCar(c, input, dt, world);
     this._groundVehicleY = undefined;
@@ -1621,7 +1647,8 @@ class ThirdPersonControllerManager {
         if (g < -30) g = this.landAt?.(x, z) ? 0 : -40;
         // a lake is not a lawn: its bed is well under its surface
         else if (g < 4 && this.parkWaterAt(x, z) !== null) g -= 4;
-        return Math.max(g, this.roofHeight(x, z, y, 0.9));
+        const roof = this.roofHeight(x, z, y, 0.9);
+        return this.frontier?.landAt(x, z) && !roof ? g : Math.max(g, roof);
       },
       // the level of the water at (x, z): the rivers and the harbour, or a lake of the park; false over land
       water: (x, z) => (this.afloat(x, z) ? WATER : this.parkWaterAt(x, z) ?? false),
@@ -1642,6 +1669,7 @@ class ThirdPersonControllerManager {
   }
 
   overWater(x, z) {
+    if (this.frontier?.landAt(x, z)) return false;
     if (z < ISLAND_BOUNDS.minZ || z > ISLAND_BOUNDS.maxZ) return true;
     const shore = getIslandBoundsAtZ(z);
     return x < shore.westX || x > shore.eastX;
@@ -1683,7 +1711,9 @@ class ThirdPersonControllerManager {
     h.position.x += Math.sin(h.heading) * h.speed * dt;
     h.position.z += Math.cos(h.heading) * h.speed * dt;
     // Skids on the street or on whatever roof it comes down onto (judged from before this step, so a fast descent lands)
-    const floor = this.roofHeight(h.position.x, h.position.z, h.position.y - 0.25, 0.3) + 0.25;
+    const ground = this._heliGround ??= {};
+    const terrain = this.frontier?.sample(h.position.x, h.position.z, h.position.y + .3, ground) ? ground.y : 0;
+    const floor = Math.max(terrain, this.roofHeight(h.position.x, h.position.z, h.position.y - .25, .3)) + .25;
     h.position.y += h.verticalSpeed * dt;
 
     if (h.position.y < floor) {

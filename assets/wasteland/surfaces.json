@@ -1,0 +1,198 @@
+{
+  "dune": {
+    "id": "aerial_beach_01",
+    "title": "Aerial Beach 01",
+    "metres": 10,
+    "photographed": 30,
+    "mean": [
+      0.2828,
+      0.2372,
+      0.1959
+    ],
+    "roughness": 0.88,
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "color": "dune_c.webp",
+    "normal": "dune_n.webp"
+  },
+  "sand": {
+    "id": "dry_ground_rocks",
+    "title": "Dry Ground Rocks",
+    "metres": 4,
+    "mean": [
+      0.3161,
+      0.1852,
+      0.0859
+    ],
+    "roughness": 0.812,
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "color": "sand_c.webp",
+    "normal": "sand_n.webp"
+  },
+  "crack": {
+    "id": "mud_cracked_dry_03",
+    "title": "Mud Cracked Dry 03",
+    "metres": 3,
+    "photographed": 1.5,
+    "mean": [
+      0.6347,
+      0.4034,
+      0.2253
+    ],
+    "roughness": 0.756,
+    "authors": [
+      "Dario Barresi",
+      "Dimitrios Savva"
+    ],
+    "color": "crack_c.webp",
+    "normal": "crack_n.webp"
+  },
+  "salt": {
+    "id": "dry_ground_01",
+    "title": "Dry Ground 01",
+    "metres": 4,
+    "mean": [
+      0.241,
+      0.2015,
+      0.1485
+    ],
+    "roughness": 0.829,
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "color": "salt_c.webp",
+    "normal": "salt_n.webp"
+  },
+  "gravel": {
+    "id": "floor_pebbles_01",
+    "title": "Floor Pebbles 01",
+    "metres": 3,
+    "mean": [
+      0.3151,
+      0.2552,
+      0.1646
+    ],
+    "roughness": 0.928,
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "color": "gravel_c.webp",
+    "normal": "gravel_n.webp"
+  },
+  "cliff": {
+    "id": "cliff_side",
+    "title": "Cliff Side",
+    "metres": 4,
+    "photographed": 1.83,
+    "mean": [
+      0.213,
+      0.0918,
+      0.034
+    ],
+    "roughness": 0.861,
+    "authors": [
+      "James Ray Cock",
+      "Jenelle van Heerden",
+      "Dario Barresi"
+    ],
+    "color": "cliff_c.webp",
+    "normal": "cliff_n.webp"
+  },
+  "crag": {
+    "id": "marble_cliff_03",
+    "title": "Marble Cliff 03",
+    "metres": 5.748,
+    "mean": [
+      0.3441,
+      0.2196,
+      0.1161
+    ],
+    "roughness": 0.872,
+    "authors": [
+      "Amal Kumar"
+    ],
+    "color": "crag_c.webp",
+    "normal": "crag_n.webp"
+  },
+  "slab": {
+    "id": "sandstone_cracks",
+    "title": "Sandstone Cracks",
+    "metres": 2,
+    "mean": [
+      0.6421,
+      0.3606,
+      0.1788
+    ],
+    "roughness": 0.908,
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "color": "slab_c.webp",
+    "normal": "slab_n.webp"
+  },
+  "rust": {
+    "id": "rusty_metal_04",
+    "title": "Rusty Metal 04",
+    "metres": 2,
+    "mean": [
+      0.1062,
+      0.0743,
+      0.057
+    ],
+    "roughness": 0.703,
+    "authors": [
+      "Amal Kumar"
+    ],
+    "color": "rust_c.webp",
+    "normal": "rust_n.webp"
+  },
+  "sheet": {
+    "id": "rusty_corrugated_iron",
+    "title": "Rusty Corrugated Iron",
+    "metres": 2,
+    "mean": [
+      0.1003,
+      0.0247,
+      0.0101
+    ],
+    "roughness": 0.936,
+    "authors": [
+      "Charlotte Baglioni"
+    ],
+    "color": "sheet_c.webp",
+    "normal": "sheet_n.webp"
+  },
+  "bunker": {
+    "id": "concrete",
+    "title": "Concrete",
+    "metres": 4,
+    "mean": [
+      0.1744,
+      0.1499,
+      0.1083
+    ],
+    "roughness": 0.839,
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "color": "bunker_c.webp",
+    "normal": "bunker_n.webp"
+  },
+  "macro": {
+    "id": "dirt_aerial_02",
+    "title": "Dirt Aerial 02",
+    "metres": 20,
+    "mean": [
+      0.2077,
+      0.1184,
+      0.0559
+    ],
+    "authors": [
+      "Rob Tuytel"
+    ],
+    "color": "macro_c.webp"
+  }
+}

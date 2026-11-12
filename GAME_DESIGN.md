@@ -435,4 +435,41 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.23** | **Free Float** | Menu pause : circulation Aucun / Faible / Moyen / Dense, mémorisée, pour les rues et les voies rapides ; réduction réelle de la simulation et du rendu. |
 | **0.9.24** | **Flight to Quality** | Pilotage refait : modèle de vol à corps rigide, deux avions neufs (biplan Bourrasque, chasseur Tramontane), caméra de vol, cockpit et viseur tête haute, instruments, effets, son, collisions avec la ville et figures récompensées. |
 | **0.9.25** | **Consumer Staples** | Deux franchises de restauration dans toute la ville : BULLION (burgers, 36 succursales) et TRANCHE (pizza à la part, 54). On y entre, on commande, on porte son plateau, on s’assoit, on mange ; équipiers et clients vivent leur vie ; en-cas à emporter, braquage de la caisse. |
+| **0.9.26** | **Scorched Earth** | Le Wasteland : Hudson à sec au pied des quais, douves de l’East River, Mur du nord et portes, ruines ensablées, Ceinture de 47 km, bascule d’ambiance au franchissement, navires échoués, camps, feux et projecteurs la nuit. |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |
+
+
+## Le Wasteland (Scorched Earth)
+
+**Le récit.** L’eau est partie. L’Hudson s’est vidé, la rade a séché en lac de sel, et la ville a gardé ce qu’elle a
+pu : l’East River, fermé par quatre digues, lui sert de douves et de réserve. Manhattan est un plateau fortifié de
+survivants ; tout ce qui l’entoure est le Wasteland. On l’appelle ici la crise de liquidité.
+
+**La géographie est celle de New York.** Les rives sont les vraies (New Jersey, Brooklyn, Queens, Bronx, haut de
+Manhattan). À l’ouest, le lit de l’Hudson, large de 1,3 km, sept à neuf mètres sous les rues, puis la Corniche au pied
+des Palisades et le plateau du Haut-Sel. Au nord, le Mur ferme l’île sur sa coupe, et Harlem continue derrière en
+ruines. À l’est, les douves, puis les os de Brooklyn et du Queens. Au sud, la rade, blanche, avec ses îles et ses
+bouées échouées. Au loin, des chaînes ferment l’horizon.
+
+**La limite se franchit en trois endroits et de trois manières.** Par une porte dans un mur (la Grande Porte, au
+nord : la rue continue, le monde change). Par une descente (la porte des Pompes, à l’ouest : on quitte le plateau).
+Par un pont (à l’est : la ville s’éloigne dans la poussière). Dans tous les cas l’image bascule avant que le joueur
+ait lu quoi que ce soit : ciel, brume, exposition, étalonnage, sable dans l’air, puis le carton du lieu.
+
+**Le sol.** `tools/wasteland/build-terrain.mjs` façonne le relief une fois (32 m) : rives, lit, digues, falaises,
+mesas, érosion, routes nivelées, masques de matière. Le jeu y ajoute le détail (dunes, pierraille) sur un treillis
+de 8 m, le même pour l’image et pour les appuis (`js/wasteland-plan.js`). Le dessin suit la caméra en niveaux de
+détail (`js/wasteland.js`). Sous les rues, le relief reste enfoui, sauf là où une brèche l’a laissé passer.
+
+**Ce qui l’habite.** Les navires sont restés où l’eau les a posés (`js/wasteland-wrecks.js`) : le Cimetière des
+Coques devant l’ancien terminal des paquebots, d’autres le long du lit et sur la rade, et à quai ceux qui n’ont jamais
+appareillé. Les camps (`js/wasteland-works.js`) se tiennent aux lieux nommés : le Relais des Veilleurs à la Cale,
+des camps de Rouliers ailleurs. La nuit (`js/wasteland-night.js`) se lit de loin : un feu est un point orange à deux
+kilomètres avant d’être une flamme qui éclaire, et les projecteurs du Mur disent où est la ville.
+
+**La règle des croisements.** Une route du dehors qui coupe une chaussée de la ville la ferme le temps du passage,
+comme un passage à niveau (`crossingStops` dans `js/highway-driving.js`). Le joueur ne doit jamais payer d’un
+accident le fait d’avoir pris une porte.
+
+**Ce qui vient ensuite.** Convois des Rouliers sur la Ceinture, carburant et eau comme monnaie du dehors, tempêtes de
+sable qui gagnent la ville, intérieurs des coques, phares plus longs hors les murs, missions hors les murs.

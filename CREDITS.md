@@ -272,3 +272,70 @@ Matières :
 
 La mousse acoustique du stand de tir n'existe pas chez Poly Haven : elle est dessinée par
 `tools/calibre/build-kit.mjs`, création du projet.
+
+
+## The Wasteland
+
+Relief, cargo, grues, vestiges, enseignes et carrosseries de récupération conçus et générés dans le projet.
+Les textures de terrain et de chaussée réemploient les photographies Poly Haven déjà créditées ci-dessus.
+
+### Matières et objets du désert
+
+Les matières photographiées (`assets/wasteland/*_c.webp`, `*_n.webp`) et les objets numérisés ou modélisés du désert
+(`assets/wasteland/kit.*`) viennent de [Poly Haven](https://polyhaven.com), en CC0. Ils sont téléchargés, réduits et
+assemblés par `tools/wasteland/build-surfaces.mjs` et `tools/wasteland/build-kit.mjs`.
+
+Matières :
+- Aerial Beach 01 (sable ridé par le vent) par Rob Tuytel : https://polyhaven.com/a/aerial_beach_01
+- Dry Ground Rocks (sol sec semé de cailloux) par Rob Tuytel : https://polyhaven.com/a/dry_ground_rocks
+- Mud Cracked Dry 03 (boue séchée et craquelée) par Dario Barresi et Dimitrios Savva : https://polyhaven.com/a/mud_cracked_dry_03
+- Dry Ground 01 (croûte pâle à fins polygones) par Rob Tuytel : https://polyhaven.com/a/dry_ground_01
+- Floor Pebbles 01 (nappe de gravier) par Rob Tuytel : https://polyhaven.com/a/floor_pebbles_01
+- Cliff Side (grès rouge en strates) par James Ray Cock, Jenelle van Heerden et Dario Barresi : https://polyhaven.com/a/cliff_side
+- Marble Cliff 03 (paroi fracturée en blocs) par Amal Kumar : https://polyhaven.com/a/marble_cliff_03
+- Sandstone Cracks (dalle de grès nue) par Rob Tuytel : https://polyhaven.com/a/sandstone_cracks
+- Rusty Metal 04 (tôle d’acier peinte et rouillée) par Amal Kumar : https://polyhaven.com/a/rusty_metal_04
+- Rusty Corrugated Iron (tôle ondulée rouillée) par Charlotte Baglioni : https://polyhaven.com/a/rusty_corrugated_iron
+- Concrete (béton coulé, taché) par Rob Tuytel : https://polyhaven.com/a/concrete
+- Dirt Aerial 02 (vue aérienne de terre sèche) par Rob Tuytel : https://polyhaven.com/a/dirt_aerial_02
+
+Objets :
+- Stone 01 par Dario Barresi et Rico Cilliers : https://polyhaven.com/a/stone_01
+- Namaqualand Boulder 03 par Jenelle van Heerden et Dario Barresi : https://polyhaven.com/a/namaqualand_boulder_03
+- Namaqualand Boulder 04 par Jenelle van Heerden : https://polyhaven.com/a/namaqualand_boulder_04
+- Namaqualand Boulder 05 par Jenelle van Heerden et Dario Barresi : https://polyhaven.com/a/namaqualand_boulder_05
+- Namaqualand Boulder 06 par Greg Zaal et Jenelle van Heerden : https://polyhaven.com/a/namaqualand_boulder_06
+- Rock 07 par Jenelle van Heerden : https://polyhaven.com/a/rock_07
+- Rock 09 par Jenelle van Heerden : https://polyhaven.com/a/rock_09
+- Namaqualand Cliff 01 par Jenelle van Heerden et Rico Cilliers : https://polyhaven.com/a/namaqualand_cliff_01
+- Namaqualand Cliff 02 par Dario Barresi et Rico Cilliers : https://polyhaven.com/a/namaqualand_cliff_02
+- Namaqualand Rocks 01 par Greg Zaal et Jenelle van Heerden : https://polyhaven.com/a/namaqualand_rocks_01
+- Dead Tree Trunk 02 par Jenelle van Heerden et Rico Cilliers : https://polyhaven.com/a/dead_tree_trunk_02
+- Dead Tree Trunk par Rob Tuytel : https://polyhaven.com/a/dead_tree_trunk
+- Dead Quiver Trunk par James Ray Cock, Dario Barresi et Rico Cilliers : https://polyhaven.com/a/dead_quiver_trunk
+- Dry Branches Medium 01 par Rico Cilliers : https://polyhaven.com/a/dry_branches_medium_01
+- Shrub 02 par Rico Cilliers : https://polyhaven.com/a/shrub_02
+- Barrel_01 par Jorge Camacho : https://polyhaven.com/a/Barrel_01
+- Barrel 03 par Serhii Khromov : https://polyhaven.com/a/barrel_03
+- Barrel Stove par MP : https://polyhaven.com/a/barrel_stove
+- Old Tyre par MP : https://polyhaven.com/a/old_tyre
+- Metal Jerrycan par Sean Buckley : https://polyhaven.com/a/metal_jerrycan
+- Small Lpg Tank par Ulan Cabanilla : https://polyhaven.com/a/small_lpg_tank
+- Concrete Road Barrier par Amal Kumar : https://polyhaven.com/a/concrete_road_barrier
+- Concrete Road Barrier 02 par Amal Kumar : https://polyhaven.com/a/concrete_road_barrier_02
+- Cement Bag par PierreB3D : https://polyhaven.com/a/cement_bag
+- Wooden Crate 01 par James Ray Cock : https://polyhaven.com/a/wooden_crate_01
+- Old Military Crate par Jack Mava : https://polyhaven.com/a/old_military_crate
+- Modular Chainlink Fence par James Ray Cock et Amal Kumar : https://polyhaven.com/a/modular_chainlink_fence
+- Ladder Sectioned 01 par MP : https://polyhaven.com/a/ladder_sectioned_01
+- Covered Car par MP : https://polyhaven.com/a/covered_car
+- Ocean Buoy par Mateusz Sadek : https://polyhaven.com/a/ocean_buoy
+- Modular Electricity Poles par James Ray Cock : https://polyhaven.com/a/modular_electricity_poles
+- Portable Generator par James Ray Cock : https://polyhaven.com/a/portable_generator
+- Portable Welding Cart par Georgii Gorbunov : https://polyhaven.com/a/portable_welding_cart
+- Trashbag par Benny Weimer : https://polyhaven.com/a/trashbag
+- Metal Trash Can par GurJas Studios : https://polyhaven.com/a/metal_trash_can
+- Old Bed Frame par Luca B : https://polyhaven.com/a/old_bed_frame
+- Stone Fire Pit par Sebastian Platen : https://polyhaven.com/a/stone_fire_pit
+- Plastic Monobloc Chair 01 par Kuutti Siitonen : https://polyhaven.com/a/plastic_monobloc_chair_01
+- Wooden Picnic Table par Ulan Cabanilla : https://polyhaven.com/a/wooden_picnic_table

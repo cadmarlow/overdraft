@@ -358,6 +358,13 @@ class CameraSystem {
     this.userOrbitTimer = 0;
   }
 
+  // The lowest the camera may sit at (x, z) while it follows a body at height `y`: just above the street, or just
+  // above the Wasteland's ground, which lies well under the street on the dry beds and well over it on the dunes
+  floorY(x, z, margin, y) {
+    const hit = this._floorHit ??= {};
+    return this.controllerManager.frontier?.sample(x, z, y + 3, hit) && !hit.deck ? hit.y + margin : margin;
+  }
+
   resetForTeleport() {
     // Arrive with a fresh chase view, without carrying a previous drive or gesture into the destination.
     this._clearPointers();
@@ -440,9 +447,10 @@ class CameraSystem {
 
         desiredPos.set(
           entity.position.x - Math.sin(totalYaw) * horizDist,
-          Math.max(0.65, entity.position.y + height),
+          entity.position.y + height,
           entity.position.z - Math.cos(totalYaw) * horizDist
         );
+        desiredPos.y = Math.max(this.floorY(desiredPos.x, desiredPos.z, 0.65, entity.position.y), desiredPos.y);
 
         const lookUpBias = entity.type === 'helicopter' ? 0.2 : (entity.type === 'car' ? 0.52 : 0);
         const lookAhead = entity.type === 'person' ? 0.7 : 5.2;
@@ -623,7 +631,7 @@ class CameraSystem {
       this.followLookOffset.lerp(desiredLook.sub(entity.position), k);
       this.currentPos.set(entity.position.x, this.followBaseY, entity.position.z).add(this.followOffset);
       this.currentLookAt.set(entity.position.x, this.followBaseY, entity.position.z).add(this.followLookOffset);
-      this.currentPos.y = Math.max(0.55, this.currentPos.y);
+      this.currentPos.y = Math.max(this.floorY(this.currentPos.x, this.currentPos.z, 0.55, entity.position.y), this.currentPos.y);
     } else {
       this.followEntity = null;
       const k = 1 - Math.exp(-dt * 8.5);
@@ -962,7 +970,8 @@ class CameraSystem {
       + Math.sin(this.orbitPitchOffset - 0.09) * distance * 0.85;
     const shoulder = action ? Math.min(1.6, (car.spec?.halfW ?? 0.9) + 0.55) : 0;
     desiredPos.set(car.position.x - Math.sin(yaw) * distance + Math.cos(yaw) * shoulder,
-      Math.max(0.7, car.position.y + lift), car.position.z - Math.cos(yaw) * distance - Math.sin(yaw) * shoulder);
+      car.position.y + lift, car.position.z - Math.cos(yaw) * distance - Math.sin(yaw) * shoulder);
+    desiredPos.y = Math.max(this.floorY(desiredPos.x, desiredPos.z, 0.7, car.position.y), desiredPos.y);
 
     // Anticipate the road modestly; looking far past the nose conceals the car behind the bottom edge of the screen.
     // While orbiting, keep the subject centred rather than fighting the player's inspection of the bodywork.

@@ -67,7 +67,7 @@ const BAKE_BUDGET_MS = 4; // buffer baking per update while the bank fills
 const MAX_GROUPS = 14; // concurrent on-demand sounds, 2 to 5 nodes each
 const MAX_AMBIENT_GROUPS = 9; // the rest stays free for explicit events
 const BAR_BPM = 124;
-const UNIT_PARAMS = ['crowd', 'traffic', 'night', 'subway', 'construction', 'bar', 'birds', 'water', 'fountain', 'indoor', 'rain', 'enclosure'];
+const UNIT_PARAMS = ['crowd', 'traffic', 'night', 'subway', 'construction', 'bar', 'birds', 'water', 'fountain', 'indoor', 'rain', 'enclosure', 'wasteland'];
 let voiceSerial = 0;
 
 const finite = (value, fallback = 0) => Number.isFinite(value) ? value : fallback;
@@ -119,14 +119,14 @@ function computeLevels(p, out) {
   out.bar = level.bar * Math.pow(p.bar, 1.3) * nightlife * indoor;
   // Pigeons roost and gulls quieten at night; both shelter from the rain.
   out.birds = level.birds * Math.pow(Math.max(p.birds, p.water * 0.9), 0.8) * (1 - 0.7 * p.night) * (1 - 0.85 * p.rain) * indoor;
-  out.siren = level.siren * (0.8 + 0.4 * p.night) * indoor;
-  out.hum = level.hum * (0.65 + 0.35 * p.traffic) * (1 - 0.2 * p.night) * indoor;
+  out.siren = level.siren * (0.8 + 0.4 * p.night) * indoor * (1 - p.wasteland);
+  out.hum = level.hum * (0.65 + 0.35 * p.traffic) * (1 - 0.2 * p.night) * indoor * (1 - .94 * p.wasteland);
   out.fountain = level.fountain * p.fountain ** 1.5 * indoor;
   return out;
 }
 
 const blankParams = () => ({ crowd: 0, traffic: 0, night: 0, hour: 13, subway: 0, construction: 0, bar: 0, birds: 0,
-  water: 0, fountain: 0, indoor: 0, rain: 0, enclosure: 0 });
+  water: 0, fountain: 0, indoor: 0, rain: 0, enclosure: 0, wasteland: 0 });
 
 // Target gain of every layer for the given params, indoor attenuation included.
 export function ambienceLevels(params) {

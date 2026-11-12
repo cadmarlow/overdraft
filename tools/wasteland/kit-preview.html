@@ -1,0 +1,269 @@
+<!doctype html>
+<meta charset="utf-8"><title>Kit Wasteland</title>
+<style>
+  html,body{margin:0;height:100%;background:#20242a;overflow:hidden;font:12px/1.2 -apple-system,Helvetica,Arial,sans-serif;color:#fff}
+  canvas{display:block;position:absolute;left:0;top:0}
+  .label{position:absolute;transform:translate(-50%,0);white-space:nowrap;padding:1px 5px;border-radius:3px;background:rgba(0,0,0,.62);pointer-events:none}
+  .label small{opacity:.7}
+  .cell{transform:none}
+  #help{position:absolute;left:8px;bottom:8px;opacity:.7;max-width:80ch}
+</style>
+<script type="importmap">{"imports":{"three":"../../vendor/three/build/three.webgpu.js","three/webgpu":"../../vendor/three/build/three.webgpu.js","three/tsl":"../../vendor/three/build/three.tsl.js","three/addons/":"../../vendor/three/examples/jsm/"}}</script>
+<div id="labels"></div>
+<div id="help"></div>
+<script type="module">
+// Every prop and surface of assets/wasteland (tools/wasteland/build-kit.mjs, build-surfaces.mjs), through the game's
+// own loaders (js/wasteland-kit.js, js/wasteland-surfaces.js).
+//   (default)    the yard: every prop on a 1 m grid, its `full` level and, behind it, its `low` level; the grey post
+//                is 1.8 m tall. Drag to turn, wheel to zoom, right-drag (or shift) to pan. Names show when the camera
+//                is near (&labels=all, or a distance in metres). ?az=22&el=30&dist=17&target=x,y,z place the camera.
+//   ?surfaces=1  every surface on a 20 m plane with a 20 m x 5 m wall behind it, at its real scale, under a low sun;
+//                &tone=1 divides each photograph by its mean (what a shader that sets its own tone starts from)
+//   ?sheet=1     one cell per prop and level, each framed to fit: &az=35&el=18 (camera), &cols=6, &only=a,b,c,
+//                &page=0&per=24, &level=full|low (default: both, side by side). The square is the ground (y = 0);
+//                &collider=1 draws the suggested collider.
+//   ?flat=1      no normal map, ?white=1 no colour map (to read the shapes), ?env=0 no environment
+//   ?side=front  draws front faces only, ?side=double both faces, on every prop. By default each prop is drawn as its
+//                flags say (twoSided, cutout), which is how the game should draw it.
+// The title becomes "done" when the first picture is drawn. For scripted screenshots: window.KIT, window.__scene and,
+// outside the sheet, window.__view({ az, el, dist, target }) (degrees, metres), which resolves once the picture is drawn.
+import * as THREE from 'three/webgpu';
+import { color, normalWorld, mix, smoothstep, texture, positionWorld, vec2, vec3, normalize, transformDirection, cameraViewMatrix, float } from 'three/tsl';
+import { loadWastelandKit, wastelandProp } from '../../js/wasteland-kit.js';
+import { loadWastelandSurfaces } from '../../js/wasteland-surfaces.js';
+
+const q = new URLSearchParams(location.search);
+const num = (k, d) => (q.has(k) ? +q.get(k) : d);
+const W = innerWidth, H = innerHeight;
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(2, devicePixelRatio));
+renderer.setSize(W, H);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.prepend(renderer.domElement);
+await renderer.init();
+const [KIT, SURFACES] = await Promise.all([loadWastelandKit(), loadWastelandSurfaces()]);
+window.KIT = KIT; window.SURFACES = SURFACES;
+
+const scene = new THREE.Scene();
+window.__scene = scene;
+scene.background = new THREE.Color(0x2a2f36);
+const sun = new THREE.DirectionalLight(0xfff0dc, 3.0); sun.position.set(3, q.get('surfaces') === '1' ? 2.2 : 6, 5); scene.add(sun);
+const fill = new THREE.DirectionalLight(0xbdd4ff, 0.7); fill.position.set(-4, 2.5, -5); scene.add(fill);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x8a7a66, 0.8));
+if (q.get('env') !== '0') {
+  const dome = new THREE.Scene();
+  const sky = new THREE.MeshBasicNodeMaterial({ side: THREE.BackSide });
+  const up = normalWorld.y.negate();
+  sky.colorNode = mix(mix(color(0x9a8a72), color(0xdfe6ee), smoothstep(-0.05, 0.12, up)), color(0x8fa9cc), smoothstep(0.1, 0.9, up)).mul(1.1);
+  dome.add(new THREE.Mesh(new THREE.SphereGeometry(30, 32, 16), sky));
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(4, 16, 8), new THREE.MeshBasicNodeMaterial());
+  lamp.material.colorNode = color(0xfff4e0).mul(10);
+  lamp.position.set(11, 21, 15);
+  dome.add(lamp);
+  scene.environment = new THREE.PMREMGenerator(renderer).fromScene(dome, 0.02).texture;
+}
+
+// The kit's materials, as the game should make them: one for the closed props, one for the open sheets, one for the cut-outs
+const kitMaterial = (side, alphaTest = 0) => new THREE.MeshStandardNodeMaterial({
+  map: q.get('white') === '1' ? null : KIT.maps.color, normalMap: q.get('flat') === '1' ? null : KIT.maps.normal,
+  roughnessMap: KIT.maps.orm, metalnessMap: KIT.maps.orm, aoMap: KIT.maps.orm, roughness: 1, metalness: 1, side, alphaTest
+});
+const forced = { front: THREE.FrontSide, double: THREE.DoubleSide }[q.get('side')];
+const materials = { closed: kitMaterial(forced ?? THREE.FrontSide), open: kitMaterial(forced ?? THREE.DoubleSide), cut: new THREE.MeshStandardNodeMaterial({ map: KIT.maps.color, normalMap: q.get('flat') === '1' ? null : KIT.maps.normal, roughnessMap: KIT.maps.orm, metalnessMap: KIT.maps.orm, aoMap: KIT.maps.orm, roughness: 1, metalness: 1, side: forced ?? THREE.DoubleSide, alphaTest: 0.5 }) };
+const materialOf = (p) => (p.cutout ? materials.cut : p.twoSided ? materials.open : materials.closed);
+const ground = new THREE.MeshStandardNodeMaterial({ color: 0x8a7458, roughness: 0.95, side: THREE.DoubleSide });
+const wire = new THREE.MeshBasicNodeMaterial({ color: 0x40ff90, wireframe: true });
+const labels = document.getElementById('labels');
+const names = (q.get('only')?.split(',') ?? Object.keys(KIT.props)).filter((n) => KIT.props[n]);
+const text = (p, name, level) => `${name}${level ? ` · ${level}` : ''} <small>${p.size.map((v) => v.toFixed(2)).join(' × ')} m · ${level ? p.triangles[level] : `${p.triangles.full} / ${p.triangles.low}`} tri${p.grounded ? '' : ` · ${p.buried.toFixed(2)} m sous le sol`}${p.cutout ? ' · découpé' : p.twoSided ? ' · 2 faces' : ''}</small>`;
+
+// The suggested collider of a prop, as a wire shape
+function colliderShape(p) {
+  const c = p.collider;
+  if (!c) return null;
+  const g = c.radius !== undefined ? new THREE.CylinderGeometry(c.radius, c.radius, c.height, 16, 1, true) : new THREE.BoxGeometry(c.half[0] * 2, c.half[1] * 2, c.half[2] * 2);
+  const m = new THREE.Mesh(g, wire);
+  m.position.set(...c.centre);
+  return m;
+}
+
+let cam, target, view, draw;
+if (q.get('sheet') === '1') {
+  // ---- contact sheet -----------------------------------------------------------------------------------------------
+  const levels = q.has('level') ? [q.get('level')] : ['full', 'low'];
+  const per = num('per', 24), page = num('page', 0);
+  const shown = names.slice(page * per, page * per + per).flatMap((name) => levels.map((level) => [name, level]));
+  const cols = num('cols', Math.ceil(Math.sqrt(shown.length * W / H) / levels.length) * levels.length);
+  const rows = Math.ceil(shown.length / cols), cw = W / cols, ch = H / rows;
+  const az = num('az', 35) * Math.PI / 180, el = num('el', 18) * Math.PI / 180;
+  cam = new THREE.PerspectiveCamera(24, cw / ch, 0.01, 400);
+  const objects = shown.map(([name, level]) => {
+    const p = KIT.props[name], o = new THREE.Group();
+    o.name = name;
+    o.add(new THREE.Mesh(p[level], materialOf(p)));
+    if (q.get('ground') !== '0') {
+      const s = Math.max(p.size[0], p.size[2]) * 1.15;
+      o.add(new THREE.Mesh(new THREE.PlaneGeometry(s, s).rotateX(-Math.PI / 2).translate(0, -0.002, 0), ground));
+    }
+    if (q.get('collider') === '1') { const c = colliderShape(p); if (c) o.add(c); }
+    o.visible = false;
+    scene.add(o);
+    return o;
+  });
+  shown.forEach(([name, level], i) => {
+    const d = document.createElement('div');
+    d.className = 'label cell';
+    d.innerHTML = text(KIT.props[name], name, level);
+    d.style.left = `${(i % cols) * cw + 4}px`;
+    d.style.top = `${Math.floor(i / cols) * ch + 4}px`;
+    labels.append(d);
+  });
+  scene.updateMatrixWorld(true);
+  renderer.autoClear = false;
+  renderer.setScissorTest(true);
+  draw = async () => {
+    renderer.setScissor(0, 0, W, H); renderer.setViewport(0, 0, W, H);
+    renderer.clear();
+    for (const [i, o] of objects.entries()) {
+      const p = KIT.props[o.name];
+      const centre = new THREE.Vector3((p.min[0] + p.max[0]) / 2, (Math.max(0, p.min[1]) + p.max[1]) / 2, (p.min[2] + p.max[2]) / 2);
+      const radius = Math.hypot(p.size[0], p.max[1] - Math.max(0, p.min[1]), p.size[2]) / 2;
+      const distance = radius / Math.sin(Math.min(cam.fov, cam.fov * cam.aspect) * Math.PI / 360) * 1.02;
+      cam.position.set(centre.x + Math.sin(az) * Math.cos(el) * distance, centre.y + Math.sin(el) * distance, centre.z + Math.cos(az) * Math.cos(el) * distance);
+      cam.near = distance / 50; cam.far = distance * 4;
+      cam.lookAt(centre); cam.updateProjectionMatrix(); cam.updateMatrixWorld(true);
+      const x = (i % cols) * cw, y = Math.floor(i / cols) * ch;
+      renderer.setViewport(x, y, cw, ch); renderer.setScissor(x, y, cw, ch);
+      o.visible = true;
+      await renderer.renderAsync(scene, cam);
+      o.visible = false;
+    }
+  };
+  await draw();
+  await draw();
+} else {
+  const spots = [];
+  let centre = [0, 1, 0], distance = 20;
+  if (q.get('surfaces') === '1') {
+    // ---- the surfaces: 20 m of ground and a 5 m wall each, at their real scale --------------------------------------
+    const SIDE = 20, GAP = 2, COLS = 4;
+    const entries = Object.entries(SURFACES);
+    const post = new THREE.MeshStandardNodeMaterial({ color: 0x9aa0a8, roughness: 0.8 });
+    entries.forEach(([name, s], i) => {
+      const cx = (i % COLS) * (SIDE + GAP), cz = Math.floor(i / COLS) * (SIDE + GAP + 4);
+      const P = positionWorld.xz.sub(vec2(cx - SIDE / 2, cz - SIDE / 2));
+      const tone = (c) => (q.get('tone') === '1' ? c.rgb.div(vec3(...s.mean)).mul((s.mean[0] + s.mean[1] + s.mean[2]) / 3) : c.rgb);
+      // flat ground: u along world x, v along world z, as the city's ground shaders read their photographs
+      const floor = new THREE.MeshStandardNodeMaterial();
+      const fuv = P.div(s.metres);
+      floor.colorNode = tone(texture(s.color, fuv));
+      if (s.normal) {
+        const n = texture(s.normal, fuv), slope = n.xy.mul(2).sub(1);
+        floor.roughnessNode = n.a;
+        if (q.get('flat') !== '1') floor.normalNode = transformDirection(normalize(vec3(slope.x, 1, slope.y.negate())), cameraViewMatrix);
+      }
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(SIDE, SIDE).rotateX(-Math.PI / 2), floor);
+      plane.position.set(cx, 0, cz);
+      scene.add(plane);
+      if (s.normal) {
+        // a wall facing +z: u along world x, v down the wall
+        const wall = new THREE.MeshStandardNodeMaterial();
+        const wuv = vec2(positionWorld.x.sub(cx - SIDE / 2), float(5).sub(positionWorld.y)).div(s.metres);
+        const n = texture(s.normal, wuv), slope = n.xy.mul(2).sub(1);
+        wall.colorNode = tone(texture(s.color, wuv));
+        wall.roughnessNode = n.a;
+        if (name === 'rust' || name === 'sheet') wall.metalnessNode = float(0.6);
+        if (q.get('flat') !== '1') wall.normalNode = transformDirection(normalize(vec3(slope.x, slope.y, 1)), cameraViewMatrix);
+        const panel = new THREE.Mesh(new THREE.PlaneGeometry(SIDE, 5), wall);
+        panel.position.set(cx, 2.5, cz - SIDE / 2);
+        scene.add(panel);
+      }
+      const figure = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.8, 0.3), post);
+      figure.position.set(cx - SIDE / 2 + 1.5, 0.9, cz + SIDE / 2 - 1.5);
+      scene.add(figure);
+      spots.push({ html: `${name} <small>${s.metres} m</small>`, at: new THREE.Vector3(cx, 5.4, cz - SIDE / 2), far: true });
+    });
+    const rows = Math.ceil(entries.length / COLS);
+    centre = [(COLS - 1) * (SIDE + GAP) / 2, 0, (rows - 1) * (SIDE + GAP + 4) / 2];
+    distance = 95;
+  } else {
+    // ---- the yard: every prop on a metre grid, full in front, low behind --------------------------------------------
+    const ROW = 30; // metres across before a new row
+    let x = 0, z = 0, depth = 0;
+    const order = [...names].sort((a, b) => {
+      const pa = KIT.props[a], pb = KIT.props[b], rank = { rock: 0, wood: 1, plant: 2, big: 3, clutter: 4 };
+      return rank[pa.kind] - rank[pb.kind] || pb.size[1] - pa.size[1];
+    });
+    for (const name of order) {
+      const p = KIT.props[name];
+      const w = Math.max(1, Math.ceil(p.size[0] + 0.6)), deep = Math.max(1, Math.ceil(p.size[2] + 0.6));
+      if (x + w > ROW && x > 0) { x = 0; z += depth * 2 + 2; depth = 0; }
+      const cx = x + w / 2;
+      x += w; depth = Math.max(depth, deep);
+      for (const [level, dz] of [['full', deep / 2], ['low', -deep / 2]]) {
+        const mesh = new THREE.Mesh(wastelandProp(name, level), materialOf(p));
+        mesh.position.set(cx, 0, z + dz);
+        scene.add(mesh);
+        if (q.get('collider') === '1') { const c = colliderShape(p); if (c) { c.position.add(mesh.position); scene.add(c); } }
+      }
+      spots.push({ html: text(p, name), at: new THREE.Vector3(cx, 0, z + deep + 0.2) });
+    }
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(ROW + 20, z + depth * 2 + 20).rotateX(-Math.PI / 2), ground);
+    floor.position.set(ROW / 2, -0.004, (z + depth * 2) / 2 - 2);
+    scene.add(floor);
+    const grid = new THREE.GridHelper(80, 80, 0x4a4034, 0x6a5a48);
+    grid.position.set(Math.round(ROW / 2), 0, Math.round(z / 2));
+    scene.add(grid);
+    const figure = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.8, 0.3), new THREE.MeshStandardNodeMaterial({ color: 0x9aa0a8, roughness: 0.8 }));
+    figure.position.set(-1, 0.9, 1);
+    scene.add(figure);
+    centre = [ROW / 2, 1, (z + depth * 2) / 2 - 2];
+    distance = 48;
+  }
+  for (const s of spots) { s.div = document.createElement('div'); s.div.className = 'label'; s.div.innerHTML = s.html; labels.append(s.div); }
+  document.getElementById('help').textContent = 'Glisser : tourner · molette : zoom · clic droit ou maj : déplacer · les noms apparaissent en s’approchant · ?sheet=1 : une case par objet et par niveau · ?surfaces=1 : les matières';
+
+  cam = new THREE.PerspectiveCamera(40, W / H, 0.05, 600);
+  target = new THREE.Vector3(...(q.get('target')?.split(',').map(Number) ?? centre));
+  view = { az: num('az', 22) * Math.PI / 180, el: num('el', 30) * Math.PI / 180, dist: num('dist', distance) };
+  const reach = q.get('labels') === 'all' ? Infinity : num('labels', 14); // names show within this many metres
+  scene.updateMatrixWorld(true);
+  const v = new THREE.Vector3();
+  let wanted = true;
+  draw = async () => {
+    cam.position.set(target.x + Math.sin(view.az) * Math.cos(view.el) * view.dist, target.y + Math.sin(view.el) * view.dist, target.z + Math.cos(view.az) * Math.cos(view.el) * view.dist);
+    cam.lookAt(target); cam.updateMatrixWorld(true);
+    await renderer.renderAsync(scene, cam);
+    for (const s of spots) {
+      v.copy(s.at).project(cam);
+      const on = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1 && (s.far || s.at.distanceTo(cam.position) < reach);
+      s.div.style.display = on ? '' : 'none';
+      if (on) { s.div.style.left = `${(v.x + 1) / 2 * W}px`; s.div.style.top = `${(1 - v.y) / 2 * H}px`; }
+    }
+  };
+  const loop = async () => { if (wanted) { wanted = false; await draw(); } requestAnimationFrame(loop); };
+  window.__view = (o) => { Object.assign(view, o.az !== undefined ? { az: o.az * Math.PI / 180 } : {}, o.el !== undefined ? { el: o.el * Math.PI / 180 } : {}, o.dist !== undefined ? { dist: o.dist } : {}); if (o.target) target.set(...o.target); return draw(); };
+  const el = renderer.domElement;
+  let drag = null;
+  el.addEventListener('contextmenu', (e) => e.preventDefault());
+  el.addEventListener('pointerdown', (e) => { drag = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey }; el.setPointerCapture(e.pointerId); });
+  el.addEventListener('pointerup', () => { drag = null; });
+  el.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    drag.x = e.clientX; drag.y = e.clientY;
+    if (drag.pan) {
+      const k = view.dist / H;
+      target.x -= (Math.cos(view.az) * dx + Math.sin(view.az) * Math.sin(view.el) * dy) * k;
+      target.z += (Math.sin(view.az) * dx - Math.cos(view.az) * Math.sin(view.el) * dy) * k;
+      target.y += Math.cos(view.el) * dy * k;
+    } else { view.az -= dx * 0.006; view.el = Math.min(1.5, Math.max(-0.3, view.el + dy * 0.006)); }
+    wanted = true;
+  });
+  el.addEventListener('wheel', (e) => { e.preventDefault(); view.dist = Math.min(300, Math.max(0.3, view.dist * Math.exp(e.deltaY * 0.001))); wanted = true; }, { passive: false });
+  await draw();
+  await draw();
+  loop();
+}
+document.title = 'done';
+</script>

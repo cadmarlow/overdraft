@@ -33,21 +33,22 @@ const ACT3 = [
       yield* m.say([
         ['JULES', 'J’ai retourné les comptes de Varga. Il n’était qu’un guichet. Tout remonte à une seule signature : Hélène Cazal, Liberty Trust.'],
         ['SACHA', 'Une banquière.'],
-        ['JULES', 'La banquière. Elle a des bateaux qui déchargent de nuit sur l’Hudson. On va lui prendre une cargaison, juste pour qu’elle lève la tête.'],
+        ['JULES', 'La banquière. Elle a des bateaux qui déchargent de nuit dans les douves. On va lui prendre une cargaison, juste pour qu’elle lève la tête.'],
         ['JULES', 'Le hors-bord t’attend dans le chenal. Fais vite.']
       ]);
-      const w = g.waterNear(-2300, streetZ(23));
-      const boat = m.spawnBoat(w.x, w.z, -1.57, 0x0c1f33);
+      const w = g.waterNear(2200, streetZ(23));
+      const boat = m.spawnBoat(w.x, w.z, 1.57, 0x0c1f33);
       let mk = m.markOn(boat, 'objective');
       m.objective('Montez à bord du *hors-bord*.');
       m.gps(w.x, w.z);
       m.failIf(() => boat.destroyed, 'Le hors-bord a sombré.');
       yield* m.waitFor(() => m.inCar(boat));
       m.unmark(mk);
-      const north = [g.waterNear(-2300, streetZ(45)), g.waterNear(-2300, streetZ(60)), g.waterNear(-2300, streetZ(79))].map((p) => ({ x: p.x - 150, z: p.z }));
-      yield* riverLeg(m, boat, north.slice(0, 2), 'Remontez l’*Hudson*');
+      // the Hudson is dry: what floats, floats on the East River, the city's moat
+      const north = [g.waterNear(2200, streetZ(40)), g.waterNear(2200, streetZ(52)), g.waterNear(2200, streetZ(66))].map((p) => ({ x: p.x + 70, z: p.z }));
+      yield* riverLeg(m, boat, north.slice(0, 2), 'Remontez l’*East River*');
       m.say1('JULES', 'Deux vedettes à toi. Ne t’arrête pas.');
-      const hunters = [m.enemyBoat(north[1].x - 120, north[1].z - 160, 0x202226), m.enemyBoat(north[1].x + 90, north[1].z - 220, 0x202226)];
+      const hunters = [m.enemyBoat(north[1].x + 30, north[1].z - 160, 0x202226), m.enemyBoat(north[1].x - 10, north[1].z - 230, 0x202226)];
       yield* riverLeg(m, boat, north.slice(2), 'Foncez jusqu’à la *barge*');
       const marks = hunters.map((h) => m.markOn(h, 'target'));
       m.objective('Coulez les *vedettes* du Syndic. (Clic droit et clic : tir par-dessus bord)');
@@ -188,19 +189,19 @@ const ACT3 = [
         ['NADIA', 'Son yacht, deux vedettes d’escorte. Elle se sauvera sur son canot rapide : c’est lui qu’il te faut.'],
         ['SACHA', 'Ma dette, elle l’a écrite de sa main. Elle va la solder de la même main.']
       ]);
-      const w = g.waterNear(-2300, streetZ(34));
-      const boat = m.spawnBoat(w.x, w.z, -1.57, 0x0c1f33);
+      const w = g.waterNear(2200, streetZ(34));
+      const boat = m.spawnBoat(w.x, w.z, 1.57, 0x0c1f33);
       m.objective('Prenez le *hors-bord*.');
       let mk = m.markOn(boat, 'objective');
       m.gps(w.x, w.z);
       m.failIf(() => boat.destroyed, 'Votre hors-bord a coulé.');
       yield* m.waitFor(() => m.inCar(boat));
       m.unmark(mk);
-      const anchor = g.waterNear(-2300, streetZ(46));
-      const yacht = m.spawnYacht(anchor.x - 260, anchor.z);
-      const at = { x: anchor.x - 260, z: anchor.z };
-      mk = m.mark(at.x + 50, at.z, 'target', { radius: 18, height: 10 });
-      m.gps(at.x + 50, at.z);
+      const anchor = g.waterNear(2200, streetZ(46));
+      const yacht = m.spawnYacht(anchor.x + 230, anchor.z);
+      const at = { x: anchor.x + 230, z: anchor.z };
+      mk = m.mark(at.x - 50, at.z, 'target', { radius: 18, height: 10 });
+      m.gps(at.x - 50, at.z);
       m.objective('Approchez du *yacht de Cazal*.');
       yield* m.waitFor(() => m.near(at.x, at.z, 240));
       m.unmark(mk);
@@ -238,13 +239,13 @@ const ACT3 = [
 // A run round the tip of the island against the clock, whenever you feel like it
 const REGATTA = {
   id: 'regate',
-  title: 'RÉGATE DE LA BATTERIE',
+  title: 'RÉGATE DES DOUVES',
   place: 'pier',
-  contactLabel: 'Régate · Quai 76',
+  contactLabel: 'Régate · Quai de la 34e Rue Est',
   *run(m) {
     const g = m.game;
-    const w = g.waterNear(-2300, streetZ(40));
-    const boat = m.spawnBoat(w.x, w.z, 2.6, 0x7a1414);
+    const w = g.waterNear(2200, streetZ(40));
+    const boat = m.spawnBoat(w.x, w.z, 0.4, 0x7a1414);
     m.objective('Montez sur le *hors-bord*.');
     const mk = m.markOn(boat, 'objective');
     m.gps(w.x, w.z);
@@ -252,8 +253,8 @@ const REGATTA = {
     m.unmark(mk);
     yield* m.countdown();
     m.timer(120, 'Temps écoulé.');
-    const zs = [1400, 3000, 4600, 6000];
-    yield* riverLeg(m, boat, zs.map((z) => { const p = g.waterNear(-2300, z); return { x: p.x - 90, z: p.z }; }), 'Descendez le fleuve');
+    const zs = [1300, 2700, 4100, 5300];
+    yield* riverLeg(m, boat, zs.map((z) => { const p = g.waterNear(2200, z); return { x: p.x + 70, z: p.z }; }), 'Descendez les douves');
     m.stopTimer();
     m.complete(5000);
   }

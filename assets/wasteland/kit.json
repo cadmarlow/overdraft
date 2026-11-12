@@ -1,0 +1,2296 @@
+{
+ "atlas": {
+  "width": 4096,
+  "height": 2048,
+  "gutter": 8,
+  "colour": "kit_c.webp",
+  "normal": "kit_n.webp",
+  "orm": "kit_orm.webp",
+  "ormScale": 0.5,
+  "cutOuts": 2
+ },
+ "bin": "kit.bin",
+ "props": [
+  {
+   "name": "boulder_a",
+   "kind": "rock",
+   "id": "stone_01",
+   "title": "Stone 01",
+   "authors": [
+    "Dario Barresi",
+    "Rico Cilliers"
+   ],
+   "size": [
+    1.7548,
+    0.8538,
+    1.0675
+   ],
+   "min": [
+    -0.8774,
+    -0.168,
+    -0.5338
+   ],
+   "max": [
+    0.8774,
+    0.6859,
+    0.5338
+   ],
+   "triangles": {
+    "full": 1800,
+    "low": 450
+   },
+   "vertices": {
+    "full": 1109,
+    "low": 326
+   },
+   "sourceTriangles": 53520,
+   "grounded": false,
+   "buried": 0.168,
+   "collider": {
+    "radius": 0.63,
+    "height": 0.686,
+    "centre": [
+     0,
+     0.343,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     2032,
+     576,
+     520,
+     528
+    ]
+   ]
+  },
+  {
+   "name": "boulder_b",
+   "kind": "rock",
+   "id": "namaqualand_boulder_03",
+   "title": "Namaqualand Boulder 03",
+   "authors": [
+    "Jenelle van Heerden",
+    "Dario Barresi"
+   ],
+   "size": [
+    2.3979,
+    1.4707,
+    3.0642
+   ],
+   "min": [
+    -1.1989,
+    -0.0122,
+    -1.5321
+   ],
+   "max": [
+    1.1989,
+    1.4585,
+    1.5321
+   ],
+   "triangles": {
+    "full": 1800,
+    "low": 450
+   },
+   "vertices": {
+    "full": 1037,
+    "low": 296
+   },
+   "sourceTriangles": 64826,
+   "grounded": false,
+   "buried": 0.012,
+   "collider": {
+    "radius": 1.082,
+    "height": 1.458,
+    "centre": [
+     0,
+     0.729,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     2032,
+     0,
+     568,
+     576
+    ]
+   ]
+  },
+  {
+   "name": "boulder_c",
+   "kind": "rock",
+   "id": "namaqualand_boulder_04",
+   "title": "Namaqualand Boulder 04",
+   "authors": [
+    "Jenelle van Heerden"
+   ],
+   "size": [
+    2.516,
+    1.8897,
+    2.4791
+   ],
+   "min": [
+    -1.258,
+    -0.0233,
+    -1.2395
+   ],
+   "max": [
+    1.258,
+    1.8663,
+    1.2395
+   ],
+   "triangles": {
+    "full": 1800,
+    "low": 450
+   },
+   "vertices": {
+    "full": 1022,
+    "low": 291
+   },
+   "sourceTriangles": 59066,
+   "grounded": false,
+   "buried": 0.023,
+   "collider": {
+    "radius": 1.042,
+    "height": 1.866,
+    "centre": [
+     0,
+     0.933,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     2600,
+     0,
+     568,
+     576
+    ]
+   ]
+  },
+  {
+   "name": "boulder_d",
+   "kind": "rock",
+   "id": "namaqualand_boulder_05",
+   "title": "Namaqualand Boulder 05",
+   "authors": [
+    "Jenelle van Heerden",
+    "Dario Barresi"
+   ],
+   "size": [
+    1.3534,
+    0.531,
+    0.7404
+   ],
+   "min": [
+    -0.6767,
+    -0.0052,
+    -0.3702
+   ],
+   "max": [
+    0.6767,
+    0.5258,
+    0.3702
+   ],
+   "triangles": {
+    "full": 1500,
+    "low": 374
+   },
+   "vertices": {
+    "full": 953,
+    "low": 291
+   },
+   "sourceTriangles": 89618,
+   "grounded": false,
+   "buried": 0.005,
+   "collider": {
+    "radius": 0.456,
+    "height": 0.526,
+    "centre": [
+     0,
+     0.263,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     3168,
+     0,
+     528,
+     528
+    ]
+   ]
+  },
+  {
+   "name": "boulder_e",
+   "kind": "rock",
+   "id": "namaqualand_boulder_06",
+   "title": "Namaqualand Boulder 06",
+   "authors": [
+    "Greg Zaal",
+    "Jenelle van Heerden"
+   ],
+   "size": [
+    0.668,
+    0.6483,
+    1.2087
+   ],
+   "min": [
+    -0.334,
+    -0.018,
+    -0.6044
+   ],
+   "max": [
+    0.334,
+    0.6303,
+    0.6044
+   ],
+   "triangles": {
+    "full": 1800,
+    "low": 450
+   },
+   "vertices": {
+    "full": 1169,
+    "low": 370
+   },
+   "sourceTriangles": 109114,
+   "grounded": false,
+   "buried": 0.018,
+   "collider": {
+    "radius": 0.42,
+    "height": 0.63,
+    "centre": [
+     0,
+     0.315,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     3168,
+     528,
+     528,
+     528
+    ]
+   ]
+  },
+  {
+   "name": "boulder_f",
+   "kind": "rock",
+   "id": "rock_07",
+   "title": "Rock 07",
+   "authors": [
+    "Jenelle van Heerden"
+   ],
+   "size": [
+    1.0041,
+    0.8604,
+    1.9167
+   ],
+   "min": [
+    -0.5021,
+    -0.0096,
+    -0.9583
+   ],
+   "max": [
+    0.5021,
+    0.8509,
+    0.9583
+   ],
+   "triangles": {
+    "full": 1500,
+    "low": 374
+   },
+   "vertices": {
+    "full": 946,
+    "low": 275
+   },
+   "sourceTriangles": 14844,
+   "grounded": false,
+   "buried": 0.01,
+   "collider": {
+    "radius": 0.677,
+    "height": 0.851,
+    "centre": [
+     0,
+     0.425,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     1408,
+     616,
+     464,
+     504
+    ]
+   ]
+  },
+  {
+   "name": "slab",
+   "kind": "rock",
+   "id": "rock_09",
+   "title": "Rock 09",
+   "authors": [
+    "Jenelle van Heerden"
+   ],
+   "size": [
+    1.4777,
+    0.6515,
+    2.8921
+   ],
+   "min": [
+    -0.7388,
+    -0.0099,
+    -1.4461
+   ],
+   "max": [
+    0.7388,
+    0.6416,
+    1.4461
+   ],
+   "triangles": {
+    "full": 1500,
+    "low": 374
+   },
+   "vertices": {
+    "full": 915,
+    "low": 269
+   },
+   "sourceTriangles": 12416,
+   "grounded": false,
+   "buried": 0.01,
+   "collider": {
+    "half": [
+     0.739,
+     0.321,
+     1.446
+    ],
+    "centre": [
+     0,
+     0.321,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     2552,
+     576,
+     536,
+     520
+    ]
+   ]
+  },
+  {
+   "name": "outcrop_a",
+   "kind": "rock",
+   "id": "namaqualand_cliff_01",
+   "title": "Namaqualand Cliff 01",
+   "authors": [
+    "Jenelle van Heerden",
+    "Rico Cilliers"
+   ],
+   "size": [
+    8.2618,
+    4.9505,
+    4.3753
+   ],
+   "min": [
+    -4.1309,
+    -0.8192,
+    -2.1876
+   ],
+   "max": [
+    4.1309,
+    4.1314,
+    2.1876
+   ],
+   "triangles": {
+    "full": 2999,
+    "low": 750
+   },
+   "vertices": {
+    "full": 2176,
+    "low": 721
+   },
+   "sourceTriangles": 94369,
+   "grounded": false,
+   "buried": 0.819,
+   "collider": {
+    "half": [
+     4.131,
+     2.066,
+     2.188
+    ],
+    "centre": [
+     0,
+     2.066,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": true,
+   "shell": true,
+   "rects": [
+    [
+     1408,
+     0,
+     624,
+     616
+    ]
+   ]
+  },
+  {
+   "name": "outcrop_b",
+   "kind": "rock",
+   "id": "namaqualand_cliff_02",
+   "title": "Namaqualand Cliff 02",
+   "authors": [
+    "Dario Barresi",
+    "Rico Cilliers"
+   ],
+   "size": [
+    20.1985,
+    7.1616,
+    6.4904
+   ],
+   "min": [
+    -10.0993,
+    -0.1555,
+    -3.2452
+   ],
+   "max": [
+    10.0993,
+    7.006,
+    3.2452
+   ],
+   "triangles": {
+    "full": 3000,
+    "low": 814
+   },
+   "vertices": {
+    "full": 2732,
+    "low": 1124
+   },
+   "sourceTriangles": 194080,
+   "grounded": false,
+   "buried": 0.155,
+   "collider": {
+    "half": [
+     10.099,
+     3.503,
+     3.245
+    ],
+    "centre": [
+     0,
+     3.503,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": true,
+   "shell": true,
+   "rects": [
+    [
+     0,
+     0,
+     704,
+     704
+    ]
+   ]
+  },
+  {
+   "name": "rubble",
+   "kind": "rock",
+   "id": "namaqualand_rocks_01",
+   "title": "Namaqualand Rocks 01",
+   "authors": [
+    "Greg Zaal",
+    "Jenelle van Heerden"
+   ],
+   "size": [
+    0.4736,
+    0.1491,
+    0.4829
+   ],
+   "min": [
+    -0.2368,
+    0.0017,
+    -0.2415
+   ],
+   "max": [
+    0.2368,
+    0.1508,
+    0.2415
+   ],
+   "triangles": {
+    "full": 720,
+    "low": 180
+   },
+   "vertices": {
+    "full": 587,
+    "low": 217
+   },
+   "sourceTriangles": 85716,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "radius": 0.223,
+    "height": 0.149,
+    "centre": [
+     0,
+     0.076,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     2576,
+     1456,
+     312,
+     312
+    ]
+   ]
+  },
+  {
+   "name": "dead_trunk",
+   "kind": "wood",
+   "id": "dead_tree_trunk_02",
+   "title": "Dead Tree Trunk 02",
+   "authors": [
+    "Jenelle van Heerden",
+    "Rico Cilliers"
+   ],
+   "size": [
+    4.0476,
+    1.0447,
+    1.0491
+   ],
+   "min": [
+    -2.0238,
+    -0.3243,
+    -0.5246
+   ],
+   "max": [
+    2.0238,
+    0.7204,
+    0.5246
+   ],
+   "triangles": {
+    "full": 1398,
+    "low": 660
+   },
+   "vertices": {
+    "full": 1289,
+    "low": 751
+   },
+   "sourceTriangles": 83128,
+   "grounded": false,
+   "buried": 0.324,
+   "collider": {
+    "half": [
+     2.024,
+     0.36,
+     0.525
+    ],
+    "centre": [
+     0,
+     0.36,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     704,
+     696,
+     440,
+     440
+    ]
+   ]
+  },
+  {
+   "name": "dead_log",
+   "kind": "wood",
+   "id": "dead_tree_trunk",
+   "title": "Dead Tree Trunk",
+   "authors": [
+    "Rob Tuytel"
+   ],
+   "size": [
+    3.0445,
+    0.2704,
+    0.2683
+   ],
+   "min": [
+    -1.5222,
+    -0.0249,
+    -0.1341
+   ],
+   "max": [
+    1.5222,
+    0.2455,
+    0.1341
+   ],
+   "triangles": {
+    "full": 800,
+    "low": 200
+   },
+   "vertices": {
+    "full": 581,
+    "low": 191
+   },
+   "sourceTriangles": 101802,
+   "grounded": false,
+   "buried": 0.025,
+   "collider": {
+    "half": [
+     1.522,
+     0.123,
+     0.134
+    ],
+    "centre": [
+     0,
+     0.123,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     440,
+     1136,
+     352,
+     352
+    ]
+   ]
+  },
+  {
+   "name": "dead_tree",
+   "kind": "wood",
+   "id": "dead_quiver_trunk",
+   "title": "Dead Quiver Trunk",
+   "authors": [
+    "James Ray Cock",
+    "Dario Barresi",
+    "Rico Cilliers"
+   ],
+   "size": [
+    0.3035,
+    1.9866,
+    0.2567
+   ],
+   "min": [
+    -0.1517,
+    0,
+    -0.1284
+   ],
+   "max": [
+    0.1517,
+    1.9866,
+    0.1284
+   ],
+   "triangles": {
+    "full": 800,
+    "low": 402
+   },
+   "vertices": {
+    "full": 477,
+    "low": 237
+   },
+   "sourceTriangles": 17978,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "radius": 0.147,
+    "height": 1.987,
+    "centre": [
+     0,
+     0.993,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     3088,
+     1056,
+     352,
+     360
+    ]
+   ]
+  },
+  {
+   "name": "dead_branch",
+   "kind": "wood",
+   "id": "dry_branches_medium_01",
+   "title": "Dry Branches Medium 01",
+   "authors": [
+    "Rico Cilliers"
+   ],
+   "size": [
+    0.3151,
+    0.3401,
+    1.2944
+   ],
+   "min": [
+    -0.1576,
+    0,
+    -0.6472
+   ],
+   "max": [
+    0.1576,
+    0.3401,
+    0.6472
+   ],
+   "triangles": {
+    "full": 499,
+    "low": 151
+   },
+   "vertices": {
+    "full": 355,
+    "low": 99
+   },
+   "sourceTriangles": 5933,
+   "grounded": true,
+   "buried": 0,
+   "collider": null,
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     664,
+     1488,
+     264,
+     264
+    ]
+   ]
+  },
+  {
+   "name": "bush",
+   "kind": "plant",
+   "id": "shrub_02",
+   "title": "Shrub 02",
+   "authors": [
+    "Rico Cilliers"
+   ],
+   "size": [
+    1.1102,
+    1.5063,
+    1.2789
+   ],
+   "min": [
+    -0.5551,
+    0,
+    -0.6394
+   ],
+   "max": [
+    0.5551,
+    1.5063,
+    0.6394
+   ],
+   "triangles": {
+    "full": 900,
+    "low": 221
+   },
+   "vertices": {
+    "full": 871,
+    "low": 363
+   },
+   "sourceTriangles": 5242,
+   "grounded": true,
+   "buried": 0,
+   "collider": null,
+   "cutout": true,
+   "twoSided": true,
+   "rects": [
+    [
+     1864,
+     1464,
+     360,
+     344
+    ]
+   ]
+  },
+  {
+   "name": "bush_wide",
+   "kind": "plant",
+   "id": "shrub_02",
+   "title": "Shrub 02",
+   "authors": [
+    "Rico Cilliers"
+   ],
+   "size": [
+    1.7653,
+    1.3128,
+    2.2847
+   ],
+   "min": [
+    -0.8827,
+    0,
+    -1.1424
+   ],
+   "max": [
+    0.8827,
+    1.3128,
+    1.1424
+   ],
+   "triangles": {
+    "full": 1197,
+    "low": 282
+   },
+   "vertices": {
+    "full": 1256,
+    "low": 470
+   },
+   "sourceTriangles": 9234,
+   "grounded": true,
+   "buried": 0,
+   "collider": null,
+   "cutout": true,
+   "twoSided": true,
+   "rects": [
+    [
+     1864,
+     1464,
+     360,
+     344
+    ]
+   ]
+  },
+  {
+   "name": "barrel_red",
+   "kind": "clutter",
+   "id": "Barrel_01",
+   "title": "Barrel_01",
+   "authors": [
+    "Jorge Camacho"
+   ],
+   "size": [
+    0.5627,
+    0.8767,
+    0.5615
+   ],
+   "min": [
+    -0.2814,
+    0,
+    -0.2808
+   ],
+   "max": [
+    0.2814,
+    0.8767,
+    0.2808
+   ],
+   "triangles": {
+    "full": 600,
+    "low": 150
+   },
+   "vertices": {
+    "full": 607,
+    "low": 137
+   },
+   "sourceTriangles": 2682,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "radius": 0.281,
+    "height": 0.877,
+    "centre": [
+     0,
+     0.438,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     792,
+     1136,
+     352,
+     352
+    ]
+   ]
+  },
+  {
+   "name": "barrel_blue",
+   "kind": "clutter",
+   "id": "barrel_03",
+   "title": "Barrel 03",
+   "authors": [
+    "Serhii Khromov"
+   ],
+   "size": [
+    0.6339,
+    0.9276,
+    0.6348
+   ],
+   "min": [
+    -0.317,
+    0,
+    -0.3174
+   ],
+   "max": [
+    0.317,
+    0.9276,
+    0.3174
+   ],
+   "triangles": {
+    "full": 600,
+    "low": 193
+   },
+   "vertices": {
+    "full": 530,
+    "low": 173
+   },
+   "sourceTriangles": 1473,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "radius": 0.318,
+    "height": 0.928,
+    "centre": [
+     0,
+     0.464,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     2552,
+     1096,
+     352,
+     360
+    ]
+   ]
+  },
+  {
+   "name": "fire_barrel",
+   "kind": "clutter",
+   "id": "barrel_stove",
+   "title": "Barrel Stove",
+   "authors": [
+    "MP"
+   ],
+   "size": [
+    0.5886,
+    0.8556,
+    0.5912
+   ],
+   "min": [
+    -0.2943,
+    0,
+    -0.2963
+   ],
+   "max": [
+    0.2943,
+    0.8556,
+    0.2949
+   ],
+   "triangles": {
+    "full": 894,
+    "low": 375
+   },
+   "vertices": {
+    "full": 630,
+    "low": 304
+   },
+   "sourceTriangles": 9216,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "radius": 0.294,
+    "height": 0.856,
+    "centre": [
+     0,
+     0.428,
+     -0.001
+    ]
+   },
+   "cutout": false,
+   "twoSided": true,
+   "rects": [
+    [
+     1144,
+     1120,
+     360,
+     352
+    ]
+   ]
+  },
+  {
+   "name": "tyre",
+   "kind": "clutter",
+   "id": "old_tyre",
+   "title": "Old Tyre",
+   "authors": [
+    "MP"
+   ],
+   "size": [
+    0.5875,
+    0.1632,
+    0.6
+   ],
+   "min": [
+    -0.2938,
+    0,
+    -0.3
+   ],
+   "max": [
+    0.2938,
+    0.1632,
+    0.3
+   ],
+   "triangles": {
+    "full": 500,
+    "low": 280
+   },
+   "vertices": {
+    "full": 461,
+    "low": 229
+   },
+   "sourceTriangles": 2880,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "radius": 0.296,
+    "height": 0.163,
+    "centre": [
+     0,
+     0.082,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     1456,
+     1472,
+     312,
+     304
+    ]
+   ]
+  },
+  {
+   "name": "tyre_stack",
+   "kind": "clutter",
+   "id": "old_tyre",
+   "title": "Old Tyre",
+   "authors": [
+    "MP"
+   ],
+   "size": [
+    0.6474,
+    0.6372,
+    0.6175
+   ],
+   "min": [
+    -0.3237,
+    0,
+    -0.3088
+   ],
+   "max": [
+    0.3237,
+    0.6372,
+    0.3088
+   ],
+   "triangles": {
+    "full": 1640,
+    "low": 1112
+   },
+   "vertices": {
+    "full": 1568,
+    "low": 912
+   },
+   "sourceTriangles": 2880,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "radius": 0.316,
+    "height": 0.637,
+    "centre": [
+     0,
+     0.319,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     1456,
+     1472,
+     312,
+     304
+    ]
+   ]
+  },
+  {
+   "name": "jerrycan",
+   "kind": "clutter",
+   "id": "metal_jerrycan",
+   "title": "Metal Jerrycan",
+   "authors": [
+    "Sean Buckley"
+   ],
+   "size": [
+    0.3501,
+    0.4544,
+    0.1698
+   ],
+   "min": [
+    -0.175,
+    0,
+    -0.0849
+   ],
+   "max": [
+    0.175,
+    0.4544,
+    0.0849
+   ],
+   "triangles": {
+    "full": 805,
+    "low": 476
+   },
+   "vertices": {
+    "full": 663,
+    "low": 320
+   },
+   "sourceTriangles": 20022,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "half": [
+     0.175,
+     0.227,
+     0.085
+    ],
+    "centre": [
+     0,
+     0.227,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": true,
+   "rects": [
+    [
+     3792,
+     1488,
+     264,
+     264
+    ]
+   ]
+  },
+  {
+   "name": "gas_cylinder",
+   "kind": "clutter",
+   "id": "small_lpg_tank",
+   "title": "Small Lpg Tank",
+   "authors": [
+    "Ulan Cabanilla"
+   ],
+   "size": [
+    0.4035,
+    0.642,
+    0.4032
+   ],
+   "min": [
+    -0.201,
+    0,
+    -0.2023
+   ],
+   "max": [
+    0.2025,
+    0.642,
+    0.2009
+   ],
+   "triangles": {
+    "full": 900,
+    "low": 400
+   },
+   "vertices": {
+    "full": 859,
+    "low": 268
+   },
+   "sourceTriangles": 15042,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "radius": 0.201,
+    "height": 0.642,
+    "centre": [
+     0.001,
+     0.321,
+     -0.001
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     3520,
+     1528,
+     272,
+     256
+    ]
+   ]
+  },
+  {
+   "name": "road_barrier",
+   "kind": "clutter",
+   "id": "concrete_road_barrier",
+   "title": "Concrete Road Barrier",
+   "authors": [
+    "Amal Kumar"
+   ],
+   "size": [
+    1.5434,
+    0.8266,
+    0.6354
+   ],
+   "min": [
+    -0.7717,
+    0,
+    -0.3177
+   ],
+   "max": [
+    0.7717,
+    0.8266,
+    0.3177
+   ],
+   "triangles": {
+    "full": 700,
+    "low": 206
+   },
+   "vertices": {
+    "full": 473,
+    "low": 160
+   },
+   "sourceTriangles": 60928,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "half": [
+     0.772,
+     0.413,
+     0.318
+    ],
+    "centre": [
+     0,
+     0.413,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     3696,
+     0,
+     392,
+     392
+    ]
+   ]
+  },
+  {
+   "name": "concrete_block",
+   "kind": "clutter",
+   "id": "concrete_road_barrier_02",
+   "title": "Concrete Road Barrier 02",
+   "authors": [
+    "Amal Kumar"
+   ],
+   "size": [
+    1.563,
+    1.0959,
+    0.4355
+   ],
+   "min": [
+    -0.7815,
+    0,
+    -0.2175
+   ],
+   "max": [
+    0.7815,
+    1.0959,
+    0.218
+   ],
+   "triangles": {
+    "full": 490,
+    "low": 228
+   },
+   "vertices": {
+    "full": 328,
+    "low": 160
+   },
+   "sourceTriangles": 23822,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "half": [
+     0.782,
+     0.548,
+     0.218
+    ],
+    "centre": [
+     0,
+     0.548,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     0,
+     1144,
+     352,
+     352
+    ]
+   ]
+  },
+  {
+   "name": "cement_bag",
+   "kind": "clutter",
+   "id": "cement_bag",
+   "title": "Cement Bag",
+   "authors": [
+    "PierreB3D"
+   ],
+   "size": [
+    0.4625,
+    0.1791,
+    0.6964
+   ],
+   "min": [
+    -0.2312,
+    0,
+    -0.3482
+   ],
+   "max": [
+    0.2312,
+    0.1791,
+    0.3482
+   ],
+   "triangles": {
+    "full": 300,
+    "low": 74
+   },
+   "vertices": {
+    "full": 212,
+    "low": 69
+   },
+   "sourceTriangles": 844,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "half": [
+     0.231,
+     0.09,
+     0.348
+    ],
+    "centre": [
+     0,
+     0.09,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     928,
+     1488,
+     216,
+     224
+    ]
+   ]
+  },
+  {
+   "name": "crate",
+   "kind": "clutter",
+   "id": "wooden_crate_01",
+   "title": "Wooden Crate 01",
+   "authors": [
+    "James Ray Cock"
+   ],
+   "size": [
+    0.8189,
+    0.341,
+    0.4021
+   ],
+   "min": [
+    -0.4096,
+    0,
+    -0.201
+   ],
+   "max": [
+    0.4094,
+    0.341,
+    0.201
+   ],
+   "triangles": {
+    "full": 827,
+    "low": 475
+   },
+   "vertices": {
+    "full": 704,
+    "low": 413
+   },
+   "sourceTriangles": 6576,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "half": [
+     0.409,
+     0.171,
+     0.201
+    ],
+    "centre": [
+     0,
+     0.171,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": true,
+   "rects": [
+    [
+     1144,
+     1472,
+     312,
+     312
+    ]
+   ]
+  },
+  {
+   "name": "ammo_crate",
+   "kind": "clutter",
+   "id": "old_military_crate",
+   "title": "Old Military Crate",
+   "authors": [
+    "Jack Mava"
+   ],
+   "size": [
+    0.804,
+    0.3009,
+    0.4487
+   ],
+   "min": [
+    -0.402,
+    0,
+    -0.2262
+   ],
+   "max": [
+    0.402,
+    0.3009,
+    0.2225
+   ],
+   "triangles": {
+    "full": 1060,
+    "low": 745
+   },
+   "vertices": {
+    "full": 1131,
+    "low": 816
+   },
+   "sourceTriangles": 6882,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "half": [
+     0.402,
+     0.15,
+     0.224
+    ],
+    "centre": [
+     0,
+     0.15,
+     -0.002
+    ]
+   },
+   "cutout": false,
+   "twoSided": true,
+   "rects": [
+    [
+     3792,
+     1176,
+     304,
+     312
+    ]
+   ]
+  },
+  {
+   "name": "fence",
+   "kind": "clutter",
+   "id": "modular_chainlink_fence",
+   "title": "Modular Chainlink Fence",
+   "authors": [
+    "James Ray Cock",
+    "Amal Kumar"
+   ],
+   "size": [
+    1.9113,
+    2.37,
+    0.0481
+   ],
+   "min": [
+    -0.9557,
+    0,
+    -0.0241
+   ],
+   "max": [
+    0.9557,
+    2.37,
+    0.0241
+   ],
+   "triangles": {
+    "full": 400,
+    "low": 99
+   },
+   "vertices": {
+    "full": 555,
+    "low": 126
+   },
+   "sourceTriangles": 3054,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "half": [
+     0.956,
+     1.185,
+     0.024
+    ],
+    "centre": [
+     0,
+     1.185,
+     0
+    ]
+   },
+   "cutout": true,
+   "twoSided": true,
+   "rects": [
+    [
+     3696,
+     784,
+     312,
+     392
+    ],
+    [
+     3440,
+     1176,
+     352,
+     352
+    ]
+   ]
+  },
+  {
+   "name": "ladder",
+   "kind": "clutter",
+   "id": "ladder_sectioned_01",
+   "title": "Ladder Sectioned 01",
+   "authors": [
+    "MP"
+   ],
+   "size": [
+    0.6615,
+    2.1234,
+    0.098
+   ],
+   "min": [
+    -0.3308,
+    0,
+    -0.049
+   ],
+   "max": [
+    0.3308,
+    2.1234,
+    0.049
+   ],
+   "triangles": {
+    "full": 790,
+    "low": 556
+   },
+   "vertices": {
+    "full": 706,
+    "low": 509
+   },
+   "sourceTriangles": 10748,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "half": [
+     0.331,
+     1.062,
+     0.049
+    ],
+    "centre": [
+     0,
+     1.062,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": true,
+   "rects": [
+    [
+     0,
+     1496,
+     264,
+     264
+    ]
+   ]
+  },
+  {
+   "name": "covered_car",
+   "kind": "big",
+   "id": "covered_car",
+   "title": "Covered Car",
+   "authors": [
+    "MP"
+   ],
+   "size": [
+    1.7823,
+    1.394,
+    4.3621
+   ],
+   "min": [
+    -0.8912,
+    0,
+    -2.1811
+   ],
+   "max": [
+    0.8912,
+    1.394,
+    2.1811
+   ],
+   "triangles": {
+    "full": 2984,
+    "low": 780
+   },
+   "vertices": {
+    "full": 3563,
+    "low": 823
+   },
+   "sourceTriangles": 12592,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "half": [
+     0.891,
+     0.697,
+     2.181
+    ],
+    "centre": [
+     0,
+     0.697,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": true,
+   "rects": [
+    [
+     704,
+     0,
+     704,
+     696
+    ]
+   ]
+  },
+  {
+   "name": "buoy",
+   "kind": "big",
+   "id": "ocean_buoy",
+   "title": "Ocean Buoy",
+   "authors": [
+    "Mateusz Sadek"
+   ],
+   "size": [
+    1.0626,
+    2.6562,
+    0.9521
+   ],
+   "min": [
+    -0.5313,
+    0,
+    -0.4761
+   ],
+   "max": [
+    0.5313,
+    2.6562,
+    0.4761
+   ],
+   "triangles": {
+    "full": 1500,
+    "low": 372
+   },
+   "vertices": {
+    "full": 2111,
+    "low": 455
+   },
+   "sourceTriangles": 12240,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "radius": 0.49,
+    "height": 2.656,
+    "centre": [
+     0,
+     1.328,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": true,
+   "rects": [
+    [
+     0,
+     704,
+     440,
+     440
+    ]
+   ]
+  },
+  {
+   "name": "power_pole",
+   "kind": "big",
+   "id": "modular_electricity_poles",
+   "title": "Modular Electricity Poles",
+   "authors": [
+    "James Ray Cock"
+   ],
+   "size": [
+    1.2,
+    6.13,
+    1.9252
+   ],
+   "min": [
+    -0.6,
+    0,
+    -1.5153
+   ],
+   "max": [
+    0.6,
+    6.13,
+    0.4098
+   ],
+   "triangles": {
+    "full": 1500,
+    "low": 362
+   },
+   "vertices": {
+    "full": 2283,
+    "low": 427
+   },
+   "sourceTriangles": 31932,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "radius": 0.11,
+    "height": 6.13,
+    "centre": [
+     0,
+     3.065,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": true,
+   "rects": [
+    [
+     3696,
+     392,
+     392,
+     392
+    ],
+    [
+     3792,
+     1752,
+     192,
+     192
+    ]
+   ]
+  },
+  {
+   "name": "generator",
+   "kind": "clutter",
+   "id": "portable_generator",
+   "title": "Portable Generator",
+   "authors": [
+    "James Ray Cock"
+   ],
+   "size": [
+    0.816,
+    0.5769,
+    0.5591
+   ],
+   "min": [
+    -0.408,
+    0,
+    -0.2795
+   ],
+   "max": [
+    0.408,
+    0.5769,
+    0.2795
+   ],
+   "triangles": {
+    "full": 1997,
+    "low": 1301
+   },
+   "vertices": {
+    "full": 2146,
+    "low": 1398
+   },
+   "sourceTriangles": 26365,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "half": [
+     0.408,
+     0.288,
+     0.28
+    ],
+    "centre": [
+     0,
+     0.288,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": true,
+   "rects": [
+    [
+     2904,
+     1416,
+     352,
+     352
+    ]
+   ]
+  },
+  {
+   "name": "welding_cart",
+   "kind": "clutter",
+   "id": "portable_welding_cart",
+   "title": "Portable Welding Cart",
+   "authors": [
+    "Georgii Gorbunov"
+   ],
+   "size": [
+    0.8365,
+    1.5596,
+    0.602
+   ],
+   "min": [
+    -0.4183,
+    0,
+    -0.301
+   ],
+   "max": [
+    0.4183,
+    1.5596,
+    0.301
+   ],
+   "triangles": {
+    "full": 898,
+    "low": 422
+   },
+   "vertices": {
+    "full": 684,
+    "low": 377
+   },
+   "sourceTriangles": 29258,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "half": [
+     0.418,
+     0.78,
+     0.301
+    ],
+    "centre": [
+     0,
+     0.78,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": true,
+   "rects": [
+    [
+     1504,
+     1120,
+     360,
+     352
+    ]
+   ]
+  },
+  {
+   "name": "trash_bag",
+   "kind": "clutter",
+   "id": "trashbag",
+   "title": "Trashbag",
+   "authors": [
+    "Benny Weimer"
+   ],
+   "size": [
+    0.5153,
+    0.5731,
+    0.459
+   ],
+   "min": [
+    -0.2577,
+    0,
+    -0.2295
+   ],
+   "max": [
+    0.2577,
+    0.5731,
+    0.2295
+   ],
+   "triangles": {
+    "full": 424,
+    "low": 234
+   },
+   "vertices": {
+    "full": 294,
+    "low": 179
+   },
+   "sourceTriangles": 4482,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "radius": 0.241,
+    "height": 0.573,
+    "centre": [
+     0,
+     0.287,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     928,
+     1712,
+     216,
+     216
+    ]
+   ]
+  },
+  {
+   "name": "trash_can",
+   "kind": "clutter",
+   "id": "metal_trash_can",
+   "title": "Metal Trash Can",
+   "authors": [
+    "GurJas Studios"
+   ],
+   "size": [
+    0.7716,
+    0.9061,
+    0.5452
+   ],
+   "min": [
+    -0.3858,
+    0,
+    -0.2726
+   ],
+   "max": [
+    0.3858,
+    0.9061,
+    0.2726
+   ],
+   "triangles": {
+    "full": 704,
+    "low": 420
+   },
+   "vertices": {
+    "full": 674,
+    "low": 458
+   },
+   "sourceTriangles": 7532,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "half": [
+     0.386,
+     0.453,
+     0.273
+    ],
+    "centre": [
+     0,
+     0.453,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     352,
+     1488,
+     312,
+     304
+    ]
+   ]
+  },
+  {
+   "name": "bed_frame",
+   "kind": "clutter",
+   "id": "old_bed_frame",
+   "title": "Old Bed Frame",
+   "authors": [
+    "Luca B"
+   ],
+   "size": [
+    0.8968,
+    1.1644,
+    1.9951
+   ],
+   "min": [
+    -0.4484,
+    0,
+    -0.9975
+   ],
+   "max": [
+    0.4484,
+    1.1644,
+    0.9975
+   ],
+   "triangles": {
+    "full": 900,
+    "low": 220
+   },
+   "vertices": {
+    "full": 1375,
+    "low": 188
+   },
+   "sourceTriangles": 49990,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "half": [
+     0.448,
+     0.582,
+     0.998
+    ],
+    "centre": [
+     0,
+     0.582,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": true,
+   "rects": [
+    [
+     3256,
+     1528,
+     264,
+     264
+    ]
+   ]
+  },
+  {
+   "name": "fire_pit",
+   "kind": "clutter",
+   "id": "stone_fire_pit",
+   "title": "Stone Fire Pit",
+   "authors": [
+    "Sebastian Platen"
+   ],
+   "size": [
+    1.4485,
+    0.3811,
+    1.4332
+   ],
+   "min": [
+    -0.7242,
+    -0.1062,
+    -0.7166
+   ],
+   "max": [
+    0.7242,
+    0.2749,
+    0.7166
+   ],
+   "triangles": {
+    "full": 900,
+    "low": 224
+   },
+   "vertices": {
+    "full": 654,
+    "low": 219
+   },
+   "sourceTriangles": 3887,
+   "grounded": false,
+   "buried": 0.106,
+   "collider": {
+    "radius": 0.716,
+    "height": 0.275,
+    "centre": [
+     0,
+     0.137,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": true,
+   "rects": [
+    [
+     2224,
+     1456,
+     352,
+     352
+    ]
+   ]
+  },
+  {
+   "name": "chair",
+   "kind": "clutter",
+   "id": "plastic_monobloc_chair_01",
+   "title": "Plastic Monobloc Chair 01",
+   "authors": [
+    "Kuutti Siitonen"
+   ],
+   "size": [
+    0.6419,
+    0.8798,
+    0.6276
+   ],
+   "min": [
+    -0.3209,
+    0,
+    -0.3138
+   ],
+   "max": [
+    0.3209,
+    0.8798,
+    0.3138
+   ],
+   "triangles": {
+    "full": 614,
+    "low": 482
+   },
+   "vertices": {
+    "full": 902,
+    "low": 463
+   },
+   "sourceTriangles": 3356,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "half": [
+     0.321,
+     0.44,
+     0.314
+    ],
+    "centre": [
+     0,
+     0.44,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": false,
+   "rects": [
+    [
+     664,
+     1752,
+     216,
+     216
+    ]
+   ]
+  },
+  {
+   "name": "table",
+   "kind": "clutter",
+   "id": "wooden_picnic_table",
+   "title": "Wooden Picnic Table",
+   "authors": [
+    "Ulan Cabanilla"
+   ],
+   "size": [
+    2.2361,
+    0.7421,
+    3.0208
+   ],
+   "min": [
+    -1.1181,
+    0,
+    -1.5104
+   ],
+   "max": [
+    1.1181,
+    0.7421,
+    1.5104
+   ],
+   "triangles": {
+    "full": 800,
+    "low": 403
+   },
+   "vertices": {
+    "full": 1035,
+    "low": 431
+   },
+   "sourceTriangles": 10210,
+   "grounded": true,
+   "buried": 0,
+   "collider": {
+    "half": [
+     1.118,
+     0.371,
+     1.51
+    ],
+    "centre": [
+     0,
+     0.371,
+     0
+    ]
+   },
+   "cutout": false,
+   "twoSided": true,
+   "rects": [
+    [
+     1872,
+     1104,
+     352,
+     360
+    ],
+    [
+     0,
+     1760,
+     176,
+     168
+    ]
+   ]
+  }
+ ]
+}

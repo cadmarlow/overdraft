@@ -577,10 +577,11 @@ class CityAudioSystem {
         }
       }
     }
-    Object.assign(this.windParams, { speed: Math.min(sources.motion, 50), rush: sources.rush || 0, altitude: position.y, traffic: sources.traffic, night: night ? 1 : 0, enclosure });
+    const probe = this.ambienceProbe?.(position);
+    const saltWind = probe?.wasteland ? .22 + .18 * Math.sin(elapsed * .59) : 0;
+    Object.assign(this.windParams, { speed: Math.min(sources.motion, 50), rush: Math.max(sources.rush || 0, saltWind), altitude: position.y, traffic: sources.traffic, night: night ? 1 : 0, enclosure });
     this.wind.update(this.windParams, now);
     if (this.ambience) {
-      const probe = this.ambienceProbe ? this.ambienceProbe(position) : null;
       Object.assign(this.ambienceParams, probe || {}, { traffic: sources.traffic, night: night ? 1 : 0, enclosure });
       this.ambience.update(this.ambienceParams, this.context.currentTime);
     }

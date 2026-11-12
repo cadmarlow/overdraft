@@ -1,4 +1,8 @@
 import { GEO } from './nyc-geodata.js';
+import {
+  FRONTIER_BRIDGES, SALT_LOOP, SALT_ROUTES, SALT_PLACES, saltMoatRuns,
+  SALT_MIN_X, SALT_MAX_X, SALT_MIN_Z, SALT_MAX_Z, saltLocation, routeThroughSalt
+} from './wasteland-plan.js';
 import { HIGHWAY_ROUTES } from './highway-layout.js';
 import { closePoint, closeBlock, closeLawn, closeWalks, fountainSite } from './morningside-plan.js';
 import { lincolnBlock, lincolnPoint, lincolnPlaza, lincolnGarden, lincolnFountain,
@@ -14,22 +18,12 @@ import {
   getIslandBoundsAtZ,
   MANHATTAN_COASTLINE,
   WATERFRONT_PIERS,
-  NJ_SHORELINE_POLYGON,
-  BROOKLYN_POLYGONS,
-  QUEENS_POLYGONS,
-  BRONX_POLYGONS,
-  STATEN_ISLAND_POLYGON,
-  UPPER_MANHATTAN_POLYGON,
-  WESTCHESTER_POLYGON,
-  NASSAU_POLYGON,
   ROOSEVELT_ISLAND_POLYGON,
   GOVERNORS_ISLAND_POLYGON,
   RANDALLS_ISLAND_POLYGON,
   LIBERTY_ISLAND_POLYGON,
   ELLIS_ISLAND_POLYGON,
   MILL_ROCK_POLYGON,
-  EAST_RIVER_BRIDGES,
-  OUTER_BRIDGES,
   getLocationLabel,
   isTypingInField
 } from './city-config.js';
@@ -43,6 +37,12 @@ const MAP_ROADS = ROADS.filter(r => !(r.highway && COASTAL_HIGHWAY.test(r.raw)))
 // Minimap and full-screen map drawn from the same geography and building footprints as the 3D city.
 // World frame: 1 unit = 1 m, x = Manhattan-grid east, z = grid south. Both maps face grid north,
 // about 29 degrees east of true north.
+
+const mapLocation = (x, z) => saltLocation(x, z) ?? getLocationLabel(x, z);
+
+const MAP_LANDMARKS = [...(NYC_LANDMARKS ?? []), ...SALT_PLACES.map((p,i)=>({
+  ...p, id: 'sel-'+i, short: p.name, district: 'Le Wasteland'
+}))];
 
 const FONT = 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 const MIN_ZOOM = 0.015; // full map, pixels per metre: the whole harbour, Staten Island to the Bronx
@@ -92,10 +92,9 @@ const MODELLED_LANDMARKS = [
 
 // Borough (0), waterway (1) & neighbourhood (2) names at their real places (world metres)
 const AREA_LABELS = [
-  ['MANHATTAN', 120, -1500, 0], ['NEW JERSEY', -7000, 2000, 0], ['BROOKLYN', 7850, 8780, 0], ['QUEENS', 8810, -1680, 0],
-  ['THE BRONX', 1010, -9640, 0], ['STATEN ISLAND', -1800, 19220, 0],
-  ['HUDSON RIVER', -2680, -300, 1], ['HUDSON RIVER', -2650, -5600, 1], ['EAST RIVER', 1700, 800, 1],
-  ['HARLEM RIVER', 220, -7930, 1], ['UPPER NEW YORK BAY', 130, 10530, 1],
+  ['MANHATTAN', 120, -1500, 0], ['LE WASTELAND', 6900, -3200, 0], ['LE WASTELAND', -7200, 3400, 0],
+  ['LE LIT DE L’HUDSON', -2760, -300, 1], ['LE LIT DE L’HUDSON', -2760, -5200, 1], ['EAST RIVER', 1700, 800, 1],
+  ['LA RADE', 130, 10530, 1],
   ['HARLEM', -320, -6750, 2], ['MORNINGSIDE HEIGHTS', -1600, -6160, 2], ['EAST HARLEM', 830, -5820, 2],
   ['UPPER WEST SIDE', -1410, -3070, 2], ['CENTRAL PARK', -430, -3280, 2], ['UPPER EAST SIDE', 590, -2680, 2],
   ['ROOSEVELT ISLAND', 1810, -2030, 2], ["HELL'S KITCHEN", -1350, -590, 2], ['MIDTOWN', 100, -500, 2],
@@ -104,10 +103,7 @@ const AREA_LABELS = [
   ['SOHO', 200, 3560, 2], ['LOWER EAST SIDE', 1690, 3760, 2], ['TRIBECA', -140, 4460, 2], ['CHINATOWN', 850, 4420, 2],
   ['BATTERY PARK CITY', -370, 5540, 2], ['FINANCIAL DISTRICT', 455, 5715, 2], ['GOVERNORS ISLAND', 795, 7685, 2],
   ['LIBERTY ISLAND', -1234, 8849, 2], ['ELLIS ISLAND', -1427, 7648, 2], ["RANDALL'S ISLAND", 2268, -6301, 2],
-  ['WASHINGTON HEIGHTS', -1690, -10270, 2], ['DOWNTOWN BROOKLYN', 2570, 6280, 2], ['WILLIAMSBURG', 3670, 2980, 2],
-  ['GREENPOINT', 3305, 1277, 2], ['LONG ISLAND CITY', 2865, -473, 2], ['ASTORIA', 3345, -3699, 2],
-  ['HOBOKEN', -3293, 3032, 2], ['JERSEY CITY', -2671, 6014, 2], ['WEEHAWKEN', -3670, 193, 2], ['FORT LEE', -4456, -9911, 2],
-  ['RED HOOK', 2005, 8855, 2], ['BAYONNE', -5284, 13699, 2]
+  ...SALT_PLACES.map(p => [p.name.toUpperCase(), p.x, p.z, 2])
 ];
 
 // Shorter map names for a few real street names
@@ -218,13 +214,12 @@ function mapLayers() {
   const L = {};
   const rings = (list) => list.filter((p) => p && p.length > 2);
 
-  // Land around the harbour: New Jersey, Brooklyn, Queens, the Bronx, Staten Island and Upper Manhattan (outlined), the
-  // horizon fillers beyond the city line (not outlined); the East River & harbour islands
-  L.land = new Path2D();
-  for (const ring of rings([NJ_SHORELINE_POLYGON, ...(BROOKLYN_POLYGONS || []), ...(QUEENS_POLYGONS || []), ...(BRONX_POLYGONS || []),
-    STATEN_ISLAND_POLYGON, UPPER_MANHATTAN_POLYGON])) addRing(L.land, ring);
-  L.fillers = new Path2D();
-  for (const ring of rings([WESTCHESTER_POLYGON, NASSAU_POLYGON])) addRing(L.fillers, ring);
+  // The exterior basin and its water channel are two rings of the same shape.
+  L.moat = new Path2D();
+  for (const [x0, z, x1] of saltMoatRuns()) L.moat.rect(x0, z - 8, x1 - x0, 16);
+  L.saltRoads = new Path2D();
+  addLine(L.saltRoads, SALT_LOOP);
+  for (const route of SALT_ROUTES) addLine(L.saltRoads, route.path);
   L.islands = new Path2D();
   for (const ring of rings([RANDALLS_ISLAND_POLYGON, ROOSEVELT_ISLAND_POLYGON, GOVERNORS_ISLAND_POLYGON, LIBERTY_ISLAND_POLYGON,
     ELLIS_ISLAND_POLYGON, MILL_ROCK_POLYGON])) addRing(L.islands, ring);
@@ -312,7 +307,7 @@ function mapLayers() {
   }
 
   // Bridges, Manhattan landing to the far landing, deck width to scale
-  L.bridges = [...EAST_RIVER_BRIDGES, ...OUTER_BRIDGES].map((br) => {
+  L.bridges = FRONTIER_BRIDGES.map((br) => {
     const path = new Path2D();
     path.moveTo(br.a.x, br.a.z);
     path.lineTo(br.b.x, br.b.z);
@@ -444,13 +439,13 @@ function drawPlayerArrow(ctx, tipY, halfWidth, tailY) {
 }
 
 // GPS route from the player to the waypoint, along the grid (x first, then z): taxi yellow on a dark casing
-function drawRoute(ctx, x0, y0, x1, y1, width) {
+function drawRoute(ctx, x0, y0, x1, y1, width, path, toX, toY) {
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
   ctx.beginPath();
   ctx.moveTo(x0, y0);
-  ctx.lineTo(x1, y0);
-  ctx.lineTo(x1, y1);
+  if (path) for (const p of path) ctx.lineTo(toX(p.x), toY(p.z));
+  else { ctx.lineTo(x1, y0); ctx.lineTo(x1, y1); }
   ctx.strokeStyle = MAP.halo;
   ctx.lineWidth = width + 3;
   ctx.stroke();
@@ -527,7 +522,7 @@ class NYCMapSystem {
     this.searchPath = null;
     this.textWidths = new Map();
     // Start with a waypoint at Times Square / Broadway.
-    const ts = NYC_LANDMARKS.find((l) => l.id === 'timessquare') || { x: 0, z: 0 };
+    const ts = MAP_LANDMARKS.find((l) => l.id === 'timessquare') || { x: 0, z: 0 };
     this.waypoint = { x: ts.x, z: ts.z, name: 'Times Square & 42nd St' };
 
     // Street names measured before the web font arrived would be spaced for the fallback font: measure & draw again
@@ -636,7 +631,7 @@ class NYCMapSystem {
         if (mx >= 0 && mx <= rect.width && my >= 0 && my <= rect.height) {
           const wPos = this.screenToWorld(mx, my, rect.width, rect.height);
           if (this.elHoverInfo) {
-            this.elHoverInfo.textContent = `${getLocationLabel(wPos.x, wPos.z)} · Click to teleport here`;
+            this.elHoverInfo.textContent = `${mapLocation(wPos.x, wPos.z)} · Click to teleport here`;
           }
         }
       });
@@ -688,9 +683,30 @@ class NYCMapSystem {
     this.renderFullMap();
   }
 
+  saltGps(position) {
+    const target = this.waypoint;
+    if (!target) return null;
+    const cached = this.saltRoute;
+    if (cached?.target === target && Math.hypot(cached.x - position.x, cached.z - position.z) < 42) return cached.path;
+    const from = { x: position.x, z: position.z };
+    const path = routeThroughSalt(from, target)?.slice(1);
+    const nav = this.controllerManager.playground?.nav;
+    if (path && nav && !saltLocation(from.x, from.z)) {
+      const gate = path[0];
+      const streets = nav.route(from.x, from.z, gate.x, gate.z, 15000);
+      if (streets?.length > 1) path.unshift(...streets);
+    } else if (path && nav && !saltLocation(target.x, target.z)) {
+      const gate = path.at(-2);
+      const streets = nav.route(gate.x, gate.z, target.x, target.z, 15000);
+      if (streets?.length > 1) path.splice(path.length - 1, 0, ...streets);
+    }
+    this.saltRoute = { target, ...from, path };
+    return path;
+  }
+
   placeWaypoint(point, allowTeleport = false) {
     const { x, z } = this.clampToManhattan(point);
-    this.waypoint = { x, z, name: getLocationLabel(x, z) };
+    this.waypoint = { x, z, name: mapLocation(x, z) };
     if (allowTeleport) this.onTeleport?.(x, z);
     this.renderFullMap();
   }
@@ -699,9 +715,9 @@ class NYCMapSystem {
     if (center) { this.centerOnPlayer(); return; }
     if (waypoint) { this.placeWaypoint({ x: this.viewCenterX, z: this.viewCenterZ }); return; }
     if (!x && !y && !zoom) return;
-    const distance = 540 * dt / this.viewZoom, bounds = ISLAND_BOUNDS;
-    this.viewCenterX = Math.max(bounds.minX - 1500, Math.min(bounds.maxX + 1500, this.viewCenterX + x * distance));
-    this.viewCenterZ = Math.max(bounds.minZ - 1500, Math.min(bounds.maxZ + 1500, this.viewCenterZ + y * distance));
+    const distance = 540 * dt / this.viewZoom;
+    this.viewCenterX = Math.max(SALT_MIN_X, Math.min(SALT_MAX_X, this.viewCenterX + x * distance));
+    this.viewCenterZ = Math.max(SALT_MIN_Z, Math.min(SALT_MAX_Z, this.viewCenterZ + y * distance));
     this.viewZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, this.viewZoom * Math.exp(zoom * dt * 1.75)));
     this.renderFullMap();
   }
@@ -715,7 +731,7 @@ class NYCMapSystem {
     this.searchHighlight = q;
     this.searchPath = null;
     if (q.length > 0) {
-      const lmMatch = NYC_LANDMARKS.find((l) => l.name.toLowerCase().includes(q) || l.short.toLowerCase().includes(q));
+      const lmMatch = MAP_LANDMARKS.find((l) => l.name.toLowerCase().includes(q) || l.short.toLowerCase().includes(q));
       const roads = ROAD_LABELS.filter((l) => l.lower.includes(q) || l.raw.includes(q));
       if (roads.length) {
         this.searchPath = new Path2D();
@@ -799,6 +815,7 @@ class NYCMapSystem {
 
   // Teleports land on Manhattan: inside the island's extent at that latitude
   clampToManhattan(p) {
+    if (saltLocation(p.x, p.z)) return p;
     const z = Math.max(ISLAND_BOUNDS.minZ + 25, Math.min(ISLAND_BOUNDS.maxZ - 25, p.z));
     const shore = getIslandBoundsAtZ(z);
     return { x: Math.max(shore.westX + 12, Math.min(shore.eastX - 12, p.x)), z };
@@ -827,15 +844,17 @@ class NYCMapSystem {
     ctx.lineCap = 'round';
 
     // 1. Land around the harbour & the islands
-    ctx.fillStyle = MAP.land;
-    ctx.fill(L.fillers);
-    ctx.fill(L.land);
+    ctx.fillStyle = '#2b2620';
+    ctx.fillRect(SALT_MIN_X, SALT_MIN_Z, SALT_MAX_X - SALT_MIN_X, SALT_MAX_Z - SALT_MIN_Z);
+    ctx.fillStyle = MAP.water;
+    ctx.fill(L.moat);
+    ctx.strokeStyle = '#81755f';
+    ctx.lineWidth = Math.max(px(isMinimap ? 1.4 : 1.7), 12);
+    ctx.stroke(L.saltRoads);
     ctx.fillStyle = MAP.islands;
     ctx.fill(L.islands);
     if (!isMinimap) {
       ctx.lineWidth = px(1.4);
-      ctx.strokeStyle = MAP.landEdge;
-      ctx.stroke(L.land);
       ctx.strokeStyle = MAP.islandsEdge;
       ctx.stroke(L.islands);
     }
@@ -1087,7 +1106,7 @@ class NYCMapSystem {
     const scale = this.miniScale;
 
     if (this.elMiniStreet) {
-      const label = getLocationLabel(px, pz);
+      const label = mapLocation(px, pz);
       if (label !== this.miniStreetText) {
         this.miniStreetText = label;
         this.elMiniStreet.textContent = label;
@@ -1153,12 +1172,12 @@ class NYCMapSystem {
     if (this.waypoint) {
       const wx = toX(this.waypoint.x);
       const wy = toY(this.waypoint.z);
-      drawRoute(ctx, 0, 0, wx, wy, 3);
+      drawRoute(ctx, 0, 0, wx, wy, 3, this.saltGps({ x: px, z: pz }), toX, toY);
       drawWaypoint(ctx, wx, wy, 4.5);
     }
 
     // Landmark blips
-    for (const lm of NYC_LANDMARKS) {
+    for (const lm of MAP_LANDMARKS) {
       const lx = toX(lm.x);
       const ly = toY(lm.z);
       if (Math.abs(lx) < w * 0.48 && Math.abs(ly) < h * 0.48) {
@@ -1211,7 +1230,7 @@ class NYCMapSystem {
 
     const ent = this.controllerManager.getActiveEntity();
     if (this.elPlayerInfo) {
-      const text = `You are at ${getLocationLabel(ent.position.x, ent.position.z)}`;
+      const text = `You are at ${mapLocation(ent.position.x, ent.position.z)}`;
       if (text !== this.playerInfoText) {
         this.playerInfoText = text;
         this.elPlayerInfo.textContent = text;
@@ -1245,7 +1264,7 @@ class NYCMapSystem {
     if (this.waypoint) {
       const wx = toX(this.waypoint.x);
       const wy = toY(this.waypoint.z);
-      drawRoute(ctx, toX(ent.position.x), toY(ent.position.z), wx, wy, 4);
+      drawRoute(ctx, toX(ent.position.x), toY(ent.position.z), wx, wy, 4, this.saltGps(ent.position), toX, toY);
       drawWaypoint(ctx, wx, wy, 7);
     }
 
@@ -1290,7 +1309,7 @@ class NYCMapSystem {
     ctx.font = `700 11px ${FONT}`;
     const placed = [];
     const pins = [];
-    for (const lm of NYC_LANDMARKS) {
+    for (const lm of MAP_LANDMARKS) {
       const lx = toX(lm.x);
       const ly = toY(lm.z);
       if (Math.abs(lx) > w * 0.48 || Math.abs(ly) > h * 0.48) continue;

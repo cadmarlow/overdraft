@@ -15,4 +15,36 @@ function highwaySpeedProfile(points, cumulative, cruise, lateralAcceleration = 2
   return limits;
 }
 
-export { highwaySpeedProfile };
+// A level crossing: where a road running east-west cuts across the carriageway (the Wasteland's western gate), every
+// lane holds short of it while someone is on the crossing or coming up to it, as at a red light.
+// The stop lines: for each lane that runs through the crossing at road level, the arc position where its cars wait.
+// The carriageway may lie up to `reach` from the point given.
+function crossingStops(lanes, { x, z, half = 14, reach = 90 }) {
+  const stops = [];
+  for (const lane of lanes) {
+    const P = lane.pts;
+    for (let i = 0; i + 1 < P.length; i++) {
+      const a = P[i], b = P[i + 1];
+      if (a.z === b.z || (a.z - z) * (b.z - z) > 0) continue;
+      const t = (z - a.z) / (b.z - a.z), ay = a.y ?? 0, by = b.y ?? 0;
+      if (Math.abs(a.x + (b.x - a.x) * t - x) > reach || ay + (by - ay) * t < -1) continue; // elsewhere, or in a tunnel
+      stops.push({ lane, u: lane.cum[i] + t * (lane.cum[i + 1] - lane.cum[i]) - half - 3 });
+      break;
+    }
+  }
+  return stops;
+}
+
+// Is the crossing taken? `west` and `east` are how far out on either side a body is seen coming.
+function crossingHeld({ x, z, half = 14, west = 85, east = 170 }, body) {
+  return !!body && Math.abs(body.z - z) < half + 6 && body.x > x - west && body.x < x + east && Math.abs(body.y) < 9;
+}
+
+// The gap a car at arc position `u` keeps to a held stop line: a standing leader at the line. A car already over the
+// line clears the crossing, and one whose own leader is nearer keeps following it: both get `gap` back unchanged.
+function gapToStopLine(stopAt, u, length, gap, standstill) {
+  const toLine = stopAt - u - length / 2;
+  return toLine > -1.5 && toLine < gap ? Math.max(0.1, toLine + standstill) : gap;
+}
+
+export { highwaySpeedProfile, crossingStops, crossingHeld, gapToStopLine };

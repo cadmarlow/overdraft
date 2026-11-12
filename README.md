@@ -3,7 +3,19 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.25 — Consumer Staples**. Deux franchises de restauration ouvrent dans tout Manhattan : **BULLION**
+Version **0.9.26 — Scorched Earth**. Manhattan est une ville de survivants au milieu du **Wasteland**. L’Hudson est
+à sec : son lit commence au pied des quais, sept mètres sous les rues. La rade est un lac de sel, et l’East River,
+retenu par quatre digues, sert de douves. Au nord, la ville finit sur un mur de conteneurs. On sort par la **Grande
+Porte** (avenue Adam Clayton Powell, tout au nord), par la **porte des Pompes** (au bout de la 34e Rue, côté ouest,
+puis la rampe) ou par les quatre ponts de l’East River. Dehors : la Ceinture, 47 km de vieille route autour de l’île,
+les ruines ensablées de Harlem, de Hoboken et de Brooklyn, les falaises et le plateau du Haut-Sel, et les Rouliers.
+Quinze navires gisent dans le lit et sur la rade (le **Cimetière des Coques** est à hauteur de la 48e Rue), des camps
+tiennent les carrefours, et la nuit se lit aux feux et aux projecteurs du Mur.
+
+La carte permet de chercher **Les Pompes**, **La Grande Porte**, **Le Cimetière des Coques** ou **Cale des Veilleurs**. En local, `?spawn=sel`
+démarre à pied au fond du lit de l’Hudson, au pied de la rampe. La session de visite ne sauvegarde pas la progression.
+
+Depuis la **0.9.25 — Consumer Staples**, deux franchises de restauration ouvrent dans tout Manhattan : **BULLION**
 (burgers, « La valeur refuge. », 36 succursales) et **TRANCHE** (pizza à la part, « Prenez votre part. », 54). On y
 entre, on commande à la caisse, à la borne ou au guichet sur le trottoir, on attend son numéro, on porte son plateau,
 on s'assoit où l'on veut et on mange (F) ; un vrai repas referme toutes les blessures pendant quelques minutes. À

@@ -13,7 +13,7 @@ const PLACES = {
   garage: { x: -1398.5, z: streetZ(44) + 38, name: 'Garage Okafor', road: { x: -1404, z: streetZ(44) + 38 } },
   debtor: { x: -846, z: streetZ(29) + 35, name: '8e Avenue & 29e Rue' },
   crew: { x: -1670, z: streetZ(34) + 45, name: '11e Avenue & 34e Rue' },
-  pier: { x: -1950, z: streetZ(40) + 2, name: 'Quai 76' },
+  pier: { x: 1215, z: streetZ(34) + 6, name: 'Quai de la 34e Rue Est' }, // the Hudson is dry: the regatta runs on the moat
   meet: { x: 265, z: 5753, name: 'Wall Street', nearRoad: true },
   safehouse: { x: 1079, z: streetZ(12) + 40, name: 'Planque de la 1re Avenue' },
   raceStart: { x: -846, z: streetZ(57) + 30, name: '8e Avenue & 57e Rue', road: { x: -856, z: streetZ(57) + 30 } },

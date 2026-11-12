@@ -139,6 +139,6 @@ test('the burnt state rides in the street cars\' style code without disturbing i
   assert.match(controllers, /burnt \? createBurntWheelMaterial\(\) : createWheelMaterial\(model\)/);
   // and no wreck is made of a fixed model any more
   assert.doesNotMatch(gameSource, /createCarEntity\(\{ kind: 'sedan'/);
-  assert.match(gameSource, /this\.placeWreck\(x, z, heading, car\.kind\)/);
+  assert.match(gameSource, /this\.placeWreck\(x, z, heading, car\.kind(?:,|\))/);
   assert.match(gameSource, /this\.placeWreck\(x, z, heading, v\.bus \? 'bus' : v\.bodyType\)/);
 });

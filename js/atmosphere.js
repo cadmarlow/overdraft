@@ -218,6 +218,8 @@ class Atmosphere {
 
     const p = this.compute();
     this.adapt(dt, p);
+    // Out in the Wasteland the sky, the haze and the grade are another country's (js/wasteland-air.js)
+    this.biome?.(p, this.look);
     // Re-bake the sky environment when it has visibly changed (or during lightning), never every frame
     this.bakeT -= dt;
     const sig = `${p.sunDir.x.toFixed(2)}${p.sunDir.y.toFixed(2)}|${p.skyExposure.toFixed(3)}|${p.cloudCoverage.toFixed(2)}|${p.nightFactor.toFixed(2)}|${p.fogColor.getHexString()}`;

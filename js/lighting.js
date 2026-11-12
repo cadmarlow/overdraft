@@ -15,7 +15,14 @@ import {
   max,
   exp,
   abs,
-  select
+  select,
+  uniformArray,
+  smoothstep,
+  clamp,
+  floor,
+  min,
+  dot,
+  int
 } from 'three/tsl';
 import { SkyMesh } from 'three/addons/objects/SkyMesh.js';
 import { SunLight } from 'three/addons/lights/SunLight.js';
@@ -226,6 +233,13 @@ class LightingSystem {
     // so helicopter / observatory views stay clearer than the horizon.
     this.uFogDensity = uniform(TIME_PRESETS.golden.fogDensity);
     this.uFogHeight = uniform(900.0);
+    // Dust of the Wasteland (js/wasteland-air.js). uDust: how deep in it the camera stands. uShore: Manhattan's west
+    // and east shores on 24 rows from uShoreZ.x to uShoreZ.y, so that what lies beyond them is hazed in ochre even
+    // when it is seen from the city. Until the Wasteland sets them, nothing lies beyond.
+    this.uDust = uniform(0);
+    this.uDustTint = uniform(new THREE.Vector3(1.12, 0.75, 0.41));
+    this.uShore = uniformArray(Array.from({ length: 24 }, () => new THREE.Vector2(-1e7, 1e7)));
+    this.uShoreZ = uniform(new THREE.Vector2(-1e7, 1e7));
     if (this.envRenderTarget) this.scene.fogNode = this.createAerialFogNode();
   }
 
@@ -243,8 +257,16 @@ class LightingSystem {
     const ea = exp(ya.div(H).negate());
     const eb = exp(yb.div(H).negate());
     const meanDensity = select(abs(dy).greaterThan(1.0), ea.sub(eb).mul(H).div(dy), ea);
-    const tau = this.uFogDensity.mul(dist).mul(meanDensity);
-    return fog(skyColor, float(1.0).sub(exp(tau.mul(tau).negate())));
+    // Is this fragment out in the Wasteland?
+    const rows = float(23.0);
+    const row = clamp(positionWorld.z.sub(this.uShoreZ.x).div(this.uShoreZ.y.sub(this.uShoreZ.x)), 0.0, 1.0).mul(rows);
+    const r0 = min(floor(row), rows.sub(1.0));
+    const shore = mix(this.uShore.element(int(r0)), this.uShore.element(int(r0.add(1.0))), row.sub(r0));
+    const inland = min(min(positionWorld.x.sub(shore.x), shore.y.sub(positionWorld.x)), min(positionWorld.z.sub(this.uShoreZ.x), this.uShoreZ.y.sub(positionWorld.z)));
+    const dust = max(this.uDust, smoothstep(60.0, -260.0, inland).mul(smoothstep(250.0, 1700.0, dist)));
+    const dustColor = mix(skyColor, vec3(dot(skyColor, vec3(0.3, 0.5, 0.2))).mul(this.uDustTint), 0.8);
+    const tau = this.uFogDensity.mul(dist).mul(meanDensity).mul(dust.mul(0.3).add(1.0));
+    return fog(mix(skyColor, dustColor, dust), float(1.0).sub(exp(tau.mul(tau).negate())));
   }
 
   bakeEnvironmentMap() {

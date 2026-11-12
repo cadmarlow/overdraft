@@ -41,6 +41,8 @@ import {
   EAST_RIVER_BRIDGES,
   CUT_Z
 } from './city-config.js';
+import { WEST_GATE } from './wasteland-design.js';
+import { saltLandAt, sampleSalt } from './wasteland-plan.js';
 import { createGroundRoadMaterial, createGroundWalkMaterial, createGroundCurbMaterial } from './ground-materials.js';
 import { buildIslands } from './ground.js';
 import { curbOutline } from './ground-plan.js';
@@ -765,23 +767,24 @@ function buildWaterfrontPiers(group, colliders) {
   const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
 
   // Local frame: u runs seaward from the bulkhead, s across the pier (rotation about Y as in Object3D.rotation.y)
-  const frame = (x0, z0, theta) => {
+  // `dy` lowers everything built in the frame: a vessel that has come down onto a dry bed (see `aground` below)
+  const frame = (x0, z0, theta, dy = 0) => {
     const c = Math.cos(theta), sn = Math.sin(theta);
     const wx = (u, s) => x0 + u * c + s * sn;
     const wz = (u, s) => z0 - u * sn + s * c;
     return {
       theta, wx, wz,
-      box: (mat, u0, u1, y0, y1, s0, s1, v = 0, open = false) => B.box(mat, wx((u0 + u1) / 2, (s0 + s1) / 2), (y0 + y1) / 2, wz((u0 + u1) / 2, (s0 + s1) / 2),
+      box: (mat, u0, u1, y0, y1, s0, s1, v = 0, open = false) => B.box(mat, wx((u0 + u1) / 2, (s0 + s1) / 2), (y0 + y1) / 2 + dy, wz((u0 + u1) / 2, (s0 + s1) / 2),
         Math.abs(u1 - u0), Math.abs(y1 - y0), Math.abs(s1 - s0), theta, v, open),
-      geo: (mat, geo, u = 0, y = 0, s = 0, rot = 0, v = 0) => B.geo(mat, geo, wx(u, s), y, wz(u, s), theta + rot, v),
-      sub: (u, s, rot = 0) => frame(wx(u, s), wz(u, s), theta + rot),
+      geo: (mat, geo, u = 0, y = 0, s = 0, rot = 0, v = 0) => B.geo(mat, geo, wx(u, s), y + dy, wz(u, s), theta + rot, v),
+      sub: (u, s, rot = 0) => frame(wx(u, s), wz(u, s), theta + rot, dy),
       // Thin beam between two local points [u, y, s] (rigging, masts, ramps); t thick, t2 wide
       strut: (mat, a, b, t, v = 0, t2 = t) => {
         const d = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
         const g = new THREE.BoxGeometry(t, d.length(), t2);
         g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(Y_AXIS, d.normalize()));
         g.translate((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
-        B.geo(mat, g, x0, 0, z0, theta, v);
+        B.geo(mat, g, x0, dy, z0, theta, v);
       },
       tree: (u, s, y, r) => trees.push([wx(u, s), y, wz(u, s), r]),
       // Canvas-atlas lettering; rot = -PI/2 faces landward (-u), +PI/2 seaward (+u)
@@ -1470,6 +1473,20 @@ function buildWaterfrontPiers(group, colliders) {
   };
   // [pier kinds]
 
+  // The Wasteland: where the river is gone, whatever floated has come down onto the bed with it. A hull's keel lies
+  // some 2.8 m under the old water line; it settles half a metre into the mud. The boat basin's floating docks too.
+  const aground = (S) => {
+    const x = S.wx(0, 0), z = S.wz(0, 0);
+    return saltLandAt(x, z) ? frame(x, z, S.theta, sampleSalt(x, z) + 2.3) : S;
+  };
+  for (const kind of Object.keys(ships)) { const build = ships[kind]; ships[kind] = (S, ...rest) => build(aground(S), ...rest); }
+  kinds.basin = ((build) => (F) => {
+    const x = F.wx(F.L * 0.5, 0), z = F.wz(F.L * 0.5, 0);
+    if (!saltLandAt(x, z)) return build(F);
+    const G = frame(F.wx(0, 0), F.wz(0, 0), F.theta, sampleSalt(x, z) + 1.6);
+    for (const key of Object.keys(F)) if (typeof F[key] !== 'function') G[key] = F[key];
+    return build(G);
+  })(kinds.basin);
   for (const p of WATERFRONT_PIERS) (kinds[p.kind] || kinds.generic)(pierFrame(p), p);
 
   // Park trees: trunks and lumpy low-poly crowns (one of three summer greens) join the paint batch: no extra draw calls
@@ -1507,11 +1524,19 @@ function buildCityGrid(scene) {
   // 1. NEW YORK HARBOR, HUDSON RIVER, EAST RIVER & HARLEM RIVER WATER PLANE
   // =========================================================================
   const waterMat = createWaterMaterial();
-  const harborWaterGeo = new THREE.PlaneGeometry(60000, 60000, 1, 1);
+  const harborWaterGeo = new THREE.PlaneGeometry(180000, 180000, 1, 1);
   harborWaterGeo.rotateX(-Math.PI / 2);
   const harborWaterMesh = new THREE.Mesh(harborWaterGeo, waterMat);
   harborWaterMesh.position.set(0, ISLAND_BOUNDS.waterLevel, -50);
   group.add(harborWaterMesh);
+  // Waves use world coordinates, so the four-vertex ocean can follow an aircraft without moving the wave pattern.
+  function updateHarborWater(position) {
+    const centre = harborWaterMesh.position;
+    if (Math.max(Math.abs(position.x - centre.x), Math.abs(position.z - centre.z)) < 24000) return;
+    centre.x = Math.round(position.x / 16384) * 16384;
+    centre.z = Math.round(position.z / 16384) * 16384;
+    harborWaterMesh.updateMatrixWorld();
+  }
 
   // =========================================================================
   // 2. POLYGONAL MANHATTAN ISLAND SEAWALL BULKHEAD & ROADWAY ASPHALT DECK
@@ -2581,7 +2606,7 @@ function buildCityGrid(scene) {
   const sidewalks = roadSidewalks;
   // Player colliders of the viaduct, park rocks and retaining walls
   const colliders = [...((fdrViaduct && fdrViaduct.colliders) || []), ...outcrops.colliders, ...groundColliders, ...waterfrontColliders];
-  return { group, sidewalks, curbs, groundSurfaces: streetGroundSurfaces, footprints, highwayLanes, colliders, roadPaint, gardenVisits };
+  return { group, sidewalks, curbs, groundSurfaces: streetGroundSurfaces, harborWater: harborWaterMesh, footprints, highwayLanes, colliders, roadPaint, gardenVisits };
 }
 
 // =====================================================================================================================
@@ -2634,6 +2659,8 @@ function buildManhattanWaterfrontEdge(group, { blockSidewalks, treeSites, lawnMa
   const z79 = streetZ(79);
   const gaps = [{ west: true, z0: z79 - 60, z1: z79 + 40, dMax: 4.5 }]; // the 79th St Boat Basin's gangways
   for (const p of WATERFRONT_PIERS) gaps.push({ west: p.side === 'west', z0: p.z - p.width / 2 - 2.5, z1: p.z + p.width / 2 + 2.5, dMax: 4.5 });
+  // The western gate of the Wasteland: 34th Street runs through the barriers, the park and the railing to the ramp
+  gaps.push({ west: true, z0: WEST_GATE.z - 13, z1: WEST_GATE.z + 13, dMax: 1e9 });
   const X = (r, d) => r.s + r.sgn * d;
   const H = (r, o) => r.d0 + o * r.k; // offset `o` across the highway section (squeezed where the strip is short)
   const inBox = (o, x, z) => {

@@ -50,12 +50,15 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 // OVERDRAFT — the game layer over the city simulation: the protagonist on foot and at the wheel, weapons and
 // damage, vehicles that smoke, burn and explode, the wanted level (police), missions, money, death and arrest, and saving.
 
-const LOCAL_ARRIVALS = { ...urbanArrivals, ...manhattanArrivals };
+const LOCAL_ARRIVALS = {
+  ...urbanArrivals, ...manhattanArrivals,
+  sel: { x: -2420, z: 612, heading: -1.5, name: 'Le Wasteland', subtitle: 'Au pied de la descente des Pompes' }
+};
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.25';
-const BUILD_NAME = 'Consumer Staples';
+const BUILD = '0.9.26';
+const BUILD_NAME = 'Scorched Earth';
 const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
 // The neighbourhoods as the opening card names them (city-config.js districtAt)
 const DISTRICT_NAMES = {
@@ -471,6 +474,7 @@ export class Game {
     cars.length = 0;
     for (const c of this.fleet) cars.push(c);
     for (const c of this.wanted.cars) cars.push(c);
+    this.frontierEncounter?.appendCars(cars);
     for (const c of this.wrecks) if (c.mesh.visible) cars.push(c);
     return cars;
   }
@@ -1031,7 +1035,8 @@ export class Game {
   // A car that went off the quay: a splash, then it fills and goes down, and whoever is in it comes up without it
   sinking(c) {
     const y = c.position.y;
-    if (y > WATER + 0.3) { c.splashed = false; return; }
+    // only where there is water: the dry beds of the Wasteland lie under the old water line
+    if (y > WATER + 0.3 || (this.controllers.frontier && !this.controllers.afloat(c.position.x, c.position.z))) { c.splashed = false; return; }
     if (!c.splashed) {
       c.splashed = true;
       this.driveFx.splash(c.position.x, c.position.z, Math.min(1.6, 0.6 + Math.hypot(c.body.vx, c.body.vz) * 0.04));
@@ -1227,11 +1232,17 @@ export class Game {
       if (this.state === 'onFoot' || this.state === 'down') this.vertical.landed(impact);
     } else if (this.state === 'onFoot') this.vertical.checkFall(ground);
     p.footing = ground;
+    if (p.position.y < WATER + .12 && c.frontier?.exterior(p.position.x, p.position.z) && c.afloat(p.position.x, p.position.z)) this.enterWater(p.position.x, p.position.z);
   }
 
   // ---- In the water ---------------------------------------------------------------------------------------------------
   // The open water nearest (x, z), a little way off the seawall
   waterNear(x, z) {
+    const frontier = this.controllers.frontier;
+    if (frontier?.landAt(x, z)) {
+      const berth = frontier.coastWaterNear(x, z, (px, pz) => this.controllers.afloat(px, pz));
+      if (berth) return berth;
+    }
     const zone = Math.max(ISLAND_BOUNDS.minZ + 60, Math.min(ISLAND_BOUNDS.maxZ - 60, z));
     const shore = getIslandBoundsAtZ(zone);
     const west = Math.abs(x - shore.westX) < Math.abs(x - shore.eastX);
@@ -2079,11 +2090,11 @@ export class Game {
 
   // The burnt-out body that takes the place of a vehicle of model `kind` where it blew up. One of that model lying
   // idle, else a second one (its materials are the street's, already compiled), else the oldest of that model again.
-  placeWreck(x, z, heading, kind = 'sedan', burn = 22) {
+  placeWreck(x, z, heading, kind = 'sedan', burn = 22, elevation = 0) {
     if (!this.wreckKinds.includes(kind)) kind = 'sedan';
     const same = this.wrecks.filter((c) => c.kind === kind);
     const w = same.find((c) => !c.standing) || (same.length < WRECKS_PER_KIND ? this.makeWreck(kind) : same.reduce((a, b) => (a.placedAt < b.placedAt ? a : b)));
-    w.position.set(x, 0, z);
+    w.position.set(x, elevation, z);
     w.heading = heading;
     w.prevX = x; w.prevZ = z;
     w.speed = w.vx = w.vz = w.angularVel = 0;
@@ -2120,7 +2131,11 @@ export class Game {
       this.removeFleetCar(car);
     }
     car.mesh.visible = false;
-    if (!car.moto && !car.mode && !car.boat) this.placeWreck(x, z, heading, car.kind);
+    if (!car.moto && !car.mode && !car.boat) {
+      const frontier = this.controllers.frontier;
+      const elevation = frontier?.landAt(x, z) || frontier?.deckAt(x, z, y + 1) ? y : 0;
+      this.placeWreck(x, z, heading, car.kind, 22, elevation);
+    }
     if (playerInside && !ejected) {
       // thrown clear, fatally
       this.transition = null;
@@ -2493,7 +2508,7 @@ export class Game {
       if (this.aviation.airborne(this.car)) { this.bailOut(); return; }
       if (this.car.flight.ditched && this.controllers.afloat(air.x, air.z)) { this.car.ridden = false; this.enterWater(air.x + Math.cos(this.car.heading) * 2.5, air.z - Math.sin(this.car.heading) * 2.5); return; }
     } else if (this.active && this.state === 'driving' && this.car.air && air.y - this.controllers.getGroundHeight(air.x, air.z, 'helicopter', air.y) > 3) { this.bailOut(); return; }
-    if (this.active && (this.calibre?.interact() || this.eatery?.interact())) return;
+    if (this.active && (this.calibre?.interact() || this.eatery?.interact() || this.frontierEncounter?.interact())) return;
     if (this.active && this.vertical.interact()) return;
     if (!this.active || !canInteract(this.state, this.car.speed)) {
       if (this.state === 'driving') this.toast('Ralentissez', 'Arrêtez le véhicule pour descendre.');
@@ -2894,6 +2909,7 @@ export class Game {
     if (dt <= 0) this.hero.update(!person.inVehicle, 0, 0);
 
     if (dt > 0) {
+      this.frontierEncounter?.update(dt, pl);
       for (let i = this.jets.length - 1; i >= 0; i--) {
         const jet = this.jets[i];
         jet.life -= dt;
@@ -3022,7 +3038,7 @@ export class Game {
     const car = this.car;
     this.candidate = this.state === 'onFoot' && this.active ? this.findCandidate() : null;
     const prompt = this.ui['game-prompt'];
-    const offer = this.active && (this.calibre?.prompt() || this.eatery?.prompt());
+    const offer = this.active && (this.calibre?.prompt() || this.eatery?.prompt() || this.frontierEncounter?.prompt());
     if (offer) {
       prompt.classList.add('visible');
       const span = prompt.querySelector('span');
@@ -3081,7 +3097,7 @@ export class Game {
         player: { x: spot.x, y: spot === p.position ? p.position.y : this.controllers.getGroundHeight(spot.x, spot.z, 'person'), z: spot.z, heading: p.heading },
         active: fleet.indexOf(this.car), stolen: this.stolen, distance: this.distance, firstEntry: this.firstEntry,
         money: this.money, debt: this.debt, held: [...this.gangs.held], health: this.health, armor: this.armor, weapons: this.weapons, weaponId: this.weaponId, mods: this.mods, range: this.range, snacks: this.snacks, fed: Math.round(this.fed),
-        missionsDone: this.missionsDone, stats: this.stats, radio: this.radio?.stationIndex ?? this.radioIndex,
+        missionsDone: this.missionsDone, saltContract: this.saltContract ?? null, stats: this.stats, radio: this.radio?.stationIndex ?? this.radioIndex,
         atmosphere: this.atmosphere.serialize(), safehouses: this.shops?.serialize(), worldBikes: !!this.worldBikesPlaced,
         fleet: fleet.map(car => ({ kind: car.kind, paint: car.paint, position: { x: car.position.x, y: car.position.y, z: car.position.z }, heading: car.heading, stolen: car.stolen, hp: car.hp }))
       };
@@ -3114,6 +3130,7 @@ export class Game {
       this.stolen = Number.isFinite(data.stolen) ? Math.max(0, data.stolen) : 0;
       this.firstEntry = data.firstEntry !== false;
       if (data.version === 2) {
+        this.saltContract = ['transport', 'livré'].includes(data.saltContract) ? data.saltContract : null;
         this.money = Number.isFinite(data.money) ? Math.max(0, data.money) : 0;
         if (Number.isFinite(data.debt)) this.debt = data.debt;
         if (Array.isArray(data.held)) this.gangs.held = new Set(data.held.filter((id) => typeof id === 'string'));

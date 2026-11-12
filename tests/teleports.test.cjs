@@ -50,6 +50,7 @@ test('preset and map teleports share arrival resets and mark the resolved landin
     gamepadControls: { reset: () => calls.push(['gamepad']) },
     cameraSystem: { resetForTeleport: () => calls.push(['camera']) },
     selectCamera: (...args) => calls.push(['selectCamera', ...args]),
+    saltLocation: () => null,
     getLocationLabel: (x, z) => `${x}, ${z}`,
     cityBlocks: { allBlocks: [] },
     trafficSystem: {},

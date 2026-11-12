@@ -47,7 +47,7 @@ Les versions portent des noms de la finance : 0.2 Opening Bell, 0.3 Margin Call,
 0.9.6 Footfall, 0.9.7 Curb Appeal, 0.9.8 Revaluation, 0.9.9 Break Even, 0.9.10 Price Action, 0.9.11 Short Squeeze,
 0.9.12 Blue Chips, 0.9.13 Market Order, 0.9.14 Ground Floor, 0.9.15 After Hours, 0.9.16 Green Shoots,
 0.9.17 Stop Loss, 0.9.18 Dry Powder, 0.9.19 Growth Equity, 0.9.20 Slippage, 0.9.21 Clearing, 0.9.22 Circuit Breaker,
-0.9.23 Free Float, 0.9.24 Flight to Quality, 0.9.25 Consumer Staples.
+0.9.23 Free Float, 0.9.24 Flight to Quality, 0.9.25 Consumer Staples, 0.9.26 Scorched Earth (le Wasteland).
 Prochaine : 1.0 Closing Bell (voir `GAME_DESIGN.md`).
 
 Une nouvelle version met à jour, ensemble :
@@ -123,6 +123,16 @@ Paramètres d'adresse : `?stats=1` (images par seconde et coût de chaque systè
 - L'utilisateur joue à la manette Xbox sur ce Mac, et tout Chrome la voit. Un Chrome de test au focus émulé obéit à ses
   boutons : le héros monte en voiture, vise, met en pause pendant la mesure. Couper la manette dans la page de test
   (`navigator.getGamepads = () => []` par `Page.addScriptToEvaluateOnNewDocument`).
+- Le sol n’est plus partout à zéro, et « sous le niveau de l’eau » ne veut plus dire « dans l’eau » : le lit de l’Hudson
+  est à sec sept mètres sous les rues. Demander `controllers.afloat(x, z)` pour savoir s’il y a de l’eau et
+  `getGroundHeight()` (ou `frontier.sample()`) pour le sol. Un plancher de caméra, une noyade ou une traînée d’eau
+  réglés sur `y < WATER` ou `y > 0.5` cassent au fond du lit (c’est arrivé aux trois).
+- Le relief du Wasteland est cuit dans `js/wasteland-terrain.bin.gz`. Après tout changement de `js/wasteland-design.js`
+  (rives, digues, brèches, routes, lieux), relancer `node tools/wasteland/build-terrain.mjs` : le jeu refuse de
+  démarrer si les routes ne correspondent plus au relief.
+- Le moteur n’éclaire que les `maxLights` premières lampes de la scène (`ClusteredLighting` dans `js/main.js`, 320) :
+  au-delà, les dernières ajoutées restent éteintes sans un mot. À 256 pour 272 lampes de nuit, c’étaient les éclairs
+  des tirs, les feux et les phares du joueur. Avant d’ajouter des lampes, les compter de nuit ; préférer `fx.flash()`.
 - Le dossier personnel `/Users/ulik` est lui-même un dépôt Git : une session Claude Code lancée au-dessus de ce dépôt
   partage sa mémoire avec d'autres projets. Travailler depuis ce dossier.
 

@@ -8,7 +8,7 @@ import { HEADLIGHTS, createVehicleHeadlight, placeVehicleHeadlight } from './veh
 import { BODY_SPECS, carStyleCode, buildLightbarGeometry, createLightbarMaterial } from './cars.js';
 import { carModels, carSpecs, trafficMaterial, withWheels } from './car-assets.js';
 import { shuntBody } from './car-physics.js';
-import { highwaySpeedProfile } from './highway-driving.js';
+import { highwaySpeedProfile, crossingStops, crossingHeld, gapToStopLine } from './highway-driving.js';
 import { TRAFFIC_LEVELS, readTrafficDensity, trafficSubset, resizeHighwayTraffic } from './traffic-density.js';
 import {
   BUS_SPEC,
@@ -2453,6 +2453,15 @@ function createHighwayTraffic(scene, lanes, traffic) {
     return null;
   }
 
+  // Level crossings (js/highway-driving.js): the lanes hold short of a road that cuts across them while the player is
+  // on it or coming up to it
+  const crossings = [];
+  function addCrossing(spec) {
+    const stops = crossingStops(lanes, spec);
+    crossings.push({ spec, stops });
+    return stops.length;
+  }
+
   // Back into lane once it has been hit: the shove fades out, then the driver steers home and pulls away
   function settleKnock(c, dt) {
     if (!c.ox && !c.oz && !c.oyaw && !c.kvx && !c.kvz && !c.spin) return;
@@ -2539,11 +2548,16 @@ function createHighwayTraffic(scene, lanes, traffic) {
       vx: Math.sin(entity.heading || 0) * (entity.speed || 0) + (entity.vx || 0),
       vz: Math.cos(entity.heading || 0) * (entity.speed || 0) + (entity.vz || 0)
     } : null;
+    for (const crossing of crossings) {
+      const held = crossingHeld(crossing.spec, pl);
+      for (const stop of crossing.stops) stop.lane.stopAt = held ? stop.u : -1;
+    }
     for (const lane of lanes) {
       const list = lane.cars;
       const n = list.length;
       if (n === 0) continue;
       const pIn = pl ? playerInLane(lane, pl) : null;
+      const stopAt = lane.stopAt ?? -1;
       for (let k = 0; k < n; k++) {
         const c = list[k];
         let gap = Infinity;
@@ -2562,6 +2576,11 @@ function createHighwayTraffic(scene, lanes, traffic) {
             gap = playerGap;
             dv = c.v - pIn.v;
           }
+        }
+        // a held crossing is a standing leader at its stop line
+        if (stopAt >= 0) {
+          const held = gapToStopLine(stopAt, c.u, c.len, gap, D.s0);
+          if (held !== gap) { gap = held; dv = c.v; }
         }
         const sStar = D.s0 + Math.max(0, c.v * D.T + (c.v * dv) / brakeTerm);
         const targetSpeed = lane.speedProfile[Math.min(c.seg, lane.speedProfile.length - 1)];
@@ -2759,7 +2778,7 @@ function createHighwayTraffic(scene, lanes, traffic) {
   }
 
   setDensity(traffic.density);
-  return { group, update, cars, lanes, setDensity, get density() { return density; } };
+  return { group, update, cars, lanes, setDensity, addCrossing, get density() { return density; } };
 }
 
 export { createTrafficSystem, createHighwayTraffic, FLEET_STYLES };
