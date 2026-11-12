@@ -594,7 +594,7 @@ function createSidewalkFurniture(scene, o) {
     const typeId = typeof s.type === 'number' ? SHOP_TYPES[s.type]?.id : s.type;
     if (!CAFE_TYPES.has(typeId)) continue;
     const seed = Math.round(s.x * 7 + s.z * 3);
-    if (hash(seed, 1) > (haveData ? 0.12 : 0.3) || s.width < 5) continue;
+    if ((!s.terrace && hash(seed, 1) > (haveData ? 0.12 : 0.3)) || s.width < 5) continue;
     if (diningSpots.some((d) => Math.hypot(d.x - s.x, d.z - s.z) < 14)) continue;
     const n = 1 + Math.floor(hash(seed, 2) * Math.min(3, s.width / 2.4));
     for (let i = 0; i < n; i++) {

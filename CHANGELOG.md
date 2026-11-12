@@ -1,5 +1,22 @@
 # Changelog
 
+## À paraître — Morningside, Lincoln Center et Stuyvesant Town
+
+- Amsterdam Avenue, de la 110e à la 113e, retrouve un ensemble dessiné autour de la cathédrale : tours inachevées,
+  rosace et portails sculptés, parvis en gradins, jardins clos avec entrées, allées, bancs et fontaine de bronze.
+- Morningside Park a un versant de schiste, deux promenades et un escalier traversable. Les surfaces du décor
+  servent aussi aux appuis du personnage et des véhicules.
+- Des passants empruntent les allées et occupent les bancs en journée. Le soir, les lampes éclairent les chemins.
+  Le son de la fontaine est synthétisé et s’entend en approchant. Le site figure sur la carte. En local, `?spawn=morningside` permet de démarrer devant le jardin.
+- Les arbres des plantations denses adoptent plus tôt leurs modèles allégés. Les arbres proches gardent leur détail.
+
+- La place Josie Robertson reprend sa forme à Lincoln Center, avec les cinq arches du Metropolitan Opera,
+  deux salles aux façades distinctes, les marches et rampes de Columbus Avenue, la fontaine Revson animée
+  et des visiteurs qui entrent sur la place puis s’installent sur les bancs.
+- À Stuyvesant Town, l’Oval retrouve sa grande pelouse et sa promenade entre les tours en brique rouge.
+  Allées, fontaine, terrain de basket, tables d’échecs, boîte à livres et bancs composent les abords.
+  Les deux lieux sont repérés sur la carte et accessibles en local via `?spawn=lincoln` et `?spawn=stuytown`.
+
 ## 0.9.24 — Flight to Quality — 11 novembre 2026
 
 - **Deux avions neufs** remplacent l'ancien, chacun avec son caractère. La **Hauturier · Bourrasque** est un biplan

@@ -1,5 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { highwayX, highwayScale } from './highway-layout.js';
+import { closePoint } from './morningside-plan.js';
+import { urbanArrivals } from './urban-places-plan.js';
 import { ISLAND_BOUNDS, getIslandBoundsAtZ, streetZ, isTypingInField, districtAt, getLocationLabel } from './city-config.js';
 import { angleDelta, doorPosition, smooth, clamp, canInteract, validPosition } from './interaction-state.js';
 import { CharacterModel, LOOKS } from './characters.js';
@@ -308,12 +310,25 @@ export class Game {
     }
   }
 
-  // An explicit local test link starts at the reported FDR facade after restoring the player's progression.
-  // The garage uses an already compiled car; this practice session never writes over the regular save.
+  // Local review links start from surveyed positions after loading the regular progression.
+  // These sessions never write back to the save.
   applyTestSpawn() {
-    if (!['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) ||
-      new URLSearchParams(location.search).get('spawn') !== 'fdr') return;
+    if (!['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) return;
+    const spawn = new URLSearchParams(location.search).get('spawn');
+    const arrival = spawn === 'morningside' ? { ...closePoint(11.3, 2.4), heading: Math.PI / 2 }
+      : Object.hasOwn(urbanArrivals, spawn) ? urbanArrivals[spawn] : null;
+    if (spawn !== 'fdr' && !arrival) return;
     this.testSpawn = true;
+    if (arrival) {
+      this.teleportPlayer(arrival.x, arrival.z);
+      this.person.heading = this.camera.footYaw = arrival.heading;
+      this.atmosphere.setHour(14);
+      this.atmosphere.setWeather('clear', true);
+      this.atmosphere.running = false;
+      this.atmosphere.lockWeather = true;
+      this.testSpawnSite = spawn;
+      return;
+    }
     const z = 1020, x = highwayX(false, z) + 5.55 * highwayScale(false, z);
     const heading = Math.atan2(highwayX(false, z - 3) - highwayX(false, z + 3), -6);
     this.teleportPlayer(x - 12, z + 12);
@@ -618,7 +633,11 @@ export class Game {
       this.camera.menuDolly = null;
       this.camera.resetForTeleport();
       this.camera.initialized = false;
-      this.toast('Test FDR · 30e Rue', 'Voie nord · Z / RT pour passer devant l’immeuble · Essai sans sauvegarde');
+      if (this.testSpawnSite === 'morningside') this.toast('Morningside Heights', 'Amsterdam Avenue · 111e Rue');
+      else if (this.testSpawnSite) {
+        const { name, subtitle } = urbanArrivals[this.testSpawnSite];
+        this.toast(name, subtitle);
+      } else this.toast('Test FDR · 30e Rue', 'Voie nord · Z / RT pour passer devant l’immeuble · Essai sans sauvegarde');
       return;
     }
     if (first) {

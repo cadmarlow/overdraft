@@ -48,7 +48,7 @@ const TAU = Math.PI * 2;
 const TUNING = {
   // Gain of each layer at full presence, before the indoor attenuation. Loops are baked at BED_RMS (or at a 0.98
   // peak when their crest factor is high: the babble lands near 0.13 RMS).
-  level: { crowd: 0.07, subway: 0.12, construction: 0.3, bar: 0.075, birds: 0.06, siren: 0.03, hum: 0.022 },
+  level: { crowd: 0.07, subway: 0.12, construction: 0.3, bar: 0.075, birds: 0.06, siren: 0.03, hum: 0.022, fountain: 0.12 },
   indoor: { db: -12, cutoff: 800, open: 18000 },
   crowd: { call: [0.2, 0.5] },
   hum: { rumble: 1, vent: 0.55 },
@@ -67,7 +67,7 @@ const BAKE_BUDGET_MS = 4; // buffer baking per update while the bank fills
 const MAX_GROUPS = 14; // concurrent on-demand sounds, 2 to 5 nodes each
 const MAX_AMBIENT_GROUPS = 9; // the rest stays free for explicit events
 const BAR_BPM = 124;
-const UNIT_PARAMS = ['crowd', 'traffic', 'night', 'subway', 'construction', 'bar', 'birds', 'water', 'indoor', 'rain', 'enclosure'];
+const UNIT_PARAMS = ['crowd', 'traffic', 'night', 'subway', 'construction', 'bar', 'birds', 'water', 'fountain', 'indoor', 'rain', 'enclosure'];
 let voiceSerial = 0;
 
 const finite = (value, fallback = 0) => Number.isFinite(value) ? value : fallback;
@@ -121,11 +121,12 @@ function computeLevels(p, out) {
   out.birds = level.birds * Math.pow(Math.max(p.birds, p.water * 0.9), 0.8) * (1 - 0.7 * p.night) * (1 - 0.85 * p.rain) * indoor;
   out.siren = level.siren * (0.8 + 0.4 * p.night) * indoor;
   out.hum = level.hum * (0.65 + 0.35 * p.traffic) * (1 - 0.2 * p.night) * indoor;
+  out.fountain = level.fountain * p.fountain ** 1.5 * indoor;
   return out;
 }
 
 const blankParams = () => ({ crowd: 0, traffic: 0, night: 0, hour: 13, subway: 0, construction: 0, bar: 0, birds: 0,
-  water: 0, indoor: 0, rain: 0, enclosure: 0 });
+  water: 0, fountain: 0, indoor: 0, rain: 0, enclosure: 0 });
 
 // Target gain of every layer for the given params, indoor attenuation included.
 export function ambienceLevels(params) {
@@ -496,6 +497,24 @@ function* bakeAir(ctx) {
       if ((i & PASS) === PASS) yield;
     }
     return air;
+  });
+}
+
+function* bakeFountain(ctx) {
+  const rate = 16000;
+  return yield* bakeLoop(ctx, { rate, duration: 7, fade: 0.55 }, function* (length) {
+    const random = randomSource(11132);
+    const flow = yield* noise(length, random), drops = yield* noise(length, random);
+    yield* band(flow, 620, 2900, rate);
+    yield* band(drops, 2050, 5600, rate);
+    yield* unit(flow);
+    yield* unit(drops);
+    const pulse = wander(random, 21, rate), water = wander(random, 3.6, rate);
+    for (let i = 0; i < length; i++) {
+      flow[i] = flow[i] * (0.61 + 0.23 * water()) + drops[i] * (0.03 + 0.16 * pulse() ** 3);
+      if ((i & PASS) === PASS) yield;
+    }
+    return flow;
   });
 }
 
@@ -946,7 +965,7 @@ const BAKERS = {
   swell: bakeSwell, rumble: bakeRumble, vent: bakeVent, babble: bakeBabble, subway: bakeSubway, air: bakeAir, bar: bakeBar,
   calls: bakeCalls, jackhammer: bakeJackhammer, drill: bakeDrill, hammers: bakeHammers, coos: bakeCoos, gulls: bakeGulls,
   sirenWail: (ctx) => bakeSiren(ctx, 0), sirenFire: (ctx) => bakeSiren(ctx, 1), alarm: bakeAlarm, clack: bakeClack,
-  squeal: bakeSqueal, inverter: bakeInverter
+  squeal: bakeSqueal, inverter: bakeInverter, fountain: bakeFountain
 };
 
 function ambienceBank(context, resources) {
@@ -1076,7 +1095,8 @@ export function createAmbienceVoice(context, resources = {}, destination = conte
   // Layers.
   const crowdMod = gainNode(0), crowdGain = gainNode(0);
   crowdMod.connect(crowdGain).connect(bus);
-  const rumbleGain = gainNode(0), ventGain = gainNode(0);
+  const rumbleGain = gainNode(0), ventGain = gainNode(0), fountainGain = gainNode(0);
+  fountainGain.connect(bus);
   rumbleGain.connect(bus);
   ventGain.connect(bus);
   const subFilter = filterNode('lowpass', 260, 0.6), trainGain = gainNode(TUNING.subway.idle);
@@ -1102,7 +1122,7 @@ export function createAmbienceVoice(context, resources = {}, destination = conte
   };
   const set = {
     crowd: smoother(crowdGain.gain, 0.6), rumble: smoother(rumbleGain.gain, 0.8), vent: smoother(ventGain.gain, 0.8),
-    subway: smoother(subwayGain.gain, 0.5), construction: smoother(constructionGain.gain, 0.5),
+    fountain: smoother(fountainGain.gain, 0.35), subway: smoother(subwayGain.gain, 0.5), construction: smoother(constructionGain.gain, 0.5),
     bar: smoother(barGain.gain, 0.5), barCutoff: smoother(barFilter.frequency, 0.4), birds: smoother(birdsGain.gain, 0.8),
     siren: smoother(sirenGain.gain, 1.2), events: smoother(eventsGain.gain, 0.25), indoor: smoother(indoorFilter.frequency, 0.25),
     send: smoother(send.gain, 0.5), feedbackA: smoother(feedbackA.gain, 0.5), feedbackB: smoother(feedbackB.gain, 0.5)
@@ -1125,6 +1145,7 @@ export function createAmbienceVoice(context, resources = {}, destination = conte
     { needs: ['babble', 'swell'], start: (t) => { loop('babble', crowdMod, t); loop('swell', crowdMod.gain, t, 0.61); } },
     { needs: ['rumble'], start: (t) => loop('rumble', rumbleGain, t) },
     { needs: ['vent'], start: (t) => loop('vent', ventGain, t) },
+    { needs: ['fountain'], start: (t) => loop('fountain', fountainGain, t) },
     { needs: ['subway'], start: (t) => { subwaySource = loop('subway', subFilter, t); } },
     { needs: ['air'], start: (t) => loop('air', airGain, t) },
     { needs: ['bar'], start: (t) => { barSource = loop('bar', barFilter, t, barRate()); barQuietSince = t; } }
@@ -1436,6 +1457,7 @@ export function createAmbienceVoice(context, resources = {}, destination = conte
     // Traffic feeds the rumble; at night the fans and transformers come forward.
     set.rumble(levels.hum * TUNING.hum.rumble * (0.4 + 0.6 * p.traffic) * (1 - 0.3 * p.night), now);
     set.vent(levels.hum * TUNING.hum.vent * (1 + 0.4 * p.night), now);
+    set.fountain(levels.fountain, now);
     set.subway(levels.subway, now);
     set.construction(levels.construction, now);
     set.bar(levels.bar, now);

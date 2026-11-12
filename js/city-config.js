@@ -602,6 +602,9 @@ const NYC_LANDMARKS = [
   return { id, name, short, x: s.x, z: s.z, district };
 });
 NYC_LANDMARKS.push(
+  { id: 'lincoln', name: 'Lincoln Center · Place Josie Robertson', short: 'Lincoln Center', x: -1199.25, z: -1725.35, district: 'Lincoln Square' },
+  { id: 'stuytown', name: 'Stuyvesant Oval', short: 'Stuyvesant Oval', x: 1395.7, z: 1985.2, district: 'Stuyvesant Town' },
+  { id: 'morningside', name: 'Cathédrale de Morningside', short: 'Cathédrale', x: avenueX('10') + 10, z: streetZ(112), district: 'Morningside Heights' },
   { id: 'centralpark', name: 'Central Park & The Lake', short: 'Central Park', x: -560, z: -2630, district: 'Uptown' },
   { id: 'brooklynbr', name: 'Brooklyn Bridge', short: 'Brooklyn Bridge', x: EAST_RIVER_BRIDGES[3].a.x + 700, z: EAST_RIVER_BRIDGES[3].a.z + 200, district: 'East River' },
   { id: 'queensborobr', name: 'Queensboro 59th St Bridge', short: '59th St Bridge', x: 1500, z: -1410, district: 'East River' }

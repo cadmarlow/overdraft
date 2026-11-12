@@ -375,6 +375,23 @@ la plus proche du départ ; les autres couvrent l'île, à 350 m au moins les un
 Restent à faire : voix, geste de remise de l'arme, succursales différenciées par quartier, armes vendues seulement
 chez CALIBRE (fusil de précision, pistolet lourd), ombres des lampes intérieures.
 
+## Lieux à reprendre dans Manhattan
+
+Les empreintes d’immeubles et les surfaces d’îlots ont servi à repérer les grandes étendues sans bâtiment. La
+part inoccupée sert à signaler un lieu à examiner. Un îlot du jeu peut regrouper un parc, une emprise routière
+et un quai. Les plans des sites et la caméra à hauteur de rue servent à décider de l’aménagement.
+
+- **Lincoln Center** et **Stuyvesant Oval** ont été repris sur la branche Morningside. Le premier est organisé autour
+  de la place et de ses salles. Le second garde un cœur libre pour la pelouse avec la vie quotidienne sur ses bords.
+- **Columbia, Morningside Campus**. College Walk, le grand escalier de Low Plaza et la coupole de Low Library donnent
+  une structure à la traversée entre Broadway et Amsterdam Avenue. [Plan officiel](https://www.law.columbia.edu/sites/default/files/2020-02/cu_morningside_campus_map.pdf).
+- **Asphalt Green, East 90th Street**. Le terrain Litwin, les courts et l’ancienne usine d’asphalte permettent de
+  retrouver à la fois un équipement de quartier et une silhouette industrielle. [Plan du campus](https://www.asphaltgreen.org/location/upper-east-side/).
+- **East River Park**. La coupure de la FDR rend importantes les entrées et les passerelles. Les terrains, l’amphithéâtre
+  et le chemin d’eau donnent un usage à chaque section de rive. [Projet de la ville de New York](https://www.nyc.gov/site/escr/about/parks-and-recreation.page).
+- **Siège de l’ONU**. La dalle du Secrétariat, les volumes plus bas et les jardins du quai méritent un traitement
+  d’ensemble. [Architecture et jardins du siège](https://documents.un.org/doc/undoc/gen/n14/224/81/pdf/n1422481.pdf).
+
 ## Feuille de route
 
 Les versions portent des noms de la finance, comme la dette de Sacha.

@@ -5,6 +5,12 @@ const test = require('node:test');
 const { loadModule } = require('./helpers/module.cjs');
 
 const source = readFileSync(join(__dirname, '../js/nyc-map.js'), 'utf8');
+const morningside = {};
+const places = {};
+test.before(async () => {
+  Object.assign(morningside, await import('../js/morningside-plan.js'));
+  Object.assign(places, await import('../js/urban-places-plan.js'));
+});
 
 test('surveyed building courtyards remain holes in the map footprint layer', () => {
   class Path2D {
@@ -15,7 +21,7 @@ test('surveyed building courtyards remain holes in the map footprint layer', () 
   }
   const { footprintLayers } = loadModule(source + '\nexport { footprintLayers };', {
     globals: { Path2D },
-    imports: { './nyc-geodata.js': { GEO: {} }, './city-config.js': { ROADS: [] } }
+    imports: { './morningside-plan.js': morningside, './urban-places-plan.js': places, './nyc-geodata.js': { GEO: {} }, './city-config.js': { ROADS: [] } }
   });
   const ring = (x0, z0, x1, z1) => [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }];
   const layers = footprintLayers([{ footprints: [{ h: 120, pts: ring(0, 0, 20, 20), holes: [ring(5, 5, 15, 15)] }] }]);
@@ -32,7 +38,7 @@ for (const [width, height, dpr] of [[500, 300, 1], [320, 180, 1.5], [1920, 1080,
     const window = { innerWidth: width, innerHeight: height, devicePixelRatio: dpr };
     const { NYCMapSystem } = loadModule(source, {
       globals: { window, performance: { now: () => 0 } },
-      imports: { './nyc-geodata.js': { GEO: {} }, './city-config.js': { ROADS: [] } }
+      imports: { './morningside-plan.js': morningside, './urban-places-plan.js': places, './nyc-geodata.js': { GEO: {} }, './city-config.js': { ROADS: [] } }
     });
     const map = Object.create(NYCMapSystem.prototype);
     // Capture the production render viewport; drawing primitives are irrelevant to coordinate conversion.
@@ -125,7 +131,7 @@ function mapHarness() {
   };
   const { NYCMapSystem } = loadModule(source, {
     globals: { window, document },
-    imports: { './nyc-geodata.js': { GEO: { frame: {} } }, './city-config.js': config }
+    imports: { './morningside-plan.js': morningside, './urban-places-plan.js': places, './nyc-geodata.js': { GEO: { frame: {} } }, './city-config.js': config }
   });
   const teleports = [], toggles = [];
   const map = new NYCMapSystem({
@@ -230,7 +236,7 @@ test('coastal map lines use the same corrected corridor as the drivable highway'
   const routes = [{ west: false, z0: 900, step: 3, x: [1284, 1285, 1286] }];
   const old = { name: 'Franklin D Roosevelt Dr', raw: 'FRANKLIN D ROOSEVELT DR', highway: true, pts: [{ x: 1340, z: 900 }, { x: 1342, z: 906 }] };
   const { MAP_ROADS } = loadModule(source + '\nexport { MAP_ROADS };', {
-    imports: { './nyc-geodata.js': { GEO: {} }, './city-config.js': { ROADS: [old] }, './highway-layout.js': { HIGHWAY_ROUTES: routes } }
+    imports: { './morningside-plan.js': morningside, './urban-places-plan.js': places, './nyc-geodata.js': { GEO: {} }, './city-config.js': { ROADS: [old] }, './highway-layout.js': { HIGHWAY_ROUTES: routes } }
   });
   assert.equal(MAP_ROADS.length, 1);
   assert.equal(MAP_ROADS[0].name, 'FDR Drive');

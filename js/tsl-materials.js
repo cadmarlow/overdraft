@@ -1515,7 +1515,7 @@ const pavingJoints = Fn(([style, wx, wz]) => {
  * - 1: Light-grey granite plaza pavers in running bond with scattered dark pavers (Times Sq, Herald Sq, Flatiron)
  * - 2: Bluestone & granite square slabs (fountain & monument plazas)
  */
-function createParkPavingMaterial() {
+function createParkPavingMaterial({ evenGranite = false } = {}) {
   const mat = new THREE.MeshStandardNodeMaterial({
     metalness: 0.0,
     roughness: 0.86
@@ -1541,8 +1541,8 @@ function createParkPavingMaterial() {
     const rowG = floor(wz.div(0.45));
     const idG = vec2(floor(wx.add(mod(rowG, 2.0).mul(0.45)).div(0.9)), rowG);
     const granCol = mix(
-      mix(color(0x9d9c95), color(0xbab9b1), hash2D(idG)),
-      color(0x6a6964),
+      mix(color(evenGranite ? 0x91908a : 0x9d9c95), color(evenGranite ? 0x9b9990 : 0xbab9b1), hash2D(idG)),
+      color(evenGranite ? 0x8b8980 : 0x6a6964),
       step(0.85, hash2D(idG.add(vec2(17.3, 5.1))))
     );
 

@@ -11,7 +11,7 @@ const parkingPlan = loadModule(read('parking-plan.js'));
 const storefrontTypes = loadModule(read('storefront-types.js'));
 const PROP = { PHONE: 0, COFFEE: 1, UMBRELLA: 2, BAG: 3, BACKPACK: 4 };
 
-function makeLife({ district = 'midtown', shops = [], seats = [], stands = [], peds = [] } = {}) {
+function makeLife({ district = 'midtown', shops = [], seats = [], stands = [], gardenVisits = [], peds = [] } = {}) {
   const { createStreetLife } = loadModule(read('street-life.js'), { imports: {
     './city-config.js': { districtAt: () => district },
     './parking-plan.js': parkingPlan,
@@ -26,7 +26,7 @@ function makeLife({ district = 'midtown', shops = [], seats = [], stands = [], p
   };
   const traffic = { clock: 0, cars: [], hails: [], setBusStops() {}, requestStop() { return false; } };
   const hour = { value: 12 };
-  const life = createStreetLife({ pedestrians, traffic, shops, seats, stands, busStops: [], subwayMouths: [], foodCarts: [], hourOf: () => hour.value });
+  const life = createStreetLife({ pedestrians, traffic, shops, seats, stands, gardenVisits, busStops: [], subwayMouths: [], foodCarts: [], hourOf: () => hour.value });
   return { life, pedestrians, traffic, hour, placed };
 }
 
@@ -82,6 +82,37 @@ test('a walker passing a free seat may sit; busy seats and people already busy a
   sitter.activity.onDone(sitter, false);
   assert.equal(life.anchors[0].busy, 0);
   assert.ok(life.anchors[0].cooldown > traffic.clock);
+});
+
+test('walkers enter through the garden gate and follow its path to the bench during opening hours', () => {
+  const gate = { x: 2, z: 0 }, route = [{ x: 4, z: 2 }, { x: 8, z: 2 }];
+  const seat = { x: 9, z: 4, y: 0.26, yaw: 1, kind: 'garden' };
+  const peds = Array.from({ length: 30 }, () => ({ placed: true, dead: false, activity: null, node: null,
+    route: { edge: { axis: 'st' } }, pause: 0, conversation: null, v: 1.2, panicUntil: 0, x: 1, z: 0 }));
+  const { life, traffic, hour } = makeLife({ peds, gardenVisits: [{ gate, route, seat }] });
+  const camera = { position: { x: 0, z: 0 } };
+  hour.value = 23;
+  for (let i = 0; i < 20; i++) { traffic.clock += 0.25; life.update(0.25, camera); }
+  assert.equal(life.stats().garden, 0);
+  hour.value = 14;
+  for (let i = 0; i < 20; i++) { traffic.clock += 0.25; life.update(0.25, camera); }
+  assert.equal(life.stats().garden, 1);
+  const act = peds.find(p => p.activity)?.activity;
+  assert.deepEqual(Array.from(act.waypoints), [gate, ...route, seat]);
+  assert.equal(act.seat, seat);
+  act.onDone(null, true);
+  assert.equal(life.anchors[0].busy, 0);
+});
+
+test('an authored sidewalk supplies at most one visitor for its entrance when no walker is nearby', () => {
+  const gate = { x: 25, z: 0 }, entry = { x: 25, z: -5 }, sidewalk = [entry, { x: 25, z: 9 }];
+  const seat = { x: 28, z: 2, y: 0.26, yaw: 1 };
+  const peds = [{ placed: false }, { placed: false }];
+  const { life, traffic, placed } = makeLife({ peds, gardenVisits: [{ gate, entry, sidewalk, seat, route: [] }] });
+  for (let i = 0; i < 8; i++) { traffic.clock += 1; life.update(1, { position: { x: 0, z: 0 } }); }
+  assert.equal(life.stats().garden, 1);
+  assert.equal(placed.length, 1);
+  assert.deepEqual([placed[0].x, placed[0].z], [entry.x, entry.z]);
 });
 
 test('people gather round a spot, phones out, only those walking nearby', () => {

@@ -4,6 +4,8 @@
 // Metres a tree stays listed in a level before and after the material lets it show there: the lists are only redone
 // every few metres of camera travel, the material fades every frame
 const MARGIN = 8;
+// Authored groves carry a per-instance class in the whole part of their packed variety.
+const DENSE_LOD_STEP = 0.52;
 
 /** Where a level hands over to the next (metres), for the graphics level's detail factor (quality.js `trees`) */
 function bandsFor(k) {
@@ -14,11 +16,12 @@ function bandsFor(k) {
  * The levels a tree `dist` metres away is listed in: bit 1 the full model, bit 2 the light model, bit 4 the impostor.
  * Two bits are set across a handover (the material draws part of each there), none beyond `reach`.
  */
-function listing(dist, bands) {
+function listing(dist, bands, lodScale = 1) {
+  const lodDistance = dist * lodScale;
   let bits = 0;
-  if (dist < bands.near + MARGIN) bits |= 1;
-  if (dist >= bands.near - bands.fade - MARGIN && dist < bands.far + MARGIN) bits |= 2;
-  if (dist >= bands.far - bands.fade - MARGIN && dist < bands.reach + MARGIN) bits |= 4;
+  if (lodDistance < bands.near + MARGIN) bits |= 1;
+  if (lodDistance >= bands.near - bands.fade - MARGIN && lodDistance < bands.far + MARGIN) bits |= 2;
+  if (lodDistance >= bands.far - bands.fade - MARGIN && dist < bands.reach + MARGIN) bits |= 4;
   return bits;
 }
 
@@ -46,4 +49,4 @@ function candidates(site, types) {
   return list;
 }
 
-export { MARGIN, bandsFor, listing, candidates };
+export { MARGIN, DENSE_LOD_STEP, bandsFor, listing, candidates };

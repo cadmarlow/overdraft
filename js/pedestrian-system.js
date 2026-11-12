@@ -607,12 +607,12 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
   function activityStep(p, dt) {
     const a = p.activity;
     const tx = p.ax + p.ux * p.t + p.uz * p.dodge, tz = p.az + p.uz * p.t - p.ux * p.dodge;
-    const goal = a.phase === 'return' ? { x: tx, z: tz } : { x: a.x, z: a.z };
     if (a.phase === 'hold') {
       p.v = 0;
       if (clock >= a.until || a.release) {
         a.phase = a.leave === 'vanish' ? 'vanish' : 'return';
         a.until = clock + 20;
+        if (a.waypoints) a.waypoint = a.waypoints.length - 2;
       }
       if (a.phase === 'hold') return;
     }
@@ -623,6 +623,8 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
       p.rig.placed = false;
       return;
     }
+    const waypoint = a.waypoints?.[a.waypoint];
+    const goal = waypoint ?? (a.phase === 'return' ? { x: tx, z: tz } : { x: a.x, z: a.z });
     const dx = goal.x - p.x, dz = goal.z - p.z, d = Math.hypot(dx, dz);
     const step = Math.min(d, ACTIVITY_SPEED * dt);
     if (d > 1e-3) {
@@ -631,7 +633,11 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
       a.moveHeading = Math.atan2(dx, dz);
     }
     p.v = ACTIVITY_SPEED;
-    if (d <= Math.max(0.05, step) || clock >= a.until) {
+    if (waypoint && d <= Math.max(0.05, step)) {
+      a.waypoint += a.phase === 'return' ? -1 : 1;
+      if (a.phase === 'return' || a.waypoint < a.waypoints.length) return;
+    }
+    if (d <= Math.max(0.05, step) || (!a.waypoints && clock >= a.until)) {
       if (a.phase === 'approach') {
         a.phase = 'hold';
         a.until = clock + a.duration;
@@ -654,7 +660,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
   }
 
   // An unplaced pedestrian appears at (x, z), tied to the nearest sidewalk track (within reach m), standing where it is
-  function placeAt(p, x, z, reach = 9) {
+  function placeAt(p, x, z, reach = 9, sidewalk = null) {
     if (p.placed) return false;
     let best = null, bestD = reach;
     for (const e of nearEdges) {
@@ -663,6 +669,13 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
         const d = Math.hypot(track.ax + track.ux * t - x, track.az + track.uz * t - z);
         if (d < bestD) { bestD = d; best = { track, t }; }
       }
+    }
+    if (!best && sidewalk) {
+      const [a, b] = sidewalk;
+      const dx = b.x - a.x, dz = b.z - a.z, len = Math.hypot(dx, dz);
+      const ux = dx / len, uz = dz / len;
+      const t = clamp((x - a.x) * ux + (z - a.z) * uz, 0.5, len - 0.5);
+      best = { track: { ax: a.x, az: a.z, ux, uz, len, local: true, node: null, side: 0, line: 0 }, t };
     }
     if (!best) return false;
     if (p.conversation) endConversation(p.conversation);
@@ -699,6 +712,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
   // How many of the pool stand in the city (street-life.js sets it by district and hour)
   let density = 1;
   function pedGround(p, x, z) {
+    if (p.activity?.waypoints) return groundAt(x, z);
     if (!p.node) return SIDEWALK_Y;
     const t = (x - p.ax) * p.ux + (z - p.az) * p.uz;
     return t > 2 && t < p.len - 2 ? CROSSWALK_Y : SIDEWALK_Y;
@@ -737,7 +751,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
     if (act && draw && act.phase === 'hold' && act.seat) {
       // Sitting: the seat poses the whole body (bench, café chair, shelter bench)
       seatRoot ??= createSeatRoot();
-      seatRoot.position.set(act.seat.x, SIDEWALK_Y, act.seat.z);
+      seatRoot.position.set(act.seat.x, act.seat.y ?? SIDEWALK_Y, act.seat.z);
       seatRoot.rotation.y = act.seat.yaw;
       seatRoot.updateMatrixWorld(true);
       const rig = p.rig;
