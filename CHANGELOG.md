@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.33 — Market Sweep — 12 novembre 2026
+
+- Les tirs en pleine rue et les explosions causées par le joueur déclenchent une intervention au lieu du signalement.
+  Une patrouille libre répond d’abord. Les renforts prennent la route depuis des points hors champ ou masqués.
+- De une à dix voitures selon le niveau de recherche. Les plus proches suivent la voiture du joueur. Celles qui ont
+  une route plus courte peuvent le devancer à un carrefour. Les barrages sont montés par les patrouilles sur place.
+- À la perte du contact visuel, une voiture retourne au dernier point connu et les autres se répartissent les rues.
+  Le radar montre le point signalé, la direction de recherche des patrouilles et les barrages. La poursuite reste terrestre.
+
 ## 0.9.32 — Carry Trade — 12 novembre 2026
 
 - Les poursuites se jouent au sol. Retrait de l’hélicoptère de police, des renforts qui surgissaient sur les toits

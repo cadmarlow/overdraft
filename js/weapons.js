@@ -265,11 +265,11 @@ function castShot(world, ox, oy, oz, dx, dy, dz, maxDist, ignore = null) {
 }
 
 // Line of sight between two points through buildings only
-function lineOfSight(controllers, ax, ay, az, bx, by, bz) {
+function lineOfSight(controllers, ax, ay, az, bx, by, bz, includeParked = true) {
   const dx = bx - ax, dy = by - ay, dz = bz - az;
   const d = Math.hypot(dx, dy, dz);
   if (d < 0.5) return true;
-  return raycastBuildings(controllers, ax, ay, az, dx / d, dy / d, dz / d, d) >= d - 0.3;
+  return raycastBuildings(controllers, ax, ay, az, dx / d, dy / d, dz / d, d, null, includeParked) >= d - 0.3;
 }
 
 // Random direction within a cone of `spread` radians around (dx, dy, dz) (unit), written to out

@@ -8,10 +8,10 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 class AIDriver {
   /**
    * @param {object} opts - maxSpeed (m/s), corner (m/s through a right-angle turn), traffic (array of traffic vehicles),
-   *   repath (s between route searches), avoid (steer round traffic)
+   *   repath (s between route searches), avoid (steer round traffic), roadGoal (optional road route resolver)
    */
-  constructor(controllers, nav, car, { maxSpeed = 30, corner = 9, traffic = null, repath = 2.2, avoid = true } = {}) {
-    Object.assign(this, { controllers, nav, car, maxSpeed, corner, traffic, repathEvery: repath, avoid });
+  constructor(controllers, nav, car, { maxSpeed = 30, corner = 9, traffic = null, repath = 2.2, avoid = true, roadGoal = null } = {}) {
+    Object.assign(this, { controllers, nav, car, maxSpeed, corner, traffic, repathEvery: repath, avoid, roadGoal });
     this.aggressive = false;
     this.path = null;
     this.seg = 0;
@@ -34,7 +34,7 @@ class AIDriver {
 
   replan() {
     const c = this.car.position;
-    const route = this.nav.route(c.x, c.z, this.goalX, this.goalZ, 8000);
+    const route = this.roadGoal?.(c.x, c.z, this.goalX, this.goalZ) ?? this.nav.route(c.x, c.z, this.goalX, this.goalZ, 8000);
     this.path = route ? [{ x: c.x, z: c.z }, ...route] : [{ x: c.x, z: c.z }, { x: this.goalX, z: this.goalZ }];
     this.seg = 0;
     this.repathT = this.repathEvery;

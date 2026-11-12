@@ -157,8 +157,8 @@ class GameHud {
   }
 
   // Stars fill with the wanted level; they flash while the police search without seeing the player
-  setWanted({ level, name, seen, escape }) {
-    const key = `${level}|${seen}`;
+  setWanted({ level, name, seen, phase, escape }) {
+    const key = `${level}|${seen}|${phase}`;
     const active = level > 0;
     this.wanted.classList.toggle('active', active);
     this.wantedName.classList.toggle('active', active);
@@ -167,10 +167,11 @@ class GameHud {
       this.state.wanted = key;
       this.stars.forEach((s, i) => s.classList.toggle('on', i < level));
       this.wanted.classList.toggle('searching', active && !seen);
-      this.wantedName.textContent = active ? `${name} · ${seen ? 'EN VUE' : 'HORS DE VUE'}` : '';
+      const status = seen ? 'EN VUE' : phase === 'dispatch' ? 'PATROUILLES EN ROUTE' : 'RECHERCHE EN COURS';
+      this.wantedName.textContent = active ? `${name} · ${status}` : '';
       this.wantedName.classList.toggle('seen', !!seen);
     }
-    this.wantedEscape.classList.toggle('show', active && !seen);
+    this.wantedEscape.classList.toggle('show', active && !seen && phase !== 'dispatch');
     this.wantedEscapeFill.style.transform = `scaleX(${Math.min(1, escape)})`;
   }
 

@@ -20,14 +20,16 @@ Un système à **cinq étoiles**, dans la tradition du genre, avec une police qu
 
 - Chaque crime **vu par un témoin** fait monter la pression policière et vous vaut des étoiles :
   ★ *Signalé*, ★★ *Recherché*, ★★★ *Traqué*, ★★★★ *Ennemi public*, ★★★★★ *Chasse à l'homme*.
-- La police ne sait pas où vous êtes : elle **fouille les rues** autour de la dernière observation.
-  La zone de recherche suit le **vrai réseau routier** et s'affiche sur la carte.
-- Les unités patrouillent dans la zone. Chaque observation (voiture ou agent à pied)
-  la recentre sur vous ; les étoiles sont pleines quand on vous voit, elles **clignotent** pendant la recherche.
+- Un tir en pleine rue ou une explosion causée par le joueur donne un **lieu de signalement**. Les premières
+  voitures convergent vers ce lieu par le réseau routier. Une nouvelle alerte peut les faire changer de rue.
+- Quand une unité voit le joueur, elle transmet sa position. Les voitures qui peuvent devancer le joueur
+  prennent un itinéraire vers un carrefour devant lui. Dès trois étoiles, une unité peut y monter un barrage.
+- À la perte du contact, une voiture vérifie le **dernier point connu** et les autres se répartissent les rues
+  voisines. La carte montre le point et la direction des patrouilles. Les étoiles clignotent pendant la recherche.
 - Pour vous en sortir : **quittez la zone et restez hors de vue** jusqu'à ce que la jauge de fuite
   se remplisse. Se cacher à l'intérieur de la zone est possible, mais trois fois plus long.
-- Les étoiles renforcent les poursuites terrestres. Plus elles sont nombreuses, plus les voitures
-  sont nombreuses, les agents mieux équipés et les tireurs précis.
+- Les cinq niveaux mobilisent jusqu’à 1, 3, 5, 7 et 10 voitures. À quatre étoiles, une unité en position peut
+  déployer une herse. La poursuite reste terrestre.
 - À une étoile, les agents tentent d'abord de vous **arrêter** (« CUFFED »). Ensuite, ils tirent.
 - Le trafic se range devant les sirènes et les patrouilles déjà en ville rejoignent la poursuite.
 
@@ -442,6 +444,7 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.30** | **Buffer Zone** | Rues rongées par le sable, végétation par plaques et six relais habités avec horaires, dialogues et feux. Le filtre du Marché des Lisières donne une première raison de quitter les rues et de revenir. |
 | **0.9.31** | **Carry Trade** | Façades de bordure, six relais reconstruits, haltes de proximité, commerce de récupération, routines de fret et cinq postes dont les barrières réagissent à la météo. |
 | **0.9.32** | **Carry Trade** | Correctif des poursuites. Retrait de l’hélicoptère de police et des renforts sur les toits, prise en compte de la hauteur pour le repérage de proximité et l’arrestation. |
+| **0.9.33** | **Market Sweep** | Signalements suivis d’intervention, dix voitures, interceptions et barrages par le réseau routier, recherche coordonnée et lisible sur le radar. |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |
 
 

@@ -14,7 +14,7 @@ import { createWeaponModel } from './weapon-models.js';
 import { Vertical } from './vertical.js';
 import { SkyRings } from './missions-sky.js';
 import { ActorSystem } from './actors.js';
-import { WantedSystem, WANTED_LEVELS } from './wanted.js';
+import { WantedSystem, WANTED_LEVELS, SIGHT_RANGE, SIGHT_ANGLE } from './wanted.js';
 import { RoadNavigator } from './navigation.js';
 import { HOSPITALS, PRECINCTS, MarkerSystem, PickupSystem, PICKUP_STYLE } from './missions.js';
 import { MissionDirector } from './mission-director.js';
@@ -62,8 +62,8 @@ const LOCAL_ARRIVALS = {
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.32';
-const BUILD_NAME = 'Carry Trade';
+const BUILD = '0.9.33';
+const BUILD_NAME = 'Market Sweep';
 const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
 // The neighbourhoods as the opening card names them (city-config.js districtAt)
 const DISTRICT_NAMES = {
@@ -836,6 +836,7 @@ export class Game {
     }
     const t = performance.now() / 1000;
     const inView = (x, y, m = 0) => !mini || (Math.abs(x) < w * 0.5 + m && Math.abs(y) < h * 0.5 + m);
+    const wanted = this.wanted;
     // The search area: searched street segments, flashing red and blue while the player is in sight
     if (this.wanted.level > 0 && this.wanted.searchNodes.length) {
       const seen = this.wanted.seen;
@@ -870,6 +871,17 @@ export class Game {
       ctx.stroke();
       ctx.restore();
     }
+    if (wanted.level && !wanted.seen) {
+      const x = toX(wanted.zone.x), y = toY(wanted.zone.z);
+      if (inView(x, y)) {
+        const r = 5 + 4 * (0.5 + 0.5 * Math.sin(t * 4));
+        ctx.save();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = wanted.phase === 'dispatch' ? '#ffc376' : '#ff7885';
+        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
+    }
     // GPS route along the streets
     if (this.gpsPath && this.gpsPath.length > 1) {
       ctx.save();
@@ -883,9 +895,29 @@ export class Game {
       ctx.restore();
     }
     // Police
-    for (const c of this.wanted.cars) {
+    for (const u of wanted.units) {
+      if (!u.active || !u.car.siren) continue;
+      const c = u.car;
       const x = toX(c.position.x), y = toY(c.position.z);
       if (!inView(x, y)) continue;
+      if (!wanted.seen) {
+        const dx = Math.sin(c.heading), dz = Math.cos(c.heading);
+        const reach = Math.min(72, Math.max(14, SIGHT_RANGE * scale));
+        const px = c.position.x, pz = c.position.z;
+        const mapX = toX(px + dx * 10) - x, mapY = toY(pz + dz * 10) - y;
+        const angle = Math.atan2(mapY, mapX);
+        ctx.fillStyle = 'rgba(86, 150, 255, 0.20)';
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.arc(x, y, reach, angle - SIGHT_ANGLE, angle + SIGHT_ANGLE);
+        ctx.closePath();
+        ctx.fill();
+      }
+      if (u.mode === 'block') {
+        ctx.strokeStyle = '#ffbd73';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(x - 5.5, y - 5.5, 11, 11);
+      }
       ctx.fillStyle = Math.sin(t * 10) > 0 ? '#ff3b47' : '#3b7bff';
       ctx.fillRect(x - 3.5, y - 3.5, 7, 7);
     }
@@ -1011,9 +1043,13 @@ export class Game {
       if (self.boat) { if (self === this.car) this.camera.addShake(Math.min(1.2, speed * 0.06)); continue; }
       if ((self.type === 'car' || self.air) && self.hp !== undefined && !self.destroyed && speed > 4.5) {
         const before = this.crashPeak(self, speed);
-        if (speed > before) this.damageCar(self, crashDamage(speed) - crashDamage(before), self === this.car && this.state === 'driving' ? 'crash' : 'hit');
+        const driving = self === this.car && this.state === 'driving';
+        const policeContact = driving && other?.police && other.siren;
+        // A patrol can spin the player's car. The shunt itself uses less of the damage budget than a wall impact.
+        const impact = policeContact ? 0.35 : 1;
+        if (speed > before) this.damageCar(self, (crashDamage(speed) - crashDamage(before)) * impact, driving ? 'crash' : 'hit');
         if (self === this.car && this.state === 'driving' && self.moto && speed > 8) { this.bail(self, speed); continue; }
-        if (self === this.car && this.state === 'driving' && speed > 22 && speed > before) this.damagePlayer((speed - Math.max(22, before)) * 1.2, 'crash');
+        if (driving && speed > 22 && speed > before) this.damagePlayer((speed - Math.max(22, before)) * 1.2 * impact, 'crash');
         if (other && other.police && self === this.car && this.state === 'driving') this.crime('copCarHit', e.x, e.z);
       }
       // Traffic takes the blow and is left battered, never blown up by a bumper: fire is for bullets and blasts
@@ -1808,14 +1844,15 @@ export class Game {
     this.bloom = Math.min(handling.maxBloom, this.bloom + handling.bloom);
     const side = Math.sin(++this.shotsInBurst * 2.4) * w.recoil * 0.2;
     this.camera.addRecoil(w.recoil * (this.isAiming() ? 0.9 : 1.15), side);
-    // Gunfire empties the street and calls the police if anyone notices. A suppressed shot carries a few metres:
-    // those who run from it saw the gun, nobody further heard it, and only an officer close by makes it a crime
+    // Outdoor gunfire in the city can be reported from the next street, even if the local crowd is already gone.
     const noise = w.noise;
     const panicked = ranged ? 0 : this.traffic.pedestrians.panic(this.player.x, this.player.z, noise.panic, 12);
     if (!ranged) this.traffic.flee(this.player.x, this.player.z, noise.flee, 7);
     if (!ranged && this.clock - this.lastCrimeShot > 1.5) {
       this.lastCrimeShot = this.clock;
-      if ((noise.witnesses && panicked > 0) || this.policeNear(noise.police) || this.wanted.level > 0) this.crime('shots', this.player.x, this.player.z);
+      const x = this.player.x, z = this.player.z;
+      const inCity = noise.witnesses && this.nav?.nearest(x, z, 80) >= 0;
+      if (inCity || (noise.witnesses && panicked > 0) || this.policeNear(noise.police) || this.wanted.level > 0) this.crime('shots', x, z);
     }
     if (slot.mag === 0 && slot.ammo > 0) this.autoReloadT = 0.18;
   }
@@ -1929,14 +1966,14 @@ export class Game {
         this.fx.impact(h.x, h.y, h.z, h.nx, h.ny, h.nz, 'metal');
         this.audio.sfx('impactMetal', h.x, h.y, h.z);
         const c = this.takeParked(h.target, true);
-        if (c && !c.destroyed) this.damageCar(c, damage * 0.4, 'shot');
+        if (c && !c.destroyed) this.damageCar(c, damage * 0.4, byPlayer ? 'playerShot' : 'shot');
         return { hit: true, kill: false };
       }
       case 'car': {
         const c = h.target;
         this.fx.impact(h.x, h.y, h.z, h.nx, h.ny, h.nz, 'metal');
         this.audio.sfx('impactMetal', h.x, h.y, h.z);
-        if (!c.destroyed) this.damageCar(c, damage * 0.4, 'shot');
+        if (!c.destroyed) this.damageCar(c, damage * 0.4, byPlayer ? 'playerShot' : 'shot');
         if (byPlayer && c.police) this.crime('copCarHit', c.position.x, c.position.z);
         return { hit: true, kill: false };
       }
@@ -2035,6 +2072,7 @@ export class Game {
     if (car.destroyed || car.hp === undefined || !(amount > 0)) return;
     car.hp = Math.max(0, car.hp - amount);
     if (car.hp <= 0 && !car.burnT) {
+      car.fireCause = cause;
       // The player gets the time to bail out of a burning car
       car.burnT = cause === 'explosion' ? 0.4 : car === this.car ? 9 + Math.random() * 2 : 5 + Math.random() * 2;
       if (car === this.car && this.state === 'driving') this.toast('Le moteur prend feu', 'Sortez du véhicule avant l’explosion ! [F]');
@@ -2143,7 +2181,8 @@ export class Game {
       this.person.position.set(x + Math.cos(heading) * 2.2, this.controllers.getGroundHeight(x, z, 'person'), z - Math.sin(heading) * 2.2);
       this.onMode('person');
     }
-    this.explode(x, Math.max(0.8, y), z, car.air ? 1.5 : 1, car === this.car ? 'player' : 'npc');
+    const cause = car === this.car || car.fireCause === 'playerShot' ? 'player' : 'npc';
+    this.explode(x, Math.max(0.8, y), z, car.air ? 1.5 : 1, cause);
     if (playerInside && !ejected && this.state !== 'dead') this.damagePlayer(200, 'explosion');
     if (ejected) this.toast('Éjecté !', 'ZQSD pour diriger le parachute.');
   }
@@ -3085,7 +3124,7 @@ export class Game {
     this.ui['session-mode'].textContent = this.director.current ? 'MISSION' : this.wanted.level ? 'RECHERCHÉ' : 'LIBRE';
     this.hud.setVitals(this.health, this.armor);
     const lvl = this.wanted.level;
-    this.hud.setWanted({ level: lvl, name: WANTED_LEVELS[lvl].name, seen: this.wanted.seen, escape: this.wanted.escape });
+    this.hud.setWanted({ level: lvl, name: WANTED_LEVELS[lvl].name, seen: this.wanted.seen, phase: this.wanted.phase, escape: this.wanted.escape });
     this.hud.setArrest(this.wanted.arrest / 1.6);
     this.hud.update(dt);
   }

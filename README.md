@@ -3,7 +3,9 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.32 — Carry Trade**. Les poursuites de police se jouent au sol, avec patrouilles et barrages.
+Version **0.9.33 — Market Sweep**. Tirs et explosions attirent les patrouilles vers le lieu du signalement. Dès qu’elles
+vous voient au volant, elles se partagent la poursuite et les interceptions. À cinq étoiles, jusqu’à dix voitures sont
+engagées. La carte indique le dernier contact, les patrouilles qui fouillent les rues et les barrages en place.
 
 À East Harlem, suivez la 119e Rue jusqu’à la **Halle au Poids**. Les habitants amènent des caisses, trient les pièces
 et expédient les chargements. Approchez du comptoir avec **F** ou **Y** à la manette pour vendre vos trouvailles.
