@@ -65,15 +65,18 @@ class ShopSystem {
     const g = this.game;
     for (const m of this.markers) g.markers.remove(m.marker);
     this.markers.length = 0;
-    const shops = [...SHOPS, ...(this.gunShops || [])];
+    const shops = [...SHOPS, ...(this.gunShops || []), ...(this.foodShops || [])];
     for (const s of shops) {
       if (s.gift && !g.missionsDone.includes(s.gift) && !this.owned.has(s.id)) continue;
-      const spot = s.calibre ? s : g.safeSpot(s.x, s.z, s.drive ? 1.5 : 0.5);
-      const kind = s.calibre ? 'guns' : s.type === 'home' ? (this.owned.has(s.id) ? 'home' : 'homeSale') : 'shop';
-      const marker = g.markers.add(spot.x, spot.z, { kind, radius: s.drive ? 3.2 : 1.2, height: s.drive ? 3 : 2.4, label: s.name, blip: true, mapOnly: !!s.calibre });
+      const spot = s.counter ? s : g.safeSpot(s.x, s.z, s.drive ? 1.5 : 0.5);
+      const kind = s.eatery ? s.brand : s.calibre ? 'guns' : s.type === 'home' ? (this.owned.has(s.id) ? 'home' : 'homeSale') : 'shop';
+      const marker = g.markers.add(spot.x, spot.z, { kind, radius: s.drive ? 3.2 : 1.2, height: s.drive ? 3 : 2.4, label: s.name, blip: true, mapOnly: !!s.counter });
       if (marker) this.markers.push({ shop: s, marker, x: spot.x, z: spot.z });
     }
   }
+
+  // Whose counter a shop's is: the system that draws its sheet and keeps its world running (calibre.js, eatery.js)
+  desk(s) { return s.eatery ? this.game.eatery : this.game.calibre; }
 
   nearest(type) {
     const g = this.game;
@@ -92,7 +95,7 @@ class ShopSystem {
     if (this.open || this.cooldown > 0 || g.director.current) return;
     for (const m of this.markers) {
       const s = m.shop;
-      if (s.calibre) continue;
+      if (s.counter) continue;
       const r = s.drive ? 4 : 1.6;
       if (Math.hypot(g.player.x - m.x, g.player.z - m.z) > r) continue;
       if (s.drive ? g.state !== 'driving' : g.state !== 'onFoot') continue;
@@ -141,13 +144,13 @@ class ShopSystem {
 
   show(s) {
     const g = this.game;
-    if (s.calibre && !g.calibre.available(s)) return;
+    if (s.counter && !this.desk(s).available(s)) return;
     this.open = s;
     this.sel = 0;
     g.modal = true;
     g.controllers.resetInput();
     g.releasePointer();
-    if (s.calibre) { g.audio.ui('shop'); g.calibre.openCounter(s); return; }
+    if (s.counter) { g.audio.ui('shop'); this.desk(s).openCounter(s); return; }
     this.title.textContent = s.name;
     this.sub.textContent = s.sub;
     this.panel.hidden = false;
@@ -183,7 +186,7 @@ class ShopSystem {
   }
 
   navigate(step) {
-    if (this.open?.calibre) { this.game.calibre.counter.navigate(step); return; }
+    if (this.open?.counter) { this.desk(this.open).counter.navigate(step); return; }
     const count = this.current?.length;
     if (!count) return;
     this.sel = (this.sel + step + count) % count;
@@ -193,12 +196,12 @@ class ShopSystem {
 
   // Left and right: the counter's tabs (the other services have none)
   turn(step) {
-    if (this.open?.calibre) this.game.calibre.counter.turn(step);
+    if (this.open?.counter) this.desk(this.open).counter.turn(step);
   }
 
   buy() {
     const g = this.game;
-    if (this.open?.calibre) { g.calibre.counter.act(); return; }
+    if (this.open?.counter) { this.desk(this.open).counter.act(); return; }
     const it = this.current?.[this.sel];
     if (!it) return;
     if (it.enabled === false || it.price > g.money) { g.audio.ui('deny'); return; }
@@ -210,7 +213,7 @@ class ShopSystem {
 
   key(e) {
     if (!this.open) return;
-    if (this.open.calibre) { this.game.calibre.counter.key(e); return; }
+    if (this.open.counter) { this.desk(this.open).counter.key(e); return; }
     const k = e.code;
     if (['ArrowUp', 'ArrowDown', 'KeyW', 'KeyS', 'KeyZ', 'Enter', 'NumpadEnter', 'Space', 'Escape', 'Tab'].includes(k)) {
       e.preventDefault();
@@ -226,7 +229,7 @@ class ShopSystem {
 
   close() {
     const g = this.game;
-    if (this.open?.calibre) g.calibre.closeCounter();
+    if (this.open?.counter) this.desk(this.open).closeCounter();
     this.open = null;
     this.panel.hidden = true;
     g.modal = false;

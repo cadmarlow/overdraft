@@ -53,20 +53,20 @@ function calibreLocal(site, x, z) {
   return { x: dx * site.nz - dz * site.nx, z: dx * site.nx + dz * site.nz };
 }
 
-function roomFits(site, polygon) {
-  const half = CALIBRE.width / 2;
+function roomFits(site, polygon, spec = site.spec || CALIBRE) {
+  const half = spec.width / 2, depth = spec.depth;
   // Include the entire shell, and reject concavities/courtyards cutting any of its edges.
-  for (const x of [-half - 0.2, 0, half + 0.2]) for (let z = -0.15; z > -CALIBRE.depth - 0.25; z -= 2.5) {
-    const p = calibrePoint(site, x, Math.max(z, -CALIBRE.depth - 0.2));
+  for (const x of [-half - 0.2, 0, half + 0.2]) for (let z = -0.15; z > -depth - 0.25; z -= 2.5) {
+    const p = calibrePoint(site, x, Math.max(z, -depth - 0.2));
     if (!polygonContains(polygon, p.x, p.z)) return false;
   }
   for (const x of [-half - 0.2, 0, half + 0.2]) {
-    const p = calibrePoint(site, x, -CALIBRE.depth - 0.2);
+    const p = calibrePoint(site, x, -depth - 0.2);
     if (!polygonContains(polygon, p.x, p.z)) return false;
   }
   const crossesRoom = (a, b) => {
     let lo = 0, hi = 1;
-    for (const [start, delta, min, max] of [[a.x, b.x - a.x, -half - 0.19, half + 0.19], [a.z, b.z - a.z, -CALIBRE.depth - 0.19, -0.1]]) {
+    for (const [start, delta, min, max] of [[a.x, b.x - a.x, -half - 0.19, half + 0.19], [a.z, b.z - a.z, -depth - 0.19, -0.1]]) {
       if (Math.abs(delta) < 1e-10) { if (start <= min || start >= max) return false; }
       else { const t0 = (min - start) / delta, t1 = (max - start) / delta; lo = Math.max(lo, Math.min(t0, t1)); hi = Math.min(hi, Math.max(t0, t1)); }
     }
@@ -79,57 +79,100 @@ function roomFits(site, polygon) {
   // A boundary vertex in the proposed room reveals a re-entrant wall or courtyard.
   for (const ring of [polygon.outer, ...(polygon.holes || [])]) for (const p of ring) {
     const q = calibreLocal(site, p.x, p.z);
-    if (Math.abs(q.x) < half + 0.2 && q.z < -0.05 && q.z > -CALIBRE.depth - 0.2) return false;
+    if (Math.abs(q.x) < half + 0.2 && q.z < -0.05 && q.z > -depth - 0.2) return false;
   }
   return true;
 }
 
-function planCalibre(shops, records, count = CALIBRE.count, bounds = null) {
-  const candidates = [];
+// Records by 64 m cell, for the neighbours of a candidate (one grid per list of records)
+const GRID = 64, grids = new WeakMap();
+function recordsNear(records, x, z, reach) {
+  let grid = grids.get(records);
+  if (!grid) {
+    grid = new Map();
+    for (const r of records) {
+      for (let cx = Math.floor(r.minX / GRID); cx <= Math.floor(r.maxX / GRID); cx++) for (let cz = Math.floor(r.minZ / GRID); cz <= Math.floor(r.maxZ / GRID); cz++) {
+        const key = cx * 65537 + cz;
+        if (!grid.has(key)) grid.set(key, []);
+        grid.get(key).push(r);
+      }
+    }
+    grids.set(records, grid);
+  }
+  const found = new Set();
+  for (let cx = Math.floor((x - reach) / GRID); cx <= Math.floor((x + reach) / GRID); cx++) for (let cz = Math.floor((z - reach) / GRID); cz <= Math.floor((z + reach) / GRID); cz++) {
+    for (const r of grid.get(cx * 65537 + cz) || []) if (r.minX < x + reach && r.maxX > x - reach && r.minZ < z + reach && r.maxZ > z - reach) found.add(r);
+  }
+  return found;
+}
+
+/**
+ * Rooms carved out of real ground floors, behind registered storefronts (CALIBRE's branches, the restaurants of
+ * eatery-plan.js). A storefront qualifies when its building holds the whole room behind its frontage with nothing
+ * else in it and a clear approach on the sidewalk. The first room is the candidate nearest to `origin`; the others
+ * are spread by farthest-point sampling, never closer than `spacing` to one another.
+ * @param {object} options - spec { width, depth, height, entry? (the doorway's x in the room's frame) }, count,
+ *   bounds, prefix (of the ids), origin { x, z }, spacing (m), prefer (shop) => a weight above 1 for a favoured front
+ */
+function planRooms(shops, records, { spec, count, bounds = null, prefix, origin = { x: -12, z: 380 }, spacing = 350, prefer = null }) {
+  const candidates = [], entry = spec.entry || 0;
   for (const shop of shops) {
-    if (shop.width < CALIBRE.width + 0.6 || shop.record.height < CALIBRE.height + 1) continue;
+    // a front or a building another kind of room already took is left alone (planning one kind twice gives it again)
+    if ((shop.interior && shop.interior.spec !== spec) || shop.record.openings?.some(o => o.spec !== spec)) continue;
+    if (shop.width < spec.width + 0.6 || shop.record.height < spec.height + 1) continue;
     const site = { x: shop.x + shop.ux * shop.width / 2, z: shop.z + shop.uz * shop.width / 2,
-      nx: shop.nx, nz: shop.nz, wall: shop.wall, shop, record: shop.record };
+      nx: shop.nx, nz: shop.nz, wall: shop.wall, shop, record: shop.record, spec };
     if (bounds) {
       const playable = (x, z) => {
         const p = calibrePoint(site, x, z), shore = bounds.shoreAt?.(p.z);
         return p.z > bounds.minZ + 40 && p.z < bounds.maxZ - 20 && p.x > bounds.minX + 20 && p.x < bounds.maxX - 20 &&
           (!shore || p.x > shore.westX + 15 && p.x < shore.eastX - 15);
       };
-      if (![-4.6, 4.6].every(x => [-CALIBRE.depth - 0.2, 4.5].every(z => playable(x, z)))) continue;
+      const reach = spec.width / 2 + 0.2;
+      if (![-reach, reach].every(x => [-spec.depth - 0.2, 4.5].every(z => playable(x, z)))) continue;
     }
-    const polygon = shop.record.polygons.find(p => roomFits(site, p));
+    const polygon = shop.record.polygons.find(p => roomFits(site, p, spec));
     if (!polygon) continue;
-    const approach = calibrePoint(site, 0, 1.8), middle = calibrePoint(site, 0, -CALIBRE.depth / 2);
-    const reach = CALIBRE.depth + 6;
-    const nearby = records.filter(r => r !== site.record && r.minX < site.x + reach && r.maxX > site.x - reach && r.minZ < site.z + reach && r.maxZ > site.z - reach);
-    if (nearby.some(r => r.polygons.some(p => polygonBoxOverlaps(p, approach.x, approach.z, 1.3, 1.6, site.nz, site.nx)
-      || polygonBoxOverlaps(p, middle.x, middle.z, CALIBRE.width / 2, CALIBRE.depth / 2 - 0.1, site.nz, site.nx)))) continue;
+    const approach = calibrePoint(site, entry, 1.8), middle = calibrePoint(site, 0, -spec.depth / 2);
+    const reach = spec.depth + 6;
+    let blocked = false;
+    for (const r of recordsNear(records, site.x, site.z, reach)) {
+      if (r === site.record) continue;
+      if (r.polygons.some(p => polygonBoxOverlaps(p, approach.x, approach.z, 1.3, 1.6, site.nz, site.nx)
+        || polygonBoxOverlaps(p, middle.x, middle.z, spec.width / 2, spec.depth / 2 - 0.1, site.nz, site.nx))) { blocked = true; break; }
+    }
+    if (blocked) continue;
     site.polygon = polygon;
-    site.id = `calibre-${Math.round(site.x * 10)}-${Math.round(site.z * 10)}`;
+    site.id = `${prefix}-${Math.round(site.x * 10)}-${Math.round(site.z * 10)}`;
+    site.weight = prefer ? prefer(shop) : 1;
     candidates.push(site);
   }
   candidates.sort((a, b) => a.id.localeCompare(b.id));
   const selected = [], used = new Set();
-  // The first branch is close to the opening; farthest-point sampling then covers the whole inhabited island.
-  for (const site of candidates) site.distance = Math.hypot(site.x + 12, site.z - 380);
+  for (const site of candidates) site.distance = Math.hypot(site.x - origin.x, site.z - origin.z);
   while (selected.length < count) {
     let best = null;
     for (const site of candidates) {
-      if (used.has(site.record) || (selected.length && site.distance < 350)) continue;
-      if (!best || (selected.length ? site.distance > best.distance : site.distance < best.distance)) best = site;
+      if (used.has(site.record) || (selected.length && site.distance < spacing)) continue;
+      if (!best || (selected.length ? site.distance * site.weight > best.distance * best.weight : site.distance < best.distance)) best = site;
     }
     if (!best) break;
     selected.push(best); used.add(best.record);
     best.variant = (selected.length - 1) % 3;
-    best.shop.calibre = best;
-    best.record.calibreOpenings = [best];
+    best.shop.interior = best;
+    best.record.openings = best.record.calibreOpenings = [best];
     for (const site of candidates) {
       const distance = Math.hypot(site.x - best.x, site.z - best.z);
       site.distance = selected.length === 1 ? distance : Math.min(site.distance, distance);
     }
   }
   return selected;
+}
+
+function planCalibre(shops, records, count = CALIBRE.count, bounds = null) {
+  const sites = planRooms(shops, records, { spec: CALIBRE, count, bounds, prefix: 'calibre' });
+  for (const site of sites) site.shop.calibre = site;
+  return sites;
 }
 
 // Subtract an open-front room from the ground-floor footprint, retaining its original winding.
@@ -142,12 +185,12 @@ function carveCalibrePolygon(polygon, site) {
     if (wallKey(a.x, a.z, b.x, b.z) !== site.wall) continue;
     const dx = b.x - a.x, dz = b.z - a.z, length = Math.hypot(dx, dz);
     const along = (site.x - a.x) * dx / length + (site.z - a.z) * dz / length;
-    const half = CALIBRE.width / 2;
+    const spec = site.spec || CALIBRE, half = spec.width / 2;
     if (along - half < 0 || along + half > length) throw new Error('CALIBRE: opening outside its wall');
     const p = { x: a.x + dx / length * (along - half), z: a.z + dz / length * (along - half) };
     const q = { x: a.x + dx / length * (along + half), z: a.z + dz / length * (along + half) };
-    outer.push(p, { x: p.x - site.nx * CALIBRE.depth, z: p.z - site.nz * CALIBRE.depth },
-      { x: q.x - site.nx * CALIBRE.depth, z: q.z - site.nz * CALIBRE.depth }, q);
+    outer.push(p, { x: p.x - site.nx * spec.depth, z: p.z - site.nz * spec.depth },
+      { x: q.x - site.nx * spec.depth, z: q.z - site.nz * spec.depth }, q);
     cut = true;
   }
   if (!cut) throw new Error('CALIBRE: facade wall not found');
@@ -159,18 +202,19 @@ function carveCalibreColliders(colliders, sites) {
     const index = colliders.findIndex(c => c.polygon === site.polygon && c.minY === 0);
     if (index < 0) throw new Error('CALIBRE: building collider not found');
     const original = colliders[index];
-    colliders[index] = { ...original, polygon: carveCalibrePolygon(original.polygon, site), maxY: CALIBRE.height, roof: false };
-    colliders.push({ ...original, minY: CALIBRE.height });
+    const height = (site.spec || CALIBRE).height;
+    colliders[index] = { ...original, polygon: carveCalibrePolygon(original.polygon, site), maxY: height, roof: false };
+    colliders.push({ ...original, minY: height });
   }
 }
 
 function calibreWallPanels(record, ax, az, bx, bz, bottom, top) {
   const width = Math.hypot(bx - ax, bz - az), key = wallKey(ax, az, bx, bz);
-  const site = record.calibreOpenings?.find(s => s.wall === key);
-  if (!site || bottom >= CALIBRE.height) return [[0, width, bottom, top]];
+  const site = record.calibreOpenings?.find(s => s.wall === key), spec = site?.spec || CALIBRE;
+  if (!site || bottom >= spec.height) return [[0, width, bottom, top]];
   const t = ((site.x - ax) * (bx - ax) + (site.z - az) * (bz - az)) / width;
-  const lo = t - CALIBRE.width / 2, hi = t + CALIBRE.width / 2;
-  return [[0, lo, bottom, top], [lo, hi, CALIBRE.height, top], [hi, width, bottom, top]].filter(p => p[1] - p[0] > 0.001 && p[3] > p[2]);
+  const lo = t - spec.width / 2, hi = t + spec.width / 2;
+  return [[0, lo, bottom, top], [lo, hi, spec.height, top], [hi, width, bottom, top]].filter(p => p[1] - p[0] > 0.001 && p[3] > p[2]);
 }
 
 function calibreBox(site, x, z, width, depth, minY, maxY) {
@@ -214,4 +258,4 @@ function calibreZone(x, z) {
   return z > PLAN.partition.z ? 'shop' : 'range';
 }
 
-export { CALIBRE, PLAN, calibrePoint, calibreLocal, roomFits, planCalibre, carveCalibrePolygon, carveCalibreColliders, calibreWallPanels, calibreBox, calibreFixtures, calibreZone };
+export { CALIBRE, PLAN, calibrePoint, calibreLocal, roomFits, planRooms, planCalibre, carveCalibrePolygon, carveCalibreColliders, calibreWallPanels, calibreBox, calibreFixtures, calibreZone };

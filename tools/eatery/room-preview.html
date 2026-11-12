@@ -1,0 +1,81 @@
+<!doctype html>
+<meta charset="utf-8"><title>Restaurants : aperçu d'une succursale</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b0d0c;overflow:hidden;font:12px/1.3 -apple-system,Helvetica,Arial,sans-serif;color:#fff}
+  canvas{display:block}
+  #help{position:absolute;left:8px;bottom:8px;opacity:.7}
+</style>
+<script>
+// ?stub=prints,food stands in for modules that are not written yet (plain grey prints, no food)
+const stubs = new URLSearchParams(location.search).get('stub')?.split(',') || [];
+const imports = { three: '../../vendor/three/build/three.webgpu.js', 'three/webgpu': '../../vendor/three/build/three.webgpu.js', 'three/tsl': '../../vendor/three/build/three.tsl.js', 'three/addons/': '../../vendor/three/examples/jsm/' };
+const js = new URL('../../js/', location.href).href;
+if (stubs.includes('prints')) imports[js + 'eatery-prints.js'] = 'data:text/javascript,' + encodeURIComponent('const any = new Proxy({}, { get: () => [0, 0, 1, 1] }); export const PRINT_SIZE = 64; export const PRINTS = { bullion: any, tranche: any }; export function paintPrints(c) { c.fillStyle = "#8a8478"; c.fillRect(0, 0, 64, 64); }');
+if (stubs.includes('food')) imports[js + 'eatery-food.js'] = 'data:text/javascript,' + encodeURIComponent('export const FOOD = { ready: false, material: null, geometry: {}, info: {} }; export function foodGeometry() { return null; } export async function loadFoodKit() {}');
+document.write('<script type="importmap">' + JSON.stringify({ imports }) + '<\/script>');
+</script>
+<div id="help"></div>
+<script type="module">
+// One branch of BULLION and one of TRANCHE on their own, built by the game's modules (js/eatery-room.js), to judge
+// the layout and the materials in seconds. The game lights them with clustered lamps, bloom and its eye: this page
+// is a plain renderer with the same lamps, so brightness differs; shapes, textures and placement do not.
+//   ?brand=bullion|tranche   which branch the camera's frame is (x along the front, z into the building negative, y above the floor)
+//   ?cam=x,y,z&look=x,y,z  ?fov=55  ?exposure=1  ?sun=1 (daylight through the front)  ?night=1  ?ambient=0.16  ?door=1 (open)
+// `window.look(cx, cy, cz, tx, ty, tz, fov)` moves the camera and redraws; the title becomes "ready" after each picture.
+import * as THREE from 'three/webgpu';
+import { loadGround } from '../../js/ground-assets.js';
+import { KIT, loadCalibreKit } from '../../js/calibre-kit.js';
+import { INDOOR, createMaterials } from '../../js/calibre-build.js';
+import { loadWeaponModels } from '../../js/weapon-models.js';
+import { SPECS } from '../../js/eatery-plan.js';
+import * as Food from '../../js/eatery-food.js';
+import { createEateryWorld } from '../../js/eatery-room.js';
+
+const q = new URLSearchParams(location.search);
+const vec = (k, d) => (q.get(k) || d).split(',').map(Number);
+const brand = q.get('brand') === 'tranche' ? 'tranche' : 'bullion';
+const renderer = new THREE.WebGPURenderer({ antialias: true });
+renderer.setPixelRatio(1);
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = +(q.get('exposure') || 1);
+document.body.prepend(renderer.domElement);
+await renderer.init();
+await Promise.all([loadGround(), loadCalibreKit(), loadWeaponModels().catch(() => {}), Food.loadFoodKit?.()]);
+if (q.has('ambient')) INDOOR.ambient.value = +q.get('ambient');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(q.get('sun') ? 0x9db4d0 : 0x05070a);
+scene.add(new THREE.HemisphereLight(0x9abbe6, 0xc88a62, q.get('sun') ? 1.05 : 0.25));
+if (q.get('sun')) { const sun = new THREE.DirectionalLight(0xffca92, 5.8); sun.position.set(6, 9, 14); scene.add(sun); }
+const street = new THREE.Mesh(new THREE.PlaneGeometry(60, 14), new THREE.MeshStandardNodeMaterial({ color: 0x55585a, roughness: 0.9 }));
+street.rotation.x = -Math.PI / 2; street.position.set(8, 0.18, 7); scene.add(street);
+// the building around the rooms: a plain wall above and beside the fronts
+const wallMat = new THREE.MeshStandardNodeMaterial({ color: 0x7a5a48, roughness: 0.9 });
+const above = new THREE.Mesh(new THREE.BoxGeometry(40, 8, 0.3), wallMat); above.position.set(8, 3.8 + 4, -0.15); scene.add(above);
+const sites = [{ x: 0, z: 0, nx: 0, nz: 1, id: 'preview-bullion', brand: 'bullion', variant: 0 }, { x: 16, z: 0, nx: 0, nz: 1, id: 'preview-tranche', brand: 'tranche', variant: 0 }];
+const t0 = performance.now();
+const surfaces = Object.fromEntries(Object.entries(KIT.surfaces).map(([name, s]) => [name, s.metres]));
+const world = createEateryWorld(scene, sites, createMaterials(), surfaces);
+window.world = world;
+const origin = sites.find((s) => s.brand === brand), floor = SPECS[brand].floor;
+const camera = new THREE.PerspectiveCamera(+(q.get('fov') || 55), innerWidth / innerHeight, 0.08, 200);
+const player = { x: origin.x, z: q.get('door') ? 1 : 30 };
+function look(cx, cy, cz, tx, ty, tz, fov) {
+  document.title = 'drawing';
+  camera.position.set(origin.x + cx, cy + floor, cz);
+  camera.lookAt(origin.x + tx, ty + floor, tz);
+  if (fov) { camera.fov = fov; camera.updateProjectionMatrix(); }
+  camera.updateMatrixWorld(true);
+  for (let i = 0; i < 6; i++) world.update(camera, player, 1, [], +(q.get('night') || 0));
+  scene.updateMatrixWorld(true);
+  renderer.render(scene, camera);
+  return new Promise((done) => requestAnimationFrame(() => { renderer.render(scene, camera); requestAnimationFrame(() => { document.title = 'ready'; done(); }); }));
+}
+window.look = look;
+let tris = 0, meshes = 0;
+world.rooms.find((r) => r.brand === brand).root.traverse((o) => { if (o.isMesh) { meshes++; tris += (o.geometry.index?.count ?? o.geometry.attributes.position.count) / 3; } });
+document.getElementById('help').textContent = `${brand} · ${meshes} maillages · ${Math.round(tris).toLocaleString('fr-FR')} triangles · construit en ${Math.round(performance.now() - t0)} ms`;
+window.stats = { meshes, tris: Math.round(tris), ms: Math.round(performance.now() - t0) };
+await look(...vec('cam', brand === 'bullion' ? '0.3,1.7,-0.8' : '1.5,1.7,-0.6'), ...vec('look', brand === 'bullion' ? '-0.4,1.5,-9' : '0.4,1.4,-7'));
+</script>

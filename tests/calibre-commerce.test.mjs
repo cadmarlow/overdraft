@@ -123,7 +123,7 @@ test('restoring a purchased inventory replaces the starter arsenal without free 
 
 test('a live counter advances game time, while a paused counter does not', () => {
   let resets = 0;
-  const g = { active: false, camera: {}, controllers: { resetInput() { resets++; } }, shops: { open: { calibre: true } },
+  const g = { active: false, camera: {}, controllers: { resetInput() { resets++; } }, shops: { open: { calibre: true, counter: true } },
     slowMo: 0, arsenal: {}, wheelSlow: 0, timeScale: 1, clock: 10, invulnerable: 0, state: 'onFoot', health: 100,
     person: {}, updateTransition() {} };
   const update = method('beforeUpdate');

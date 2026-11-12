@@ -20,7 +20,7 @@ const LEVELS = [
   { name: 'CHASSE À L’HOMME', heat: 95, units: 6, radius: 280, escape: 20 }
 ];
 const CRIMES = {
-  shots: 5, aim: 2, pedHit: 9, pedKilled: 14, carjack: 7, copHurt: 16, copKilled: 26, copCarHit: 6, explosion: 18, arrestResist: 10
+  shots: 5, aim: 2, robbery: 16, pedHit: 9, pedKilled: 14, carjack: 7, copHurt: 16, copKilled: 26, copCarHit: 6, explosion: 18, arrestResist: 10
 };
 const POOL = 8;
 const BLOCK_EVERY = 16; // seconds between roadblocks

@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.9.25 — Consumer Staples — 12 novembre 2026
+
+- **Deux franchises de restauration** ouvrent dans tout Manhattan, taillées dans de vrais rez-de-chaussée comme les
+  armureries CALIBRE. **BULLION** : burgers, laque noire et or, « La valeur refuge. », 36 succursales. **TRANCHE** :
+  pizza à la part, rouge tomate et carrelage blanc, « Prenez votre part. », 54 succursales, dont 31 là où la ville
+  avait déjà une pizzeria. Les deux premières sont au point de départ (5e Avenue / 37e Rue).
+- **Identités originales** (`js/eatery-logos.js`, `js/eatery-prints.js`) : le burger en lingots coiffé de cornes de
+  taureau, le camembert-pizza dont on a tiré une part, enseignes, enseignes en drapeau, auvent rayé, néons, menus
+  lumineux, bandeau de cours défilant (« LINGOT 9,00 ▲ »), affiches, bornes, tableau à lettres, ardoises de trottoir.
+- **On y mange.** F à la caisse, à la borne (BULLION) ou au guichet sur le trottoir (TRANCHE) : la carte s'ouvre, le
+  monde continue derrière. Sur place : le numéro s'affiche à l'écran, le préparateur l'appelle, on prend son plateau,
+  on s'assoit où l'on veut (banquette, table, tabouret) et on mange, F pour chaque bouchée ou tout seul si on laisse
+  faire. Chez TRANCHE la part se mange aussi debout, en marchant. Un menu rend toute la santé et laisse « rassasié » :
+  les blessures se referment jusqu'au bout pendant 3 à 5 minutes.
+- **À emporter** : jusqu'à 8 en-cas en poche, mangés n'importe où avec **U** (à pied en trois bouchées, d'un trait au
+  volant). Sauvegardés. La Subprime à 1 $ est à vos risques.
+- **Des gens qui travaillent.** Chez BULLION : deux caissiers, un cuisinier qui pose, retourne et retire les steaks,
+  dresse et emballe ; un préposé aux frites qui descend ses paniers, attend la sonnerie, les secoue ; un préparateur
+  qui compose les plateaux et appelle les numéros ; un équipier de salle qui débarrasse, essuie, passe la serpillière
+  derrière son panneau jaune. Chez TRANCHE : la pizzaiola pétrit, étire, fait voler la pâte, garnit, enfourne à la
+  pelle, découpe et regarnit la vitrine ; le serveur encaisse, réchauffe chaque part au four et sert aussi le guichet.
+- **Des clients qui vivent.** Ce sont les passants de la rue : ils entrent, lisent la carte, font la queue, commandent,
+  paient, attendent leur numéro le téléphone à la main, remplissent leur gobelet, choisissent une place (plutôt à côté
+  de quelqu'un), mangent bouchée par bouchée, débarrassent (ou pas) et repartent sur le trottoir, un sac à la main ou
+  la part en train de se finir. Affluence selon l'heure : coup de feu du midi et du soir, TRANCHE ouvert jusqu'à 4 h.
+- **Quand ça tourne mal** : un coup de feu, une arme pointée, et la salle se vide ; l'équipe se baisse derrière le
+  comptoir, la succursale ferme un moment. Tenir un caissier en joue : il lève les mains, vide la caisse dans un sac
+  et le pose sur le comptoir (nouveau délit « braquage »). Sortir une arme les mains pleines renverse le plateau.
+- **Carte et téléphone** : pastilles aux emblèmes des deux marques sur le radar et la carte, légende, contacts
+  BULLION et TRANCHE (itinéraire vers la succursale la plus proche).
+- **Nourriture et emballages** modélisés (`js/eatery-food.js`) : burgers entiers, entamés, emballés, frites, gobelets,
+  plateaux, sacs, pizzas entières ou entamées, parts sur assiette ou pliées en main, boîtes, pâtons, pelle, roulette.
+- **Son** synthétisé (`js/audio-eatery.js`) : salle, friteuses, plaque, four, radio de la maison, caisse, appel des
+  numéros, porte, bouchées, et quelques notes propres à chaque enseigne quand on entre.
+- Technique : le plan des pièces taillées dans les immeubles est commun aux armureries et aux restaurants
+  (`planRooms` dans `js/calibre-plan.js`) ; la foule sait s'asseoir à une hauteur donnée, porter et tendre les mains
+  (`PersonRig.reachHand`) ; les objets tenus sont des maillages instanciés remplis à chaque image
+  (`js/eatery-props.js`).
+- Vérification en Chrome isolé, WebGPU HAUTE, vraies touches : commande à la caisse, numéro appelé en 6 secondes,
+  plateau, banquette, repas complet (santé 50 → 100, rassasié), puis commande chez TRANCHE.
+- Validation : 1 117 tests ; build de production réussi.
+- **Non vérifié ou faible** : le son n'a été écouté par personne (l'agent qui l'écrivait a été interrompu avant son
+  compte rendu : le module charge et ses tests passent). Les équipiers portent casquette et tablier par-dessus les
+  habits des passants, sans uniforme complet. Les succursales d'une même enseigne sont identiques. Pas de livreurs
+  ni de livraison à domicile. Les images par seconde n'ont pas été mesurées à l'intérieur.
+
 ## 0.9.24 — Flight to Quality — 11 novembre 2026
 
 - **Deux avions neufs** remplacent l'ancien, chacun avec son caractère. La **Hauturier · Bourrasque** est un biplan

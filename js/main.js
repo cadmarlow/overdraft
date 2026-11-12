@@ -55,9 +55,14 @@ import { createGrass } from './grass.js';
 import { currentLevel, FramePacer } from './quality.js';
 import { OpeningScreen } from './opening-screen.js';
 import { calibreBox, calibreFixtures } from './calibre-plan.js';
+import { eateryFixtures, eateryReserves } from './eatery-plan.js';
 import { createCalibreWorld } from './calibre-room.js';
-import { loadCalibreKit } from './calibre-kit.js';
+import { KIT as CALIBRE_KIT, loadCalibreKit } from './calibre-kit.js';
 import { CalibreSystem } from './calibre.js';
+import { loadFoodKit } from './eatery-food.js';
+import { createEateryWorld } from './eatery-room.js';
+import { EateryProps } from './eatery-props.js';
+import { EaterySystem } from './eatery.js';
 
 // Application setup, shader warm-up and frame loop.
 
@@ -141,7 +146,7 @@ async function initApp() {
   // 3. Build Manhattan Geography, Iconic Landmarks, Blocks, Street Details & Traffic
   await showLoadingStage('Préparation des rues et des quais…');
   await Promise.all([loadNature(), loadTrees(), loadWorld(), loadGround(), loadClutter(), loadCars(undefined, { surveyedReflections: quality.id === 'high' }),
-    loadStorefronts(), loadUrbanLight({ reflections: quality.id === 'high' }), loadCalibreKit(),
+    loadStorefronts(), loadUrbanLight({ reflections: quality.id === 'high' }), loadCalibreKit(), loadFoodKit(),
     // (without its aircraft the game still plays: the garage's two tiles would be empty air)
     loadAircraftModels().catch((error) => console.warn(`[aircraft] ${error.message}`))]);
   setTreeDetail(quality.trees);
@@ -157,14 +162,14 @@ async function initApp() {
   const cityBlocks = buildCityBlocks(scene, landmarkColliders);
   markInit('blocks');
   // Ground-floor shops, built in 3D around the camera (the facades paint them further out)
-  const storefronts = createStorefronts(scene, cityBlocks.shops.filter(s => !s.calibre), { radius: { high: 300, balanced: 250, fluid: 170 }[quality.id] ?? 250 });
+  const storefronts = createStorefronts(scene, cityBlocks.shops.filter(s => !s.interior), { radius: { high: 300, balanced: 250, fluid: 170 }[quality.id] ?? 250 });
   markInit('storefronts');
   // Window sills, hoods and air conditioners in 3D around the camera (the facades paint them further out)
   const facadeKit = createFacadeKit(scene, cityBlocks.records, { radius: { high: 200, balanced: 160, fluid: 0 }[quality.id] ?? 160 });
-  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...cityBlocks.calibreSites.flatMap(calibreFixtures), ...storefronts.colliders, ...boroughs.colliders, ...(cityGrid.colliders || [])];
+  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...cityBlocks.calibreSites.flatMap(calibreFixtures), ...cityBlocks.eateries.all.flatMap(eateryFixtures), ...storefronts.colliders, ...boroughs.colliders, ...(cityGrid.colliders || [])];
 
   await showLoadingStage('Préparation des rues…');
-  const entranceReserves = cityBlocks.calibreSites.map(s => calibreBox(s, 0, 1.7, 3.4, 3.8, 0, 3.5));
+  const entranceReserves = [...cityBlocks.calibreSites.map(s => calibreBox(s, 0, 1.7, 3.4, 3.8, 0, 3.5)), ...cityBlocks.eateries.all.flatMap(eateryReserves)];
   const streetDetails = buildStreetDetails(scene, [...allColliders, ...entranceReserves]);
   // Central Park's ground can now be told where its trees shade it (js/park-plan.js)
   surveyCentralPark(streetDetails.treeField.sites, (cityGrid.colliders || []).filter((c) => c.obstacle === 'rock'));
@@ -172,6 +177,15 @@ async function initApp() {
   await showLoadingStage('La ville prend vie…');
   await Promise.all([loadCharacters(), loadCrowd(CROWD_BODIES, CROWD_PROPS), loadCrowdMotion()]);
   const calibreWorld = createCalibreWorld(scene, cityBlocks.calibreSites);
+  // The restaurants (BULLION, TRANCHE): their rooms, and what changes hands in them
+  const eateryWorld = createEateryWorld(scene, cityBlocks.eateries.all, calibreWorld.materials,
+    Object.fromEntries(Object.entries(CALIBRE_KIT.surfaces).map(([name, surface]) => [name, surface.metres])));
+  const eateryProps = new EateryProps(scene, eateryWorld.materials);
+  // One picture: what the restaurants hold goes to the GPU, then each kind of room hides the city it cannot see
+  function renderWorld() {
+    eateryProps.flush();
+    return calibreWorld.render(cameraSystem.camera, () => eateryWorld.render(cameraSystem.camera, () => renderPipeline.render()));
+  }
   // Buildings turned along non-grid streets have oriented colliders whose world bounds reach past their lots: they stay
   // inside the property line anyway, so the road network (lanes & sidewalks) doesn't need them.
   // Elevated building sections that clear even a bus don't obstruct ground traffic.
@@ -187,7 +201,7 @@ async function initApp() {
   await showLoadingStage('Préparation des trottoirs…');
   const footprintsBefore = streetDetails.footprints.length;
   const furniture = createSidewalkFurniture(scene, {
-    network: roadNetwork, records: cityBlocks.records, shops: cityBlocks.shops.filter(s => !s.calibre), trunks: streetDetails.treeField.trunks, street: STREET,
+    network: roadNetwork, records: cityBlocks.records, shops: cityBlocks.shops.filter(s => !s.interior), trunks: streetDetails.treeField.trunks, street: STREET,
     isOnSidewalk: streetDetails.isOnSidewalk, isClearOfPoles: streetDetails.isClearOfPoles, addPole: streetDetails.addPole,
     addFootprint: streetDetails.addFootprint, obstacles: streetDetails.obstacles, colliders: allColliders, entrances: entranceReserves, quality: quality.id
   });
@@ -206,11 +220,11 @@ async function initApp() {
   // nobody parks at a bus stop or where a building site's dumpster stands
   for (const stop of furniture.busStops) parking.ban(stop.x, stop.z, 13);
   for (const b of furniture.roadBlocks) parking.ban(b.x, b.z, b.r);
-  for (const site of cityBlocks.calibreSites) parking.ban(site.x, site.z, 6);
+  for (const site of [...cityBlocks.calibreSites, ...cityBlocks.eateries.all]) parking.ban(site.x, site.z, 6);
   markInit('parking');
   // People with somewhere to be: the crowd's density, its stops at the street's spots, doors, bus stops, cabs
   const streetLife = createStreetLife({
-    pedestrians: trafficSystem.pedestrians, traffic: trafficSystem, shops: cityBlocks.shops.filter(s => !s.calibre), subwayMouths: streetDetails.subwayMouths,
+    pedestrians: trafficSystem.pedestrians, traffic: trafficSystem, shops: cityBlocks.shops.filter(s => !s.interior), subwayMouths: streetDetails.subwayMouths,
     foodCarts: streetDetails.foodCarts, seats: furniture.seats, stands: furniture.stands, busStops: furniture.busStops,
     hourOf: () => gameplay?.atmosphere?.hour ?? 12
   });
@@ -275,7 +289,10 @@ async function initApp() {
     .map((name) => scene.getObjectByName(name))
     .filter(Boolean);
   setupSceneCulling(scene, cullingRoots, lightingSystem.sunLight.shadow, quality);
-  calibreWorld.setExteriorRoots(scene.children.filter(o => /^(Manhattan|Boroughs|Storefronts|FacadeKit|SidewalkFurniture|HighwayTraffic|ParkedCars|Ground|Road|StreetAnimals|CullCell|ShadowProxy)/.test(o.name)));
+  const exteriorRoots = scene.children.filter(o => /^(Manhattan|Boroughs|Storefronts|FacadeKit|SidewalkFurniture|HighwayTraffic|ParkedCars|Ground|Road|StreetAnimals|CullCell|ShadowProxy)/.test(o.name));
+  calibreWorld.setExteriorRoots(exteriorRoots);
+  // (the restaurants' people are the crowd's: from inside a room the cars may go, the people stay)
+  eateryWorld.setExteriorRoots([...exteriorRoots.filter(o => o !== trafficSystem.group), ...trafficSystem.group.children.filter(o => !/^People/.test(o.name))]);
 
   // Initialize static world matrices once, including the chunks and shadow proxies created above.
   // Crowd, tree and building-detail animation changes instance/pose buffers, not Object3D transforms.
@@ -700,6 +717,7 @@ async function initApp() {
     scene, onMode: selectMode, onTime: selectTime, audio: audioSystem, map: mapSystem, touch: touchControls, gamepad: gamepadControls,
     lighting: lightingSystem, grade: colorGrade, parking });
   gameplay.calibre = new CalibreSystem(gameplay, calibreWorld, cityBlocks.calibreSites);
+  gameplay.eatery = new EaterySystem(gameplay, eateryWorld, eateryProps, cityBlocks.eateries.all);
   gameplay.openingScreen = opening;
   gamepadControls.game = gameplay;
   // The Architect (ARCHITECTE.md) is a local development tool: on this machine or its network only, never online, where
@@ -730,7 +748,7 @@ async function initApp() {
       const shore = getIslandBoundsAtZ(z);
       probe.water = Math.max(0, 1 - Math.min(Math.abs(x - shore.westX), Math.abs(x - shore.eastX)) / 160);
       probe.birds = gameplay.birds?.near ? gameplay.birds.near(x, z) : 0;
-      probe.indoor = gameplay.calibre.inside ? 0.88 : 0;
+      probe.indoor = gameplay.calibre.inside ? 0.88 : gameplay.eatery.inside ? 0.8 : 0;
       return probe;
     };
   }
@@ -883,7 +901,7 @@ async function initApp() {
     camera.updateMatrixWorld();
   };
   if (new URLSearchParams(location.search).has('qa')) {
-    window.__render = { renderer, scene, lightingSystem, cameraSystem, pacer, THREE, cityGrid, highwayTraffic, streetDetails, storefronts, facadeKit, cityBlocks, parking, furniture, streetLife, birds, colorGrade, aoPass, aoNode,
+    window.__render = { eateryWorld, eateryProps, renderer, scene, lightingSystem, cameraSystem, pacer, THREE, cityGrid, highwayTraffic, streetDetails, storefronts, facadeKit, cityBlocks, parking, furniture, streetLife, birds, colorGrade, aoPass, aoNode,
       // Inspection: the camera goes where it is told, whatever the game does
       view(x, y, z, tx, ty, tz, fov) {
         if (x === undefined) {
@@ -901,7 +919,7 @@ async function initApp() {
       updateSceneCulling(cameraSystem.camera.position);
       for (const root of dynamicRoots) root.updateMatrixWorld();
       applyQAView();
-      calibreWorld.render(cameraSystem.camera, () => renderPipeline.render());
+      renderWorld();
     };
   }
 
@@ -928,7 +946,7 @@ async function initApp() {
     if (audioSystem.ready && !graphicsLost) gamepadControls.update(dt);
     if (opening.ready) return; // The first frame is warm. Save the GPU while the player is on the title screen.
     elapsed += dt;
-    const liveShop = gameplay.playing && !gameplay.paused && !mapSystem.isFullMapOpen && gameplay.shops.open?.calibre;
+    const liveShop = gameplay.playing && !gameplay.paused && !mapSystem.isFullMapOpen && gameplay.shops.open?.counter;
     const simulationDt = gameplay.active || liveShop ? dt * gameplay.timeScale : 0;
     const worldDt = !gameplay.playing ? dt : simulationDt;
 
@@ -1011,7 +1029,7 @@ async function initApp() {
     }
     // the Architect's own eye: a photo frame rendered and read back just before the player's (local development only)
     gameplay.architect?.beforeRender(cameraSystem.camera, () => renderPipeline.render(), renderer.domElement);
-    calibreWorld.render(cameraSystem.camera, () => renderPipeline.render());
+    renderWorld();
     // the Architect's photos read the frame back here, while it is still on the canvas (local development only)
     gameplay.architect?.afterRender(renderer.domElement);
     pacer.submitted(now);

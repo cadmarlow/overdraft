@@ -1,0 +1,74 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>BULLION · TRANCHE : imprimés</title>
+<style>
+  body { margin: 0; background: #3a3a3a; }
+  canvas { display: block; }
+</style>
+<canvas id="view"></canvas>
+<script type="module">
+// Dev tool: the printed sheet of one franchise.
+//   ?brand=bullion|tranche            the whole sheet, scaled to fit the window
+//   &zoom=name[,name...]              those prints only, at 1:1 (or &scale=0.4 to judge them from across the room)
+//   &bg=dark|light|checker            what shows behind the alpha prints (default: checker)
+//   &cut=0.3                          the alpha prints as an alphaTest material shows them: cut out at that threshold
+import { PRINT_SIZE, PRINT_LAYOUT, PRINT_ALPHA, paintPrints } from '../../js/eatery-prints.js';
+
+const query = new URLSearchParams(location.search);
+const brand = query.get('brand') === 'tranche' ? 'tranche' : 'bullion';
+const zoom = (query.get('zoom') || '').split(',').filter((name) => PRINT_LAYOUT[brand][name]);
+const scale = Number(query.get('scale')) || 1;
+const ground = query.get('bg') || 'checker';
+
+const sheet = document.createElement('canvas');
+sheet.width = sheet.height = PRINT_SIZE;
+const t0 = performance.now();
+paintPrints(sheet.getContext('2d'), brand);
+const cost = performance.now() - t0;
+const cut = Number(query.get('cut')) || 0;
+if (cut) {
+  const sc = sheet.getContext('2d');
+  for (const name of PRINT_ALPHA[brand]) {
+    const [x, y, w, h] = PRINT_LAYOUT[brand][name], image = sc.getImageData(x, y, w, h), d = image.data;
+    for (let i = 3; i < d.length; i += 4) d[i] = d[i] >= cut * 255 ? 255 : 0;
+    sc.putImageData(image, x, y);
+  }
+}
+
+const view = document.getElementById('view');
+const W = innerWidth, H = innerHeight;
+view.width = W; view.height = H;
+const c = view.getContext('2d');
+function backdrop(x, y, w, h) {
+  if (ground === 'dark') { c.fillStyle = '#17171a'; c.fillRect(x, y, w, h); return; }
+  if (ground === 'light') { c.fillStyle = '#d9d4c8'; c.fillRect(x, y, w, h); return; }
+  c.save(); c.beginPath(); c.rect(x, y, w, h); c.clip();
+  for (let j = 0; j * 16 < h; j++) for (let i = 0; i * 16 < w; i++) { c.fillStyle = (i + j) % 2 ? '#5a5a5a' : '#444'; c.fillRect(x + i * 16, y + j * 16, 16, 16); }
+  c.restore();
+}
+c.fillStyle = '#2a2a2a'; c.fillRect(0, 0, W, H);
+if (!zoom.length) {
+  const side = Math.min(W, H);
+  backdrop(0, 0, side, side);
+  c.imageSmoothingQuality = 'high';
+  c.drawImage(sheet, 0, 0, side, side);
+  c.fillStyle = '#ddd'; c.font = '14px Menlo, monospace';
+  c.fillText(`${brand} · ${Object.keys(PRINT_LAYOUT[brand]).length} prints · painted in ${cost.toFixed(0)} ms`, side + 16, 24);
+} else {
+  // flow the chosen prints left to right, wrapping, shrunk together if they do not fit
+  const flow = (k) => {
+    let x = 8, y = 8, row = 0; const out = [];
+    for (const name of zoom) {
+      const [sx, sy, sw, sh] = PRINT_LAYOUT[brand][name], w = sw * k, h = sh * k;
+      if (x + w > W - 8 && x > 8) { x = 8; y += row + 8; row = 0; }
+      out.push({ name, sx, sy, sw, sh, x, y, w, h }); x += w + 8; row = Math.max(row, h);
+    }
+    return { out, bottom: y + row, right: Math.max(...out.map((o) => o.x + o.w)) };
+  };
+  let k = scale, placed = flow(k);
+  while ((placed.bottom > H - 4 || placed.right > W - 4) && k > 0.05) { k *= 0.95; placed = flow(k); }
+  c.imageSmoothingQuality = 'high';
+  for (const o of placed.out) { backdrop(o.x, o.y, o.w, o.h); c.drawImage(sheet, o.sx, o.sy, o.sw, o.sh, o.x, o.y, o.w, o.h); }
+}
+document.title = 'ready';
+</script>

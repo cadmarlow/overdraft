@@ -1,0 +1,25 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>BULLION · TRANCHE : logos</title>
+<style>body { margin: 0; background: #555; } canvas { display: block; }</style>
+<canvas id="c" width="1600" height="900"></canvas>
+<script type="module">
+import { brandEmblem, brandWordmark, brandLockup } from '../../js/eatery-logos.js';
+const c = document.getElementById('c').getContext('2d');
+const panel = (x, y, w, h, bg) => { c.fillStyle = bg; c.fillRect(x, y, w, h); };
+// BULLION on black, on cream, small sizes, one ink
+panel(0, 0, 800, 450, '#15120f'); panel(800, 0, 800, 450, '#f3e9d2');
+brandEmblem(c, 'bullion', 200, 170, 260); brandWordmark(c, 'bullion', 560, 170, 70);
+brandLockup(c, 'bullion', 400, 370, 44);
+brandEmblem(c, 'bullion', 980, 150, 220, { tone: 'ink', color: '#15120f' }); brandEmblem(c, 'bullion', 1240, 150, 220);
+brandWordmark(c, 'bullion', 1200, 330, 60, { tone: 'ink', color: '#15120f' });
+for (const [i, s] of [64, 40, 24, 16].entries()) brandEmblem(c, 'bullion', 1440 + i * 0, 60 + i * 70 + s / 2, s);
+// TRANCHE on cream, on tomato, on charcoal
+panel(0, 450, 800, 450, '#f7eedc'); panel(800, 450, 400, 450, '#d5311f'); panel(1200, 450, 400, 450, '#1e1b19');
+brandEmblem(c, 'tranche', 180, 620, 260); brandWordmark(c, 'tranche', 560, 620, 84);
+brandLockup(c, 'tranche', 400, 830, 44);
+brandEmblem(c, 'tranche', 1000, 600, 200, { tone: 'light' }); brandWordmark(c, 'tranche', 1000, 800, 56, { tone: 'light' });
+brandEmblem(c, 'tranche', 1400, 600, 200); brandWordmark(c, 'tranche', 1400, 800, 56);
+for (const [i, s] of [64, 40, 24, 16].entries()) brandEmblem(c, 'tranche', 740, 490 + i * 70 + s / 2, s);
+document.title = 'ready';
+</script>

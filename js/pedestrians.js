@@ -2064,7 +2064,7 @@ class PersonRig {
 
   // At the wheel of a car (car-cabin.js lays the cabin out): back in the seat, hands on the rim at ten to two going
   // round with it, feet on the pedals, head up and turned a little into the corner. In the car's frame, like ride().
-  drive(root, { seat, wheel, radius, tilt, turn, pedals, recline, look }) {
+  drive(root, { seat, wheel, radius, tilt, turn, pedals, recline, look, lean = 0, nod = 0 }) {
     const s = this.s;
     this.riding = true;
     this.gait = 0;
@@ -2076,9 +2076,9 @@ class PersonRig {
     qX(_qPelvis, -recline).premultiply(_qRoot);
     toWorld(_pelvis.set(seat.x, seat.y + 0.06 * s, seat.z + 0.02));
     this.writeBone(BONE.PELVIS, _qPelvis, _pelvis);
-    _qChest.copy(_qPelvis).multiply(qX(_q, 0.1));
+    _qChest.copy(_qPelvis).multiply(qX(_q, 0.1 + lean));
     this.writeBone(BONE.CHEST, _qChest, this.jointFrom(BONE.PELVIS, BONE.CHEST, _qPelvis, _pelvis, _chest));
-    _qa.copy(_qRoot).multiply(_q2.setFromAxisAngle(_yAxis, look)).multiply(qX(_q, 0.05));
+    _qa.copy(_qRoot).multiply(_q2.setFromAxisAngle(_yAxis, look)).multiply(qX(_q, 0.05 + nod));
     this.jointFrom(BONE.CHEST, BONE.HEAD, _qChest, _chest, _v);
     this.writeBone(BONE.HEAD, _qa, _v);
     this.headPosition = (this.headPosition || new THREE.Vector3()).copy(_v);
@@ -2110,6 +2110,42 @@ class PersonRig {
   }
 }
 
+// What the restaurants ask of a body on top of whatever pose it is in (walking capture, a seat): a hand taken to a
+// point of the world (a tray, a burger to the mouth, a spatula over the griddle), and where its hands and mouth are.
+Object.assign(PersonRig.prototype, {
+  // Arm i (0 left, 1 right): the wrist to (x, y, z), over the pose already written this frame
+  reachHand(i, x, y, z, grip = 0.6) {
+    const s = this.s, side = SIDES[i], j = this.bind;
+    this.readBone(BONE.CHEST, _qChest);
+    this.readBone(LIMB.upperArm[i], _qa);
+    this.carried(LIMB.upperArm[i], j[LIMB.upperArm[i]], _qa, _shoulder);
+    _target.set(x, y, z);
+    _pole.set(side * 0.7, -1, -0.5).applyQuaternion(_qChest);
+    _front.set(0, 0, 1).applyQuaternion(_qChest);
+    this.limb(LIMB.upperArm[i], LIMB.forearm[i], _shoulder, _target, UPPER_ARM * s, (FOREARM + 0.07) * s, _pole, _front, side * ARM_BIND_ABDUCTION);
+    this.grip[i] = grip;
+    this.readBone(LIMB.forearm[i], _qa);
+    this.carried(LIMB.forearm[i], j[LIMB.hand[i]], _qa, _v);
+    this.writeBone(LIMB.hand[i], _qa, _v);
+    this.carried(LIMB.hand[i], j[LIMB.fingers[i]], _qa, _v);
+    this.writeBone(LIMB.fingers[i], _qa.multiply(_q.setFromAxisAngle(HAND_AXIS[i], 0.15 + grip * 1.25)), _v);
+  },
+  // Where the palm of hand i is now (world)
+  handPoint(i, out) {
+    this.readBone(LIMB.hand[i], _qa);
+    return this.carried(LIMB.hand[i], _v2.copy(this.bind[LIMB.fingers[i]]).lerp(this.bind[LIMB.hand[i]], 0.35), _qa, out);
+  },
+  // Where the mouth is now (world)
+  mouthPoint(out) {
+    this.readBone(BONE.HEAD, _qa);
+    return this.carried(BONE.HEAD, _v2.set(0, 1.585, 0.1), _qa, out);
+  },
+  // A point given in the chest's frame (bind-pose metres: +x the body's left, +z forward), in the world
+  chestPoint(x, y, z, out) {
+    this.readBone(BONE.CHEST, _qa);
+    return this.carried(BONE.CHEST, _v2.set(x, y, z), _qa, out);
+  }
+});
 
 // A root to seat a rig on (pedestrian-system.js: benches, café chairs)
 const createSeatRoot = () => new THREE.Object3D();

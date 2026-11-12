@@ -1,0 +1,47 @@
+/* The restaurants: the menu at a till, a kiosk or the hatch, in each brand's own colours; the pocket's count by the vitals. */
+.eatery-counter{--ink:#15120f;--paper:#f3e9d2;--accent:#e8b23a;--accent-ink:#15120f;--soft:#cdbf9c;--card:linear-gradient(175deg,#1a1612f7,#0e0c0af7);--line:#f3e9d20d;--good:#bfe3a0;
+  position:fixed;inset:0;z-index:30;pointer-events:none;color:var(--paper);font-family:Arial,Helvetica,sans-serif}
+.eatery-counter[data-brand=tranche]{--ink:#1e1b19;--paper:#2a211c;--accent:#d5311f;--accent-ink:#f7eedc;--soft:#7a6a5c;--card:linear-gradient(175deg,#f9f1e0fa,#efe4cdfa);--line:#2a211c0f;--good:#2f7a4a}
+.eatery-counter[hidden]{display:none}
+.eatery-counter>*{pointer-events:auto}
+.ec-head{position:absolute;left:36px;top:30px;text-shadow:0 2px 14px #000c}
+.ec-head strong{display:block;font-size:46px;font-weight:900;letter-spacing:.2em;line-height:1;color:#e8b23a}
+.eatery-counter[data-brand=tranche] .ec-head strong{font-family:Georgia,'Times New Roman',serif;letter-spacing:.1em;color:#f7eedc}
+.ec-head span{display:block;margin-top:10px;font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:15px;color:#f3e9d2}
+.ec-card{position:absolute;right:36px;top:50%;transform:translateY(-50%);width:min(430px,calc(100vw - 72px));max-height:calc(100dvh - 96px);display:flex;flex-direction:column;
+  padding:22px 22px 18px;background:var(--card);border-top:4px solid var(--accent);box-shadow:0 24px 70px #000a;box-sizing:border-box}
+.ec-top{display:flex;align-items:baseline;justify-content:space-between;gap:16px}
+.ec-top h2{margin:0;font-size:26px;font-weight:900;letter-spacing:.12em;line-height:1}
+.eatery-counter[data-brand=tranche] .ec-top h2{font-family:Georgia,'Times New Roman',serif;letter-spacing:.06em;color:var(--accent)}
+.ec-top em{font-style:normal;font-size:18px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--good)}
+.ec-modes{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin:16px 0 4px}
+.ec-modes[hidden]{display:none}
+.ec-modes button{all:unset;box-sizing:border-box;cursor:pointer;padding:9px 0;text-align:center;font-size:11px;font-weight:800;letter-spacing:.2em;color:var(--soft);border:1px solid var(--line);background:var(--line)}
+.ec-modes button.on{color:var(--accent-ink);background:var(--accent);border-color:var(--accent)}
+.ec-lines{display:flex;flex-direction:column;gap:3px;margin-top:8px;overflow-y:auto;min-height:0;padding-right:2px;scrollbar-width:thin}
+.ec-line{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:1fr auto;align-items:center;column-gap:14px;padding:10px 12px;background:var(--line);border:1px solid transparent;border-left:3px solid transparent}
+.ec-line strong{grid-column:1;font-size:14px;font-weight:900;letter-spacing:.08em}
+.eatery-counter[data-brand=tranche] .ec-line strong{font-family:Georgia,'Times New Roman',serif;letter-spacing:.04em}
+.ec-line span{grid-column:1;margin-top:3px;font-size:11.5px;color:var(--soft)}
+.ec-line small{grid-column:1;margin-top:4px;font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--good)}
+.ec-line em{grid-row:1/4;grid-column:2;font-style:normal;font-size:17px;font-weight:900;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ec-line.sel{border-color:var(--accent);border-left-color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent)}
+.ec-line.off{opacity:.45}.ec-line.off small{color:#e2674a}
+.ec-line.shake{animation:ec-shake .28s}
+@keyframes ec-shake{25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+.ec-note{margin:12px 0 0;font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:12.5px;line-height:1.45;color:var(--soft)}
+.ec-foot{position:absolute;left:36px;bottom:28px;font-size:10px;letter-spacing:.14em;white-space:pre;color:#f3e9d2;text-shadow:0 1px 8px #000c}
+@media(max-width:760px){.ec-head strong{font-size:30px}.ec-card{right:12px;left:12px;width:auto;top:auto;bottom:54px;transform:none;max-height:62dvh}.ec-foot{left:14px;bottom:14px;font-size:9px}}
+
+/* What is in the pockets: a count by the vitals, and the key that eats one */
+.snack-chip{position:absolute;left:268px;bottom:20px;display:flex;align-items:center;gap:6px;padding:4px 8px 4px 6px;background:#0c0b0acc;border:1px solid #f3e9d226;color:#f3e9d2;font:800 12px Arial,Helvetica,sans-serif;letter-spacing:.06em;pointer-events:none}
+.snack-chip[hidden]{display:none}
+.snack-chip i{display:block;width:16px;height:13px;border-radius:7px 7px 3px 3px;background:linear-gradient(#e8b23a 0 38%,#7e1f1a 38% 62%,#e8b23a 62%)}
+.snack-chip[data-brand=tranche] i{width:0;height:0;border-radius:0;background:none;border-left:8px solid transparent;border-right:8px solid transparent;border-top:14px solid #f2c14e;filter:drop-shadow(0 -2px 0 #d9a45b)}
+.snack-chip span{padding:1px 5px;font-size:10px;color:#15120f;background:#f3e9d2}
+body.at-counter .snack-chip,body.in-intro .snack-chip{opacity:0}
+@media(max-width:700px){.snack-chip{left:176px;bottom:11px}}
+
+/* The full map's legend */
+.legend-swatch.burger-swatch{width:16px;height:16px;border-radius:50%;border:1.5px solid #e8b23a;background:#15120f linear-gradient(#e8b23a,#e8b23a) center/8px 6px no-repeat}
+.legend-swatch.pizza-swatch{width:16px;height:16px;border-radius:50%;border:1.5px solid #d5311f;background:conic-gradient(from 20deg,#f2c14e 0 60deg,#d5311f 60deg 360deg)}

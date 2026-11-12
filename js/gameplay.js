@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { brandEmblem } from './eatery-logos.js';
 import { highwayX, highwayScale } from './highway-layout.js';
 import { ISLAND_BOUNDS, getIslandBoundsAtZ, streetZ, isTypingInField, districtAt, getLocationLabel } from './city-config.js';
 import { angleDelta, doorPosition, smooth, clamp, canInteract, validPosition } from './interaction-state.js';
@@ -49,8 +50,8 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.24';
-const BUILD_NAME = 'Flight to Quality';
+const BUILD = '0.9.25';
+const BUILD_NAME = 'Consumer Staples';
 const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
 // The neighbourhoods as the opening card names them (city-config.js districtAt)
 const DISTRICT_NAMES = {
@@ -137,6 +138,8 @@ const _gunUp = new THREE.Vector3();
 const _barrel = new THREE.Vector3();
 const _flashOpts = { id: 'player', vx: 0, vy: 0, vz: 0 };
 // CALIBRE on the maps: a pistol seen from the side, in a 24-unit box (the trigger guard is cut out by the even-odd rule)
+// What goes on the maps as a badge under everything else: the gun shops, the restaurants
+const BADGES = new Set(['guns', 'bullion', 'tranche']);
 const GUN_BLIP = typeof Path2D === 'function' ? new Path2D('M2 6h18.5v1H22v2.6h-1.5v1h-6.8a3 3 0 0 1-3 3H9.1L7.9 19H2.3l1.1-6.4L2 10.6zM10.3 11v1.4h1.1a1.5 1.5 0 0 0 1.5-1.4z') : null;
 const _casingOpts = { port: _port, right: _gunRight, up: _gunUp };
 const _hitOpts = { dir: { x: 0, y: 0, z: 0 } };
@@ -158,6 +161,8 @@ export class Game {
     this.weapons = { fists: { mag: 0, ammo: 0 } };
     this.weaponId = 'fists';
     this.mods = {}; // upgrades and finishes bought at CALIBRE, per weapon (weapon-mods.js)
+    this.snacks = []; // what is in the pockets from BULLION and TRANCHE (eatery.js): { brand, id, name, heal, kind }
+    this.fed = 0; // seconds left of a full stomach: wounds close all the way
     this.range = { medals: {}, best: {} }; // CALIBRE's shooting range, per weapon: medals 0..3, best score (calibre-range.js)
     this.missionsDone = [];
     this.stats = { kills: 0, shots: 0, cops: 0, cars: 0, explosions: 0, deaths: 0, busted: 0 };
@@ -768,6 +773,13 @@ export class Game {
       try { seen = localStorage.getItem('overdraft:tip:calibre') === '1'; localStorage.setItem('overdraft:tip:calibre', '1'); } catch { /* storage optional */ }
       if (!seen && this.state === 'onFoot' && !this.director.current && !this.calibre?.inside) this.toast('Nouveau : les armureries CALIBRE', 'On y entre : améliorations d’armes au comptoir, stand de tir au fond. Repères laiton sur la carte, ou P → Contacts → CALIBRE.');
     }
+    // 0.9.25: the restaurants, once per browser
+    if ((this.foodTipT = (this.foodTipT ?? 34) - dt) <= 0 && !this.foodTipped) {
+      this.foodTipped = true;
+      let seen = false;
+      try { seen = localStorage.getItem('overdraft:tip:eatery') === '1'; localStorage.setItem('overdraft:tip:eatery', '1'); } catch { /* storage optional */ }
+      if (!seen && this.state === 'onFoot' && !this.director.current && !this.eatery?.inside) this.toast('Nouveau : BULLION et TRANCHE', 'Burgers et pizza à la part dans toute la ville. On y commande, on s’assoit, on mange. Repères sur la carte, ou P → Contacts.');
+    }
     if ((this.tipT = (this.tipT ?? 26) - dt) > 0 || this.tipped) return;
     this.tipped = true;
     this.phone.text('NADIA', 'On m’a parlé de toi. J’ai du travail pour quelqu’un qui sait conduire. Regarde tes contrats (P).');
@@ -847,10 +859,10 @@ export class Game {
     }
     // Markers & contacts. The gun shops go down first: missions and their names are read over them
     for (let pass = 0; pass < 2; pass++) for (const m of this.markers.markers) {
-      if (!m.used || m.blip === false || (m.kind === 'guns') !== (pass === 0)) continue;
+      if (!m.used || m.blip === false || BADGES.has(m.kind) !== (pass === 0)) continue;
       let x = toX(m.x), y = toY(m.z);
-      const color = { objective: '#ffd54a', destination: '#5ec8ff', contact: '#e1f3a0', target: '#ff4d4d', race: '#ff9a3c', guns: '#e1c492', shop: '#c99bff', home: '#7ee08a', homeSale: '#3e8a4a' }[m.kind] || '#fff';
-      const pinned = m.kind !== 'guns' && m.kind !== 'shop' && m.kind !== 'home' && m.kind !== 'homeSale';
+      const color = { objective: '#ffd54a', destination: '#5ec8ff', contact: '#e1f3a0', target: '#ff4d4d', race: '#ff9a3c', guns: '#e1c492', bullion: '#e8b23a', tranche: '#d5311f', shop: '#c99bff', home: '#7ee08a', homeSale: '#3e8a4a' }[m.kind] || '#fff';
+      const pinned = !BADGES.has(m.kind) && m.kind !== 'shop' && m.kind !== 'home' && m.kind !== 'homeSale';
       if (mini && !pinned && (Math.abs(x) > w * 0.5 - 6 || Math.abs(y) > h * 0.5 - 6)) continue;
       if (mini) {
         // pin markers to the radar's edge
@@ -858,13 +870,13 @@ export class Game {
         const d = Math.hypot(x, y);
         if (Math.abs(x) > w * 0.5 - 8 || Math.abs(y) > h * 0.5 - 8) { x = x / d * r; y = y / d * r; }
       }
-      if (m.kind === 'guns') {
-        // A gun shop: a brass pistol on a bottle-green badge, twice the size of a dot so it reads at a glance; on the
+      if (BADGES.has(m.kind)) {
+        // A restaurant: its own emblem on a disc of its colour. A gun shop: a brass pistol on a bottle-green badge, twice the size of a dot so it reads at a glance; on the
         // full map it shrinks with the zoom, and is named once the map is close enough for names not to pile up
         const r = mini ? 10.5 : Math.max(8, Math.min(11.5, 6.5 + 22 * scale));
         // a mission's marker on the same doorstep: the badge steps aside, so that both are read
         for (const o of this.markers.markers) {
-          if (!o.used || o.blip === false || o.kind === 'guns') continue;
+          if (!o.used || o.blip === false || BADGES.has(o.kind)) continue;
           const dx = x - toX(o.x), dy = y - toY(o.z), d = Math.hypot(dx, dy);
           if (d > r + 7) continue;
           const ux = d > 0.5 ? dx / d : 1, uy = d > 0.5 ? dy / d : 0;
@@ -873,10 +885,11 @@ export class Game {
         }
         ctx.fillStyle = '#000b';
         ctx.beginPath(); ctx.arc(x, y, r + 2, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#16261f';
+        ctx.fillStyle = m.kind === 'guns' ? '#16261f' : m.kind === 'bullion' ? '#15120f' : '#f7eedc';
         ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
         ctx.strokeStyle = color; ctx.lineWidth = 1.6; ctx.stroke();
-        if (GUN_BLIP) {
+        if (m.kind !== 'guns') brandEmblem(ctx, m.kind, x, y - (m.kind === 'bullion' ? r * 0.06 : 0), r * (m.kind === 'bullion' ? 1.28 : 1.5));
+        else if (GUN_BLIP) {
           const k = r * 1.46 / 24;
           ctx.save();
           ctx.translate(x - 12 * k, y - 12.4 * k); ctx.scale(k, k);
@@ -889,7 +902,7 @@ export class Game {
           ctx.font = '700 10px Arial';
           ctx.textAlign = 'center';
           ctx.fillStyle = '#000b'; ctx.fillText(m.label, x + 1, y + r + 13);
-          ctx.fillStyle = '#f3dda6'; ctx.fillText(m.label, x, y + r + 12);
+          ctx.fillStyle = m.kind === 'guns' ? '#f3dda6' : m.kind === 'bullion' ? '#f0c964' : '#ffd9cf'; ctx.fillText(m.label, x, y + r + 12);
           ctx.textAlign = 'start';
         }
         continue;
@@ -2459,7 +2472,7 @@ export class Game {
       if (this.aviation.airborne(this.car)) { this.bailOut(); return; }
       if (this.car.flight.ditched && this.controllers.afloat(air.x, air.z)) { this.car.ridden = false; this.enterWater(air.x + Math.cos(this.car.heading) * 2.5, air.z - Math.sin(this.car.heading) * 2.5); return; }
     } else if (this.active && this.state === 'driving' && this.car.air && air.y - this.controllers.getGroundHeight(air.x, air.z, 'helicopter', air.y) > 3) { this.bailOut(); return; }
-    if (this.active && this.calibre?.interact()) return;
+    if (this.active && (this.calibre?.interact() || this.eatery?.interact())) return;
     if (this.active && this.vertical.interact()) return;
     if (!this.active || !canInteract(this.state, this.car.speed)) {
       if (this.state === 'driving') this.toast('Ralentissez', 'Arrêtez le véhicule pour descendre.');
@@ -2778,7 +2791,7 @@ export class Game {
     this.camera.flightView = null;
     if (!this.active) {
       this.controllers.resetInput(); this.lookDX = this.lookDY = 0;
-      if (!(dt > 0 && this.shops?.open?.calibre)) return;
+      if (!(dt > 0 && this.shops?.open?.counter)) return;
     }
     if (this.intro) {
       // the opening flight: no control yet; any key or click cuts it short
@@ -2799,7 +2812,9 @@ export class Game {
     this.invulnerable = Math.max(0, this.invulnerable - dt);
     // Wounds close slowly up to half health once out of harm's way
     if (this.state === 'onFoot' || this.state === 'driving') {
-      if (this.health < 50 && this.clock - (this.lastHurt ?? -10) > 6) this.health = Math.min(50, this.health + dt * 2.5);
+      // (all the way after a real meal: eatery.js)
+      const mend = this.fed > 0 ? 100 : 50;
+      if (this.health < mend && this.clock - (this.lastHurt ?? -10) > 6) this.health = Math.min(mend, this.health + dt * 2.5);
     }
     this.updateTransition(dt);
     if (this.state === 'driving') this.distance += Math.abs(this.car.speed) * dt;
@@ -2827,7 +2842,7 @@ export class Game {
     }
     const falling = this.state === 'falling';
     const walker = this.person;
-    walker.chaseDistance = falling ? 13 : this.calibre?.inside ? 2.4 : 4.3;
+    walker.chaseDistance = falling ? 13 : this.calibre?.inside ? 2.4 : this.eatery?.inside ? 2.7 : 4.3;
     walker.chaseHeight = falling ? 1.4 : 1.95;
     walker.cameraTargetOffset.y = falling ? 3.4 : this.footCameraY;
     this.vertical.frame(walker);
@@ -2845,6 +2860,7 @@ export class Game {
     pl.vz = inVehicle ? Math.cos(car.heading) * car.speed + (car.vz || 0) : 0;
     pl.onFoot = this.state === 'onFoot' || this.state === 'down' || this.state === 'surfing';
     this.calibre?.update(dt);
+    this.eatery?.update(dt);
     pl.alive = this.state !== 'dead' && this.state !== 'busted';
 
     // the grapple's launcher is held like the pistol
@@ -2863,7 +2879,7 @@ export class Game {
         if (jet.life <= 0) this.jets.splice(i, 1);
         else if (Math.hypot(jet.x - pl.x, jet.z - pl.z) < 120) this.fx.jet(jet.x, jet.y, jet.z, dt);
       }
-      if (!this.shops.open?.calibre) this.updateWeapons(dt);
+      if (!this.shops.open?.counter) this.updateWeapons(dt);
       this.hero.update(!person.inVehicle, 0, dt);
       if (this.state === 'driving' && car.crashed) this.destroyCar(car);
       // Loose cars (parked, pushed, abandoned) roll to a stop under physics; then every gameplay car pair collides
@@ -2985,7 +3001,7 @@ export class Game {
     const car = this.car;
     this.candidate = this.state === 'onFoot' && this.active ? this.findCandidate() : null;
     const prompt = this.ui['game-prompt'];
-    const offer = this.active && this.calibre?.prompt();
+    const offer = this.active && (this.calibre?.prompt() || this.eatery?.prompt());
     if (offer) {
       prompt.classList.add('visible');
       const span = prompt.querySelector('span');
@@ -3043,7 +3059,7 @@ export class Game {
         version: 2, state: this.state === 'driving' && fleet.includes(this.car) ? 'driving' : 'onFoot',
         player: { x: spot.x, y: spot === p.position ? p.position.y : this.controllers.getGroundHeight(spot.x, spot.z, 'person'), z: spot.z, heading: p.heading },
         active: fleet.indexOf(this.car), stolen: this.stolen, distance: this.distance, firstEntry: this.firstEntry,
-        money: this.money, debt: this.debt, held: [...this.gangs.held], health: this.health, armor: this.armor, weapons: this.weapons, weaponId: this.weaponId, mods: this.mods, range: this.range,
+        money: this.money, debt: this.debt, held: [...this.gangs.held], health: this.health, armor: this.armor, weapons: this.weapons, weaponId: this.weaponId, mods: this.mods, range: this.range, snacks: this.snacks, fed: Math.round(this.fed),
         missionsDone: this.missionsDone, stats: this.stats, radio: this.radio?.stationIndex ?? this.radioIndex,
         atmosphere: this.atmosphere.serialize(), safehouses: this.shops?.serialize(), worldBikes: !!this.worldBikesPlaced,
         fleet: fleet.map(car => ({ kind: car.kind, paint: car.paint, position: { x: car.position.x, y: car.position.y, z: car.position.z }, heading: car.heading, stolen: car.stolen, hp: car.hp }))
@@ -3083,6 +3099,9 @@ export class Game {
         this.health = Number.isFinite(data.health) ? clamp(data.health, 20, 100) : 100;
         this.armor = Number.isFinite(data.armor) ? clamp(data.armor, 0, 100) : 0;
         this.mods = sanitizeMods(data.mods);
+        this.snacks = Array.isArray(data.snacks) ? data.snacks.filter((s) => s && typeof s.name === 'string' && Number.isFinite(s.heal) && s.heal > 0 && s.heal <= 100).slice(0, 8)
+          .map((s) => ({ brand: s.brand === 'tranche' ? 'tranche' : 'bullion', id: String(s.id || ''), name: s.name.slice(0, 40), heal: s.heal, kind: ['burger', 'fries', 'cup', 'slice', 'can'].includes(s.kind) ? s.kind : 'burger', flavour: ['margherita', 'pepperoni', 'bianca'].includes(s.flavour) ? s.flavour : 'pepperoni', risky: !!s.risky })) : [];
+        this.fed = Number.isFinite(data.fed) ? clamp(data.fed, 0, 600) : 0;
         for (const id of MOD_GUNS) {
           const medal = data.range?.medals?.[id], best = data.range?.best?.[id];
           if (Number.isInteger(medal) && medal > 0 && medal <= 3) this.range.medals[id] = medal;

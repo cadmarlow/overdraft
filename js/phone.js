@@ -11,6 +11,20 @@ const CONTACTS = [
       g.gps(shop.x, shop.z); g.toast('CALIBRE · itinéraire', shop.shop.sub); p.close();
     } }
   ] },
+  { id: 'bullion', name: 'BULLION', role: 'Burgers · la valeur refuge', actions: [
+    { label: 'Trouver un BULLION', sub: 'Itinéraire vers la succursale la plus proche', run: (g, p) => {
+      const shop = g.shops.nearest('bullion');
+      if (!shop) return;
+      g.gps(shop.x, shop.z); g.toast('BULLION · itinéraire', shop.shop.sub); p.close();
+    } }
+  ] },
+  { id: 'tranche', name: 'TRANCHE', role: 'Pizza à la part · ouvert tard', actions: [
+    { label: 'Trouver un TRANCHE', sub: 'Itinéraire vers la part la plus proche', run: (g, p) => {
+      const shop = g.shops.nearest('tranche');
+      if (!shop) return;
+      g.gps(shop.x, shop.z); g.toast('TRANCHE · itinéraire', shop.shop.sub); p.close();
+    } }
+  ] },
   { id: 'mireille', name: 'Mireille Okafor', role: 'Garagiste', actions: [
     { label: 'Réparer le véhicule', sub: '800 $', run: (g, p) => p.repair() },
     { label: 'Amène-moi le hors-bord', sub: 'À la rive la plus proche', run: (g) => g.garage.summon('boat') }

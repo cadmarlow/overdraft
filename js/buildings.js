@@ -49,6 +49,7 @@ import { STOREFRONTS } from './storefront-geodata.js';
 import { SHOP_TYPES } from './storefront-types.js';
 import { planStorefronts } from './storefront-plan.js';
 import { planCalibre, carveCalibreColliders } from './calibre-plan.js';
+import { planEateries } from './eatery-plan.js';
 import { polygonContains, polygonBoxOverlaps } from './building-collision.js';
 import { pavedPlazaRects, parkTreeSites, sidewalkBlocks } from './city-grid.js';
 
@@ -374,7 +375,9 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   const plan = planStorefronts(records, STOREFRONTS, SHOP_TYPES);
   for (const [record, walls] of plan.wallsByRecord) record.shopWalls = walls;
   const calibreSites = planCalibre(plan.shops, records, 48, { ...ISLAND_BOUNDS, shoreAt: getIslandBoundsAtZ });
-  carveCalibreColliders(colliders, calibreSites);
+  // The restaurants (BULLION, TRANCHE) take other ground floors the same way (eatery-plan.js)
+  const eateries = planEateries(plan.shops, records, { ...ISLAND_BOUNDS, shoreAt: getIslandBoundsAtZ });
+  carveCalibreColliders(colliders, [...calibreSites, ...eateries.all]);
   // Reserve every fire escape before placing scaffolding on neighbouring buildings.
   for (const { b, detail, masonry, rand } of detailsToPlace) {
     const neighbours = nearbyReserves(b, 6);
@@ -857,6 +860,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     update,
     shops: plan.shops,
     calibreSites,
+    eateries,
     records
   };
 }

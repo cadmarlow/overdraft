@@ -1,0 +1,136 @@
+<!doctype html>
+<meta charset="utf-8"><title>Cuisine BULLION · TRANCHE</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b0d0c;overflow:hidden;font:11px/1.3 ui-monospace,Menlo,monospace;color:#fff}
+  canvas{display:block;position:absolute;left:0;top:0}
+  .tag{position:absolute;transform:translate(-50%,0);white-space:nowrap;background:#000a;padding:1px 5px;border-radius:3px}
+  .tag.over{background:#b00c}
+</style>
+<script type="importmap">{"imports":{"three":"../../vendor/three/build/three.webgpu.js","three/webgpu":"../../vendor/three/build/three.webgpu.js","three/tsl":"../../vendor/three/build/three.tsl.js","three/addons/":"../../vendor/three/examples/jsm/"}}</script>
+<script type="module">
+// The food of the two franchises (js/eatery-food.js) on a table, under the kind of light the rooms have: a warm lamp
+// above, a soft fill, little sky. A dev tool, not shipped.
+//   ?items=burger,fries,cup   what to show, side by side (rows fill towards the back); ?items=bullion | tranche | all
+//   ?view=close               0.7 m away, slightly above: the eating camera.   ?view=play: 2.2 m, standing.
+//                             ?view=macro: 0.35 m, to inspect the painting (closer than the game ever goes)
+//   ?cam=x,y,z&look=x,y,z&fov=50   another camera        ?spin=30   turns every item (degrees)
+//   ?table=6b6460             the table's colour         ?labels=0  no names
+//   ?atlas=color|orm|normal   the atlas instead of the table (&tile=name for one tile, &zoom=x,y,size in atlas pixels)
+//   ?flat=1                   no normal map (to judge what it adds)       ?shadows=0
+// The title becomes "ready" after two rendered frames. window.food is the kit, window.stats the triangle counts.
+import * as THREE from 'three/webgpu';
+import { loadFoodKit, FOOD } from '../../js/eatery-food.js';
+
+const q = new URLSearchParams(location.search);
+const vec = (k, d) => (q.get(k) || d).split(',').map(Number);
+const W = innerWidth, H = innerHeight;
+const t0 = performance.now();
+await loadFoodKit();
+const built = Math.round(performance.now() - t0);
+window.food = FOOD;
+window.stats = Object.fromEntries(Object.entries(FOOD.info).map(([name, i]) => [name, i.triangles]));
+
+if (q.get('atlas')) {
+  const which = q.get('atlas'), src = FOOD.maps[which === 'color' ? 'color' : which === 'orm' ? 'orm' : 'normal'].image;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  document.body.append(canvas);
+  const c = canvas.getContext('2d'), k = src.width / FOOD.atlas;
+  c.fillStyle = '#222'; c.fillRect(0, 0, W, H);
+  if (q.get('tile')) { // one tile, as large as fits
+    const t = FOOD.tiles[q.get('tile')], s = Math.min(W / (t.w + 12), H / (t.h + 12));
+    c.imageSmoothingEnabled = s < 2; c.drawImage(src, (t.x - 6) * k, (t.y - 6) * k, (t.w + 12) * k, (t.h + 12) * k, 0, 0, (t.w + 12) * s, (t.h + 12) * s);
+  } else if (q.get('zoom')) { const [x, y, size] = vec('zoom', '0,0,1024'); c.imageSmoothingEnabled = false; c.drawImage(src, x * k, y * k, size * k * W / H, size * k, 0, 0, W, H); }
+  else {
+    c.drawImage(src, 0, 0, src.width, src.height, 0, 0, H, H);
+    c.font = '10px ui-monospace, monospace'; c.fillStyle = '#fff';
+    let line = 0;
+    for (const [name, t] of Object.entries(FOOD.tiles)) {
+      const s = H / FOOD.atlas;
+      c.strokeStyle = '#0f08'; c.strokeRect(t.x * s, t.y * s, t.w * s, t.h * s);
+      c.fillText(`${name} ${t.w}x${t.h}`, H + 12 + Math.floor(line / 62) * 230, 14 + (line % 62) * 14); line++;
+    }
+    c.fillText(`built in ${built} ms`, H + 12, H - 8);
+  }
+  document.title = 'ready';
+} else {
+  const renderer = new THREE.WebGPURenderer({ antialias: true });
+  renderer.setPixelRatio(1);
+  renderer.setSize(W, H);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = +(q.get('exposure') || 0.42); // the game's eye closes on a lit room; this stands in for it
+  renderer.shadowMap.enabled = q.get('shadows') !== '0';
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.body.prepend(renderer.domElement);
+  await renderer.init();
+  if (q.get('flat')) { FOOD.material.normalMap = null; FOOD.material.needsUpdate = true; }
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x15110e);
+  // what the sky gives indoors (the rooms multiply it by 0.16), a warm lamp above, a softer one from the side
+  scene.add(new THREE.HemisphereLight(0x9abbe6, 0xc88a62, 1.05 * 0.16 * +(q.get('ambient') || 1)));
+  const key = new THREE.SpotLight(0xffe2b8, +(q.get('key') || 24), 7, q.get('view') === 'play' ? 1.05 : 0.7, 0.85, 1.6);
+  key.position.set(-0.55, 1.75, 0.5); key.target.position.set(0, 0, 0);
+  key.castShadow = true; key.shadow.mapSize.set(2048, 2048); key.shadow.camera.near = 0.5; key.shadow.camera.far = 4; key.shadow.bias = -0.0006; key.shadow.normalBias = 0.004; key.shadow.radius = 5;
+  scene.add(key, key.target);
+  const fill = new THREE.PointLight(0xffc78a, +(q.get('fill') || 5), 7.5, 1.7);
+  fill.position.set(1.3, 1.2, 0.9);
+  scene.add(fill);
+  const back = new THREE.PointLight(0xffd9a8, +(q.get('rim') || 4), 6, 1.7);
+  back.position.set(0.4, 1.4, -1.6);
+  scene.add(back);
+
+  const table = new THREE.Mesh(new THREE.PlaneGeometry(6, 6), new THREE.MeshStandardNodeMaterial({ color: parseInt(q.get('table') || '6b6460', 16), roughness: 0.62 }));
+  table.rotation.x = -Math.PI / 2; table.receiveShadow = true;
+  scene.add(table);
+
+  const sets = { bullion: Object.keys(FOOD.info).filter((n) => FOOD.info[n].brand === 'bullion'), tranche: Object.keys(FOOD.info).filter((n) => FOOD.info[n].brand === 'tranche'), all: Object.keys(FOOD.info) };
+  const asked = q.get('items') || 'burger,fries,cup,tray';
+  const names = (sets[asked] || asked.split(',')).filter((n) => { if (!FOOD.geometry[n]) console.error(`no such item: ${n}`); return !!FOOD.geometry[n]; });
+  const view = q.get('view') || 'close', near = view !== 'play', gap = near ? 0.035 : 0.07, most = +(q.get('width') || (view === 'macro' ? 0.5 : near ? 1.0 : 2.7));
+  const spin = +(q.get('spin') || 0) * Math.PI / 180, cs = Math.cos(spin), sn = Math.sin(spin);
+  // rows that fill towards the back; every item on its own instanced mesh, as the game will draw it
+  const rows = [[]];
+  let x = 0;
+  for (const name of names) {
+    const i = FOOD.info[name], w = Math.abs(i.w * cs) + Math.abs(i.d * sn), d = Math.abs(i.w * sn) + Math.abs(i.d * cs);
+    if (x + w > most && rows[rows.length - 1].length) { rows.push([]); x = 0; }
+    rows[rows.length - 1].push({ name, w, d, x: x + w / 2 });
+    x += w + gap;
+  }
+  const placed = [];
+  let z = 0;
+  for (const row of rows) {
+    const width = row[row.length - 1].x + row[row.length - 1].w / 2, depth = Math.max(...row.map((r) => r.d));
+    z -= depth / 2;
+    for (const r of row) {
+      const i = FOOD.info[r.name], mesh = new THREE.InstancedMesh(FOOD.geometry[r.name], FOOD.material, 1);
+      // centre its box on its place
+      const ox = (i.min[0] + i.max[0]) / 2, oz = (i.min[2] + i.max[2]) / 2;
+      const m = new THREE.Matrix4().makeRotationY(spin).setPosition(r.x - width / 2 - (ox * cs + oz * sn), 0, z - (-ox * sn + oz * cs));
+      mesh.setMatrixAt(0, m); mesh.instanceMatrix.needsUpdate = true;
+      mesh.castShadow = mesh.receiveShadow = true; mesh.frustumCulled = false;
+      scene.add(mesh);
+      placed.push({ name: r.name, at: new THREE.Vector3(r.x - width / 2, 0, z + r.d / 2 + 0.004) });
+    }
+    z -= depth / 2 + gap;
+  }
+  const centreZ = z / 2 + gap / 2;
+  const camera = new THREE.PerspectiveCamera(+(q.get('fov') || (near ? 50 : 55)), W / H, 0.02, 50);
+  const eye = view === 'macro' ? [0, 0.2, 0.29 + centreZ] : near ? [0, 0.4, 0.575 + centreZ * 0.5] : [0, 0.95, 1.98 + centreZ * 0.5];
+  camera.position.set(...vec('cam', eye.join(',')));
+  camera.lookAt(...vec('look', `0,${view === 'macro' ? 0.04 : near ? 0.035 : 0.05},${centreZ * (view === 'macro' ? 1 : near ? 0.8 : 0.9)}`));
+  scene.updateMatrixWorld(true); camera.updateMatrixWorld(true);
+  if (q.get('labels') !== '0') for (const p of placed) {
+    const s = p.at.clone().project(camera), tag = document.createElement('div'), i = FOOD.info[p.name];
+    tag.className = `tag${i.triangles > i.budget ? ' over' : ''}`; tag.textContent = `${p.name} · ${i.triangles}`;
+    tag.style.left = `${(s.x * 0.5 + 0.5) * W}px`; tag.style.top = `${(-s.y * 0.5 + 0.5) * H + 4}px`;
+    document.body.append(tag);
+  }
+  await renderer.renderAsync(scene, camera);
+  await new Promise((r) => setTimeout(r, 250));
+  await renderer.renderAsync(scene, camera);
+  await new Promise((r) => requestAnimationFrame(r));
+  document.title = 'ready';
+}
+</script>

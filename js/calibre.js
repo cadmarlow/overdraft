@@ -52,7 +52,7 @@ class CalibreSystem {
     this.clock = 0; this.closed = new Map(); this.saidAt = -100; this.warned = 0; this.greeted = null;
     this.shops = sites.map(site => {
       const door = calibrePoint(site, 0, 1.7);
-      const shop = { id: site.id, type: 'guns', name: 'CALIBRE', sub: getLocationLabel(site.x, site.z), x: door.x, z: door.z, calibre: true, site };
+      const shop = { id: site.id, type: 'guns', name: 'CALIBRE', sub: getLocationLabel(site.x, site.z), x: door.x, z: door.z, calibre: true, counter: true, site };
       site.business = shop; return shop;
     });
     this.counter = new CalibreCounter(game);

@@ -624,13 +624,14 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
       return;
     }
     const dx = goal.x - p.x, dz = goal.z - p.z, d = Math.hypot(dx, dz);
-    const step = Math.min(d, ACTIVITY_SPEED * dt);
+    const pace = a.speed ?? ACTIVITY_SPEED;
+    const step = Math.min(d, pace * dt);
     if (d > 1e-3) {
       p.x += dx / d * step;
       p.z += dz / d * step;
       a.moveHeading = Math.atan2(dx, dz);
     }
-    p.v = ACTIVITY_SPEED;
+    p.v = pace;
     if (d <= Math.max(0.05, step) || clock >= a.until) {
       if (a.phase === 'approach') {
         a.phase = 'hold';
@@ -699,6 +700,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
   // How many of the pool stand in the city (street-life.js sets it by district and hour)
   let density = 1;
   function pedGround(p, x, z) {
+    if (p.activity && p.activity.floor !== undefined) return p.activity.floor;
     if (!p.node) return SIDEWALK_Y;
     const t = (x - p.ax) * p.ux + (z - p.az) * p.uz;
     return t > 2 && t < p.len - 2 ? CROSSWALK_Y : SIDEWALK_Y;
@@ -737,13 +739,15 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
     if (act && draw && act.phase === 'hold' && act.seat) {
       // Sitting: the seat poses the whole body (bench, café chair, shelter bench)
       seatRoot ??= createSeatRoot();
-      seatRoot.position.set(act.seat.x, SIDEWALK_Y, act.seat.z);
+      seatRoot.position.set(act.seat.x, act.seat.y ?? SIDEWALK_Y, act.seat.z);
       seatRoot.rotation.y = act.seat.yaw;
       seatRoot.updateMatrixWorld(true);
       const rig = p.rig;
       if (!rig.placed || (rig.x - p.x) ** 2 + (rig.z - p.z) ** 2 > 9) rig.reset(p.x, p.z, act.seat.yaw, pedGround, p);
       rig.carry = act.carry ?? -1;
-      rig.drive(seatRoot, SEAT_POSE);
+      rig.x = p.x; rig.z = p.z; rig.time += dt;
+      rig.drive(seatRoot, act.seat.pose || SEAT_POSE);
+      act.pose?.(rig, p, dt);
       pedCrowd.add(rig, Math.sqrt(distSq));
       return;
     }
@@ -778,6 +782,8 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
     }
     rig.update(dt, p.x, p.z, heading, pedGround, p, 0, draw, diving ? diveTime : -1);
     if (!draw) return;
+    // arms over the walk: a tray carried, a slice eaten standing (eatery-cast.js)
+    if (!rig.limp && !diving) (act?.pose || p.pose)?.(rig, p, dt);
     pedCrowd.add(rig, Math.sqrt(distSq));
   }
 
@@ -921,7 +927,7 @@ function createPedestrianSystem(network, { player, nearEdges, nearSignals, mayCr
     return count;
   }
 
-  return { peds, meshes: pedCrowd.meshes, update, kill, panic, setGround: (fn) => { groundAt = fn; }, setRain: (on) => { rain = on; }, holdUp,
+  return { peds, meshes: pedCrowd.meshes, update, kill, panic, cancelActivity, setGround: (fn) => { groundAt = fn; }, setRain: (on) => { rain = on; }, holdUp,
     placeAt, setDensity: (f) => { density = Number.isFinite(f) ? f : 1; }, get density() { return density; }, get clock() { return clock; }, NUM_PEDS };
 }
 

@@ -1,6 +1,7 @@
 import { createSynthResources, createMotorVoice, setControlRate } from './audio-synthesis.js';
 import { DriveAudio } from './audio-drive.js';
 import { FlightAudio } from './audio-flight.js';
+import { EateryAudio } from './audio-eatery.js';
 import { createEventResources, playEvent, createWindVoice } from './audio-events.js';
 import { createAmbienceVoice } from './audio-ambience.js';
 import { CityAudioSources } from './audio-sources.js';
@@ -86,6 +87,7 @@ class CityAudioSystem {
     this.onStateChange = onStateChange;
     this.context = null;
     this.flight = null; // the aircraft's voice and its one-shots (audio-flight.js), once the context exists
+    this.eatery = null; // the restaurants' rooms and their one-shots (audio-eatery.js), once the context exists
     this.ready = false;
     this.disposed = false;
     this.supported = !!(globalThis.AudioContext || globalThis.webkitAudioContext);
@@ -186,6 +188,11 @@ class CityAudioSystem {
     this.flat.connect(this.master);
     this.drive = new DriveAudio(context, this.resources, this.flat);
     this.flight = new FlightAudio(context, this.resources, this.flat);
+    // Restaurants: their beds and one-shots join the city's mix, placed by the same emitters as everything in the street
+    this.eatery = new EateryAudio(context, this.resources, this.mix, {
+      emitter: (refDistance) => new SpatialEmitter(context, this.mix, this.reflections, this.acoustics, refDistance),
+      listener: () => (this.haveListener ? this.listener : null)
+    });
     this.music = context.createGain();
     this.music.connect(this.master);
     this.onInitialize?.(context);
@@ -463,6 +470,7 @@ class CityAudioSystem {
     const active = this.sources.controllers.getActiveEntity();
     this.drive?.update(active, playing);
     this.flight?.update(playing && active?.type === 'plane' && active.flight ? active : null, dt, view);
+    this.eatery?.update(playing);
     this.accumulator += dt;
     if (this.accumulator < 0.1) return;
     dt = Math.min(this.accumulator, 0.25);
@@ -594,6 +602,7 @@ class CityAudioSystem {
     this.wind?.dispose(true);
     this.ambience?.dispose(true);
     this.flight?.dispose();
+    this.eatery?.dispose();
     for (const node of [this.mix, this.compressor, this.master, this.reflections, this.reverb, this.reflectionFilter]) node?.disconnect();
     if (this.context) {
       this.context.onstatechange = null;

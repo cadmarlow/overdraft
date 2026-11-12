@@ -121,8 +121,15 @@ function bakeWeapon(kind) {
 }
 
 class Builder {
-  constructor(materials) {
+  /**
+   * @param {object} materials - by name
+   * @param {object} prints - the sheet's rectangles by name ([u0, v0, u1, v1], v down); CALIBRE's unless given
+   * @param {string} label - the meshes' name prefix
+   */
+  constructor(materials, prints = PRINTS, label = 'Calibre') {
     this.materials = materials;
+    this.prints = prints;
+    this.label = label;
     this.batches = new Map(); // a material name, or a weapon's own material -> geometries in room space
   }
 
@@ -159,12 +166,23 @@ class Builder {
   }
   // A print of the sheet, `width` metres wide, facing +z before `matrix`; its height follows the print's proportions
   print(name, width, matrix, key = 'print', height = 0) {
-    const [u0, v0, u1, v1] = PRINTS[name];
+    const rect = this.prints[name];
+    if (!rect) { console.warn(`[${this.label}] no print named ${name}`); return 0; }
+    const [u0, v0, u1, v1] = rect;
     const h = height || width * (v1 - v0) / (u1 - u0);
     const g = new THREE.PlaneGeometry(width, h), t = g.attributes.uv;
     for (let i = 0; i < t.count; i++) t.setXY(i, u0 + t.getX(i) * (u1 - u0), 1 - (v0 + (1 - t.getY(i)) * (v1 - v0)));
     this.push(key, g, matrix);
     return h;
+  }
+  // A round print (a projecting sign's face): the sheet's square, cut to its inscribed circle, facing +z before `matrix`
+  disc(name, radius, matrix, key = 'print') {
+    const rect = this.prints[name];
+    if (!rect) return;
+    const [u0, v0, u1, v1] = rect;
+    const g = new THREE.CircleGeometry(radius, 40), t = g.attributes.uv;
+    for (let i = 0; i < t.count; i++) t.setXY(i, u0 + t.getX(i) * (u1 - u0), 1 - (v0 + (1 - t.getY(i)) * (v1 - v0)));
+    this.push(key, g, matrix);
   }
   // A prop of the kit, standing on its anchor
   prop(name, x, y, z, ry = 0, scale = 1, color = 0xffffff) {
@@ -185,7 +203,7 @@ class Builder {
     for (const [key, geometries] of this.batches) {
       const named = typeof key === 'string';
       const mesh = new THREE.Mesh(mergeGeometries(geometries), named ? this.materials[key] : key);
-      mesh.name = `Calibre ${named ? key : key.name}`;
+      mesh.name = `${this.label} ${named ? key : key.name}`;
       mesh.castShadow = named && shadows.includes(key);
       mesh.receiveShadow = true;
       mesh.matrixAutoUpdate = false;

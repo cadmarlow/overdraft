@@ -3,7 +3,15 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.24 — Flight to Quality**. Le pilotage est refait de fond en comble : un modèle de vol à corps rigide
+Version **0.9.25 — Consumer Staples**. Deux franchises de restauration ouvrent dans tout Manhattan : **BULLION**
+(burgers, « La valeur refuge. », 36 succursales) et **TRANCHE** (pizza à la part, « Prenez votre part. », 54). On y
+entre, on commande à la caisse, à la borne ou au guichet sur le trottoir, on attend son numéro, on porte son plateau,
+on s'assoit où l'on veut et on mange (F) ; un vrai repas referme toutes les blessures pendant quelques minutes. À
+emporter, les en-cas se gardent en poche et se mangent partout (U). Les équipiers cuisinent, encaissent, servent et
+nettoient ; les clients viennent de la rue, font la queue, mangent, débarrassent et repartent. On peut aussi braquer
+la caisse. Repères sur la carte et dans le téléphone (P → Contacts).
+
+Depuis la 0.9.24, le pilotage est refait de fond en comble : un modèle de vol à corps rigide
 (décrochage, effet de sol, facteur de charge, roues suspendues), une caméra de vol, un cockpit, des instruments,
 des effets et un son propres aux avions. Deux appareils neufs sortent du garage (G) : la **Hauturier · Bourrasque**,
 biplan d'école qui se pose sur une pelouse de Central Park et dessine ses loopings au fumigène, et la
