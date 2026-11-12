@@ -335,4 +335,4 @@ function buildUrbanPlaces(scene, city) {
   return [...buildLincolnPlaza(scene, city, materials), ...buildStuyvesantOval(scene, city, materials)];
 }
 
-export { buildUrbanPlaces };
+export { buildUrbanPlaces, makeMaterials, groundBuilder, fountain, wayfinding, plant, seat, visit, watch };

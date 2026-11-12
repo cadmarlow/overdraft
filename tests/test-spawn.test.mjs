@@ -5,6 +5,8 @@ import vm from 'node:vm';
 import { highwayX, highwayScale } from '../js/highway-layout.js';
 import { closePoint } from '../js/morningside-plan.js';
 import { urbanArrivals } from '../js/urban-places-plan.js';
+import { manhattanArrivals } from '../js/manhattan-sites-plan.js';
+const LOCAL_ARRIVALS = { ...urbanArrivals, ...manhattanArrivals };
 const z = 1020, x = highwayX(false, z) + 5.55 * highwayScale(false, z);
 const heading = Math.atan2(highwayX(false, z - 3) - highwayX(false, z + 3), -6);
 
@@ -12,7 +14,7 @@ const source = readFileSync(new URL('../js/gameplay.js', import.meta.url), 'utf8
 const method = name => source.match(new RegExp(`  ${name}\\(\\) \\{[\\s\\S]*?\\n  \\}`))[0];
 function harness(hostname, search) {
   const calls = [], location = { hostname, search };
-  const methods = vm.runInNewContext(`(class { ${method('applyTestSpawn')} ${method('save')} }).prototype`, { location, URLSearchParams, highwayX, highwayScale, closePoint, urbanArrivals });
+  const methods = vm.runInNewContext(`(class { ${method('applyTestSpawn')} ${method('save')} }).prototype`, { location, URLSearchParams, highwayX, highwayScale, closePoint, LOCAL_ARRIVALS });
   const game = {
     person: { position: { copy: p => calls.push(['person', p.x, p.z]) } }, car: { position: { x, z } },
     camera: { resetForTeleport: () => calls.push(['camera']) },
@@ -56,8 +58,8 @@ test('normal games and published sites do not apply the local test spawn', () =>
   }
 });
 
-test('Lincoln Center and Stuyvesant Oval start on foot, facing the public paths', () => {
-  for (const [name, arrival] of Object.entries(urbanArrivals)) {
+test('the authored neighbourhood visits start on foot, facing the public paths', () => {
+  for (const [name, arrival] of Object.entries(LOCAL_ARRIVALS)) {
     const { game, calls } = harness('localhost', '?spawn=' + name);
     game.applyTestSpawn();
     assert.deepEqual(calls, [['player', arrival.x, arrival.z], ['hour', 14], ['weather', 'clear', true]]);

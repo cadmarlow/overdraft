@@ -22,6 +22,15 @@ et [StuyTown, Our 80 Acres](https://www.stuytown.com/amenities/our-80-acres).
 Tracés dérivés d’OpenStreetMap © contributeurs, sous [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/).
 [Pelouse de l’Oval](https://www.openstreetmap.org/way/765274332) et [fontaine Revson](https://www.openstreetmap.org/way/329988120).
 
+Columbia, Asphalt Green, East River Park et le siège de l’ONU utilisent des modèles, des aménagements et des textures
+originaux créés pour OVERDRAFT. Références documentaires.
+[Guide de Columbia GSAPP](https://www.arch.columbia.edu/books/reader/1000-morningside-heights-br-self-guided-tour),
+[dossier de classement du Municipal Asphalt Plant](https://s-media.nyc.gov/agencies/lpc/lp/0905.pdf),
+[plans de l’East Side Coastal Resiliency](https://www.nyc.gov/site/escr/about/transportation-and-access.page)
+et [architecture du siège de l’ONU](https://documents.un.org/doc/undoc/gen/n14/224/81/pdf/n1422481.pdf).
+Repères du [terrain Litwin](https://www.openstreetmap.org/way/32960055) et du [terrain de basket](https://www.openstreetmap.org/way/423874272)
+issus d’OpenStreetMap © contributeurs, sous [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/).
+
 **After Hours (0.9.15).** L’illustration de Sacha Roux sur l’East River (`assets/opening/sacha-east-river.jpg`)
 a été générée avec ImageGen pour OVERDRAFT. « La dette » est une composition et un mixage originaux pour le jeu.
 Les enregistrements de cordes, de cor, de piano et de percussions utilisés dans le mix proviennent de

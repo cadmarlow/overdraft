@@ -1,6 +1,6 @@
 # Changelog
 
-## À paraître — Morningside, Lincoln Center et Stuyvesant Town
+## À paraître — Places, campus et promenades de Manhattan
 
 - Amsterdam Avenue, de la 110e à la 113e, retrouve un ensemble dessiné autour de la cathédrale : tours inachevées,
   rosace et portails sculptés, parvis en gradins, jardins clos avec entrées, allées, bancs et fontaine de bronze.
@@ -16,6 +16,15 @@
 - À Stuyvesant Town, l’Oval retrouve sa grande pelouse et sa promenade entre les tours en brique rouge.
   Allées, fontaine, terrain de basket, tables d’échecs, boîte à livres et bancs composent les abords.
   Les deux lieux sont repérés sur la carte et accessibles en local via `?spawn=lincoln` et `?spawn=stuytown`.
+
+- À Columbia, College Walk relie les deux avenues. Les marches praticables de Low Plaza, la sculpture en bronze
+  et les portiques des bibliothèques Low et Butler cadrent la traversée du campus.
+- À Asphalt Green, le terrain Litwin retrouve sa piste et ses buts. Le campus comprend aussi un terrain de basket,
+  un cadran solaire et la voûte parabolique du Murphy Center.
+- East River Park dispose d’une promenade aménagée sur environ 1,8 km, d’aires de sport et de jeux et d’un
+  amphithéâtre. La passerelle de la 10e Rue porte les piétons au-dessus de la chaussée de la FDR.
+- Le siège de l’ONU retrouve la tour vitrée du Secrétariat, le volume de l’Assemblée, les jardins et le bassin.
+  Les drapeaux et les jets de la fontaine sont animés. Les quatre lieux figurent sur la carte.
 
 ## 0.9.24 — Flight to Quality — 11 novembre 2026
 

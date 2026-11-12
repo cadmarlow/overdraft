@@ -68,6 +68,8 @@ import { fitPierToRoad } from './road-corridor.js';
 import { buildCathedralClose, buildMorningsidePark } from './morningside-ground.js';
 import { MORNINGSIDE_PARK } from './morningside-plan.js';
 import { buildUrbanPlaces } from './urban-places.js';
+import { buildManhattanGrounds } from './manhattan-grounds.js';
+import { buildEastRiverPark } from './east-river-park.js';
 
 // Live construction data consumed by the building and street-detail builders after buildCityGrid().
 let centralParkClearings;
@@ -2311,7 +2313,8 @@ function buildCityGrid(scene) {
   }
 
   const district = { ground: streetGroundSurfaces, colliders: groundColliders, addTree: site => treeSites.push(site), addBench, addLamp };
-  const gardenVisits = [...buildCathedralClose(scene, district), ...buildUrbanPlaces(scene, district)];
+  const gardenVisits = [...buildCathedralClose(scene, district), ...buildUrbanPlaces(scene, district),
+    ...buildManhattanGrounds(scene, district), ...buildEastRiverPark(scene, district)];
 
   // ---- Every other park block (Riverside, Marcus Garvey, Stuyvesant Square, City Hall Park, the
   //      Battery...): its curb island paved like a park walk, a granite-coped lawn inset from it under scattered trees

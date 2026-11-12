@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { highwayX, highwayScale } from './highway-layout.js';
 import { closePoint } from './morningside-plan.js';
 import { urbanArrivals } from './urban-places-plan.js';
+import { manhattanArrivals } from './manhattan-sites-plan.js';
 import { ISLAND_BOUNDS, getIslandBoundsAtZ, streetZ, isTypingInField, districtAt, getLocationLabel } from './city-config.js';
 import { angleDelta, doorPosition, smooth, clamp, canInteract, validPosition } from './interaction-state.js';
 import { CharacterModel, LOOKS } from './characters.js';
@@ -48,6 +49,7 @@ import { WATER, createBoat, driveBoatAI } from './boat.js';
 // OVERDRAFT — the game layer over the city simulation: the protagonist on foot and at the wheel, weapons and
 // damage, vehicles that smoke, burn and explode, the wanted level (police), missions, money, death and arrest, and saving.
 
+const LOCAL_ARRIVALS = { ...urbanArrivals, ...manhattanArrivals };
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
@@ -316,7 +318,7 @@ export class Game {
     if (!['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) return;
     const spawn = new URLSearchParams(location.search).get('spawn');
     const arrival = spawn === 'morningside' ? { ...closePoint(11.3, 2.4), heading: Math.PI / 2 }
-      : Object.hasOwn(urbanArrivals, spawn) ? urbanArrivals[spawn] : null;
+      : Object.hasOwn(LOCAL_ARRIVALS, spawn) ? LOCAL_ARRIVALS[spawn] : null;
     if (spawn !== 'fdr' && !arrival) return;
     this.testSpawn = true;
     if (arrival) {
@@ -635,7 +637,7 @@ export class Game {
       this.camera.initialized = false;
       if (this.testSpawnSite === 'morningside') this.toast('Morningside Heights', 'Amsterdam Avenue · 111e Rue');
       else if (this.testSpawnSite) {
-        const { name, subtitle } = urbanArrivals[this.testSpawnSite];
+        const { name, subtitle } = LOCAL_ARRIVALS[this.testSpawnSite];
         this.toast(name, subtitle);
       } else this.toast('Test FDR · 30e Rue', 'Voie nord · Z / RT pour passer devant l’immeuble · Essai sans sauvegarde');
       return;

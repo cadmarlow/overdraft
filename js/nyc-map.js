@@ -3,6 +3,8 @@ import { HIGHWAY_ROUTES } from './highway-layout.js';
 import { closePoint, closeBlock, closeLawn, closeWalks, fountainSite } from './morningside-plan.js';
 import { lincolnBlock, lincolnPoint, lincolnPlaza, lincolnGarden, lincolnFountain,
   ovalBlock, ovalPoint, ovalGround, ovalLawn, ovalWalks, ovalFountain } from './urban-places-plan.js';
+import { campusBlock, campusPoint, campusWalk, campusLawns, asphaltBlock, asphaltPoint, asphaltField,
+  asphaltLawns, unBlock, unPoint, unPlaza, unGarden, unPool, riverPromenade, riverBridge, riverLimits } from './manhattan-sites-plan.js';
 import {
   ROADS,
   BLOCKS,
@@ -267,8 +269,19 @@ function mapLayers() {
     { block: ovalBlock, lawns: [placePath(ovalPoint, ovalGround), placePath(ovalPoint, ovalLawn)], paving: null,
       paths: [...ovalWalks, { points: [...ovalLawn, ovalLawn[0]].map(([x,z]) => [x * 1.06,z * 1.08]), width: 4.9 }]
         .map(w => ({ path: placePath(ovalPoint, w.points, false), width: w.width })),
-      water: waterPath(ovalFountain, 3.52) }
+      water: waterPath(ovalFountain, 3.52) },
+    { block: campusBlock, lawns: campusLawns.map(l => placePath(campusPoint,l)), paving: placePath(campusPoint,campusWalk), paths: [] },
+    { block: asphaltBlock, lawns: asphaltLawns.map(l => placePath(asphaltPoint,l)), paving: null,
+      field: placePath(asphaltPoint,asphaltField), paths: [] },
+    { block: unBlock, lawns: [placePath(unPoint,unGarden)], paving: placePath(unPoint,unPlaza),
+      paths: [], water: waterPath(unPool,7.1) }
   ];
+  L.riverPromenade = new TiledLayer();
+  for (let z = riverLimits[0]; z < riverLimits[1]; z += 20) {
+    L.riverPromenade.line([riverPromenade(z), riverPromenade(Math.min(z + 20, riverLimits[1]))].map(([x,z]) => ({ x,z })));
+  }
+  L.riverFootbridge = new TiledLayer();
+  L.riverFootbridge.line([riverBridge.westLanding, riverBridge.westDeck, riverBridge.eastDeck, riverBridge.eastLanding]);
 
   // Central Park: meadows, water bodies, the drives and the sunken transverse roads
   const cp = GEO.centralPark || {};
@@ -871,10 +884,10 @@ class NYCMapSystem {
     for (const place of L.urbanPlaces) {
       if (!place.block || !v.sees(place.block)) continue;
       ctx.fillStyle = MAP.park;
-      ctx.fill(place.lawns[0]);
-      if (place.lawns[1]) {
+      for (const lawn of place.lawns) ctx.fill(lawn);
+      if (place.field) {
         ctx.fillStyle = MAP.lawn;
-        ctx.fill(place.lawns[1]);
+        ctx.fill(place.field);
       }
       if (s < 0.22) continue;
       ctx.fillStyle = MAP.parkEdge;
@@ -885,7 +898,13 @@ class NYCMapSystem {
         ctx.stroke(path.path);
       }
       ctx.fillStyle = MAP.pond;
-      ctx.fill(place.water);
+      if (place.water) ctx.fill(place.water);
+    }
+
+    if (s >= 0.22) {
+      ctx.strokeStyle = MAP.parkEdge;
+      ctx.lineWidth = 4.6;
+      L.riverPromenade.each(v, path => ctx.stroke(path));
     }
 
     // 4. Central Park: meadows, drives & transverses, water bodies
@@ -943,6 +962,11 @@ class NYCMapSystem {
     ctx.strokeStyle = MAP.highway;
     ctx.lineWidth = Math.max(px(isMinimap ? 2.4 : 1.6), 14);
     ctx.stroke(L.highways);
+    if (s >= 0.22) {
+      ctx.strokeStyle = MAP.parkEdge;
+      ctx.lineWidth = Math.max(px(1.1), 4.8);
+      L.riverFootbridge.each(v, path => ctx.stroke(path));
+    }
 
     // 9. Bridges
     ctx.strokeStyle = MAP.bridge;

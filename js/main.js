@@ -47,6 +47,7 @@ import { createSidewalkFurniture } from './sidewalk-furniture.js';
 import { createStreetLife } from './street-life.js';
 import { closeBlock, closePoint, fountainSite } from './morningside-plan.js';
 import { lincolnFountain, ovalBlock, ovalFountain } from './urban-places-plan.js';
+import { campusBlock, asphaltBlock, unBlock, unPool, riverLimits } from './manhattan-sites-plan.js';
 import { createAmbientEvents } from './ambient-events.js';
 import { createBirds } from './birds.js';
 import { getIslandBoundsAtZ } from './city-config.js';
@@ -179,9 +180,11 @@ async function initApp() {
   // Elevated building sections that clear even a bus don't obstruct ground traffic.
   const grassHit = {};
   const grassCutStart = closePoint(-15, -970), grassCutEnd = closePoint(410, 85);
+  const grassCutBlocks = [ovalBlock, campusBlock, asphaltBlock, unBlock].filter(Boolean);
   const grass = quality.grass ? createGrass(scene, scene, new THREE.Vector3(0, 10, 140), (x, z, y) =>
     ((x > grassCutStart.x && x < grassCutEnd.x && z > grassCutStart.z && z < grassCutEnd.z) ||
-      (ovalBlock && x > ovalBlock.minX && x < ovalBlock.maxX && z > ovalBlock.minZ && z < ovalBlock.maxZ)) &&
+      (x > 2100 && z > riverLimits[0] && z < riverLimits[1]) ||
+      grassCutBlocks.some(b => x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ)) &&
     cityGrid.groundSurfaces.sample(x, z, grassHit) && grassHit.y > y + 0.009) : null;
   // The road network first: the street furniture lines its curbs, then the traffic drives it
   await showLoadingStage('Préparation de la circulation…');
@@ -733,7 +736,7 @@ async function initApp() {
       probe.rain = gameplay.atmosphere.rain || 0;
       const fountainDistance = Math.hypot(x - fountainSite.x, position.y - 0.8, z - fountainSite.z);
       probe.fountain = Math.max(0, 1 - fountainDistance / 33) * (x < closeBlock.minX + 5 ? 0.55 : 1);
-      for (const site of [lincolnFountain, ovalFountain]) {
+      for (const site of [lincolnFountain, ovalFountain, unPool]) {
         const distance = Math.hypot(x - site.x, position.y - site.y, z - site.z);
         probe.fountain = Math.max(probe.fountain, 1 - distance / site.audible);
       }

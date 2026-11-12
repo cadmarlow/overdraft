@@ -16,9 +16,9 @@ function groundFootprint(poly) {
 function createGroundSurfaces() {
   const cells = new Map();
   let roadCorridor = null;
-  function add(poly, height, { grip = 1, rough = 0.006, curb = true, plane = null, deck = false, road = false } = {}) {
+  function add(poly, height, { grip = 1, rough = 0.006, curb = true, plane = null, deck = false, road = false, overpass = false } = {}) {
     if (poly.length < 3) return;
-    const surface = { ...groundFootprint(poly), height, grip, rough, curb, plane, deck, road };
+    const surface = { ...groundFootprint(poly), height, grip, rough, curb, plane, deck, road, overpass };
     for (let x = Math.floor(surface.minX / CELL); x <= Math.floor(surface.maxX / CELL); x++) {
       for (let z = Math.floor(surface.minZ / CELL); z <= Math.floor(surface.maxZ / CELL); z++) {
         const k = x * 1048576 + z;
@@ -57,13 +57,10 @@ function createGroundSurfaces() {
     return false;
   }
   function sample(x, z, out, maxDeckHeight = Infinity) {
-    if (roadCorridor?.contains(x, z)) {
-      Object.assign(out, { y: 0, grip: 1, rough: 0.0035, curb: false, nx: 0, ny: 1, nz: 0, deck: false });
-      return true;
-    }
+    const highway = roadCorridor?.contains(x, z);
     let best = null, height = -Infinity;
     for (const s of cells.get(key(x, z)) || []) {
-      if (x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
+      if ((highway && !s.overpass) || x < s.minX || x > s.maxX || z < s.minZ || z > s.maxZ) continue;
       const p = s.plane;
       const y = p ? s.height - ((x - p.x) * p.nx + (z - p.z) * p.nz) / p.ny : s.height;
       if (s.deck && y > maxDeckHeight) continue;
@@ -71,7 +68,11 @@ function createGroundSurfaces() {
       if ((y <= height && !(s.road && !best?.road)) || !contains(s.polygon.outer, x, z)) continue;
       best = s; height = y;
     }
-    if (!best) return false;
+    if (!best) {
+      if (!highway) return false;
+      Object.assign(out, { y: 0, grip: 1, rough: 0.0035, curb: false, nx: 0, ny: 1, nz: 0, deck: false });
+      return true;
+    }
     out.y = height; out.grip = best.grip; out.rough = best.rough; out.curb = best.curb;
     out.deck = best.deck;
     out.nx = best.plane?.nx ?? 0; out.ny = best.plane?.ny ?? 1; out.nz = best.plane?.nz ?? 0;

@@ -49,6 +49,8 @@ import { buildMorningsideCathedral } from './morningside-cathedral.js';
 import { closePoint, isCathedral } from './morningside-plan.js';
 import { buildLincolnTheatres } from './lincoln-theatres.js';
 import { isStuyvesantResidence, lincolnTheatres } from './urban-places-plan.js';
+import { manhattanSiteBuildings } from './manhattan-sites-plan.js';
+import { buildManhattanArchitecture } from './manhattan-monuments.js';
 import { STOREFRONTS } from './storefront-geodata.js';
 import { SHOP_TYPES } from './storefront-types.js';
 import { planStorefronts } from './storefront-plan.js';
@@ -168,9 +170,11 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   group.name = 'ManhattanCityBlocks';
   const cathedral = REAL_BUILDINGS.find(isCathedral);
   const theatres = lincolnTheatres(REAL_BUILDINGS);
-  const authored = new Set([cathedral, ...theatres.map(({ record }) => record)].filter(Boolean));
+  const civicBuildings = manhattanSiteBuildings(REAL_BUILDINGS);
+  const authored = new Set([cathedral, ...theatres.map(({ record }) => record), ...civicBuildings.map(({ record }) => record)].filter(Boolean));
   const colliders = cathedral ? buildMorningsideCathedral(scene, cathedral) : [];
   if (theatres.length) colliders.push(...buildLincolnTheatres(scene, theatres));
+  if (civicBuildings.length) colliders.push(...buildManhattanArchitecture(scene, civicBuildings));
 
   // Stream nearby architectural details.
   const quadtree = new Quadtree({

@@ -14,7 +14,8 @@ rapportent de l'argent. Les deux modèles sont sous CC BY 4.0 (voir `CREDITS.md`
 
 Sur la branche `codex/morningside`, ajouter `?spawn=morningside`, `?spawn=lincoln` ou `?spawn=stuytown` à l’adresse
 locale lance une visite à pied au jardin de la 111e Rue, à la place Josie Robertson ou à l’Oval de Stuyvesant Town.
-Le départ fixe l’heure à 14 h et la partie de visite n’écrit pas dans la sauvegarde.
+Les autres accès sont `?spawn=columbia`, `?spawn=asphalt`, `?spawn=east_river_park`, `?spawn=passerelle` et
+`?spawn=onu`. Le départ fixe l’heure à 14 h et la visite n’écrit pas dans la sauvegarde.
 
 La **0.9.23 — Free Float** permet de régler la densité de circulation depuis le menu pause.
 
