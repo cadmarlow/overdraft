@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { cityBoundsAt, cityContainsBox } from './city-frontier.js';
+import { frontierFacadeWear } from './frontier-districts.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createFireEscapes } from './fire-escapes.js';
 import { addBuildingDetails } from './building-details.js';
@@ -351,7 +352,10 @@ function buildCityBlocks(scene, landmarkColliders = [], frontageRadius = 155) {
     const { style, podium, tiers } = dress.get(b);
     const mat = style.glass ? GLASS_BUCKET : SURFACES.indexOf(style.surface);
     // The roof's vertices carry its covering's colour where the walls carry their tint
-    const styleAttr = styleAttributes(style), roofAttr = styleAttr.slice();
+    const styleAttr = styleAttributes(style);
+    // The integral part already holds the frame and flags; the fraction carries wind exposure.
+    if (!style.glass) styleAttr[11] += frontierFacadeWear(b.cx, b.cz) * 0.75;
+    const roofAttr = styleAttr.slice();
     roofAttr.splice(4, 3, ...linear(style.roof));
     // Shops come from the city's storefront registry (planned below); storefronts.js builds them
     const record = { ...b, height: podium, tone, storefronts: false, mat, floorHeight: style.floor, style, styleAttr, roofAttr, tiers,

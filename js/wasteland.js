@@ -354,12 +354,14 @@ export function buildWasteland(scene, { surfaces, kit }) {
   const maps = buildMaps();
   const ground = new SaltGround(group, createSaltGroundMaterial(surfaces, maps), createSaltGroundMaterial(surfaces, maps, { frontier: true }));
   const roads = new SaltRoads(group, createSaltRoadMaterial(surfaces));
-  const works = buildWastelandWorks(group, surfaces);
+  const works = buildWastelandWorks(group, surfaces, kit);
   const scatter = new SaltScatter(group, kit);
   const road = {};
+  const buildings = [...works.frontier.halts, ...works.frontier.posts.values()];
   const trees = frontierGroves().filter(({ x, z }) =>
     (!saltRoadAt(x, z, road) || road.distance > road.half + 5) &&
-    FRONTIER_SITES.every(site => Math.hypot(x - site.x, z - site.z) > site.width * 0.65 + 9)
+    FRONTIER_SITES.every(site => Math.hypot(x - site.x, z - site.z) > (site.id === 'lisieres' ? 46 : 30)) &&
+    buildings.every(site => Math.hypot(x - site.x, z - site.z) > (site.lookout ? 23 : 10))
   ).map(site => ({ ...site, y: sampleSalt(site.x, site.z) }));
   scene.add(group);
   group.updateMatrixWorld(true);
@@ -371,6 +373,6 @@ export function buildWasteland(scene, { surfaces, kit }) {
   };
   // The rocks and wrecks near the camera are given to the colliders as it moves
   const attach = (controllers) => { scatter.controllers = controllers; };
-  return { group, ground, roads, scatter, works, trees, attach, maps, tints: saltTints, uniforms: saltUniforms, colliders: works.colliders, surfaces: createFrontierSurfaces(),
+  return { group, ground, roads, scatter, works, trees, attach, maps, tints: saltTints, uniforms: saltUniforms, colliders: works.colliders, surfaces: createFrontierSurfaces(works.frontier.decks),
     approachReserves: CROSSINGS.map(({ x, z }) => ({ minX: x - 17, maxX: x + 17, minZ: z - 17, maxZ: z + 17, minY: 0, maxY: 12 })), update };
 }

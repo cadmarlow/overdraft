@@ -6,7 +6,8 @@ import { ground } from './ground-assets.js';
 import { CROSSINGS, NORTH_GATE, SALT_LINES, SALT_PLACES, WALL_Z, WEST_GATE, saltLandAt, saltRoadAt, sampleSalt } from './wasteland-plan.js';
 import { saltUniforms } from './wasteland-materials.js';
 import { fixItem } from './wasteland-scatter.js';
-import { buildFrontierStructures } from './frontier-structures.js';
+import { buildFrontierNursery } from './frontier-structures.js';
+import { buildFrontierWorld } from './frontier-world.js';
 import { buildWastelandWrecks } from './wasteland-wrecks.js';
 import { buildWastelandRuins } from './wasteland-ruins.js';
 
@@ -71,7 +72,7 @@ function sign(parent, x, y, z, heading, title, subtitle, width) {
   parent.add(mesh);
 }
 
-export function buildWastelandWorks(group, surfaces) {
+export function buildWastelandWorks(group, surfaces, kit) {
   const colliders = [];
   const random = rng(20261112);
   const parent = new THREE.Group(); parent.name = 'Ouvrages du Wasteland';
@@ -300,7 +301,8 @@ export function buildWastelandWorks(group, surfaces) {
   }
 
   // ---- The bones of the old city (js/wasteland-ruins.js) ---------------------------------------------------------------
-  buildFrontierStructures(parent, { sign, colliders, fires, keepOut });
+  buildFrontierNursery(parent, { colliders, keepOut });
+  const frontier = buildFrontierWorld(parent, { sign, colliders, fires, keepOut, kit });
   const ruins = buildWastelandRuins(parent, surfaces, { keepOut, colliders });
 
   // ---- The pump works: three mains climb the ramp from the bed to the city --------------------------------------------
@@ -346,5 +348,5 @@ export function buildWastelandWorks(group, surfaces) {
     for (const prop of fleet.props) fixItem(prop);
     fires.push(...fleet.fires);
   }
-  return { colliders, lamps, fires, ruins };
+  return { colliders, lamps, fires, ruins, frontier };
 }

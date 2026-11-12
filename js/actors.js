@@ -52,7 +52,7 @@ class ActorSystem {
     const isSeparateCast = t => t === 'calibre' || t === 'frontier';
     const separate = isSeparateCast(team);
     const population = this.actors.filter(a => separate ? a.team === team : !isSeparateCast(a.team));
-    if (population.length >= (separate ? 4 : MAX_ACTORS)) {
+    if (population.length >= (team === 'frontier' ? 8 : separate ? 4 : MAX_ACTORS)) {
       // recycle the farthest corpse, else refuse
       const corpse = population.filter((a) => a.dead).sort((a, b) => b.deadAt - a.deadAt).pop();
       if (!corpse) return null;

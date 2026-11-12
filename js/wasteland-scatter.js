@@ -109,7 +109,7 @@ function grow(ci, cj) {
     if (d > -45 && d < 205) {
       for (let k = Math.floor(vegetation * 20 + (nearSettlements ? 9 : 0)); k > 0; k--) {
         const [x, z] = spot();
-        if (FRONTIER_SITES.some(site => Math.hypot(x - site.x, z - site.z) < site.width * 0.65 + 7)) continue;
+        if (FRONTIER_SITES.some(site => Math.hypot(x - site.x, z - site.z) < (site.id === 'lisieres' ? 43 : 28))) continue;
         const scrub = rand();
         put(scrub > 0.43 ? 'bush' : 'bush_wide', x, z, 0.44 + rand() * 0.64,
           shade(nearSettlements ? [0.83, 0.93, 0.54] : [1.13, 0.94, 0.53]), { flat: true, sink: 0.03, clear: 4 });

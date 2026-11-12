@@ -270,9 +270,10 @@ export function saltLocation(x, z) {
 }
 
 // The city deck and the surrounding ground meet at grade.
-export function createFrontierSurfaces() {
+export function createFrontierSurfaces(decks) {
   return {
-    sample(x, z, _maxY, out) {
+    sample(x, z, maxY, out) {
+      if (decks?.sample(x, z, out, maxY)) return true;
       if (!saltLandAt(x, z)) return false;
       sampleSalt(x, z, out);
       return true;

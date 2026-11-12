@@ -3,12 +3,16 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.30 — Buffer Zone**.
+Version **0.9.31 — Carry Trade**.
 
-À East Harlem, le sable remonte les rues et laisse des plaques de bitume entre les broussailles. Au **Marché des
-Lisières**, parlez à **Leïla** avec **F** pour chercher le filtre de la pompe dans une ancienne pépinière. Le trajet
-passe des dernières échoppes au désert. Les cinq autres relais figurent dans l’atlas (**M**). On y cultive, répare,
-pèse ou surveille les pistes, avec des horaires propres à chaque lieu.
+À East Harlem, suivez la 119e Rue jusqu’à la **Halle au Poids**. Les habitants amènent des caisses, trient les pièces
+et expédient les chargements. Approchez du comptoir avec **F** ou **Y** à la manette pour vendre vos trouvailles.
+La rampe voisine mène au bulletin radio des **Fréquences**.
+
+L’atlas (**M**) situe les six relais. À l’ouest, le Bouillon des Serres sert un repas chaud. À l’Atelier du Levant,
+garez votre véhicule dans les pointillés pour le faire réparer. La Balance paie davantage en fin d’après-midi.
+À la Cour des Récupérateurs, on peut acheter un lot de pièces. Les miradors donnent sur les cinq passages routiers,
+qui ferment pendant les tempêtes. Entre ces relais, de petits abris s’occupent du linge, du courrier et de l’eau.
 
 En local, `?spawn=lisieres` place le joueur au marché à 14 h. Essayez aussi `?spawn=serres`, `?spawn=atelier`,
 `?spawn=balance`, `?spawn=vigie` ou `?spawn=cour`. Ces visites n’écrivent pas dans la sauvegarde.

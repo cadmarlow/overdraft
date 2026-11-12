@@ -126,7 +126,7 @@ class GamepadControls {
 
     const dialog = document.querySelector('dialog[open]');
     const context = dialog || (g.openingScreen?.ready ? 'opening' : g.map.isFullMapOpen ? 'map' : g.pauseMenu.visible ? 'pause'
-      : g.phone.open ? 'phone' : g.garage.open ? 'garage' : g.shops.open ? 'shop'
+      : g.phone.open ? 'phone' : g.garage.open ? 'garage' : g.shops.open ? 'shop' : g.frontierLife?.view ? 'frontier'
       : this.enabled && g.active ? g.state : 'inactive');
     if (context !== this.context) {
       this.reset();
@@ -147,7 +147,7 @@ class GamepadControls {
     const buttonActivity = pressed.some((down, i) => down && !previous[i]);
     if (buttonActivity || Math.hypot(movement.x, movement.y) > 0.12 || Math.hypot(look.x, look.y) > 0.12) this.setUsing(true);
 
-    if (dialog || ['opening', 'map', 'pause', 'phone', 'garage', 'shop'].includes(context)) {
+    if (dialog || ['opening', 'map', 'pause', 'phone', 'garage', 'shop', 'frontier'].includes(context)) {
       const direction = this.menuDirection(held, movement, dt);
       if (dialog) g.pauseMenu.controlDialog(dialog, direction, edge(A), edge(B) || edge(MENU));
       else if (context === 'opening') {
@@ -167,6 +167,8 @@ class GamepadControls {
         if (edge(B)) g.garage.close();
         else if (edge(A)) g.garage.pick(g.garage.sel);
         else if (direction) g.garage.navigate(direction);
+      } else if (context === 'frontier') {
+        g.frontierLife.control(direction, edge(A), edge(B) || edge(Y) || edge(MENU), look.x * dt);
       } else if (edge(B)) g.shops.close();
       else if (edge(A)) g.shops.buy();
       else if (direction === 'up' || direction === 'down') g.shops.navigate(direction === 'up' ? -1 : 1);

@@ -1,0 +1,74 @@
+#frontier-counter {
+  position: fixed;
+  z-index: 19;
+  right: clamp(16px, 3.4vw, 54px);
+  bottom: 13vh;
+  width: min(370px, calc(100vw - 32px));
+  max-height: 74vh;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 19px 20px 15px;
+  color: #f3ebd8;
+  background: linear-gradient(115deg, #27241af7, #161813fa);
+  border: 1px solid #8d7b57;
+  border-top: 3px solid #d1a455;
+  border-radius: 4px;
+  box-shadow: 0 10px 34px #0008;
+  font: 500 14px/1.45 system-ui, sans-serif;
+  pointer-events: auto;
+}
+#frontier-counter[hidden] { display: none; }
+#frontier-counter header, #frontier-counter li, #frontier-counter button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+#frontier-counter h2 {
+  margin: 0;
+  color: #ffefc9;
+  font: 600 23px/1.15 Georgia, serif;
+}
+#frontier-counter p { margin: 11px 0; color: #e0d3b7; }
+#frontier-counter .frontier-stock {
+  padding-top: 8px;
+  border-top: 1px solid #9c875846;
+  color: #f0ca80;
+  font-variant-numeric: tabular-nums;
+}
+#frontier-counter ul { margin: 12px 0; padding: 0; list-style: none; }
+#frontier-counter li { border-top: 1px solid #9c875846; padding: 5px 0; }
+#frontier-counter li strong { color: #edcb87; font-weight: 650; text-align: right; }
+#frontier-counter button {
+  appearance: none;
+  width: 100%;
+  min-height: 42px;
+  margin: 7px 0 0;
+  padding: 7px 11px;
+  font: inherit;
+  color: #fff1d2;
+  text-align: left;
+  background: #51462e;
+  border: 1px solid #8d7b57;
+  border-radius: 3px;
+  cursor: pointer;
+}
+#frontier-counter button:focus-visible { outline: 2px solid #f9d490; outline-offset: 2px; }
+#frontier-counter button:not(:disabled):hover { background: #645433; }
+#frontier-counter button:disabled { opacity: .47; cursor: default; }
+#frontier-counter header button { width: auto; min-height: 32px; margin: 0; font-size: 12px; }
+#frontier-counter .frontier-notice { color: #f4cd82; margin-bottom: 0; }
+#frontier-counter .frontier-notice:empty { display: none; }
+#frontier-counter.frontier-scope { width: min(305px, calc(100vw - 32px)); }
+#frontier-lens { display: none; }
+body.frontier-observing #frontier-lens {
+  display: block;
+  position: fixed;
+  z-index: 18;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(#2f28246e, #2f28246e) center / 28px 1px no-repeat,
+    linear-gradient(#2f28246e, #2f28246e) center / 1px 28px no-repeat,
+    radial-gradient(ellipse 61% 67% at center, transparent 53%, #17191031 70%, #10110ee8 100%);
+}

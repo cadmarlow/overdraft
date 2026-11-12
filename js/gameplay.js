@@ -63,8 +63,8 @@ const LOCAL_ARRIVALS = {
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.30';
-const BUILD_NAME = 'Buffer Zone';
+const BUILD = '0.9.31';
+const BUILD_NAME = 'Carry Trade';
 const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
 // The neighbourhoods as the opening card names them (city-config.js districtAt)
 const DISTRICT_NAMES = {
@@ -527,6 +527,14 @@ export class Game {
     document.getElementById('close-credits').addEventListener('click', () => document.getElementById('credits-dialog').close());
     window.addEventListener('keydown', e => {
       if (e.defaultPrevented || this.modal || isTypingInField(e) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (this.frontierLife?.view) {
+        const direction = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }[e.code];
+        if (direction || e.code === 'Escape' || e.code === 'KeyF') {
+          e.preventDefault();
+          if (!e.repeat) this.frontierLife.control(direction, false, !direction);
+        }
+        return;
+      }
       if (e.repeat) return;
       if (e.code === 'KeyF' && this.active) { e.preventDefault(); this.interact(); }
       if (e.code === 'Escape' && !document.querySelector('dialog[open]')) {
@@ -576,7 +584,7 @@ export class Game {
       mask = now;
       if (released & 1) this.fireHeld = false;
       if (released & 2) this.aimHeld = false;
-      if (!pressed || !this.active) return;
+      if (!pressed || !this.active || this.frontierLife?.view) return;
       const onCanvas = e.target === canvas || document.pointerLockElement === canvas;
       if (!onCanvas) return;
       if (document.pointerLockElement !== canvas && (pressed & 1) && !this.locking) {
@@ -593,7 +601,7 @@ export class Game {
       this.expectUnlock = false;
     });
     window.addEventListener('wheel', (e) => {
-      if (!this.active || this.state !== 'onFoot') return;
+      if (!this.active || this.state !== 'onFoot' || this.frontierLife?.view) return;
       const owned = WEAPON_ORDER.filter((id) => this.weapons[id]);
       if (owned.length < 2) return;
       e.stopPropagation();
@@ -662,12 +670,13 @@ export class Game {
       let seen = null;
       try { seen = localStorage.getItem(INTRO_KEY); localStorage.setItem(INTRO_KEY, BUILD); } catch { /* private window */ }
       this.playIntro((!this.missionsDone.length && this.distance < 50) || seen !== BUILD);
-      if (seen !== BUILD) this.phone.text('NADIA', 'À East Harlem, Leïla tient un marché au bout de la 119e Rue. Cherche le Marché des Lisières sur la carte (M). Elle a besoin de quelqu’un qui roule.');
+      if (seen !== BUILD) this.phone.text('NADIA', 'Leïla a rouvert la Halle au Poids au bout de la 119e Rue. Les vigies annoncent les fermetures de pistes à la radio, à l’étage.');
     }
   }
 
   setPaused(paused) {
     this.paused = paused;
+    if (paused) this.frontierLife?.closeView();
     this.controllers.resetInput();
     this.fireHeld = this.firePressed = this.aimHeld = this.aimToggle = false;
     this.triggerBuffer = 0;
@@ -2822,6 +2831,10 @@ export class Game {
       this.controllers.resetInput(); this.lookDX = this.lookDY = 0;
       if (!(dt > 0 && this.shops?.open?.counter)) return;
     }
+    if (this.frontierLife?.view) {
+      this.controllers.resetInput();
+      this.fireHeld = this.firePressed = this.aimHeld = this.aimToggle = false;
+    }
     if (this.intro) {
       // the opening flight: no control yet; any key or click cuts it short
       if (this.controllers._pressedCodes?.size || this.fireHeld || this.aimHeld) this.endIntro();
@@ -3095,7 +3108,7 @@ export class Game {
         player: { x: spot.x, y: spot === p.position ? p.position.y : this.controllers.getGroundHeight(spot.x, spot.z, 'person'), z: spot.z, heading: p.heading },
         active: fleet.indexOf(this.car), stolen: this.stolen, distance: this.distance, firstEntry: this.firstEntry,
         money: this.money, debt: this.debt, held: [...this.gangs.held], health: this.health, armor: this.armor, weapons: this.weapons, weaponId: this.weaponId, mods: this.mods, range: this.range, snacks: this.snacks, fed: Math.round(this.fed),
-        missionsDone: this.missionsDone, frontierDelivery: this.frontierDelivery ?? null, saltContract: this.saltContract ?? null, stats: this.stats, radio: this.radio?.stationIndex ?? this.radioIndex,
+        missionsDone: this.missionsDone, frontierTrade: this.frontierTrade ?? null, saltContract: this.saltContract ?? null, stats: this.stats, radio: this.radio?.stationIndex ?? this.radioIndex,
         atmosphere: this.atmosphere.serialize(), safehouses: this.shops?.serialize(), worldBikes: !!this.worldBikesPlaced,
         fleet: fleet.map(car => ({ kind: car.kind, paint: car.paint, position: { x: car.position.x, y: car.position.y, z: car.position.z }, heading: car.heading, stolen: car.stolen, hp: car.hp }))
       };
@@ -3135,7 +3148,7 @@ export class Game {
       this.stolen = Number.isFinite(data.stolen) ? Math.max(0, data.stolen) : 0;
       this.firstEntry = data.firstEntry !== false;
       if (data.version === 2) {
-        this.frontierDelivery = ['aller', 'retour', 'livré'].includes(data.frontierDelivery) ? data.frontierDelivery : null;
+        this.frontierTrade = data.frontierTrade;
         this.saltContract = ['transport', 'livré'].includes(data.saltContract) ? data.saltContract : null;
         this.money = Number.isFinite(data.money) ? Math.max(0, data.money) : 0;
         if (Number.isFinite(data.debt)) this.debt = data.debt;

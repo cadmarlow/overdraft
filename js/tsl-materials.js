@@ -980,11 +980,12 @@ function createPreWarBuildingMaterial(opts = {}) {
   const uSeed = S ? S[0].w : uniform(seed);
   const cSoot = color(0x4a4236);
   const cCanyonBounce = color(0xe89c68);
-  const styleFlags = S ? mod(S[2].w, 32.0) : float(0.0);
+  const styleFlags = S ? mod(floor(S[2].w.add(0.0001)), 32.0) : float(0.0);
   const flag = (bit) => mod(floor(styleFlags.div(bit)), 2.0);
   const office = flag(8);
   const uLitProbability = S ? mix(float(0.58), float(0.52), office) : uniform(litProbability);
   const uWarmth = S ? mix(float(0.86), float(0.58), office) : uniform(warmth);
+  const wear = S ? fract(S[2].w.add(0.0001)).sub(0.0002).div(0.75).clamp(0.0, 1.0) : float(0.0);
   // Glazing: 0 one over one, 1 two over two, 2 six over six, 3 arched head, 4 paired, 5 loft, 6 ribbon, 7 casement
   const glazing = S ? S[1].w : float(1.0);
   const isGlazing = (k) => float(1.0).sub(step(0.5, abs(glazing.sub(k))));
@@ -999,6 +1000,8 @@ function createPreWarBuildingMaterial(opts = {}) {
   const { isRoof, uCoord, vCoord, gridV, cellId, cellUV, fw, bayWidth, isGroundFloor, solid, back, blank, tone, coping } = facade;
   const { wallS, wallW, wallH, exposedHeight, fromTop, boxSeed } = facade;
   const open = float(1.0).sub(solid);
+  const shuttered = step(0.01, wear).mul(step(hash2D(cellId.add(vec2(uSeed, 78.4))), wear.mul(0.86)))
+    .mul(float(1.0).sub(step(2.0, gridV)));
   const front = float(1.0).sub(back);
   // Attic windows under the roof are squatter: the whole last floor that fits under the wall's top (no room for another)
   const wallTopY = vCoord.add(fromTop);
@@ -1225,7 +1228,9 @@ function createPreWarBuildingMaterial(opts = {}) {
       .mul(filteredPulse(cellUV.x, effHalfX.sub(0.03), oneMinusEffX.add(0.03), fw.x)).mul(open).mul(float(1.0).sub(beltFloor))
       .mul(S ? float(1.0).sub(inBase) : uDressed);
     const trimMix = max(max(isCornice.mul(0.62).add(isGroundFloor.mul(0.28)), coping.mul(0.8)), lintel);
-    const masonryTint = mix(wallTint, dressed, trimMix);
+    const dustHeight = float(1).sub(smoothstep(0.5, 7.4, vCoord.add(patches.sub(1.0).mul(9.0))));
+    const dust = wear.mul(dustHeight).mul(patches.mul(0.74)).mul(float(1).sub(isRoof));
+    const masonryTint = mix(mix(wallTint, dressed, trimMix), color(0xa38760).mul(patches), dust);
     const masonryWeathered = mix(masonryTint, cSoot, sootDirt.mul(0.8))
       .mul(float(1.0).sub(corniceShadow))
       .mul(float(1.0).sub(isSillUnderShadow.mul(0.42)))
@@ -1270,7 +1275,11 @@ function createPreWarBuildingMaterial(opts = {}) {
     const wallOrRoof = mix(masonryWeathered, roofCol, isRoof);
     const withFrames = mix(mix(wallOrRoof, revealCol, reveal), frameCol, isWindowOpening.mul(paneSeen).mul(sashMask));
     const withGlass = mix(withFrames, glassCol, isWindowGlass);
-    const surface = mix(mix(withGlass, acColor, inACBox), storefront.color, storefront.mask);
+    const panelUV = vec2(cellUV.x.mul(4.5), cellUV.y.mul(11.0));
+    const panelGrain = mix(float(0.72), float(1.22), fract(floor(panelUV.y).mul(0.618)));
+    const board = color(0x685746).mul(panelGrain).mul(mix(float(0.52), float(1), smoothstep(0.03, 0.17, fract(panelUV.y))));
+    const withShutters = mix(withGlass, board, shuttered.mul(isWindowOpening).mul(float(1.0).sub(isGroundFloor.mul(storefront.mask))));
+    const surface = mix(mix(withShutters, acColor, inACBox.mul(shuttered.oneMinus())), storefront.color, storefront.mask);
     return entrance ? mix(surface, entrance.color, entrance.mask) : surface;
   })();
 
@@ -1284,7 +1293,7 @@ function createPreWarBuildingMaterial(opts = {}) {
     const glassRough = float(0.14).add(pooledRough);
 
     const stoneGrain = noise2D(vec2(uCoord.mul(8.0), vCoord.mul(8.0))).mul(0.12);
-    const surface = mix(mix(float(0.78).add(stoneGrain), glassRough, isWindow), storefront.roughness, storefront.mask);
+    const surface = mix(mix(float(0.78).add(stoneGrain), glassRough, isWindow.mul(shuttered.oneMinus())), storefront.roughness, storefront.mask);
     return entrance ? mix(surface, entrance.roughness, entrance.mask) : surface;
   })();
 
@@ -1354,7 +1363,7 @@ function createPreWarBuildingMaterial(opts = {}) {
 
     const winEmit = aptRoom.xyz.mul(aptRoom.w).mul(0.76)
       .mul(transmission)
-      .mul(isWindow)
+      .mul(isWindow).mul(shuttered.oneMinus())
       .mul(cityUniforms.uInteriorGlow);
 
     const crownMask = smoothstep(uCrownGlowHeight, uCrownGlowHeight.add(26.0), vCoord).mul(float(1.0).sub(isRoof.mul(0.5)));

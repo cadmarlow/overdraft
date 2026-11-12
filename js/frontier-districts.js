@@ -50,6 +50,15 @@ export function frontierGrowth(x, z, distance) {
   return Math.max(0, (patchiness - 0.31) * 1.6) * fade;
 }
 
+// Windward blocks age in stretches, with pockets of shelter behind the surviving buildings.
+export function frontierFacadeWear(x, z) {
+  const distance = frontierDistance(x, z);
+  if (distance < -230) return 0;
+  const exposure = patch(x, z, 178, 71) * 0.71 + patch(x, z, 47, 73) * 0.29;
+  const t = Math.max(0, Math.min(1, (230 + distance) / 216));
+  return t * t * (3 - 2 * t) * (0.36 + exposure * 0.64);
+}
+
 export function frontierGroves() {
   const sites = [];
   for (let edge = 0; edge < CITY_RING.length; edge++) {

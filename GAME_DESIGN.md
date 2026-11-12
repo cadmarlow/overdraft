@@ -440,6 +440,7 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.28** | **Brick & Mortar** | Manhattan à hauteur de trottoir : portails et fenêtres en retrait, soubassements en relief, halls vitrés et auvents, finitions par famille de bâtiment. |
 | **0.9.29** | **Consolidation** | Manhattan ramené de 42,8 à 27,7 km² à échelle constante. Frontière sèche, cinq raccords terrestres, relief de l’ancienne East River, atlas topographique et contrats de l’Acte III à terre. |
 | **0.9.30** | **Buffer Zone** | Rues rongées par le sable, végétation par plaques et six relais habités avec horaires, dialogues et feux. Le filtre du Marché des Lisières donne une première raison de quitter les rues et de revenir. |
+| **0.9.31** | **Carry Trade** | Façades de bordure, six relais reconstruits, haltes de proximité, commerce de récupération, routines de fret et cinq postes dont les barrières réagissent à la météo. |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |
 
 

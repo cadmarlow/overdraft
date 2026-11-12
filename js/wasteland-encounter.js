@@ -222,9 +222,9 @@ export class WastelandEncounter {
     this.cable.visible = false;
     for (const unit of this.units) if (!unit.active) unit.car.mesh.visible = false;
     const dry = saltLandAt(player.x, player.z), floor = dry ? sampleSalt(player.x,player.z) : 0;
-    const distance = insideFrontierBounds(player.x, player.z) ? frontierDistance(player.x, player.z) : Infinity;
-    const exposed = dry && distance > 170 && player.y - floor < 16 && player.alive && !(player.inVehicle && g.car?.flight);
-    const area = distance > -54 && distance <= 170 ? 'LES LISIÈRES' : dry ? 'LE WASTELAND' : 'MANHATTAN';
+    const distanceToFrontier = insideFrontierBounds(player.x, player.z) ? frontierDistance(player.x, player.z) : Infinity;
+    const exposed = dry && distanceToFrontier > 170 && player.y - floor < 16 && player.alive && !(player.inVehicle && g.car?.flight);
+    const area = distanceToFrontier > -54 && distanceToFrontier <= 170 ? 'LES LISIÈRES' : dry ? 'LE WASTELAND' : 'MANHATTAN';
     if (this.areaBadge && this.areaBadge.textContent !== area) this.areaBadge.textContent = area;
     this.tickContract(player, dry);
     this.convoy.update(dt, player, exposed);

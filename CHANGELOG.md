@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.9.31 — Carry Trade — 12 novembre 2026
+
+- **La frontière jusque sur les façades.** Poussière incrustée et fenêtres condamnées sur les derniers îlots, murs
+  ouverts et fondations hors des rues. Huit petites haltes occupent les secteurs entre les grands relais.
+- **Six lieux reconstruits.** Halle de pesée, comptoir de récupération, atelier, cuisine et serres, dépôt de fret et
+  vigie. À East Harlem, une passerelle praticable mène aux Fréquences, une radio installée au premier étage.
+- **Une économie locale.** Récupérez des pièces, revendez-les au poids, mangez aux Serres ou payez les réparations de
+  votre voiture avec de l’argent ou des pièces. Prix, stocks et horaires varient selon le comptoir. Les échanges et
+  les pièces déjà ramassées sont mémorisés. L’ancienne livraison du filtre devient une découverte libre.
+- **Des habitants au travail.** Tournées de chariot, pesée, entretien, arrosage, relève de nuit et repli sous les
+  auvents en cas de tempête. Les habitants des petites haltes parlent du lieu où ils vivent.
+- **Cinq postes de passage.** Bras de barrière physiques, miradors accessibles à pied, jumelles et bulletin radio.
+  Les tempêtes ferment les cinq pistes. Deux passages ferment aussi de 1 h à 4 h pour la relève.
+- **Gel du Wasteland corrigé.** Au-delà de 170 m de la frontière, la distance à la ville masquait la fonction
+  utilisée pour choisir le secteur des Rouliers et afficher la poussière des véhicules hors piste. Deux tests
+  couvrent la marche après le délai d’arrivée des Rouliers et la poussière en voiture.
+
+### Validation de Carry Trade
+
+- Les cinq passages ont été conduits au clavier dans Chrome WebGPU, bras baissé puis relevé après plusieurs cycles
+  de fermeture. Les rampes des Fréquences et du mirador de la Batterie ont été montées à pied.
+- La récupération, la vente, le service du bouillon et la réparation d’un pneu ont été joués dans le build statique.
+  Le stock de pièces et la vente ont été relus après rechargement.
+
 ## 0.9.30 — Buffer Zone — 12 novembre 2026
 
 - **Le sable gagne les rues.** Sur tout le pourtour de Manhattan, les chaussées s’écaillent, la terre apparaît par

@@ -738,7 +738,7 @@ async function initApp() {
     scene, onMode: selectMode, onTime: selectTime, audio: audioSystem, map: mapSystem, touch: touchControls, gamepad: gamepadControls,
     lighting: lightingSystem, grade: colorGrade, parking });
   gameplay.frontierEncounter = new WastelandEncounter(gameplay);
-  gameplay.frontierLife = new FrontierLife(gameplay);
+  gameplay.frontierLife = new FrontierLife(gameplay, wasteland.works.frontier);
   const saltAir = gameplay.saltAir = new SaltAir({ lighting: lightingSystem, atmosphere: gameplay.atmosphere, scene });
   const saltNight = new SaltNight(scene, wasteland.works);
   saltNight.fx = gameplay.fx;
