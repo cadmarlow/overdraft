@@ -175,7 +175,7 @@ async function initApp() {
   const { colliders: landmarkColliders } = buildLandmarks(scene, { groundSurfaces: cityGrid.groundSurfaces });
   markInit('landmarks');
   await showLoadingStage('Préparation des bâtiments…');
-  const cityBlocks = buildCityBlocks(scene, landmarkColliders);
+  const cityBlocks = buildCityBlocks(scene, landmarkColliders, { high: 112, balanced: 92, fluid: 72 }[quality.id]);
   markInit('blocks');
   // Ground-floor shops, built in 3D around the camera (the facades paint them further out)
   const storefronts = createStorefronts(scene, cityBlocks.shops.filter(s => !s.interior), { radius: { high: 300, balanced: 250, fluid: 170 }[quality.id] ?? 250 });
@@ -806,6 +806,7 @@ async function initApp() {
   updateSceneCulling(cameraSystem.camera.position);
   // the curbs around the start fill before the shaders compile, so the first frame shows them
   for (let i = 0; i < 12; i++) parking.update(cameraSystem.camera, gameplay.atmosphere.hour, gameplay.atmosphere.day, 0);
+  cityBlocks.frontages.update(cameraSystem.camera.position);
   // the web fonts change the buttons' widths once they arrive
   if (document.fonts) document.fonts.ready.then(placeModeIndicator);
   markInit('ui');
@@ -1037,6 +1038,7 @@ async function initApp() {
     }
     if (boroughs.update) boroughs.update(elapsed); // Roosevelt Island Tramway cabins
     cityBlocks.update(cameraSystem.currentPos.x, cameraSystem.currentPos.z);
+    cityBlocks.frontages.update(cameraSystem.camera.position);
     grass?.update(cameraSystem.camera.position);
     storefronts.update(cameraSystem.camera, gameplay.atmosphere.hour, dt);
     facadeKit.update(cameraSystem.camera);

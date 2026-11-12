@@ -3,7 +3,13 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.27 — Distressed Assets**. Manhattan est une ville de survivants au milieu du **Wasteland**. L’Hudson est
+Version **0.9.28 — Brick & Mortar**. À Harlem comme dans le West Side, les immeubles ont des entrées en retrait,
+des fenêtres de rez-de-chaussée et des soubassements qui suivent leurs façades. De près, on distingue les voussoirs,
+les grilles, les interphones, les poignées et les auvents. Pour voir les portails cintrés, longez la 113e Rue ouest
+entre Adam Clayton Powell Jr Boulevard et Frederick Douglass Boulevard. Les halls vitrés se voient sur la 115e Rue
+près de la 5e Avenue et sur la 58e Rue du côté de West End Avenue.
+
+Manhattan est une ville de survivants au milieu du **Wasteland**. L’Hudson est
 à sec : son lit commence au pied des quais, sept mètres sous les rues. La rade est un lac de sel, et l’East River,
 retenu par quatre digues, sert de douves. Au nord, la ville finit sur un mur de conteneurs. On sort par la **Grande
 Porte** (avenue Adam Clayton Powell, tout au nord), par la **porte des Pompes** (au bout de la 34e Rue, côté ouest,

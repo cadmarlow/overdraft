@@ -45,6 +45,7 @@ import { BUILDING_FACTS } from './building-styles.js';
 import { dressBuilding, styleAttributes, linear, SURFACES } from './building-types.js';
 import { zoningSetbacks, parapetHeight } from './building-massing.js';
 import { createBuildingFootprints } from './building-footprints.js';
+import { createFrontageBuilder } from './frontages.js';
 import { buildMorningsideCathedral } from './morningside-cathedral.js';
 import { closePoint, isCathedral } from './morningside-plan.js';
 import { buildLincolnTheatres } from './lincoln-theatres.js';
@@ -166,7 +167,7 @@ class Quadtree {
   }
 }
 
-function buildCityBlocks(scene, landmarkColliders = []) {
+function buildCityBlocks(scene, landmarkColliders = [], frontageRadius = 155) {
   const group = new THREE.Group();
   group.name = 'ManhattanCityBlocks';
   const cathedral = REAL_BUILDINGS.find(isCathedral);
@@ -193,7 +194,6 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     ...SURFACES.map((surface) => createPreWarBuildingMaterial({ surface, windowGlassColor: 0x18222c, footprintLocal: true, styled: true })),
     createCurtainWallMaterial({ footprintLocal: true, styled: true })
   ];
-  const MASONRY = new Set(SURFACES.map((_, i) => i));
 
   const broadwayBillboards = [];
 
@@ -407,10 +407,12 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   }
   // The street walls each building's windows open in, for the window dressings of facade-kit.js
   const streetWalls = new Map();
+  const frontages = createFrontageBuilder(frontageRadius);
   surveyedBuckets.forEach((items, i) => {
     if (!items.length) return;
-    group.add(createBuildingFootprints(materials[i], items, MASONRY.has(i) ? b => nearbyReserves(b, 2) : undefined, streetWalls));
+    group.add(createBuildingFootprints(materials[i], items, b => nearbyReserves(b, 3), streetWalls, frontages));
   });
+  frontages.finish(group);
   for (const [record, walls] of streetWalls) record.kitWalls = walls;
 
   // Narrow empty lots become sitting areas with trees.
@@ -878,7 +880,8 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     shops: plan.shops,
     calibreSites,
     eateries,
-    records
+    records,
+    frontages
   };
 }
 

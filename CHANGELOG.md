@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9.28 — Brick & Mortar — 12 novembre 2026
+
+- Les façades de Manhattan s’ouvrent au rez-de-chaussée. Les entrées suivent la largeur des travées et l’approche
+  depuis la rue. Les longs immeubles ont des fenêtres basses entre leurs accès et les cours ont leurs propres baies.
+- Les maisons de ville ont des portails cintrés et des vantaux à panneaux, les ensembles de brique des grilles et
+  des entrées collectives, les tours des halls vitrés sous auvent. Pierre, bois, métal et verre ont chacun leur finition.
+  Seuils, jambages, poignées, plaques et interphones donnent l’échelle à pied. Les appliques et certains vitrages
+  s’allument à la tombée de la nuit.
+- Les portails résidentiels servent de décor. Les entrées des commerces et des autres intérieurs jouables restent
+  repérables à hauteur de trottoir.
+
+### Validation de Brick & Mortar
+
+- Chrome WebGPU séparé sur M1 Pro. Vues en caméra de jeu à Harlem et dans le West Side, de jour et de nuit.
+  Franchissement de l’entrée d’un CALIBRE à pied et passage en voiture sur la 58e Rue au clavier.
+- À 1 600 × 900 sans plafond, trois scènes de façade mesurées de jour en qualité ÉQUILIBRÉE donnent des médianes de
+  43 à 49 images par seconde avec une échelle de rendu de 0,70. Les 60 images par seconde restent à atteindre.
+- 1 178 tests réussis, un essai HTTP ignoré, build statique réussi.
+
 ## 0.9.27 — Distressed Assets — 12 novembre 2026
 
 Le Wasteland vu de près. Ce qui se regardait de loin se visite.

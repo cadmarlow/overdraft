@@ -437,6 +437,7 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.25** | **Consumer Staples** | Deux franchises de restauration dans toute la ville : BULLION (burgers, 36 succursales) et TRANCHE (pizza à la part, 54). On y entre, on commande, on porte son plateau, on s’assoit, on mange ; équipiers et clients vivent leur vie ; en-cas à emporter, braquage de la caisse. |
 | **0.9.27** | **Distressed Assets** | Le Wasteland vu de près : ruines aux fenêtres percées et carcasses où l’on roule, coques brisées qu’on traverse, cales où l’on entre, convois de Rouliers à piller, sable doré et ombres profondes, pleins phares hors les murs. |
 | **0.9.26** | **Scorched Earth** | Le Wasteland : Hudson à sec au pied des quais, douves de l’East River, Mur du nord et portes, ruines ensablées, Ceinture de 47 km, bascule d’ambiance au franchissement, navires échoués, camps, feux et projecteurs la nuit. |
+| **0.9.28** | **Brick & Mortar** | Manhattan à hauteur de trottoir : portails et fenêtres en retrait, soubassements en relief, halls vitrés et auvents, finitions par famille de bâtiment. |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |
 
 

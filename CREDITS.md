@@ -12,6 +12,9 @@ See the upstream README for source datasets and their individual terms.
 
 The original MIT copyright and license are preserved in LICENSE.
 
+**Brick & Mortar (0.9.28).** Les portails, soubassements et textures de menuiserie, verre et quincaillerie
+sont originaux et générés par le jeu. La pierre des murs réutilise les textures Poly Haven déjà créditées ci-dessous.
+
 Morningside Heights : modèles, plans de jeu et sculpture de la fontaine originaux pour OVERDRAFT.
 Références documentaires pour l’architecture et le terrain : [NYC Landmarks Preservation Commission, dossier LP-2585](https://s-media.nyc.gov/agencies/lpc/lp/2585.pdf)
 et [NYC Parks, Morningside Park](https://nycgovparks.org/parks/morningside-park).

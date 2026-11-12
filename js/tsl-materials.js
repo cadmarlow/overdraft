@@ -749,7 +749,7 @@ function createCurtainWallMaterial(opts = {}) {
   );
   const aptRoom = evaluateApartmentInterior(uCoord, vCoord, winUV, cellId, bayWidth, uFloorHeight, uSeed, uWarmth, uLitProbability.mul(0.65), fw);
   const storefront = createStorefront(facade, uSeed, boxLocal || footprintLocal);
-  const entrance = createBuildingEntrance(facade, cFrame, boxLocal || footprintLocal, true);
+  const entrance = footprintLocal ? null : createBuildingEntrance(facade, cFrame, boxLocal, true);
   const floorIdx = floor(gridV);
   const isMechFloor = float(1.0).sub(step(1.0, mod(floorIdx.add(uSeed), 16.0))).mul(step(4.0, floorIdx));
 
@@ -820,10 +820,22 @@ function createCurtainWallMaterial(opts = {}) {
     const finalWall = mix(facadeCol, mechCol, isMechFloor.mul(float(1.0).sub(isRoof)));
 
     // Brushed-aluminium coping capping every wall
-    const withCap = mix(finalWall, mix(cFrame, color(0xc9ced3), 0.45), coping);
+    const wallFinish = finalWall.toVar();
+    if (footprintLocal) {
+      const podium = float(1).sub(step(1, gridV)).mul(float(1).sub(isRoof)).mul(float(1).sub(isGlassPane));
+      const podiumUV = vec2(uCoord, vCoord).div(world.limestone.metres).toVar();
+      const courseShade = float(1).sub(gridLine(vCoord, 0.67, 0.012).mul(0.24)).toVar();
+      const dx = podiumUV.dFdx().toVar(), dy = podiumUV.dFdy().toVar();
+      If(podium.greaterThan(0.01), () => {
+        const cladding = texture(world.limestone.color, podiumUV).grad(dx, dy).rgb.mul(mix(cFrame, color(0x92938d), 0.56)).mul(2.7);
+        const podiumFinish = cladding.mul(courseShade).mul(mix(0.7, 1.05, smoothstep(0.22, 1.15, vCoord)));
+        wallFinish.assign(mix(finalWall, podiumFinish, podium));
+      });
+    }
+    const withCap = mix(wallFinish, mix(cFrame, color(0xc9ced3), 0.45), coping);
 
     const surface = mix(mix(withCap, roofColor, isRoof), storefront.color, storefront.mask);
-    return mix(surface, entrance.color, entrance.mask);
+    return entrance ? mix(surface, entrance.color, entrance.mask) : surface;
   })();
 
   mat.roughnessNode = Fn(() => {
@@ -833,7 +845,7 @@ function createCurtainWallMaterial(opts = {}) {
     const sillDirt = float(1.0).sub(smoothstep(spandrelRatio, spandrelRatio.add(0.18), cellUV.y)).mul(0.18);
     const glassOrFrame = mix(float(0.05).add(sillDirt), float(0.54), max(max(isFrame, isRoof), solid));
     const surface = mix(mix(glassOrFrame, float(0.36), coping), storefront.roughness, storefront.mask);
-    return mix(surface, entrance.roughness, entrance.mask);
+    return entrance ? mix(surface, entrance.roughness, entrance.mask) : surface;
   })();
 
   // Hardware derivative bumpNormal for raised curtain-wall mullions & spandrel channels (ramps >= 2px, see pre-war)
@@ -850,7 +862,7 @@ function createCurtainWallMaterial(opts = {}) {
     const mullionRelief = float(1.0).sub(inPane).mul(mix(float(0.014), float(0.04), fins)).add(coping.mul(0.01));
 
     const relief = mix(mullionRelief, storefront.relief, storefront.mask);
-    return bumpNormal(mix(relief, entrance.relief, entrance.mask).mul(detailFade));
+    return bumpNormal((entrance ? mix(relief, entrance.relief, entrance.mask) : relief).mul(detailFade));
   })();
 
   mat.emissiveNode = Fn(() => {
@@ -868,7 +880,8 @@ function createCurtainWallMaterial(opts = {}) {
       .mul(paneMask)
       .mul(cityUniforms.uInteriorGlow)
       .mul(0.72);
-    return mix(mix(emission, storefront.emissive, storefront.mask), entrance.emissive, entrance.mask);
+    const surface = mix(emission, storefront.emissive, storefront.mask);
+    return entrance ? mix(surface, entrance.emissive, entrance.mask) : surface;
   })();
 
   _curtainWallCache.set(cacheKey, mat);
@@ -1039,7 +1052,7 @@ function createPreWarBuildingMaterial(opts = {}) {
   const photoUV = wallUV.div(stonePhoto.metres);
   const aptRoom = evaluateApartmentInterior(uCoord, vCoord, winUV, cellId, bayWidth, uFloorHeight, uSeed, uWarmth, uLitProbability.mul(0.62), fw);
   const storefront = createStorefront(facade, uSeed, boxLocal || footprintLocal);
-  const entrance = createBuildingEntrance(facade, cTrim, boxLocal || footprintLocal);
+  const entrance = footprintLocal ? null : createBuildingEntrance(facade, cTrim, boxLocal);
   // Window AC units (~12% of upper-floor windows in walk-ups and apartments, a few elsewhere), none in the stone base
   const acRand = hash2D(cellId.add(vec2(uSeed.mul(1.3).add(7.1), 91.7)));
   const acShare = S ? mix(float(0.97), float(0.86), flag(4)) : float(0.88);
@@ -1192,6 +1205,8 @@ function createPreWarBuildingMaterial(opts = {}) {
     // window of a brick front
     const dressed = texture(world.limestone.color, wallUV.div(world.limestone.metres).mul(1.7)).rgb.mul(cTrim).mul(2.6);
     // The stone base, rusticated: deep joints every course
+    const damp = float(1).sub(smoothstep(0.23, 0.72, vCoord.add(patches.sub(1.0).mul(0.75))));
+    const lowerWall = footprintLocal ? float(1).sub(step(uFloorHeight, vCoord)).mul(float(1).sub(isRoof)) : float(0);
     const rustication = gridLine(vCoord.add(0.1), 0.62, 0.012).mul(inBase);
     // Quoins: long and short stones in turn up both ends of a street front, above the shops
     const quoinRow = mod(floor(vCoord.div(0.36)), 2.0);
@@ -1200,7 +1215,8 @@ function createPreWarBuildingMaterial(opts = {}) {
     const inQuoin = flag(1).mul(float(1.0).sub(step(quoinWidth, quoinEnd))).mul(front).mul(float(1.0).sub(isRoof)).mul(step(uFloorHeight, vCoord))
       .mul(float(1.0).sub(blank)).mul(step(wallW, 200.0));
     const quoinJoint = max(gridLine(vCoord, 0.36, 0.012), lineAA(quoinEnd.sub(quoinWidth), 0.012)).mul(inQuoin);
-    const baseStone = mix(stone, dressed.mul(1.06), max(inBase, inQuoin)).mul(float(1.0).sub(max(rustication.mul(0.3), quoinJoint.mul(0.35))));
+    const baseStone = mix(stone, dressed.mul(1.06), max(inBase, inQuoin)).mul(float(1.0).sub(max(rustication.mul(0.3), quoinJoint.mul(0.35))))
+      .mul(float(1.0).sub(damp.mul(lowerWall).mul(0.27)));
     // Art Deco's dark spandrels run the windows of a column together into tall strips
     const spandrel = flag(16).mul(filteredPulse(cellUV.x, effHalfX, oneMinusEffX, fw.x)).mul(open)
       .mul(float(1.0).sub(inY)).mul(float(1.0).sub(inBase)).mul(float(1.0).sub(isGroundFloor)).mul(front).mul(float(1.0).sub(isRoof));
@@ -1255,7 +1271,7 @@ function createPreWarBuildingMaterial(opts = {}) {
     const withFrames = mix(mix(wallOrRoof, revealCol, reveal), frameCol, isWindowOpening.mul(paneSeen).mul(sashMask));
     const withGlass = mix(withFrames, glassCol, isWindowGlass);
     const surface = mix(mix(withGlass, acColor, inACBox), storefront.color, storefront.mask);
-    return mix(surface, entrance.color, entrance.mask);
+    return entrance ? mix(surface, entrance.color, entrance.mask) : surface;
   })();
 
   mat.roughnessNode = Fn(() => {
@@ -1269,7 +1285,7 @@ function createPreWarBuildingMaterial(opts = {}) {
 
     const stoneGrain = noise2D(vec2(uCoord.mul(8.0), vCoord.mul(8.0))).mul(0.12);
     const surface = mix(mix(float(0.78).add(stoneGrain), glassRough, isWindow), storefront.roughness, storefront.mask);
-    return mix(surface, entrance.roughness, entrance.mask);
+    return entrance ? mix(surface, entrance.roughness, entrance.mask) : surface;
   })();
 
   // Hardware derivative bumpNormal for domed brickwork, stone courses, recessed windows & AC louvers. Edges ramp over
@@ -1303,9 +1319,9 @@ function createPreWarBuildingMaterial(opts = {}) {
 
     const relief = mix(totalHeight, storefront.relief, storefront.mask);
     // The masonry's own relief, off glass, shops and roofs
-    const masonry = float(1.0).sub(isWindow).mul(float(1.0).sub(storefront.mask)).mul(float(1.0).sub(entrance.mask)).mul(float(1.0).sub(isRoof));
+    const masonry = float(1.0).sub(isWindow).mul(float(1.0).sub(storefront.mask)).mul(entrance ? float(1.0).sub(entrance.mask) : 1.0).mul(float(1.0).sub(isRoof));
     const photoRelief = surfaceNormal(stonePhoto.normal, photoUV, masonry.mul(float(1.0).sub(smoothstep(30.0, 170.0, camDist))).mul(1.5));
-    return normalize(bumpNormal(mix(relief, entrance.relief, entrance.mask).mul(detailFade)).add(photoRelief).sub(normalViewGeometry));
+    return normalize(bumpNormal((entrance ? mix(relief, entrance.relief, entrance.mask) : relief).mul(detailFade)).add(photoRelief).sub(normalViewGeometry));
   })();
 
   mat.emissiveNode = Fn(() => {
@@ -1344,8 +1360,8 @@ function createPreWarBuildingMaterial(opts = {}) {
     const crownMask = smoothstep(uCrownGlowHeight, uCrownGlowHeight.add(26.0), vCoord).mul(float(1.0).sub(isRoof.mul(0.5)));
     const crownFlood = cCrown.mul(crownMask).mul(cityUniforms.uInteriorGlow).mul(0.55);
 
-    const emission = mix(mix(winEmit, storefront.emissive, storefront.mask), entrance.emissive, entrance.mask);
-    return emission.add(crownFlood);
+    const emission = mix(winEmit, storefront.emissive, storefront.mask);
+    return (entrance ? mix(emission, entrance.emissive, entrance.mask) : emission).add(crownFlood);
   })();
 
   _preWarCache.set(cacheKey, mat);

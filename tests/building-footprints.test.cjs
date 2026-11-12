@@ -65,6 +65,27 @@ const record = (outer, extra = {}) => {
 const build = (records, getNeighbours) => { triangulations = []; return createBuildingFootprints({}, records, getNeighbours); };
 const close = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-5, `${actual} != ${expected}`);
 
+test('ground-storey recesses cut the visible wall while the shadow stand-in keeps its silhouette', () => {
+  triangulations = [];
+  const source = record(square(), { shopWalls: null });
+  const frontages = {
+    forBuilding(record, walls) {
+      assert.equal(record, source);
+      assert.equal(walls.length, 4);
+      const wall = walls.find(w => w.nz === 1);
+      assert.equal(wall.shop, undefined);
+      return new Map([[wall, [[0, 10, 2.8, wall.top], [0, 4, wall.bottom, 2.8], [6, 10, wall.bottom, 2.8]]]]);
+    }
+  };
+  const mesh = createBuildingFootprints({}, [source], null, null, frontages).children[0];
+  assert.equal(mesh.geometry.index.length, 42);
+  const proxy = mesh.userData.shadowStandIn;
+  assert.equal(proxy.index.length, 30);
+  assert.equal(proxy.attributes.position, mesh.geometry.attributes.position);
+  const points = proxy.index.map(i => Array.from(proxy.attributes.position.array.slice(i * 3, i * 3 + 3)));
+  assert.ok(points.filter(p => p[2] === 10).every(p => p[0] === 0 || p[0] === 10));
+});
+
 test('arbitrary wall angles preserve dimensions, outward normals and facade attributes', () => {
   const angle = 0.43, c = Math.cos(angle), s = Math.sin(angle);
   const outer = square().map(({ x, z }) => p(x * c - z * s, x * s + z * c));
