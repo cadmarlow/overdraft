@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
-import { MARGIN, bandsFor, listing, candidates } from '../js/tree-levels.js';
+import { MARGIN, DENSE_LOD_STEP, bandsFor, listing, candidates } from '../js/tree-levels.js';
 import { SPECIES, KINDS } from '../tools/trees/lib/species.mjs';
 import { LEAF_KINDS, tileUV, ATLAS_W, ATLAS_H } from '../tools/trees/lib/foliage.mjs';
 import { growTree } from '../tools/trees/lib/grow.mjs';
@@ -32,6 +32,17 @@ test('every distance within reach is drawn by a level, and by two across each ha
     assert.equal(listing(b.reach + MARGIN + 1, b), 0, 'nothing beyond reach');
   }
   assert.ok(bandsFor(1.5).near > bandsFor(1).near && bandsFor(1).near > bandsFor(0.6).near, 'better graphics keep the full model further');
+});
+
+test('dense plantings keep their closest trees in full detail and hand off both levels before mid-distance', () => {
+  const b = bandsFor(1);
+  const scale = 1 + DENSE_LOD_STEP * 2;
+  assert.equal(listing(6, b, scale), 1);
+  assert.equal(listing((b.near - b.fade / 2) / scale, b, scale) & 3, 3);
+  assert.equal(listing(39, b, scale), 2);
+  assert.equal(listing(72, b, scale), 4);
+  assert.equal(listing(b.reach - 65, b, scale), 4, 'dense stands remain visible at their normal far range');
+  assert.ok(scale * 3 < MARGIN, 'a three-metre camera move cannot skip the buffered handoff');
 });
 
 test('a surveyed tree gets the model nearest its trunk, then smaller ones where the street leaves less room', () => {

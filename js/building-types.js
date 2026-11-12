@@ -129,8 +129,8 @@ function classify(b, f) {
 }
 
 // The dress: everything the facade shaders and the details need, a pure function of the building
-function dressBuilding(b, f) {
-  const type = classify(b, f);
+function dressBuilding(b, f, estateBrick = false) {
+  const type = estateBrick ? 'postwar' : classify(b, f);
   const rand = mulberry32(Math.round(b.cx * 31 + b.cz * 17) ^ 0x5bd1e995);
   const year = f.year || b.year || 0;
   const s = {
@@ -288,7 +288,17 @@ function dressBuilding(b, f) {
   // Pressed-metal cornices are painted; stone ones are the trim's stone
   s.corniceColour = s.cornice === 'metal' ? pick(rand, [0xd6ceb6, 0xe2ded4, 0xcfc8b8, 0x2e4434, 0x5a4232, 0x7a7c7a, 0xe8e6e0, 0x8a8478]) : s.trim;
   // What mappers saw wins over the palette: the colour of the building, a glass facade
-  if (f.colour >= 0 && !s.glass) {
+  if (estateBrick) {
+    s.surface = 'redbrick';
+    s.wall = pick(rand, [0x78483b, 0x805043, 0x8e5746]);
+    s.trim = 0x9c806c;
+    s.window = WINDOW.twoOverTwo;
+    s.bay = 2.62;
+    s.ratioX = 0.46;
+    s.ratioY = 0.59;
+    s.baseFloors = 0;
+    s.frame = FRAME.cream;
+  } else if (f.colour >= 0 && !s.glass) {
     const [r, g, bl] = [f.colour >> 16, (f.colour >> 8) & 255, f.colour & 255];
     if (Math.max(r, g, bl) > 40) s.wall = f.colour;
   }

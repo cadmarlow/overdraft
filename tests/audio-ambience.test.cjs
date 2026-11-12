@@ -156,14 +156,14 @@ async function bakedVoice(options) {
 
 const flatten = (value) => Array.isArray(value) ? value : value?.getChannelData ? [value] : Object.values(value);
 
-test('ambienceLevels is pure and always returns the seven finite layer gains', async () => {
+test('ambienceLevels is pure and always returns the eight finite layer gains', async () => {
   const { ambienceLevels } = await load();
   const params = Object.freeze({ crowd: 0.6, traffic: 0.4, night: 0.2, hour: 15, subway: 0.5, construction: 0.7, bar: 0.3,
     birds: 0.5, water: 0.2, indoor: 0, rain: 0.1, enclosure: 0.5 });
   const a = ambienceLevels(params), b = ambienceLevels(params);
   assert.deepEqual(a, b);
   assert.notEqual(a, b, 'a fresh object every call');
-  assert.deepEqual(Object.keys(a).sort(), ['bar', 'birds', 'construction', 'crowd', 'hum', 'siren', 'subway']);
+  assert.deepEqual(Object.keys(a).sort(), ['bar', 'birds', 'construction', 'crowd', 'fountain', 'hum', 'siren', 'subway']);
   const garbage = { crowd: NaN, traffic: -4, night: true, hour: 'midi', subway: 9, construction: Infinity, bar: -1, birds: '1',
     water: null, indoor: 2, rain: -0.5, enclosure: 7 };
   for (const input of [undefined, null, 42, {}, garbage, { hour: -30 }, { hour: 1e9 }, { hour: 24 }]) {
@@ -173,6 +173,13 @@ test('ambienceLevels is pure and always returns the seven finite layer gains', a
   }
   assert.equal(ambienceLevels({ subway: 9 }).subway, ambienceLevels({ subway: 1 }).subway, 'params are clamped to 0..1');
   assert.equal(ambienceLevels({ night: true, bar: 1 }).bar, ambienceLevels({ night: 1, bar: 1 }).bar, 'a boolean night counts');
+});
+
+test('the fountain is quiet away from its local probe and grows as the listener approaches', async () => {
+  const { ambienceLevels } = await load();
+  assert.equal(ambienceLevels({}).fountain, 0);
+  assert.ok(ambienceLevels({ fountain: 1 }).fountain > ambienceLevels({ fountain: 0.5 }).fountain);
+  assert.ok(ambienceLevels({ fountain: 1, indoor: 1 }).fountain < ambienceLevels({ fountain: 1 }).fountain);
 });
 
 test('construction only works by day and the club only plays at night', async () => {
@@ -224,7 +231,7 @@ test('the crowd grows with pedestrian density, from silence', async () => {
 
 test('the baked bank is finite, audible, within full scale, and its loops have no seam', async () => {
   const { buffers, context } = await bakedVoice();
-  const loops = ['swell', 'rumble', 'vent', 'babble', 'subway', 'air', 'bar', 'jackhammer', 'drill', 'clack'];
+  const loops = ['swell', 'rumble', 'vent', 'fountain', 'babble', 'subway', 'air', 'bar', 'jackhammer', 'drill', 'clack'];
   let total = 0;
   for (const [name, entry] of Object.entries(buffers)) {
     assert.ok(entry, `${name} failed to bake`);
@@ -251,13 +258,13 @@ test('the baked bank is finite, audible, within full scale, and its loops have n
   assert.equal(context.late, 0);
 });
 
-test('the persistent graph stays within 40 nodes, with seven looping beds', async () => {
+test('the persistent graph stays within 40 nodes, with eight looping beds', async () => {
   const { context, voice } = await bakedVoice();
   run(voice, context, 3, QUIET);
   const live = context.live();
   assert.ok(live.length <= 40, `${live.length} persistent nodes`);
   const beds = context.started.filter((source) => source.loop && !source.disconnected);
-  assert.equal(beds.length, 7);
+  assert.equal(beds.length, 8);
   assert.equal(context.all.filter((node) => node.kind === 'oscillator').length, 0, 'everything is baked, no live oscillator');
 });
 

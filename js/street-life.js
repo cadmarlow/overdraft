@@ -23,7 +23,7 @@ const DOOR_RATE = { bodega: 0.07, cafe: 0.08, bakery: 0.06, pizza: 0.06, takeout
   juice: 0.04, laundromat: 0.015, cleaners: 0.015, barber: 0.015, salon: 0.015, pharmacy: 0.05, bank: 0.04, boutique: 0.03, luxury: 0.02, jewelry: 0.01,
   phones: 0.025, hardware: 0.02, florist: 0.015, liquor: 0.03, books: 0.02, office: 0.05, souvenir: 0.03, shoes: 0.02, gallery: 0.01 };
 
-function createStreetLife({ pedestrians, traffic, shops = [], subwayMouths = [], foodCarts = [], seats = [], stands = [], busStops = [], hourOf = () => 12 }) {
+function createStreetLife({ pedestrians, traffic, shops = [], subwayMouths = [], foodCarts = [], seats = [], stands = [], busStops = [], gardenVisits = [], hourOf = () => 12 }) {
   const peds = pedestrians.peds;
   const typesById = Object.fromEntries(SHOP_TYPES.map((t) => [t.id, t]));
 
@@ -42,6 +42,8 @@ function createStreetLife({ pedestrians, traffic, shops = [], subwayMouths = [],
     return a;
   };
   for (const s of seats) add({ kind: 'seat', x: s.x, z: s.z, yaw: s.yaw, seat: s, group: s.group || null, sub: s.kind });
+  const gardens = gardenVisits.map(({ gate, route, seat = null, stop = seat, look = null, sidewalk, entry }) =>
+    add({ ...gate, kind: 'garden', yaw: stop.yaw, seat, stop, look, sidewalk, entry, waypoints: [gate, ...route, stop] }));
   for (const s of stands) add({ kind: s.kind, x: s.x, z: s.z, yaw: s.yaw, group: s.group || null });
   for (const shop of shops) {
     // storefront-plan.js keeps the type as its index in SHOP_TYPES
@@ -87,7 +89,7 @@ function createStreetLife({ pedestrians, traffic, shops = [], subwayMouths = [],
 
   // ---- Activities -------------------------------------------------------------------------------------------------------
   let clock = 0;
-  const started = { seat: 0, busstop: 0, counter: 0, window: 0, cart: 0, door: 0, exits: 0, subway: 0, boarded: 0, alighted: 0, hails: 0, fares: 0, deliveries: 0 };
+  const started = { seat: 0, busstop: 0, counter: 0, window: 0, cart: 0, door: 0, exits: 0, subway: 0, boarded: 0, alighted: 0, hails: 0, fares: 0, deliveries: 0, garden: 0 };
   const release = (a) => (p, cancelled) => {
     a.busy = Math.max(0, a.busy - 1);
     a.cooldown = clock + (cancelled ? 2 : 6 + Math.random() * 20);
@@ -102,10 +104,39 @@ function createStreetLife({ pedestrians, traffic, shops = [], subwayMouths = [],
     started[a.kind] = (started[a.kind] || 0) + 1;
     return act;
   }
+  const gardenOpen = hour => hour >= 7 && hour < 21;
+  function startGardenVisit(p, a, roll) {
+    startActivity(p, a, {
+      x: a.stop.x, z: a.stop.z, seat: a.seat, look: a.look, duration: a.seat ? 30 + Math.random() * 50 : 13 + Math.random() * 19,
+      waypoints: a.waypoints, waypoint: 0, carry: a.look ? PROP.PHONE : roll < 0.3 ? PROP.COFFEE : undefined
+    });
+  }
+
+  // When a street has a missing sidewalk track, one visitor per entry starts on the authored sidewalk.
+  // The regular crowd pool and the walking rig handle the visit, seating and departure.
+  function seedGardenVisits(x, z, hour) {
+    if (!gardenOpen(hour)) return;
+    for (const a of gardens) {
+      if (!a.entry || a.busy || clock < a.cooldown || (a.guest?.placed && a.guest.route === a.guestTrack)) continue;
+      const d = Math.hypot(a.entry.x - x, a.entry.z - z);
+      if (d < 11 || d > 106) continue;
+      const p = peds.find(q => !q.placed);
+      if (!p || !pedestrians.placeAt(p, a.entry.x, a.entry.z, 6, a.sidewalk)) continue;
+      a.guest = p;
+      a.guestTrack = p.route;
+      startGardenVisit(p, a, Math.random());
+    }
+  }
+
   function tryAnchor(p, a, hour, zone) {
     if (a.busy || clock < a.cooldown) return false;
     const r = Math.random();
     switch (a.kind) {
+      case 'garden': {
+        if (!gardenOpen(hour) || Math.hypot(p.x - a.x, p.z - a.z) > 2.2 || r > 0.62) return false;
+        startGardenVisit(p, a, r);
+        return true;
+      }
       case 'seat': {
         if (a.sub === 'shelter' && a.group && !(hour > 6 && hour < 23.5)) return false;
         if (r > (a.sub === 'cafe' ? 0.3 : 0.22)) return false;
@@ -288,6 +319,7 @@ function createStreetLife({ pedestrians, traffic, shops = [], subwayMouths = [],
     if (clock >= slowAt) {
       slowAt = clock + 1;
       pedestrians.setDensity(densityAt(cx, cz, hour));
+      seedGardenVisits(cx, cz, hour);
       serveBuses();
       startDelivery(camera);
     }
@@ -300,7 +332,7 @@ function createStreetLife({ pedestrians, traffic, shops = [], subwayMouths = [],
     const n = peds.length, slice = Math.ceil(n / 4);
     for (let k = 0; k < slice; k++) {
       const p = peds[(cursor + k) % n];
-      if (!p.placed || p.dead || p.activity || p.node || !p.route?.edge || p.pause > 0 || p.conversation || p.v < 0.4 || clock < p.panicUntil) continue;
+      if (!p.placed || p.dead || p.activity || p.node || (!p.route?.edge && !p.route?.local) || p.pause > 0 || p.conversation || p.v < 0.4 || clock < p.panicUntil) continue;
       const dx = p.x - cx, dz = p.z - cz;
       if (dx * dx + dz * dz > NEAR * NEAR) continue;
       let taken = false;

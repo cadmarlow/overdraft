@@ -45,6 +45,12 @@ import { BUILDING_FACTS } from './building-styles.js';
 import { dressBuilding, styleAttributes, linear, SURFACES } from './building-types.js';
 import { zoningSetbacks, parapetHeight } from './building-massing.js';
 import { createBuildingFootprints } from './building-footprints.js';
+import { buildMorningsideCathedral } from './morningside-cathedral.js';
+import { closePoint, isCathedral } from './morningside-plan.js';
+import { buildLincolnTheatres } from './lincoln-theatres.js';
+import { isStuyvesantResidence, lincolnTheatres } from './urban-places-plan.js';
+import { manhattanSiteBuildings } from './manhattan-sites-plan.js';
+import { buildManhattanArchitecture } from './manhattan-monuments.js';
 import { STOREFRONTS } from './storefront-geodata.js';
 import { SHOP_TYPES } from './storefront-types.js';
 import { planStorefronts } from './storefront-plan.js';
@@ -163,7 +169,13 @@ class Quadtree {
 function buildCityBlocks(scene, landmarkColliders = []) {
   const group = new THREE.Group();
   group.name = 'ManhattanCityBlocks';
-  const colliders = [];
+  const cathedral = REAL_BUILDINGS.find(isCathedral);
+  const theatres = lincolnTheatres(REAL_BUILDINGS);
+  const civicBuildings = manhattanSiteBuildings(REAL_BUILDINGS);
+  const authored = new Set([cathedral, ...theatres.map(({ record }) => record), ...civicBuildings.map(({ record }) => record)].filter(Boolean));
+  const colliders = cathedral ? buildMorningsideCathedral(group, cathedral) : [];
+  if (theatres.length) colliders.push(...buildLincolnTheatres(group, theatres));
+  if (civicBuildings.length) colliders.push(...buildManhattanArchitecture(group, civicBuildings));
 
   // Stream nearby architectural details.
   const quadtree = new Quadtree({
@@ -172,7 +184,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     minZ: ISLAND_BOUNDS.minZ - 50,
     maxZ: ISLAND_BOUNDS.maxZ + 50
   }, 6, 9);
-  const allBlocks = [];
+  const allBlocks = Array.from(authored, b => ({ ...b, footprints: b.polygons.map(p => ({ h: b.height, pts: p.outer, holes: p.holes })) }));
 
   // One facade material per wall photograph, and one for curtain walls: each building brings its own dress (its kind,
   // colours, windows; js/building-types.js) as vertex attributes, so these few materials draw every building in town
@@ -214,12 +226,12 @@ function buildCityBlocks(scene, landmarkColliders = []) {
     return { height: Infinity, x: t.x, z: t.z, x0: t.x - t.w / 2 - 3, x1: t.x + t.w / 2 + 3, z0: t.z - t.d / 2 - 3, z1: t.z + t.d / 2 + 3, ...(o || {}) };
   }).filter(Boolean);
   // Keep the authored landmark models; the survey supplies the surrounding buildings.
-  const surveyedBuildings = REAL_BUILDINGS.filter((b) => !LANDMARK_RESERVE.some((h) =>
+  const surveyedBuildings = REAL_BUILDINGS.filter((b) => !authored.has(b) && !LANDMARK_RESERVE.some((h) =>
     b.polygons.some((p) => polygonContains({ outer: p.outer, holes: [] }, h.x, h.z)))
     && !landmarkColliders.some((c) => b.minX < c.maxX && b.maxX > c.minX && b.minZ < c.maxZ && b.maxZ > c.minZ
       && b.polygons.some((p) => polygonBoxOverlaps(p, (c.minX + c.maxX) / 2, (c.minZ + c.maxZ) / 2,
         (c.maxX - c.minX) / 2, (c.maxZ - c.minZ) / 2))));
-  const landmarkReserves = [...LANDMARK_RESERVE, ...landmarkColliders.map((c) =>
+  const landmarkReserves = [...LANDMARK_RESERVE, ...[...landmarkColliders, ...colliders].map((c) =>
     ({ x0: c.minX, x1: c.maxX, z0: c.minZ, z1: c.maxZ, height: c.maxY ?? Infinity }))];
   const hitR = (a, x0, x1, z0, z1) => a.x0 < x1 && a.x1 > x0 && a.z0 < z1 && a.z1 > z0;
   const buildingReserves = [];
@@ -241,7 +253,7 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   const dress = new Map();
   for (const b of surveyedBuildings) {
     const facts = BUILDING_FACTS[factIndex.get(b)];
-    const style = dressBuilding(b, facts);
+    const style = dressBuilding(b, facts, isStuyvesantResidence(b));
     let podium = b.height, tiers = [];
     const ground = facts.parts.filter((p) => p.base < 1);
     if (ground.length) {
@@ -373,6 +385,11 @@ function buildCityBlocks(scene, landmarkColliders = []) {
   }
   // Every registered storefront on the wall of its building that faces its street
   const plan = planStorefronts(records, STOREFRONTS, SHOP_TYPES);
+  // A sidewalk terrace faces the garden across Amsterdam, on an actual surveyed storefront.
+  const cafeSite = closePoint(-16, 28);
+  const cafe = plan.shops.find(s => Math.abs(s.x - cafeSite.x) < 1.5 && Math.abs(s.z - cafeSite.z) < 5 &&
+    s.nx > 0.9 && s.width >= 5 && SHOP_TYPES[s.type]?.id === 'restaurant');
+  if (cafe) cafe.terrace = true;
   for (const [record, walls] of plan.wallsByRecord) record.shopWalls = walls;
   const calibreSites = planCalibre(plan.shops, records, 48, { ...ISLAND_BOUNDS, shoreAt: getIslandBoundsAtZ });
   // The restaurants (BULLION, TRANCHE) take other ground floors the same way (eatery-plan.js)

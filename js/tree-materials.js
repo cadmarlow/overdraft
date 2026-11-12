@@ -8,6 +8,7 @@ import {
 import { urbanSkyVisibility } from './urban-light.js';
 import { cityUniforms } from './tsl-materials.js';
 import { trees } from './tree-assets.js';
+import { DENSE_LOD_STEP } from './tree-levels.js';
 
 // The trees' two materials: the mesh one (bark tubes and leaf-spray cards, levels of detail 0 and 1) and the impostor
 // one (a tree far away is a card showing the photograph taken of it from that side, js/tree-assets.js).
@@ -141,13 +142,14 @@ function createTreeMaterial({ bark, barkNormal, barkTint, level }) {
   const mat = new TreeNodeMaterial({ side: THREE.DoubleSide, alphaToCoverage: true, metalness: 0.0, roughness: 0.8 });
   const iA = attribute('aInstA', 'vec4'), iB = attribute('aInstB', 'vec4');
   const aWind = attribute('aWind', 'vec4'), aShade = attribute('aShade', 'vec4');
-  const origin = iA.xyz, rnd = iB.z;
+  const origin = iA.xyz, rnd = fract(iB.z);
+  const lodScale = floor(iB.z).mul(DENSE_LOD_STEP).add(1);
   const cs = cos(iA.w), sn = sin(iA.w);
   const turn = (v) => vec3(v.x.mul(cs).add(v.z.mul(sn)), v.y, v.z.mul(cs).sub(v.x.mul(sn)));
   const bands = treeUniforms.bands;
 
   // Handover between levels, judged once per tree from the player's camera
-  const dist = length(treeUniforms.view.sub(origin.add(vec3(0.0, iB.y.mul(6.0), 0.0))));
+  const dist = length(treeUniforms.view.sub(origin.add(vec3(0.0, iB.y.mul(6.0), 0.0)))).mul(lodScale);
   const enter = level === 0 ? float(1.0) : smoothstep(bands.x.sub(bands.z), bands.x, dist);
   const leave = level === 0 ? smoothstep(bands.x.sub(bands.z), bands.x, dist) : smoothstep(bands.y.sub(bands.z), bands.y, dist);
   const vFade = flat(vec2(enter, leave), 'vTreeFade');
@@ -225,7 +227,8 @@ function createTreeMaterial({ bark, barkNormal, barkTint, level }) {
 function createImpostorMaterial() {
   const mat = new TreeNodeMaterial({ side: THREE.DoubleSide, alphaToCoverage: true, metalness: 0.0, roughness: 0.78 });
   const iA = attribute('aInstA', 'vec4'), iB = attribute('aInstB', 'vec4');
-  const origin = iA.xyz, rnd = iB.z;
+  const origin = iA.xyz, rnd = fract(iB.z);
+  const lodScale = floor(iB.z).mul(DENSE_LOD_STEP).add(1);
   const [aw, ah] = trees.atlas, [cols] = trees.grid;
   const count = trees.types.length;
   // per type: where its frames are in the atlas (x, y, frame width, frame height, all in uv), and its sphere (centre height, radius, tree height)
@@ -242,7 +245,7 @@ function createImpostorMaterial() {
   const up = cross(toEye, right);
 
   const dist = length(treeUniforms.view.sub(origin.add(vec3(0.0, iB.y.mul(6.0), 0.0))));
-  const enter = smoothstep(bands.y.sub(bands.z), bands.y, dist);
+  const enter = smoothstep(bands.y.sub(bands.z), bands.y, dist.mul(lodScale));
   const leave = smoothstep(bands.w.sub(60.0), bands.w, dist);
   const vFade = flat(vec2(enter, leave), 'vImpostorFade');
   const gone = step(enter, 0.0).add(step(1.0, leave)).min(1.0);

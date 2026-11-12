@@ -65,6 +65,11 @@ import { sampleShore, southernShoreRails } from './highway-shore.js';
 import { highwayCorridor, highwayGroundCut, highwayX, highwayScale } from './highway-layout.js';
 import { cutRoadGround } from './road-ground-cut.js';
 import { fitPierToRoad } from './road-corridor.js';
+import { buildCathedralClose, buildMorningsidePark } from './morningside-ground.js';
+import { MORNINGSIDE_PARK } from './morningside-plan.js';
+import { buildUrbanPlaces } from './urban-places.js';
+import { buildManhattanGrounds } from './manhattan-grounds.js';
+import { buildEastRiverPark } from './east-river-park.js';
 
 // Live construction data consumed by the building and street-detail builders after buildCityGrid().
 let centralParkClearings;
@@ -2307,7 +2312,15 @@ function buildCityGrid(scene) {
     arm.rotation.x = 0.9;
   }
 
-  // ---- Every other park block (Riverside & Morningside Parks, Marcus Garvey, Stuyvesant Square, City Hall Park, the
+  const district = { ground: streetGroundSurfaces, colliders: groundColliders, addTree: site => treeSites.push(site), addBench, addLamp };
+  // Keep these surfaces out of the at-grade road cut. The footbridge crosses the reserved highway at a different height.
+  const authoredGround = new THREE.Group();
+  authoredGround.name = 'ManhattanAuthoredGround';
+  scene.add(authoredGround);
+  const gardenVisits = [...buildCathedralClose(authoredGround, district), ...buildUrbanPlaces(authoredGround, district),
+    ...buildManhattanGrounds(authoredGround, district), ...buildEastRiverPark(authoredGround, district)];
+
+  // ---- Every other park block (Riverside, Marcus Garvey, Stuyvesant Square, City Hall Park, the
   //      Battery...): its curb island paved like a park walk, a granite-coped lawn inset from it under scattered trees
   //      (big planes along the walk), lampposts on the perimeter
   const SPECIAL_PARKS = new Set(['Central Park', 'Madison Square Park', 'Union Square Park', 'Washington Square Park', 'Tompkins Square Park', 'Bryant Park']);
@@ -2322,6 +2335,11 @@ function buildCityGrid(scene) {
     addStreetGround(b.poly, PARK_Y - 0.04);
     addStreetGround(slab, PARK_Y);
     pavedRects.push({ minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ });
+    if (b.parkName === MORNINGSIDE_PARK) {
+      // The curb polygon already bounds traffic. The diagonal park's box would close the sidewalks on Amsterdam.
+      gardenVisits.push(buildMorningsidePark(authoredGround, b, district));
+      continue;
+    }
     addFootprint((b.minX + b.maxX) * 0.5, (b.minZ + b.maxZ) * 0.5, b.maxX - b.minX, b.maxZ - b.minZ);
     const bed = offsetPolygonInward(b.poly, Math.min(5, Math.min(b.maxX - b.minX, b.maxZ - b.minZ) * 0.2));
     if (!bed) continue;
@@ -2563,7 +2581,7 @@ function buildCityGrid(scene) {
   const sidewalks = roadSidewalks;
   // Player colliders of the viaduct, park rocks and retaining walls
   const colliders = [...((fdrViaduct && fdrViaduct.colliders) || []), ...outcrops.colliders, ...groundColliders, ...waterfrontColliders];
-  return { group, sidewalks, curbs, groundSurfaces: streetGroundSurfaces, footprints, highwayLanes, colliders, roadPaint };
+  return { group, sidewalks, curbs, groundSurfaces: streetGroundSurfaces, footprints, highwayLanes, colliders, roadPaint, gardenVisits };
 }
 
 // =====================================================================================================================

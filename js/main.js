@@ -45,6 +45,9 @@ import { loadClutter } from './street-clutter.js';
 import { createParking } from './parking.js';
 import { createSidewalkFurniture } from './sidewalk-furniture.js';
 import { createStreetLife } from './street-life.js';
+import { closeBlock, closePoint, fountainSite } from './morningside-plan.js';
+import { lincolnFountain, ovalBlock, ovalFountain } from './urban-places-plan.js';
+import { campusBlock, asphaltBlock, unBlock, unPool, riverLimits } from './manhattan-sites-plan.js';
 import { createAmbientEvents } from './ambient-events.js';
 import { createBirds } from './birds.js';
 import { getIslandBoundsAtZ } from './city-config.js';
@@ -189,7 +192,14 @@ async function initApp() {
   // Buildings turned along non-grid streets have oriented colliders whose world bounds reach past their lots: they stay
   // inside the property line anyway, so the road network (lanes & sidewalks) doesn't need them.
   // Elevated building sections that clear even a bus don't obstruct ground traffic.
-  const grass = quality.grass ? createGrass(scene, scene, new THREE.Vector3(0, 10, 140)) : null;
+  const grassHit = {};
+  const grassCutStart = closePoint(-15, -970), grassCutEnd = closePoint(410, 85);
+  const grassCutBlocks = [ovalBlock, campusBlock, asphaltBlock, unBlock].filter(Boolean);
+  const grass = quality.grass ? createGrass(scene, scene, new THREE.Vector3(0, 10, 140), (x, z, y) =>
+    ((x > grassCutStart.x && x < grassCutEnd.x && z > grassCutStart.z && z < grassCutEnd.z) ||
+      (x > 2100 && z > riverLimits[0] && z < riverLimits[1]) ||
+      grassCutBlocks.some(b => x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ)) &&
+    cityGrid.groundSurfaces.sample(x, z, grassHit) && grassHit.y > y + 0.009) : null;
   // The road network first: the street furniture lines its curbs, then the traffic drives it
   await showLoadingStage('Préparation de la circulation…');
   const roadNetwork = await buildRoadNetworkAsync(cityGrid.sidewalks, [
@@ -226,6 +236,7 @@ async function initApp() {
   const streetLife = createStreetLife({
     pedestrians: trafficSystem.pedestrians, traffic: trafficSystem, shops: cityBlocks.shops.filter(s => !s.interior), subwayMouths: streetDetails.subwayMouths,
     foodCarts: streetDetails.foodCarts, seats: furniture.seats, stands: furniture.stands, busStops: furniture.busStops,
+    gardenVisits: cityGrid.gardenVisits,
     hourOf: () => gameplay?.atmosphere?.hour ?? 12
   });
   await showLoadingStage('Derniers préparatifs…');
@@ -729,7 +740,7 @@ async function initApp() {
   {
     const BARS = new Set(['bar', 'latin', 'restaurant']);
     let probeAt = -Infinity;
-    const probe = { crowd: 0, hour: 12, subway: 0, construction: 0, bar: 0, birds: 0, water: 0, indoor: 0, rain: 0 };
+    const probe = { crowd: 0, hour: 12, subway: 0, construction: 0, bar: 0, birds: 0, water: 0, fountain: 0, indoor: 0, rain: 0 };
     const nearestOf = (list, x, z, r) => { let best = r; for (const p of list) { const dx = p.x - x, dz = p.z - z; if (Math.abs(dx) > r || Math.abs(dz) > r) continue; const d = Math.hypot(dx, dz); if (d < best) best = d; } return best; };
     audioSystem.ambienceProbe = (position) => {
       const t = performance.now();
@@ -741,6 +752,12 @@ async function initApp() {
       probe.crowd = Math.min(1, crowd / 38);
       probe.hour = gameplay.atmosphere.hour;
       probe.rain = gameplay.atmosphere.rain || 0;
+      const fountainDistance = Math.hypot(x - fountainSite.x, position.y - 0.8, z - fountainSite.z);
+      probe.fountain = Math.max(0, 1 - fountainDistance / 33) * (x < closeBlock.minX + 5 ? 0.55 : 1);
+      for (const site of [lincolnFountain, ovalFountain, unPool]) {
+        const distance = Math.hypot(x - site.x, position.y - site.y, z - site.z);
+        probe.fountain = Math.max(probe.fountain, 1 - distance / site.audible);
+      }
       probe.subway = 1 - nearestOf(streetDetails.subwayMouths, x, z, 45) / 45;
       probe.subway = Math.max(probe.subway, 0.8 * (1 - nearestOf(furniture.grates, x, z, 30) / 30));
       probe.construction = 1 - nearestOf(furniture.sheds, x, z, 70) / 70;
@@ -763,6 +780,8 @@ async function initApp() {
   cameraSystem.initialized = false;
   controllerManager.update(0.016, 0, controllerManager.getActiveEntity().position);
   cameraSystem.update(0.016, 0);
+  // A local start or a restored save may be far from the tree field's initial Midtown view.
+  streetDetails.treeField.update(cameraSystem.camera.position);
   updateSceneCulling(cameraSystem.camera.position);
   // the curbs around the start fill before the shaders compile, so the first frame shows them
   for (let i = 0; i < 12; i++) parking.update(cameraSystem.camera, gameplay.atmosphere.hour, gameplay.atmosphere.day, 0);

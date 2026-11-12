@@ -122,7 +122,7 @@ class Ring {
   }
 }
 
-function createGrass(scene, root, cameraPosition) {
+function createGrass(scene, root, cameraPosition, isCovered = () => false) {
   // Upward triangles of every lawn, indexed by 16 m cells
   const CELL = 16;
   const tris = [];
@@ -185,7 +185,7 @@ function createGrass(scene, root, cameraPosition) {
         const y = list.length ? lawnAt(x, z, list) : NaN;
         const at = o + i * 4;
         out[at] = x;
-        out[at + 1] = Number.isNaN(y) ? -1000 : y;
+        out[at + 1] = Number.isNaN(y) || isCovered(x, z, y) ? -1000 : y;
         out[at + 2] = z;
         out[at + 3] = hash(x, z, 3.3);
       }

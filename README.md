@@ -20,6 +20,11 @@ mains libres l'avion garde sa pente, et le palonnier seul (A / E) fait un virage
 et l'eau sont de vrais obstacles ; les figures (looping, tonneau, rase-mottes, passage sous un pont, atterrissage)
 rapportent de l'argent. Les deux modèles sont sous CC BY 4.0 (voir `CREDITS.md`).
 
+Les paramètres `?spawn=morningside`, `?spawn=lincoln` et `?spawn=stuytown` lancent une visite à pied au jardin
+de la 111e Rue, à la place Josie Robertson ou à l’Oval de Stuyvesant Town depuis l’adresse locale.
+Les autres accès sont `?spawn=columbia`, `?spawn=asphalt`, `?spawn=east_river_park`, `?spawn=passerelle` et
+`?spawn=onu`. Le départ fixe l’heure à 14 h et la visite n’écrit pas dans la sauvegarde.
+
 La **0.9.23 — Free Float** permet de régler la densité de circulation depuis le menu pause.
 
 La **0.9.22 — Circuit Breaker** a découpé le calcul initial de la circulation en tâches courtes pour

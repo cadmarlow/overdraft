@@ -3,7 +3,7 @@ import { polygonBoxOverlaps } from './building-collision.js';
 import { trees } from './tree-assets.js';
 import { treeUniforms, createTreeMaterial, createImpostorMaterial } from './tree-materials.js';
 import { FAR_CASTER_LAYER } from './scene-culling.js';
-import { MARGIN, bandsFor, listing, candidates } from './tree-levels.js';
+import { MARGIN, DENSE_LOD_STEP, bandsFor, listing, candidates } from './tree-levels.js';
 
 // The trees of the island: tens of thousands of them, each the real species at its real size where the city's survey
 // says so. Near the camera a tree is its full model (every branch, a pair of leaf sprays on every twig); further off
@@ -87,7 +87,7 @@ function createTreeField(_scene, sites, colliders = []) {
   const planted = new Set();
   const trunks = [];
   const capacity = sites.length;
-  const data = new Float32Array(capacity * 8); // x y z yaw | across up random type
+  const data = new Float32Array(capacity * 8); // x y z yaw | across up LOD class + fractional random type
   const cells = new Map();
   const perType = types.map(() => 0);
   let N = 0;
@@ -106,7 +106,9 @@ function createTreeField(_scene, sites, colliders = []) {
     const r1 = hashPos(site.x, 1.3, site.z), r2 = hashPos(site.z, 7.1, site.x), r3 = hashPos(site.x + site.z, 3.3, 0.7);
     const s = chosen.scale * (0.95 + r1 * 0.1);
     const t = typeIndex.get(chosen.type);
-    data.set([site.x, y, site.z, site.yaw ?? r2 * Math.PI * 2, s * (0.95 + r3 * 0.1) * (site.squeeze ?? 1), s * (0.94 + r2 * 0.12), r1, t], i * 8);
+    const lodClass = site.denseCanopy ? (detail > 1 ? 1 : 2) : 0;
+    const variety = lodClass + Math.min(r1, 0.99999);
+    data.set([site.x, y, site.z, site.yaw ?? r2 * Math.PI * 2, s * (0.95 + r3 * 0.1) * (site.squeeze ?? 1), s * (0.94 + r2 * 0.12), variety, t], i * 8);
     perType[t]++;
     site.type = chosen.type.id;
     trunks.push({ x: site.x, y, z: site.z, radius: Math.max(0.09, chosen.type.trunkRadius * s * 1.1), height: Math.min(7, chosen.type.height * s * 0.6) });
@@ -243,7 +245,10 @@ function createTreeField(_scene, sites, colliders = []) {
         if (whole === 2) bits = 4;
         else if (whole === 0) {
           // (the same point of the tree the material measures from)
-          bits = listing(Math.hypot(data[i * 8] - px, data[i * 8 + 1] + data[i * 8 + 5] * 6 - py, data[i * 8 + 2] - pz), bands);
+          const offset = i * 8;
+          const lodScale = 1 + Math.floor(data[offset + 6]) * DENSE_LOD_STEP;
+          const dist = Math.hypot(data[offset] - px, data[offset + 1] + data[offset + 5] * 6 - py, data[offset + 2] - pz);
+          bits = listing(dist, bands, lodScale);
         }
         if (bits !== listed[i]) { listed[i] = bits; dirty = true; }
       }
