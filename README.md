@@ -3,7 +3,7 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.31 — Carry Trade**.
+Version **0.9.32 — Carry Trade**. Les poursuites de police se jouent au sol, avec patrouilles et barrages.
 
 À East Harlem, suivez la 119e Rue jusqu’à la **Halle au Poids**. Les habitants amènent des caisses, trient les pièces
 et expédient les chargements. Approchez du comptoir avec **F** ou **Y** à la manette pour vendre vos trouvailles.
@@ -351,10 +351,9 @@ défauts inconnus à l'échelle de toute la ville reste à mesurer sur des séan
 | Module | Rôle |
 |---|---|
 | `js/gameplay.js` | Couche de jeu : joueur, armes, dégâts, véhicules, mort, arrestation, sauvegarde |
-| `js/wanted.js` | Niveau de recherche : étoiles, zone de recherche, poursuites, agents, hélicoptère |
+| `js/wanted.js` | Niveau de recherche : étoiles, zone de recherche, poursuites terrestres, agents et barrages |
 | `js/vertical.js` | Grappin, rebords, surf sur les voitures, chute libre et wingsuit, frôlements |
 | `js/wingsuit.js` | Modèle de vol de la wingsuit et toile tendue sur le squelette |
-| `js/roof-police.js` | Police sur les toits : escaliers, rappel depuis l'hélicoptère, tireurs d'élite |
 | `js/missions-sky.js` | Course des toits, Descente, contrat Effet de levier, anneaux |
 | `js/ai-driver.js` | Pilote IA (itinéraire, poursuite pure, virages, évitement) pour la police et les missions |
 | `js/atmosphere.js` | Heure du jour, météo, pluie, éclairs et tonnerre |

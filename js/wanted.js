@@ -26,8 +26,8 @@ const POOL = 8;
 const BLOCK_EVERY = 16; // seconds between roadblocks
 const STRIP_REACH = 5.5; // half a street
 const SIGHT_RANGE = 75;
+const STREET_LEVEL_REACH = 3;
 const levelOf = (heat) => heat <= 0 ? 0 : heat < 35 ? 1 : heat < 55 ? 2 : heat < 75 ? 3 : heat < 95 ? 4 : 5;
-const angleTo = (from, to) => Math.atan2(Math.sin(to - from), Math.cos(to - from));
 const _camDir = new THREE.Vector3();
 
 // A folding strip of steel teeth laid across the road
@@ -75,13 +75,6 @@ class WantedSystem {
       scene.add(light);
       return light;
     });
-    // Helicopter searchlight
-    this.heli = controllers.entities.helicopter;
-    this.heliActive = false;
-    this.heliAngle = 0;
-    this.searchlight = new THREE.SpotLight(0xe8f2ff, 0, 140, 0.22, 0.5, 1.2);
-    this.searchlight.position.set(0, -1000, 0);
-    scene.add(this.searchlight, this.searchlight.target);
     this.warm = 0;
     this.blockT = 8;
     this.onPoliceShot = null; // (x, y, z, accuracy, damage)
@@ -139,9 +132,6 @@ class WantedSystem {
     this.clear(true);
     for (const u of this.units) this.retire(u);
     this.actors.clear((a) => a.team === 'police');
-    this.heliActive = false;
-    this.heli.mesh.visible = false;
-    this.heli.position.set(20000, -100, 20000);
   }
 
   retire(u) {
@@ -253,24 +243,24 @@ class WantedSystem {
     if (this.warm === 4) for (const u of this.units) if (!u.active) u.car.mesh.visible = false;
     const level = this.level;
 
-    // Sightings: any cruiser or officer close with a clear line, the helicopter from above, anything very close
+    // Cruisers and officers need a clear line. Very close cruisers can also spot a player at street level.
     let seen = false;
     if (level > 0 && target.alive) {
       for (const u of this.units) {
         if (!u.active) continue;
         const c = u.car.position;
         const d = Math.hypot(c.x - target.x, c.z - target.z);
+        const dy = target.y - c.y;
         u.losT -= dt;
         if (u.losT <= 0) {
           u.losT = 0.35;
-          u.los = d < SIGHT_RANGE && lineOfSight(this.controllers, c.x, 1.4, c.z, target.x, target.y + 1.2, target.z);
+          u.los = Math.hypot(d, dy) < SIGHT_RANGE && lineOfSight(this.controllers, c.x, c.y + 1.4, c.z, target.x, target.y + 1.2, target.z);
         }
-        if (u.los || d < 14) seen = true;
+        if (u.los || (d < 14 && Math.abs(dy) < STREET_LEVEL_REACH)) seen = true;
       }
       for (const a of this.actors.actors) {
-        if (a.team === 'police' && !a.dead && a.los && Math.hypot(a.x - target.x, a.z - target.z) < SIGHT_RANGE) seen = true;
+        if (a.team === 'police' && !a.dead && a.los && Math.hypot(a.x - target.x, a.y - target.y, a.z - target.z) < SIGHT_RANGE) seen = true;
       }
-      if (this.heliActive && Math.hypot(this.heli.position.x - target.x, this.heli.position.z - target.z) < 120) seen = true;
     }
     this.seen = seen;
 
@@ -309,12 +299,9 @@ class WantedSystem {
     this.updateRoadblocks(dt, target);
     this.updateFlooded();
     this.updateLights(target);
-    this.updateHelicopter(dt, target);
     // The scene does not update world matrices by itself (main.js): finalize everything moved here
     for (const u of this.units) if (u.active || this.warm < 6) { u.car.mesh.position.copy(u.car.position); u.car.mesh.rotation.y = u.car.heading; u.car.mesh.updateMatrixWorld(); }
     for (const l of this.flashers) l.updateMatrixWorld();
-    this.searchlight.updateMatrixWorld();
-    this.searchlight.target.updateMatrixWorld();
 
     // Arrest: an officer within reach of a player on foot, not fighting back, for long enough
     if (this.arrestT > 0) this.arrestT -= dt;
@@ -351,6 +338,8 @@ class WantedSystem {
     }
     const dx = target.x - car.position.x, dz = target.z - car.position.z;
     const d = Math.hypot(dx, dz);
+    const dy = target.y - car.position.y;
+    const nearStreetLevel = Math.abs(dy) < STREET_LEVEL_REACH;
     // Recycle cruisers left far behind, or all of them once the police have given up and they are out of sight
     const camD = car.position.distanceTo(this.camera.position);
     if ((d > 420 && !u.los) || (this.level === 0 && (camD > 160 || u.idle > 25))) {
@@ -392,7 +381,7 @@ class WantedSystem {
     if (u.mode === 'leave') {
       gx = car.position.x + Math.sin(car.heading) * 100; gz = car.position.z + Math.cos(car.heading) * 100;
       u.idle += dt;
-    } else if (this.seen || d < 30) {
+    } else if (this.seen || (d < 30 && nearStreetLevel)) {
       const lead = target.inVehicle ? Math.min(1.2, d / 30) : 0;
       gx = target.x + target.vx * lead; gz = target.z + target.vz * lead;
       // Close in on the car: the first one goes for the rear quarter to spin it, the others come up its flanks
@@ -424,13 +413,13 @@ class WantedSystem {
     car.body.chase = u.mode === 'pursue' && this.level >= 2 && unseen ? Math.min(6, Math.max(0, d - 35) * 0.08 + 1) : u.mode === 'pursue' && this.level >= 3 && d > 25 ? 1.4 : 0;
     driver.setGoal(gx, gz);
     const gd = Math.hypot(gx - car.position.x, gz - car.position.z);
-    const direct = gd < 40 && (u.los || gd < 16);
+    const direct = gd < 40 && (u.los || (gd < 16 && nearStreetLevel));
     // Stop beside a player on foot and send the officers out
-    const stopping = target.onFoot && d < 24 && u.mode === 'pursue';
+    const stopping = target.onFoot && d < 24 && nearStreetLevel && u.mode === 'pursue';
     driver.update(dt, { direct, stopAt: stopping ? 9 : 0 });
     if (stopping && Math.abs(car.speed) < 1.2 && !u.deployed) this.deploy(u, target);
     // From three stars the passenger shoots out of the window
-    if (this.level >= 3 && u.los && d < 38 && target.alive) {
+    if (this.level >= 3 && u.los && Math.hypot(d, dy) < 38 && target.alive) {
       u.gunT = (u.gunT ?? 1) - dt;
       if (u.gunT <= 0) {
         u.gunT = 0.5 + Math.random() * (1.1 - this.level * 0.12);
@@ -557,54 +546,6 @@ class WantedSystem {
       light.position.set(c.position.x + Math.cos(c.heading) * side, 2.1, c.position.z - Math.sin(c.heading) * side);
       light.intensity = (i === 0) === phase ? 70 : 6;
     }
-  }
-
-  updateHelicopter(dt, target) {
-    const want = this.level >= 4 && target.alive;
-    const h = this.heli;
-    if (want && !this.heliActive) {
-      this.heliActive = true;
-      this.heliAngle = Math.random() * Math.PI * 2;
-      h.position.set(target.x + Math.cos(this.heliAngle) * 200, 70, target.z + Math.sin(this.heliAngle) * 200);
-      h.mesh.visible = true;
-    }
-    if (!this.heliActive) { this.searchlight.intensity = 0; return; }
-    if (!want) {
-      // fly off and vanish
-      h.position.y += dt * 8;
-      h.position.x += Math.sin(h.heading) * 30 * dt;
-      h.position.z += Math.cos(h.heading) * 30 * dt;
-      if (h.position.y > 200) { this.heliActive = false; h.mesh.visible = false; h.position.set(20000, -100, 20000); }
-    } else {
-      this.heliAngle += dt * 0.35;
-      const r = 42;
-      const tx = (this.seen ? target.x : this.zone.x) + Math.cos(this.heliAngle) * r;
-      const tz = (this.seen ? target.z : this.zone.z) + Math.sin(this.heliAngle) * r;
-      const k = Math.min(1, dt * 0.8);
-      h.position.x += (tx - h.position.x) * k;
-      h.position.z += (tz - h.position.z) * k;
-      // above the player and above whatever towers it flies over
-      const alt = Math.max(62, (target.y || 0) + 32, this.controllers.roofHeight(h.position.x, h.position.z, 1e4, 0) + 22);
-      h.position.y += (alt - h.position.y) * Math.min(1, dt * 1.5);
-      h.heading += angleTo(h.heading, this.heliAngle + Math.PI / 2) * Math.min(1, dt * 2);
-      h.speed = 20;
-    }
-    h.mesh.position.copy(h.position);
-    h.mesh.rotation.y = h.heading;
-    h.tiltPivot.rotation.x = 0.12;
-    // A marksman in the door: slow, heavy, and he does not miss by much
-    if (want && this.seen && Math.hypot(h.position.x - target.x, h.position.z - target.z) < 110) {
-      this.heliGunT = (this.heliGunT ?? 2) - dt;
-      if (this.heliGunT <= 0) {
-        this.heliGunT = 1.4 + Math.random();
-        this.onPoliceShot?.(h.position.x, h.position.y - 1, h.position.z, 0.34, 18);
-      }
-    }
-    this.searchlight.position.set(h.position.x, h.position.y - 1.5, h.position.z);
-    const sx = this.seen ? target.x : this.zone.x + Math.sin(this.clock * 0.6) * 25, sz = this.seen ? target.z : this.zone.z + Math.cos(this.clock * 0.5) * 25;
-    this.searchlight.target.position.set(sx, this.seen ? target.y || 0 : 0, sz);
-    this.searchlight.target.updateMatrixWorld();
-    this.searchlight.intensity = want ? 2600 : 0;
   }
 }
 

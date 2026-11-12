@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.32 — Carry Trade — 12 novembre 2026
+
+- Les poursuites se jouent au sol. Retrait de l’hélicoptère de police, des renforts qui surgissaient sur les toits
+  et des tireurs d’élite postés sur les immeubles voisins.
+- Une patrouille à l’aplomb du joueur ne le repère plus par simple proximité s’il est en hauteur. Les agents
+  doivent être à portée pour l’arrêter.
+
 ## 0.9.31 — Carry Trade — 12 novembre 2026
 
 - **La frontière jusque sur les façades.** Poussière incrustée et fenêtres condamnées sur les derniers îlots, murs

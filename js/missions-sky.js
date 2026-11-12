@@ -282,7 +282,7 @@ const LEVERAGE = {
     m.toast('Registres de Cazal', 'Tout ce qu’elle doit, à qui, depuis quand.');
     // 4. the way out is down, fast
     g.wanted.alarm(4, g.player.x, g.player.z);
-    m.call('JULES', 'La police monte par l’escalier et un hélico arrive. Saute, Sacha. Espace en l’air, la wingsuit !');
+    m.call('JULES', 'La police arrive dans la rue. Saute, Sacha. Espace en l’air pour ouvrir la wingsuit !');
     const route = descentRoute(g, roof, spot);
     const land = route ? route.land : g.safeSpot(spot.x + 500, spot.z, 2);
     mk = m.mark(land.x, land.z, 'objective', { radius: 16, height: 8 });

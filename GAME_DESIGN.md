@@ -22,12 +22,12 @@ Un système à **cinq étoiles**, dans la tradition du genre, avec une police qu
   ★ *Signalé*, ★★ *Recherché*, ★★★ *Traqué*, ★★★★ *Ennemi public*, ★★★★★ *Chasse à l'homme*.
 - La police ne sait pas où vous êtes : elle **fouille les rues** autour de la dernière observation.
   La zone de recherche suit le **vrai réseau routier** et s'affiche sur la carte.
-- Les unités patrouillent dans la zone. Chaque observation (voiture, agent à pied, hélicoptère)
+- Les unités patrouillent dans la zone. Chaque observation (voiture ou agent à pied)
   la recentre sur vous ; les étoiles sont pleines quand on vous voit, elles **clignotent** pendant la recherche.
 - Pour vous en sortir : **quittez la zone et restez hors de vue** jusqu'à ce que la jauge de fuite
   se remplisse. Se cacher à l'intérieur de la zone est possible, mais trois fois plus long.
-- Plus il y a d'étoiles : plus de voitures, des agents mieux armés et protégés, des tireurs plus
-  précis, un hélicoptère avec projecteur à partir de quatre étoiles.
+- Les étoiles renforcent les poursuites terrestres. Plus elles sont nombreuses, plus les voitures
+  sont nombreuses, les agents mieux équipés et les tireurs précis.
 - À une étoile, les agents tentent d'abord de vous **arrêter** (« CUFFED »). Ensuite, ils tirent.
 - Le trafic se range devant les sirènes et les patrouilles déjà en ville rejoignent la poursuite.
 
@@ -441,6 +441,7 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.29** | **Consolidation** | Manhattan ramené de 42,8 à 27,7 km² à échelle constante. Frontière sèche, cinq raccords terrestres, relief de l’ancienne East River, atlas topographique et contrats de l’Acte III à terre. |
 | **0.9.30** | **Buffer Zone** | Rues rongées par le sable, végétation par plaques et six relais habités avec horaires, dialogues et feux. Le filtre du Marché des Lisières donne une première raison de quitter les rues et de revenir. |
 | **0.9.31** | **Carry Trade** | Façades de bordure, six relais reconstruits, haltes de proximité, commerce de récupération, routines de fret et cinq postes dont les barrières réagissent à la météo. |
+| **0.9.32** | **Carry Trade** | Correctif des poursuites. Retrait de l’hélicoptère de police et des renforts sur les toits, prise en compte de la hauteur pour le repérage de proximité et l’arrestation. |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |
 
 

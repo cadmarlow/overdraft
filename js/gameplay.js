@@ -12,7 +12,6 @@ import { MOD_GUNS, effectiveWeapon, withMod, fits, finishById, sanitizeMods } fr
 import { AimAssist } from './aim-assist.js';
 import { createWeaponModel } from './weapon-models.js';
 import { Vertical } from './vertical.js';
-import { RoofPolice } from './roof-police.js';
 import { SkyRings } from './missions-sky.js';
 import { ActorSystem } from './actors.js';
 import { WantedSystem, WANTED_LEVELS } from './wanted.js';
@@ -63,7 +62,7 @@ const LOCAL_ARRIVALS = {
 const SAVE_KEY = 'overdraft:save:2';
 // Saves from before the rename (0.2 preview, 0.1 playground) are still read
 const LEGACY_SAVE_KEYS = ['contre-maree:save:2', 'contre-maree:playground:1'];
-const BUILD = '0.9.31';
+const BUILD = '0.9.32';
 const BUILD_NAME = 'Carry Trade';
 const INTRO_KEY = 'overdraft:intro'; // the build whose opening flight has been seen
 // The neighbourhoods as the opening card names them (city-config.js districtAt)
@@ -296,7 +295,6 @@ export class Game {
     // Flying an aircraft (aviation.js): the controllers hand it the player's stick before the camera moves
     this.aviation = new Aviation(this, { fx: new FlightFx(scene, this.fx, this.driveFx), instruments: new FlightInstruments(document.getElementById('drive-gauge')?.parentNode) });
     controllers.updatePlane = (dt) => this.aviation.fly(dt);
-    this.roofPolice = new RoofPolice(this);
     this.skyRings = new SkyRings(scene);
     this.director = new MissionDirector(this);
     this.shops = new ShopSystem(this);
@@ -1066,7 +1064,7 @@ export class Game {
     else c.mesh.visible = false;
   }
 
-  // A shot from a moving cruiser or the helicopter: a tracer to wherever it went, a hit if the odds say so
+  // A shot from a moving cruiser or boat: a tracer to wherever it went, a hit if the odds say so
   policeShot(x, y, z, accuracy, damage) {
     const pl = this.player, hit = Math.random() < accuracy;
     const miss = hit ? 0 : 1.4 + Math.random() * 2.6, a = Math.random() * 6.28;
@@ -2318,7 +2316,6 @@ export class Game {
     this.rearm();
     this.wanted.reset();
     this.actors.clear((a) => a.dead || a.team === 'police');
-    this.roofPolice.reset();
     this.health = 100;
     if (dead && !spared) this.armor = 0;
     this.state = 'onFoot';
@@ -2960,7 +2957,6 @@ export class Game {
       this.runOver();
       this.actors.update(dt, { target: pl, world: this.world, camera: this.camera.camera });
       this.wanted.update(dt, pl);
-      this.roofPolice.update(dt);
       this.updateCarDamage(dt);
       this.pickups.update(dt, (x, z) => this.controllers.getGroundHeight(x, z, 'person'), person.position.x, person.position.y, person.position.z, (it) => this.collect(it));
       this.director.update(dt);

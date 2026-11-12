@@ -11,7 +11,7 @@ import { collapse } from './ragdoll.js';
 const MAX_ACTORS = 16;
 const DRAW_DISTANCE = 170;
 const ground = (controllers, x, z) => controllers.getGroundHeight(x, z, 'person');
-// Under one actor's feet: the street, or the roof they stand on (vertical play puts officers on roofs)
+// Under one actor's feet: the street or the roof they stand on
 const groundOf = (a) => (a.groundFn ??= (controllers, x, z) => controllers.getGroundHeight(x, z, 'person', a.y + 0.5));
 const angleTo = (from, to) => Math.atan2(Math.sin(to - from), Math.cos(to - from));
 const ARREST_BARKS = ['Police ! Ne bougez plus !', 'Les mains sur la tête !', 'À genoux, tout de suite !'];
@@ -147,10 +147,9 @@ class ActorSystem {
         a.model.update(visible, camD, dt);
         continue;
       }
-      if (a.rappel) this.rappel(a, dt, target);
       // a body with a pilot of its own (the Architect) is moved by it, unless the pilot hands back to the fight
-      else if (!a.pilot?.(a, dt, target, ctx)) this.think(a, dt, target, ctx);
-      a.rig.update(dt, a.x, a.z, a.heading, groundOf(a), this.controllers, a.rappel ? a.rappel.air : 0, visible);
+      if (!a.pilot?.(a, dt, target, ctx)) this.think(a, dt, target, ctx);
+      a.rig.update(dt, a.x, a.z, a.heading, groundOf(a), this.controllers, 0, visible);
       a.model.update(visible, camD, dt);
     }
   }
@@ -194,7 +193,7 @@ class ActorSystem {
       if (target.threat && a.los && d < 30) a.behavior = 'combat';
       face = Math.atan2(dx, dz);
       if (d > 1.4) { speed = d > 4 ? 4.4 : 1.6; mx = dx / d; mz = dz / d; }
-      if (d < 1.9 && target.onFoot) this.onArrest?.(dt, a);
+      if (target.onFoot && Math.hypot(d, target.y - a.y) < 1.9) this.onArrest?.(dt, a);
       if (a.los && d < 16) this.bark(a, ARREST_BARKS);
       if (a.weapon !== 'fists' && d < 12 && a.los) { aiming = true; }
     } else if (behavior === 'combat' && a.alert && a.cover && !a.cover.car.destroyed && d < 48 && this.holdCover(a, dt, dx, dz, d, target, weapon)) {
@@ -227,11 +226,6 @@ class ActorSystem {
       }
     } else if (behavior === 'guard') {
       face = a.heading;
-    } else if (behavior === 'sniper' && a.alert) {
-      // a marksman on a roof: holds the spot, turns to the target, fires when the line is clear
-      face = Math.atan2(dx, dz);
-      aiming = a.los && d < weapon.range;
-      a.rig.crouchTarget = 0.35;
     }
 
     // Shooting
@@ -244,7 +238,7 @@ class ActorSystem {
     if (a.reloadT > 0) {
       a.reloadT -= dt;
       if (a.reloadT <= 0) a.mag = weapon.mag;
-    } else if (aiming && (behavior === 'combat' || behavior === 'sniper') && a.cooldown <= 0 && a.flinch <= 0 && (a.model.armed || !a.model.visible)) {
+    } else if (aiming && behavior === 'combat' && a.cooldown <= 0 && a.flinch <= 0 && (a.model.armed || !a.model.visible)) {
       if (a.mag <= 0) {
         a.reloadT = weapon.reload * 1.3;
         this.audio?.sfx('reload', a.x, a.y + 1.2, a.z);
@@ -271,18 +265,6 @@ class ActorSystem {
       else { a.vx = a.vz = 0; }
     }
     a.y = this.controllers.getGroundHeight(a.x, a.z, 'person', a.y + 0.5);
-  }
-
-  // Down a rope from the helicopter: { y: current, floor: the roof, speed }; they open fire once their boots touch
-  rappel(a, dt, target) {
-    const r = a.rappel;
-    r.y = Math.max(r.floor, r.y - r.speed * dt);
-    r.air = r.y - r.floor;
-    a.y = r.y;
-    a.heading += angleTo(a.heading, Math.atan2(target.x - a.x, target.z - a.z)) * Math.min(1, dt * 4);
-    a.rig.aim = null;
-    a.height = 1.85;
-    if (r.air <= 0.01) { a.rappel = null; a.y = r.floor; a.alert = true; this.bark(a, ['Au sol, sur le toit !', 'Contact, on le tient !']); }
   }
 
   // Behind their car: run to the side away from the target, crouch, come up to fire, duck to reload. Returns false when
