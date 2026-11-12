@@ -3,28 +3,32 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.28 — Brick & Mortar**. À Harlem comme dans le West Side, les immeubles ont des entrées en retrait,
-des fenêtres de rez-de-chaussée et des soubassements qui suivent leurs façades. De près, on distingue les voussoirs,
-les grilles, les interphones, les poignées et les auvents. Pour voir les portails cintrés, longez la 113e Rue ouest
-entre Adam Clayton Powell Jr Boulevard et Frederick Douglass Boulevard. Les halls vitrés se voient sur la 115e Rue
-près de la 5e Avenue et sur la 58e Rue du côté de West End Avenue.
+Version **0.9.30 — Buffer Zone**.
 
-Manhattan est une ville de survivants au milieu du **Wasteland**. L’Hudson est
-à sec : son lit commence au pied des quais, sept mètres sous les rues. La rade est un lac de sel, et l’East River,
-retenu par quatre digues, sert de douves. Au nord, la ville finit sur un mur de conteneurs. On sort par la **Grande
-Porte** (avenue Adam Clayton Powell, tout au nord), par la **porte des Pompes** (au bout de la 34e Rue, côté ouest,
-puis la rampe) ou par les quatre ponts de l’East River. Dehors : la Ceinture, 47 km de vieille route autour de l’île,
-les ruines ensablées de Harlem, de Hoboken et de Brooklyn, les falaises et le plateau du Haut-Sel, et les Rouliers.
-Quinze navires gisent dans le lit et sur la rade (le **Cimetière des Coques** est à hauteur de la 48e Rue), des camps
-tiennent les carrefours, et la nuit se lit aux feux et aux projecteurs du Mur.
+À East Harlem, le sable remonte les rues et laisse des plaques de bitume entre les broussailles. Au **Marché des
+Lisières**, parlez à **Leïla** avec **F** pour chercher le filtre de la pompe dans une ancienne pépinière. Le trajet
+passe des dernières échoppes au désert. Les cinq autres relais figurent dans l’atlas (**M**). On y cultive, répare,
+pèse ou surveille les pistes, avec des horaires propres à chaque lieu.
 
-Depuis la 0.9.27, le dehors se visite : on roule sous les carcasses de béton de Harlem, entre les deux moitiés du
-paquebot brisé, et l’on entre en voiture dans la cale de trois cargos (dont le bleu du Cimetière des Coques, par la
-tôle arrachée de son flanc). Des **convois de Rouliers** tournent sur la Ceinture : on les voit venir à leur poussière,
-on les laisse passer ou l’on casse un camion pour ramasser sa cargaison. Hors les murs, la voiture passe en pleins phares.
+En local, `?spawn=lisieres` place le joueur au marché à 14 h. Essayez aussi `?spawn=serres`, `?spawn=atelier`,
+`?spawn=balance`, `?spawn=vigie` ou `?spawn=cour`. Ces visites n’écrivent pas dans la sauvegarde.
 
-La carte permet de chercher **Les Pompes**, **La Grande Porte**, **Le Cimetière des Coques** ou **Cale des Veilleurs**. En local, `?spawn=sel`
-démarre à pied au fond du lit de l’Hudson, au pied de la rampe. La session de visite ne sauvegarde pas la progression.
+Manhattan occupe désormais **27,7 km²** de terrain urbain, contre **42,8 km²** auparavant. La ville conserve son échelle,
+Central Park, Midtown et le cœur du Financial District. Le Wasteland reprend **15 km²** sur les anciens quartiers de
+rive. Les canaux extérieurs, îlots décoratifs, ponts, quais, bateaux à flot et voies rapides côtières ont disparu. Les
+lacs de Central Park et les fontaines des quartiers conservés sont toujours dans la ville.
+
+Ouvrez l’atlas avec **M**. Ses courbes de niveau montrent le lit de l’Hudson, les reliefs du Levant et la **Rade
+Blanche**. Sur la route, partez de la **57e Rue Est** vers les silos du **Déversoir**, ou suivez **Delancey Street**
+jusqu’au **Sprint des Failles**. **Broad Street** descend vers les balises de la Batterie. À l’ouest, la **34e Rue**
+mène aux Pompes et au Cimetière des Coques. Au nord, la **Grande Porte** ouvre sur les ruines de Harlem.
+
+L’Acte III se joue à terre et conserve la progression existante. La Ceinture reste la route des convois des Rouliers.
+On peut toujours entrer sous les carcasses de béton et dans les cales des épaves échouées, dont le cargo bleu du
+Cimetière des Coques. Hors des rues, les phares des voitures passent en pleins phares.
+
+En local, `?spawn=deversoir`, `?spawn=failles`, `?spawn=batterie`, `?spawn=pumps` et `?spawn=nord` placent le joueur près
+d’un accès. `?spawn=sel` démarre au pied de la descente des Pompes. Ces visites ne modifient pas la sauvegarde.
 
 Depuis la **0.9.25 — Consumer Staples**, deux franchises de restauration ouvrent dans tout Manhattan : **BULLION**
 (burgers, « La valeur refuge. », 36 succursales) et **TRANCHE** (pizza à la part, « Prenez votre part. », 54). On y
@@ -39,14 +43,13 @@ Depuis la 0.9.24, le pilotage est refait de fond en comble : un modèle de vol �
 des effets et un son propres aux avions. Deux appareils neufs sortent du garage (G) : la **Hauturier · Bourrasque**,
 biplan d'école qui se pose sur une pelouse de Central Park et dessine ses loopings au fumigène, et la
 **Corsaire · Tramontane**, chasseur à postcombustion qui passe le mur du son entre les tours. Le clavier suffit :
-mains libres l'avion garde sa pente, et le palonnier seul (A / E) fait un virage propre. Les immeubles, les ponts
-et l'eau sont de vrais obstacles ; les figures (looping, tonneau, rase-mottes, passage sous un pont, atterrissage)
+mains libres l'avion garde sa pente, et le palonnier seul (A / E) fait un virage propre. Les immeubles, le relief
+et les plans d’eau du parc sont de vrais obstacles. Les figures (looping, tonneau, rase-mottes, atterrissage)
 rapportent de l'argent. Les deux modèles sont sous CC BY 4.0 (voir `CREDITS.md`).
 
-Les paramètres `?spawn=morningside`, `?spawn=lincoln` et `?spawn=stuytown` lancent une visite à pied au jardin
-de la 111e Rue, à la place Josie Robertson ou à l’Oval de Stuyvesant Town depuis l’adresse locale.
-Les autres accès sont `?spawn=columbia`, `?spawn=asphalt`, `?spawn=east_river_park`, `?spawn=passerelle` et
-`?spawn=onu`. Le départ fixe l’heure à 14 h et la visite n’écrit pas dans la sauvegarde.
+Les paramètres `?spawn=morningside`, `?spawn=lincoln` et `?spawn=columbia` lancent une visite à pied au jardin
+de la 111e Rue, à la place Josie Robertson ou à Columbia. Le départ fixe l’heure à 14 h et la visite n’écrit pas
+dans la sauvegarde.
 
 La **0.9.23 — Free Float** permet de régler la densité de circulation depuis le menu pause.
 
@@ -303,7 +306,7 @@ Ouvrir http://localhost:5173. Paramètres utiles :
 - `?renderer=webgl` : mode de compatibilité.
 - `?debug=1` : un clic sur la carte téléporte le joueur.
 - `?qa=1` : expose `window.__game` pour les tests automatisés.
-- `?spawn=fdr` (local uniquement) : essai en Ressac sur la voie nord corrigée du FDR, à l’approche de la 30e Rue, à midi ; la sauvegarde habituelle reste intacte.
+- `?spawn=fdr` (local uniquement) : ancien lien d’essai, redirigé vers l’approche du Déversoir en Ressac, à midi ; la sauvegarde habituelle reste intacte.
 
 Le [contrôle des routes côtières](tools/highways/README.md) fournit aussi un tour reproductible des deux rives,
 avec captures, contrôle du sol et des collisions, et essais des rambardes. Les portails de Battery restent fermés

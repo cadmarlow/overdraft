@@ -72,6 +72,29 @@ test('feet and all vehicle modes use the same park surface as wheel suspension',
   assert.equal(hit.y, 0.22);
 });
 
+test('the former Cedar Street island cannot lift feet or wheels above the asphalt', async () => {
+  const config = await import('../js/city-config.js');
+  const physics = await import('../js/car-physics.js');
+  const { controller } = keyboardHarness(config, physics);
+  controller.overWater = () => false;
+  const x = 620, z = 5650;
+  assert.ok(config.surveyedBlockAt(x, z), 'the old island still exists in the survey');
+  assert.equal(config.blockAt(x, z), null);
+  assert.equal(controller.isPointOnSidewalk(x, z), false);
+  assert.equal(controller.getGroundHeight(x, z, 'person'), 0);
+  const tune = physics.makeTune('hatch', { halfW: 0.85, halfL: 2.1, height: 1.45, wheelX: 0.74,
+    wheelZf: 1.24, wheelZr: -1.32, wheelRadius: 0.32 });
+  const heading = Math.PI / 2;
+  const car = { tune, body: physics.createBody(tune, heading), position: { x, y: 0, z }, heading, speed: 0, vx: 0, vz: 0 };
+  const world = { ground: (px, pz, hit) => controller.carGround(px, pz, hit) };
+  for (let i = 0; i < 120; i++) physics.stepCar(car, { throttle: 1, steer: 0 }, 1 / 60, world);
+  assert.ok(car.position.x > x + 4, 'the driven tyres accelerate the car');
+  assert.ok(car.body.wheels.every(w => w.hasGround && w.load > 0 && w.gy === 0 && !w.curb));
+  const curb = {};
+  controller.carGround(580, z, curb);
+  assert.equal(curb.y, config.ISLAND_BOUNDS.sidewalkHeight, 'the neighbouring built curb still supports the car');
+});
+
 test('car wheels stand on the visible pier outside the bulkhead and fall only beyond its actual deck', async () => {
   const { createGroundSurfaces } = await import('../js/ground-surfaces.js');
   const { controller } = keyboardHarness({ blockAt: () => null });

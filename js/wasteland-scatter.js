@@ -1,5 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { texture, uv } from 'three/tsl';
+import { FRONTIER_SITES, frontierDistance, frontierGrowth, insideFrontierBounds } from './frontier-districts.js';
 import { SALT_LINES, insideSaltGrid, saltLandAt, saltMasksAt, saltRoadAt, sampleSalt } from './wasteland-plan.js';
 
 // What lies on the Wasteland's ground: scanned rocks and outcrops, dead wood, dry bushes, and what people left along
@@ -101,6 +102,23 @@ function grow(ci, cj) {
   for (let k = Math.round(brush * 5 + rand() - 0.5); k > 0; k--) {
     const [x, z] = spot();
     put(rand() < 0.62 ? 'bush' : 'bush_wide', x, z, 0.6 + rand() * 1.1, shade(DRY, 0.25), { flat: true, sink: 0.03 });
+  }
+  if (insideFrontierBounds(cx, cz)) {
+    const d = frontierDistance(cx, cz), vegetation = frontierGrowth(cx, cz, d);
+    const nearSettlements = FRONTIER_SITES.some(site => Math.hypot(cx - site.x, cz - site.z) < 105);
+    if (d > -45 && d < 205) {
+      for (let k = Math.floor(vegetation * 20 + (nearSettlements ? 9 : 0)); k > 0; k--) {
+        const [x, z] = spot();
+        if (FRONTIER_SITES.some(site => Math.hypot(x - site.x, z - site.z) < site.width * 0.65 + 7)) continue;
+        const scrub = rand();
+        put(scrub > 0.43 ? 'bush' : 'bush_wide', x, z, 0.44 + rand() * 0.64,
+          shade(nearSettlements ? [0.83, 0.93, 0.54] : [1.13, 0.94, 0.53]), { flat: true, sink: 0.03, clear: 4 });
+      }
+      if (d > 90 && rand() < 0.31) {
+        const [x, z] = spot();
+        put('dead_tree', x, z, 1.1 + rand() * 0.6, shade(PALE), { flat: true, sink: 0.16, clear: 7 });
+      }
+    }
   }
   // Dead wood: drift wood on the old river bed, the odd bare trunk elsewhere
   if (rand() < 0.05 + 0.07 * crack) {

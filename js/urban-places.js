@@ -330,9 +330,10 @@ function buildStuyvesantOval(scene, city, m) {
   ];
 }
 
-function buildUrbanPlaces(scene, city) {
+function buildUrbanPlaces(scene, city, { coreOnly = false } = {}) {
   const materials = makeMaterials();
-  return [...buildLincolnPlaza(scene, city, materials), ...buildStuyvesantOval(scene, city, materials)];
+  const lincoln = buildLincolnPlaza(scene, city, materials);
+  return coreOnly ? lincoln : [...lincoln, ...buildStuyvesantOval(scene, city, materials)];
 }
 
 export { buildUrbanPlaces, makeMaterials, groundBuilder, fountain, wayfinding, plant, seat, visit, watch };

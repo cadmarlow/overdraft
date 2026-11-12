@@ -6,12 +6,13 @@ const { loadModule } = require('./helpers/module.cjs');
 
 const source = readFileSync(join(__dirname, '../js/nyc-map.js'), 'utf8');
 const morningside = {};
-const places = {}, civicPlaces = {}, wasteland = {};
+const places = {}, civicPlaces = {}, wasteland = {}, frontier = {};
 test.before(async () => {
   Object.assign(morningside, await import('../js/morningside-plan.js'));
   Object.assign(places, await import('../js/urban-places-plan.js'));
   Object.assign(civicPlaces, await import('../js/manhattan-sites-plan.js'));
   Object.assign(wasteland, await import('../js/wasteland-plan.js'));
+  Object.assign(frontier, await import('../js/city-frontier.js'));
 });
 
 test('surveyed building courtyards remain holes in the map footprint layer', () => {
@@ -23,7 +24,7 @@ test('surveyed building courtyards remain holes in the map footprint layer', () 
   }
   const { footprintLayers } = loadModule(source + '\nexport { footprintLayers };', {
     globals: { Path2D },
-    imports: { './wasteland-plan.js': wasteland, './morningside-plan.js': morningside, './urban-places-plan.js': places, './manhattan-sites-plan.js': civicPlaces, './nyc-geodata.js': { GEO: {} }, './city-config.js': { ROADS: [] } }
+    imports: { './frontier-districts.js': { FRONTIER_SITES: [] }, './city-frontier.js': frontier, './wasteland-plan.js': wasteland, './morningside-plan.js': morningside, './urban-places-plan.js': places, './manhattan-sites-plan.js': civicPlaces, './nyc-geodata.js': { GEO: {} }, './city-config.js': { CITY_ROADS: [] } }
   });
   const ring = (x0, z0, x1, z1) => [{ x: x0, z: z0 }, { x: x1, z: z0 }, { x: x1, z: z1 }, { x: x0, z: z1 }];
   const layers = footprintLayers([{ footprints: [{ h: 120, pts: ring(0, 0, 20, 20), holes: [ring(5, 5, 15, 15)] }] }]);
@@ -40,7 +41,7 @@ for (const [width, height, dpr] of [[500, 300, 1], [320, 180, 1.5], [1920, 1080,
     const window = { innerWidth: width, innerHeight: height, devicePixelRatio: dpr };
     const { NYCMapSystem } = loadModule(source, {
       globals: { window, performance: { now: () => 0 } },
-      imports: { './wasteland-plan.js': wasteland, './morningside-plan.js': morningside, './urban-places-plan.js': places, './manhattan-sites-plan.js': civicPlaces, './nyc-geodata.js': { GEO: {} }, './city-config.js': { ROADS: [] } }
+      imports: { './frontier-districts.js': { FRONTIER_SITES: [] }, './city-frontier.js': frontier, './wasteland-plan.js': wasteland, './morningside-plan.js': morningside, './urban-places-plan.js': places, './manhattan-sites-plan.js': civicPlaces, './nyc-geodata.js': { GEO: {} }, './city-config.js': { CITY_ROADS: [] } }
     });
     const map = Object.create(NYCMapSystem.prototype);
     // Capture the production render viewport; drawing primitives are irrelevant to coordinate conversion.
@@ -125,7 +126,7 @@ function mapHarness() {
     canvas.dispatch('lostpointercapture', { pointerId: id });
   };
   const config = {
-    ROADS: [], BLOCKS: [], NYC_LANDMARKS: [],
+    CITY_ROADS: [], BLOCKS: [], NYC_LANDMARKS: [],
     ISLAND_BOUNDS: { minX: -10000, maxX: 10000, minZ: -10000, maxZ: 10000 },
     getIslandBoundsAtZ: () => ({ westX: -10000, eastX: 10000 }),
     getLocationLabel: (x, z) => `${x}, ${z}`,
@@ -133,7 +134,7 @@ function mapHarness() {
   };
   const { NYCMapSystem } = loadModule(source, {
     globals: { window, document },
-    imports: { './wasteland-plan.js': wasteland, './morningside-plan.js': morningside, './urban-places-plan.js': places, './manhattan-sites-plan.js': civicPlaces, './nyc-geodata.js': { GEO: { frame: {} } }, './city-config.js': config }
+    imports: { './frontier-districts.js': { FRONTIER_SITES: [] }, './city-frontier.js': frontier, './wasteland-plan.js': wasteland, './morningside-plan.js': morningside, './urban-places-plan.js': places, './manhattan-sites-plan.js': civicPlaces, './nyc-geodata.js': { GEO: { frame: {} } }, './city-config.js': config }
   });
   const teleports = [], toggles = [];
   const map = new NYCMapSystem({
@@ -234,13 +235,13 @@ test('mouse hover and zoom buttons remain available without a pan', () => {
   assert.equal(h.map.viewZoom, 1);
 });
 
-test('coastal map lines use the same corrected corridor as the drivable highway', () => {
-  const routes = [{ west: false, z0: 900, step: 3, x: [1284, 1285, 1286] }];
-  const old = { name: 'Franklin D Roosevelt Dr', raw: 'FRANKLIN D ROOSEVELT DR', highway: true, pts: [{ x: 1340, z: 900 }, { x: 1342, z: 906 }] };
+test('the atlas street layer uses the compact streets without coastal highways', async () => {
+  const { CITY_ROADS } = await import('../js/city-config.js');
   const { MAP_ROADS } = loadModule(source + '\nexport { MAP_ROADS };', {
-    imports: { './wasteland-plan.js': wasteland, './morningside-plan.js': morningside, './urban-places-plan.js': places, './manhattan-sites-plan.js': civicPlaces, './nyc-geodata.js': { GEO: {} }, './city-config.js': { ROADS: [old] }, './highway-layout.js': { HIGHWAY_ROUTES: routes } }
+    imports: { './frontier-districts.js': { FRONTIER_SITES: [] }, './city-frontier.js': frontier, './wasteland-plan.js': wasteland, './morningside-plan.js': morningside,
+      './urban-places-plan.js': places, './manhattan-sites-plan.js': civicPlaces, './nyc-geodata.js': { GEO: {} },
+      './city-config.js': { CITY_ROADS } }
   });
-  assert.equal(MAP_ROADS.length, 1);
-  assert.equal(MAP_ROADS[0].name, 'FDR Drive');
-  assert.deepEqual(Array.from(MAP_ROADS[0].pts, p => [p.x, p.z]), [[1284,900],[1285,903],[1286,906]]);
+  assert.equal(MAP_ROADS, CITY_ROADS);
+  assert.ok(MAP_ROADS.every(r => !r.highway));
 });

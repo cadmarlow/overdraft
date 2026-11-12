@@ -4,6 +4,7 @@ import {
   abs, floor, fract, mod, min, max, clamp, mix, step, smoothstep, dot, length, normalize, pow, exp, fwidth, dFdx, dFdy, texture,
   transformDirection
 } from 'three/tsl';
+import { applyFrontierGround } from './frontier-ground.js';
 import { ground } from './ground-assets.js';
 import { cityUniforms, hash2D, bumpNormal, canyonSkyAONode, roadPuddleField, roadWetMasks, transparentEffectMRT } from './tsl-materials.js';
 import { CURB_HEIGHT, CURB_WIDTH, GUTTER_WIDTH, KIND } from './ground-plan.js';
@@ -71,7 +72,7 @@ const canyonFill = (albedo, sky) => albedo.mul(CANYON_WARM).mul(cityUniforms.uCa
  * their tar seals, cracks and tar snakes in the old stretches. Post-rain wetness as before (roadWetMasks), with the
  * water now preferring the gutters.
  */
-function createGroundRoadMaterial({ street = false } = {}) {
+function createGroundRoadMaterial({ street = false, frontier = !street } = {}) {
   const mat = new THREE.MeshStandardNodeMaterial({ metalness: 0.0, roughness: 0.9 });
   mat.name = street ? 'GroundRoad' : 'GroundDeck';
   const P = positionWorld.xz;
@@ -250,7 +251,7 @@ function createGroundRoadMaterial({ street = false } = {}) {
     return reflectCol.mul(max(puddle, film.mul(0.35))).mul(roadFresnel).mul(cityUniforms.uInteriorGlow).mul(0.07).add(canyonFill(albedo, sky));
   })();
 
-  return mat;
+  return frontier ? applyFrontierGround(mat, positionWorld) : mat;
 }
 
 /**

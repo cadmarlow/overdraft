@@ -2219,6 +2219,11 @@ const HWY_RAMP = 32; // the dip at the lane ends: 2.4 m down over this many metr
 const HWY_BOX_RUN = 16; // lane segments per bounding box of the player test
 
 function createHighwayTraffic(scene, lanes, traffic) {
+  if (!lanes.length) {
+    // The city has no peripheral highway. Keep the shared traffic controls and audio interface.
+    let density = traffic.density;
+    return { group: new THREE.Group(), cars: [], lanes, update() {}, setDensity(value) { density = value; }, get density() { return density; } };
+  }
   const group = new THREE.Group();
   group.name = 'HighwayTraffic';
   scene.add(group);

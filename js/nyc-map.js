@@ -1,38 +1,19 @@
 import { GEO } from './nyc-geodata.js';
+import { CITY_RING } from './city-frontier.js';
+import { FRONTIER_SITES } from './frontier-districts.js';
 import {
-  FRONTIER_BRIDGES, SALT_LOOP, SALT_ROUTES, SALT_PLACES, saltMoatRuns,
+  MACRO_W, MACRO_H, MACRO_STEP, SALT_TERRAIN, SALT_LOOP, SALT_ROUTES, SALT_PLACES,
   SALT_MIN_X, SALT_MAX_X, SALT_MIN_Z, SALT_MAX_Z, saltLocation, routeThroughSalt
 } from './wasteland-plan.js';
-import { HIGHWAY_ROUTES } from './highway-layout.js';
 import { closePoint, closeBlock, closeLawn, closeWalks, fountainSite } from './morningside-plan.js';
-import { lincolnBlock, lincolnPoint, lincolnPlaza, lincolnGarden, lincolnFountain,
-  ovalBlock, ovalPoint, ovalGround, ovalLawn, ovalWalks, ovalFountain } from './urban-places-plan.js';
-import { campusBlock, campusPoint, campusWalk, campusLawns, asphaltBlock, asphaltPoint, asphaltField,
-  asphaltLawns, unBlock, unPoint, unPlaza, unGarden, unPool, riverPromenade, riverBridge, riverLimits } from './manhattan-sites-plan.js';
+import { lincolnBlock, lincolnPoint, lincolnPlaza, lincolnGarden, lincolnFountain } from './urban-places-plan.js';
+import { campusBlock, campusPoint, campusWalk, campusLawns } from './manhattan-sites-plan.js';
 import {
-  ROADS,
-  BLOCKS,
-  NYC_LANDMARKS,
-  LANDMARK_SITES,
-  ISLAND_BOUNDS,
-  getIslandBoundsAtZ,
-  MANHATTAN_COASTLINE,
-  WATERFRONT_PIERS,
-  ROOSEVELT_ISLAND_POLYGON,
-  GOVERNORS_ISLAND_POLYGON,
-  RANDALLS_ISLAND_POLYGON,
-  LIBERTY_ISLAND_POLYGON,
-  ELLIS_ISLAND_POLYGON,
-  MILL_ROCK_POLYGON,
-  getLocationLabel,
-  isTypingInField
+  CITY_ROADS as ROADS, CITY_BLOCKS as BLOCKS, CITY_LANDMARKS as NYC_LANDMARKS,
+  LANDMARK_SITES, getLocationLabel, isTypingInField
 } from './city-config.js';
 
-const COASTAL_HIGHWAY = /FRANKLIN D ROOSEVELT|FDR|HARLEM RIVER DR|HENRY HUDSON|^WEST ST$|^12 AVE$/;
-const MAP_ROADS = ROADS.filter(r => !(r.highway && COASTAL_HIGHWAY.test(r.raw))).concat(HIGHWAY_ROUTES.map(r => ({
-  name: r.west ? 'West Side Hwy' : 'FDR Drive', highway: true, w: 15.2,
-  pts: r.x.map((x, i) => ({ x, z: r.z0 + i * r.step }))
-})));
+const MAP_ROADS = ROADS;
 
 // Minimap and full-screen map drawn from the same geography and building footprints as the 3D city.
 // World frame: 1 unit = 1 m, x = Manhattan-grid east, z = grid south. Both maps face grid north,
@@ -40,7 +21,7 @@ const MAP_ROADS = ROADS.filter(r => !(r.highway && COASTAL_HIGHWAY.test(r.raw)))
 
 const mapLocation = (x, z) => saltLocation(x, z) ?? getLocationLabel(x, z);
 
-const MAP_LANDMARKS = [...(NYC_LANDMARKS ?? []), ...SALT_PLACES.map((p,i)=>({
+const MAP_LANDMARKS = [...(NYC_LANDMARKS ?? []), ...[...SALT_PLACES, ...(FRONTIER_SITES ?? [])].map((p,i)=>({
   ...p, id: 'sel-'+i, short: p.name, district: 'Le Wasteland'
 }))];
 
@@ -54,12 +35,9 @@ const GRID_BEARING = (GEO.frame && GEO.frame.bearingDeg) || 29.02; // Manhattan'
 // lighter than the blocks they run between, muted parks & water; a taxi-yellow GPS route, white landmarks & player,
 // cyan search hits and amber highways
 const MAP = {
-  water: '#0a1118',
+  water: '#2b231c',
   land: '#151a20',
   landEdge: '#252c35',
-  islands: '#162019',
-  islandsEdge: '#26392c',
-  piers: '#283039',
   streets: '#363f4b', // Manhattan inside its bulkhead line: the roadway left between the blocks
   shore: '#4f5b6b',
   park: '#19301f',
@@ -76,8 +54,6 @@ const MAP = {
   landmarkFill: 'rgba(255, 255, 255, 0.06)',
   landmarkEdge: 'rgba(255, 255, 255, 0.38)',
   mainRoads: '#3a434f',
-  highway: '#b27a35',
-  bridge: '#c08a3e',
   route: '#ffc21a',
   search: '#5fd0ff',
   halo: 'rgba(8, 11, 15, 0.9)'
@@ -93,16 +69,16 @@ const MODELLED_LANDMARKS = [
 // Borough (0), waterway (1) & neighbourhood (2) names at their real places (world metres)
 const AREA_LABELS = [
   ['MANHATTAN', 120, -1500, 0], ['LE WASTELAND', 6900, -3200, 0], ['LE WASTELAND', -7200, 3400, 0],
-  ['LE LIT DE L’HUDSON', -2760, -300, 1], ['LE LIT DE L’HUDSON', -2760, -5200, 1], ['EAST RIVER', 1700, 800, 1],
-  ['LA RADE', 130, 10530, 1],
-  ['HARLEM', -320, -6750, 2], ['MORNINGSIDE HEIGHTS', -1600, -6160, 2], ['EAST HARLEM', 830, -5820, 2],
+  ['LE LIT DE L’HUDSON', -2760, -300, 1], ['LE LIT DE L’HUDSON', -2760, -5200, 1], ['TERRES DU LEVANT', 2140, 800, 1],
+  ['LA RADE BLANCHE', 130, 10530, 1],
+  ['HARLEM', -320, -5940, 2], ['MORNINGSIDE HEIGHTS', -1600, -6160, 2], ['EAST HARLEM', 430, -5670, 2],
   ['UPPER WEST SIDE', -1410, -3070, 2], ['CENTRAL PARK', -430, -3280, 2], ['UPPER EAST SIDE', 590, -2680, 2],
-  ['ROOSEVELT ISLAND', 1810, -2030, 2], ["HELL'S KITCHEN", -1350, -590, 2], ['MIDTOWN', 100, -500, 2],
-  ['MURRAY HILL', 680, 330, 2], ['HUDSON YARDS', -1510, 770, 2], ['CHELSEA', -1030, 1650, 2],
-  ['FLATIRON · GRAMERCY', 330, 1660, 2], ['GREENWICH VILLAGE', -540, 2830, 2], ['EAST VILLAGE', 1250, 2800, 2],
-  ['SOHO', 200, 3560, 2], ['LOWER EAST SIDE', 1690, 3760, 2], ['TRIBECA', -140, 4460, 2], ['CHINATOWN', 850, 4420, 2],
-  ['BATTERY PARK CITY', -370, 5540, 2], ['FINANCIAL DISTRICT', 455, 5715, 2], ['GOVERNORS ISLAND', 795, 7685, 2],
-  ['LIBERTY ISLAND', -1234, 8849, 2], ['ELLIS ISLAND', -1427, 7648, 2], ["RANDALL'S ISLAND", 2268, -6301, 2],
+  ["HELL'S KITCHEN", -1350, -590, 2], ['MIDTOWN', 100, -500, 2],
+  ['MURRAY HILL', 680, 330, 2], ['HUDSON YARDS', -1350, 770, 2], ['CHELSEA', -1030, 1650, 2],
+  ['FLATIRON · GRAMERCY', 330, 1660, 2], ['GREENWICH VILLAGE', -540, 2830, 2], ['EAST VILLAGE', 880, 2800, 2],
+  ['SOHO', 200, 3560, 2], ['LOWER EAST SIDE', 970, 3790, 2], ['TRIBECA', -140, 4460, 2], ['CHINATOWN', 850, 4420, 2],
+  ['FINANCIAL DISTRICT', 455, 5715, 2], ['GOVERNORS ISLAND', 795, 7685, 2],
+
   ...SALT_PLACES.map(p => [p.name.toUpperCase(), p.x, p.z, 2])
 ];
 
@@ -208,32 +184,49 @@ class TiledLayer {
   }
 }
 
+function terrainContours() {
+  const lines = new TiledLayer(1600);
+  const stride = 4, step = stride * MACRO_STEP, { height, zone } = SALT_TERRAIN;
+  const levels = [-5, 3, 8, 15, 25, 40, 60, 90, 130, 190, 280, 370];
+  const corners = [[0, 0], [step, 0], [step, step], [0, step]];
+  for (let j = 0; j + stride < MACRO_H; j += stride) {
+    for (let i = 0; i + stride < MACRO_W; i += stride) {
+      const o = j * MACRO_W + i, row = stride * MACRO_W;
+      const indices = [o, o + stride, o + row + stride, o + row];
+      if (indices.some(k => zone[k] === 2)) continue;
+      const values = indices.map(k => height[k]);
+      const low = Math.min(...values), high = Math.max(...values);
+      const x = SALT_MIN_X + i * MACRO_STEP, z = SALT_MIN_Z + j * MACRO_STEP;
+      for (const level of levels) {
+        if (level <= low || level > high) continue;
+        const hits = [];
+        for (let k = 0; k < 4; k++) {
+          const n = (k + 1) % 4, a = values[k], b = values[n];
+          if ((a < level) === (b < level)) continue;
+          const t = (level - a) / (b - a), [ax, az] = corners[k], [bx, bz] = corners[n];
+          hits.push({ x: x + ax + (bx - ax) * t, z: z + az + (bz - az) * t });
+        }
+        if (hits.length === 4 && (values[0] < level) === (values.reduce((sum, value) => sum + value, 0) / 4 < level)) hits.push(hits.shift());
+        for (let k = 0; k < hits.length; k += 2) lines.line([hits[k], hits[k + 1]]);
+      }
+    }
+  }
+  return lines;
+}
+
 let LAYERS = null;
 function mapLayers() {
   if (LAYERS) return LAYERS;
   const L = {};
-  const rings = (list) => list.filter((p) => p && p.length > 2);
-
-  // The exterior basin and its water channel are two rings of the same shape.
-  L.moat = new Path2D();
-  for (const [x0, z, x1] of saltMoatRuns()) L.moat.rect(x0, z - 8, x1 - x0, 16);
   L.saltRoads = new Path2D();
+  L.saltTracks = new Path2D();
   addLine(L.saltRoads, SALT_LOOP);
-  for (const route of SALT_ROUTES) addLine(L.saltRoads, route.path);
-  L.islands = new Path2D();
-  for (const ring of rings([RANDALLS_ISLAND_POLYGON, ROOSEVELT_ISLAND_POLYGON, GOVERNORS_ISLAND_POLYGON, LIBERTY_ISLAND_POLYGON,
-    ELLIS_ISLAND_POLYGON, MILL_ROCK_POLYGON])) addRing(L.islands, ring);
+  for (const route of SALT_ROUTES) addLine(route.kind === 'road' ? L.saltRoads : L.saltTracks, route.path);
+  L.relief = terrainContours();
 
-  // Manhattan inside its bulkhead line, and its piers
   L.manhattan = new Path2D();
-  addRing(L.manhattan, MANHATTAN_COASTLINE);
-  L.piers = new Path2D();
-  for (const p of WATERFRONT_PIERS) if (p.ring) addRing(L.piers, p.ring);
+  addRing(L.manhattan, CITY_RING);
 
-  // Parkland (NYC Parks properties), the curb islands (blocks: raised sidewalks & lots) and the park blocks, exactly
-  // as city-grid.js / buildings.js treat them
-  L.parkLand = new TiledLayer();
-  for (const park of GEO.parks || []) for (const ring of park.rings || []) L.parkLand.ring(ring);
   L.blocks = new TiledLayer();
   L.parkBlocks = new TiledLayer();
   for (const b of BLOCKS) (b.park > 0.6 && !b.median ? L.parkBlocks : L.blocks).ring(b.poly);
@@ -261,22 +254,8 @@ function mapLayers() {
   L.urbanPlaces = [
     { block: lincolnBlock, lawns: [placePath(lincolnPoint, lincolnGarden)], paving: placePath(lincolnPoint, lincolnPlaza),
       paths: [], water: waterPath(lincolnFountain, 6.65) },
-    { block: ovalBlock, lawns: [placePath(ovalPoint, ovalGround), placePath(ovalPoint, ovalLawn)], paving: null,
-      paths: [...ovalWalks, { points: [...ovalLawn, ovalLawn[0]].map(([x,z]) => [x * 1.06,z * 1.08]), width: 4.9 }]
-        .map(w => ({ path: placePath(ovalPoint, w.points, false), width: w.width })),
-      water: waterPath(ovalFountain, 3.52) },
-    { block: campusBlock, lawns: campusLawns.map(l => placePath(campusPoint,l)), paving: placePath(campusPoint,campusWalk), paths: [] },
-    { block: asphaltBlock, lawns: asphaltLawns.map(l => placePath(asphaltPoint,l)), paving: null,
-      field: placePath(asphaltPoint,asphaltField), paths: [] },
-    { block: unBlock, lawns: [placePath(unPoint,unGarden)], paving: placePath(unPoint,unPlaza),
-      paths: [], water: waterPath(unPool,7.1) }
+    { block: campusBlock, lawns: campusLawns.map(l => placePath(campusPoint,l)), paving: placePath(campusPoint,campusWalk), paths: [] }
   ];
-  L.riverPromenade = new TiledLayer();
-  for (let z = riverLimits[0]; z < riverLimits[1]; z += 20) {
-    L.riverPromenade.line([riverPromenade(z), riverPromenade(Math.min(z + 20, riverLimits[1]))].map(([x,z]) => ({ x,z })));
-  }
-  L.riverFootbridge = new TiledLayer();
-  L.riverFootbridge.line([riverBridge.westLanding, riverBridge.westDeck, riverBridge.eastDeck, riverBridge.eastLanding]);
 
   // Central Park: meadows, water bodies, the drives and the sunken transverse roads
   const cp = GEO.centralPark || {};
@@ -292,12 +271,7 @@ function mapLayers() {
   // Street network at low zoom (avenues & wide streets, once the gaps between blocks are under a pixel) and the shore
   // highways (FDR Drive, West St / West Side Hwy, Harlem River Dr, Henry Hudson Pkwy)
   L.mainRoads = new TiledLayer(1000);
-  L.highways = new Path2D();
-  for (const r of MAP_ROADS) {
-    if (r.highway) {
-      if (!/Underpass|Tunnel/.test(r.name)) addLine(L.highways, r.pts);
-    } else if (r.w >= 15) L.mainRoads.line(r.pts);
-  }
+  for (const r of MAP_ROADS) if (r.w >= 15) L.mainRoads.line(r.pts);
 
   // Landmark lots
   L.landmarks = new Path2D();
@@ -305,14 +279,6 @@ function mapLayers() {
     const s = LANDMARK_SITES[name];
     if (s && s.ring) addRing(L.landmarks, s.ring);
   }
-
-  // Bridges, Manhattan landing to the far landing, deck width to scale
-  L.bridges = FRONTIER_BRIDGES.map((br) => {
-    const path = new Path2D();
-    path.moveTo(br.a.x, br.a.z);
-    path.lineTo(br.b.x, br.b.z);
-    return { path, width: br.width || 25 };
-  });
 
   LAYERS = L;
   return L;
@@ -376,8 +342,7 @@ for (const r of MAP_ROADS) {
     raw: r.name.toLowerCase(),
     road: r,
     major: r.highway || r.w >= 15,
-    highway: r.highway,
-    anchors,
+      anchors,
     ...boundsOf(r.pts)
   });
 }
@@ -506,7 +471,7 @@ class NYCMapSystem {
     this.elHoverInfo = document.getElementById('fullmap-hover-info');
     this.elPlayerInfo = document.getElementById('fullmap-player-info');
     this.elSearchInput = document.getElementById('fullmap-search');
-    if (this.elSearchInput) this.elSearchInput.placeholder = `Search ${ROAD_NAME_COUNT} streets & landmarks…`;
+    if (this.elSearchInput) this.elSearchInput.placeholder = `Rechercher parmi ${ROAD_NAME_COUNT} rues et lieux…`;
 
     this.isFullMapOpen = false;
     // Full map viewport state (world metres; zoom in CSS pixels per metre)
@@ -570,7 +535,10 @@ class NYCMapSystem {
     if (fullIslandBtn) {
       fullIslandBtn.addEventListener('click', () => {
         // Fits all of Manhattan, from the Harlem River to the Battery
-        const b = ISLAND_BOUNDS;
+        const b = {
+          minX: Math.min(...CITY_RING.map(p => p.x)) - 1200, maxX: Math.max(...CITY_RING.map(p => p.x)) + 1200,
+          minZ: CITY_RING[0].z - 380, maxZ: Math.max(...CITY_RING.map(p => p.z)) + 380
+        };
         const { w, h } = this.fullSize();
         this.viewCenterX = (b.minX + b.maxX) * 0.5;
         this.viewCenterZ = (b.minZ + b.maxZ) * 0.5;
@@ -685,7 +653,7 @@ class NYCMapSystem {
 
   saltGps(position) {
     const target = this.waypoint;
-    if (!target) return null;
+    if (!target || target.direct) return null;
     const cached = this.saltRoute;
     if (cached?.target === target && Math.hypot(cached.x - position.x, cached.z - position.z) < 42) return cached.path;
     const from = { x: position.x, z: position.z };
@@ -813,12 +781,11 @@ class NYCMapSystem {
     };
   }
 
-  // Teleports land on Manhattan: inside the island's extent at that latitude
-  clampToManhattan(p) {
-    if (saltLocation(p.x, p.z)) return p;
-    const z = Math.max(ISLAND_BOUNDS.minZ + 25, Math.min(ISLAND_BOUNDS.maxZ - 25, p.z));
-    const shore = getIslandBoundsAtZ(z);
-    return { x: Math.max(shore.westX + 12, Math.min(shore.eastX - 12, p.x)), z };
+  clampToManhattan({ x, z }) {
+    return {
+      x: Math.max(SALT_MIN_X + 2, Math.min(SALT_MAX_X - 2, x)),
+      z: Math.max(SALT_MIN_Z + 2, Math.min(SALT_MAX_Z - 2, z))
+    };
   }
 
   textWidth(ctx, text) {
@@ -843,25 +810,24 @@ class NYCMapSystem {
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
 
-    // 1. Land around the harbour & the islands
-    ctx.fillStyle = '#2b2620';
+    // Land and surveyed contours. The city fill covers the contour ends at the street line.
+    ctx.fillStyle = '#342b21';
     ctx.fillRect(SALT_MIN_X, SALT_MIN_Z, SALT_MAX_X - SALT_MIN_X, SALT_MAX_Z - SALT_MIN_Z);
-    ctx.fillStyle = MAP.water;
-    ctx.fill(L.moat);
-    ctx.strokeStyle = '#81755f';
-    ctx.lineWidth = Math.max(px(isMinimap ? 1.4 : 1.7), 12);
+    ctx.strokeStyle = '#a78860';
+    ctx.lineWidth = px(isMinimap ? 0.6 : 0.82);
+    ctx.globalAlpha = isMinimap ? 0.27 : 0.38;
+    L.relief.each(v, path => ctx.stroke(path));
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = '#9d8563';
+    ctx.lineWidth = Math.max(px(isMinimap ? 1.2 : 1.6), 13);
     ctx.stroke(L.saltRoads);
-    ctx.fillStyle = MAP.islands;
-    ctx.fill(L.islands);
-    if (!isMinimap) {
-      ctx.lineWidth = px(1.4);
-      ctx.strokeStyle = MAP.islandsEdge;
-      ctx.stroke(L.islands);
-    }
+    ctx.strokeStyle = '#6e5a44';
+    ctx.lineWidth = Math.max(px(0.85), 9);
+    ctx.stroke(L.saltTracks);
 
-    // 2. Piers, then Manhattan (roadway deck colour: the streets are the gaps between the blocks) in its bulkhead line
-    ctx.fillStyle = MAP.piers;
-    ctx.fill(L.piers);
+    ctx.strokeStyle = 'rgba(158, 139, 86, 0.25)';
+    ctx.lineWidth = 155;
+    ctx.stroke(L.manhattan);
     ctx.fillStyle = MAP.streets;
     ctx.fill(L.manhattan);
     ctx.strokeStyle = MAP.shore;
@@ -869,8 +835,6 @@ class NYCMapSystem {
     ctx.stroke(L.manhattan);
 
     // 3. Parkland, blocks (curb islands) and park blocks
-    ctx.fillStyle = MAP.park;
-    L.parkLand.each(v, (p) => ctx.fill(p));
     ctx.fillStyle = MAP.block;
     L.blocks.each(v, (p) => ctx.fill(p));
     if (s >= 0.22) {
@@ -918,12 +882,6 @@ class NYCMapSystem {
       }
       ctx.fillStyle = MAP.pond;
       if (place.water) ctx.fill(place.water);
-    }
-
-    if (s >= 0.22) {
-      ctx.strokeStyle = MAP.parkEdge;
-      ctx.lineWidth = 4.6;
-      L.riverPromenade.each(v, path => ctx.stroke(path));
     }
 
     // 4. Central Park: meadows, drives & transverses, water bodies
@@ -976,25 +934,6 @@ class NYCMapSystem {
       ctx.lineWidth = px(s < 0.05 ? 0.7 : 1.1);
       L.mainRoads.each(v, (p) => ctx.stroke(p));
     }
-
-    // 8. Shore highways
-    ctx.strokeStyle = MAP.highway;
-    ctx.lineWidth = Math.max(px(isMinimap ? 2.4 : 1.6), 14);
-    ctx.stroke(L.highways);
-    if (s >= 0.22) {
-      ctx.strokeStyle = MAP.parkEdge;
-      ctx.lineWidth = Math.max(px(1.1), 4.8);
-      L.riverFootbridge.each(v, path => ctx.stroke(path));
-    }
-
-    // 9. Bridges
-    ctx.strokeStyle = MAP.bridge;
-    ctx.lineCap = 'butt';
-    for (const br of L.bridges) {
-      ctx.lineWidth = Math.max(px(2), br.width);
-      ctx.stroke(br.path);
-    }
-    ctx.lineCap = 'round';
 
     // 10. Search highlight: every stretch of the matching streets
     if (this.searchPath && !isMinimap) {
@@ -1230,7 +1169,7 @@ class NYCMapSystem {
 
     const ent = this.controllerManager.getActiveEntity();
     if (this.elPlayerInfo) {
-      const text = `You are at ${mapLocation(ent.position.x, ent.position.z)}`;
+      const text = `Position · ${mapLocation(ent.position.x, ent.position.z)}`;
       if (text !== this.playerInfoText) {
         this.playerInfoText = text;
         this.elPlayerInfo.textContent = text;

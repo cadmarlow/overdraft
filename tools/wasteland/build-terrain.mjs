@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // The relief of the Wasteland, baked once: real shorelines of the harbour (js/city-config.js), the dry bed of the
-// Hudson, the moat kept behind four dams, the Palisades, mesas, dune fields, and rain that never came back but left
+// Hudson, the filled East River, the Palisades, mesas, dune fields, and rain that never came back but left
 // its gullies. Output: js/wasteland-terrain.bin.gz, read by js/wasteland-plan.js.
 //   node tools/wasteland/build-terrain.mjs [--preview <folder>] [--no-erosion]
 // File (gzip): uint32 LE header length, JSON header (space-padded to 4 bytes), then
 //   height   uint16 per macro vertex, rows delta-coded, low bytes then high bytes
-//   zone     uint8 per macro vertex (0 dry, 1 moat, 2 under the city)
-//   calm     uint8 per macro vertex (255 = no run-time detail: roads, pads, dams, the foot of the walls)
+//   zone     uint8 per macro vertex (0 dry, 2 under the city)
+//   calm     uint8 per macro vertex (255 = no run-time detail: roads, pads, the city edge)
 //   masks    RGBA8 per mask vertex (64 m): R dune sand, G cracked mud, B salt crust, A bare rock
 //   profiles float32 per route vertex: the level of every road and track along its line (the circuit first)
 import fs from 'node:fs';
@@ -15,6 +15,7 @@ import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import * as C from '../../js/city-config.js';
 import * as D from '../../js/wasteland-design.js';
+import { CITY_RING, insideCity } from '../../js/city-frontier.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const args = process.argv.slice(2);
@@ -27,7 +28,6 @@ const S = D.MACRO_STEP, W = D.MACRO_W, H = D.MACRO_H;
 const F = 16; // the raster the shores are drawn on
 const FW = (D.SALT_MAX_X - D.SALT_MIN_X) / F + 1, FH = (D.SALT_MAX_Z - D.SALT_MIN_Z) / F + 1;
 const X0 = D.SALT_MIN_X, Z0 = D.SALT_MIN_Z;
-const WATER = D.SALT_WATER;
 const clamp01 = v => Math.max(0, Math.min(1, v));
 const sm = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
 const mix = (a, b, t) => a + (b - a) * t;
@@ -61,7 +61,7 @@ function ridged(x, z, octaves, seed) {
 }
 
 // ---- The shores, drawn on a 16 m raster ----------------------------------------------------------------------------
-const NJ = 1, BROOKLYN = 2, QUEENS = 3, BRONX = 4, UPPER = 5, STATEN = 6, MINOR = 7, DRY_ISLE = 9, MOAT_ISLE = 10, CITY = 11;
+const NJ = 1, BROOKLYN = 2, QUEENS = 3, BRONX = 4, UPPER = 5, STATEN = 6, MINOR = 7, CITY = 11;
 const land = new Uint8Array(FW * FH);
 function fill(points, id) {
   if (!points || points.length < 3) return;
@@ -93,9 +93,7 @@ for (const rings of [C.BROOKLYN_POLYGONS, C.QUEENS_POLYGONS, C.BRONX_POLYGONS]) 
   for (const r of rings) if (r !== main) fill(r, MINOR);
 }
 fill(C.UPPER_MANHATTAN_POLYGON, UPPER);
-for (const p of [C.GOVERNORS_ISLAND_POLYGON, C.LIBERTY_ISLAND_POLYGON, C.ELLIS_ISLAND_POLYGON]) fill(p, DRY_ISLE);
-for (const p of [C.RANDALLS_ISLAND_POLYGON, C.ROOSEVELT_ISLAND_POLYGON, C.MILL_ROCK_POLYGON]) fill(p, MOAT_ISLE);
-fill(C.MANHATTAN_COASTLINE, CITY);
+fill(CITY_RING, CITY);
 log('shores drawn');
 
 // Exact Euclidean distance (in metres) to the nearest cell where `inside` is true
@@ -128,47 +126,9 @@ function distanceTo(inside) {
 }
 const isFar = id => id >= NJ && id <= MINOR;
 const dCity = distanceTo(i => land[i] === CITY); // to Manhattan's seawall
-const dCityIn = distanceTo(i => land[i] !== CITY); // inside Manhattan, to its edge
 const dFar = distanceTo(i => isFar(land[i])); // to the far banks
 const dWater = distanceTo(i => land[i] === 0); // inside any land, to the nearest old water
-const dIsle = distanceTo(i => land[i] === DRY_ISLE || land[i] === MOAT_ISLE);
 log('distances measured');
-
-// ---- The moat: what the dams still hold --------------------------------------------------------------------------
-const segDist = (x, z, a, b) => {
-  const dx = b.x - a.x, dz = b.z - a.z;
-  const t = clamp01(((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz));
-  return Math.hypot(x - a.x - dx * t, z - a.z - dz * t);
-};
-const DAM_FLAT = 26;
-const barrier = new Uint8Array(FW * FH);
-for (const dam of D.DAMS) {
-  const i0 = Math.floor((Math.min(dam.a.x, dam.b.x) - 80 - X0) / F), i1 = Math.ceil((Math.max(dam.a.x, dam.b.x) + 80 - X0) / F);
-  const j0 = Math.floor((Math.min(dam.a.z, dam.b.z) - 80 - Z0) / F), j1 = Math.ceil((Math.max(dam.a.z, dam.b.z) + 80 - Z0) / F);
-  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) if (segDist(X0 + i * F, Z0 + j * F, dam.a, dam.b) < DAM_FLAT) barrier[j * FW + i] = 1;
-}
-const wet = new Uint8Array(FW * FH);
-{
-  const queue = new Int32Array(FW * FH);
-  let head = 0, tail = 0;
-  const seed = Math.round((D.MOAT_SEED.z - Z0) / F) * FW + Math.round((D.MOAT_SEED.x - X0) / F);
-  if (land[seed] !== 0) throw new Error('the moat seed is not in the East River');
-  wet[seed] = 1; queue[tail++] = seed;
-  while (head < tail) {
-    const c = queue[head++], i = c % FW, j = (c - i) / FW;
-    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const ni = i + di, nj = j + dj;
-      if (ni < 0 || nj < 0 || ni >= FW || nj >= FH) throw new Error(`the moat leaks out of the map near ${X0 + i * F}, ${Z0 + j * F}: a dam is missing`);
-      const n = nj * FW + ni;
-      if (wet[n] || barrier[n] || land[n] !== 0) continue;
-      wet[n] = 1; queue[tail++] = n;
-    }
-  }
-  log('moat filled:', (tail * F * F / 1e6).toFixed(1), 'km² of water kept');
-  if (tail * F * F > 40e6) throw new Error('the moat is far larger than the East River: a dam leaks');
-}
-const dWet = distanceTo(i => wet[i] === 1);
-const dDryBed = distanceTo(i => land[i] === 0 && !wet[i]);
 
 // ---- The Palisades: the real cliff line and heights (same survey as js/boroughs.js) ---------------------------------
 const njShoreX = new Float32Array(FH); // the easternmost New Jersey ground on each row facing the Hudson
@@ -210,14 +170,21 @@ const footRow = new Float32Array(FH), cliffH = new Float32Array(FH), cliffW = ne
 }
 
 // ---- Road levels are fixed after the first relief, then the relief is graded to them ---------------------------------
-const ROUTES = [{ id: 'ceinture', kind: 'road', path: D.SALT_LOOP, closed: true }, ...D.SALT_ROUTES.map(r => ({ id: r.id, kind: r.kind, path: r.path, spec: r.spec }))];
+const ROUTES = [{ id: 'ceinture', kind: 'road', path: D.SALT_LOOP, closed: true }, ...D.SALT_ROUTES];
+
+// Uneven shelves on both sides of the old Delancey corridor. Each lobe falls away to a driveable apron.
+const FAULTS = [
+  [1340, 3470, 95, 74, 20], [1460, 3430, 113, 85, 32], [1595, 3385, 120, 91, 36],
+  [1755, 3330, 138, 88, 37], [1885, 3345, 108, 96, 28], [1995, 3410, 94, 70, 25],
+  [1510, 3805, 93, 65, 18], [1640, 3720, 114, 79, 26], [1755, 3685, 118, 72, 28],
+  [1890, 3765, 109, 92, 24], [2020, 3815, 108, 82, 18]
+];
 
 // ---- First relief ---------------------------------------------------------------------------------------------------
 const height = new Float32Array(W * H);
 const kind = new Uint8Array(W * H); // land id at the macro vertex
 const fi = (i, j) => (j * 2) * FW + i * 2;
 const islandCentre = z => { const s = C.getIslandBoundsAtZ(Math.max(C.ISLAND_BOUNDS.minZ, Math.min(C.ISLAND_BOUNDS.maxZ, z))); return (s.westX + s.eastX) / 2; };
-const BREACH_REACH = D.BREACHES.map(b => b.r + b.reach + 60);
 const harbourAt = z => sm(5600, 7200, z) * (1 - sm(12400, 13800, z));
 
 // Mesas and buttes: stepped, flat-topped, with warped outlines
@@ -240,41 +207,41 @@ for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
   const x = X0 + i * S, z = Z0 + j * S, f = fi(i, j);
   const id = land[f];
   kind[j * W + i] = id;
-  const isWet = wet[f] === 1;
   let h;
   if (id === CITY) h = D.UNDER_CITY;
-  else if (id === MOAT_ISLE) h = -3.1;
-  else if (id === 0 || id === DRY_ISLE) {
-    const shore = Math.min(dFar[f], dIsle[f]);
-    if (isWet) h = WATER - 0.4 - 5.2 * sm(0, 110, Math.min(shore, dCity[f] + 30));
+  else if (id === 0) {
+    const shore = dFar[f];
+    const west = z < 7400 && x < (z >= C.CUT_Z ? islandCentre(z) : -1300);
+    const canyon = !west && z < -7150 && x > -1400 && x < 2600;
+    const bank = sm(8, 240, shore); // 0 on the far shore, 1 well out on the bed
+    if (west) {
+      // The Hudson: deep under Manhattan's wall, a wandering low channel, shoals toward New Jersey
+      const u = dCity[f] / (dCity[f] + dFar[f] + 1);
+      const wander = 0.38 + 0.13 * Math.sin(z / 1150 + 1.3) + 0.06 * Math.sin(z / 410);
+      const thalweg = 2.6 * Math.exp(-(((u - wander) / 0.16) ** 2));
+      h = -1.2 - 5.6 * bank - thalweg * bank;
+      // Wind from the west: sand banks up against the wall, and in bars across the bed
+      h += 3.4 * dunes(x, z, 310, 41) * sm(60, 260, dCity[f]) * bank;
+      h += (0.6 + 2.4 * fbm(z / 520, 3.3, 3, 77)) * Math.exp(-dCity[f] / 85) * bank;
+      const north = sm(-7200, -9500, z); // the bed narrows and fills toward the great bridge
+      h += north * 2.2;
+    } else if (canyon) h = -1.2 - 4.6 * bank;
     else {
-      const west = z < 7400 && x < (z >= C.CUT_Z ? islandCentre(z) : -1300);
-      const canyon = !west && z < -7150 && x > -1400 && x < 2600;
-      const bank = sm(8, 240, shore); // 0 on the far shore, 1 well out on the bed
-      if (west) {
-        // The Hudson: deep under Manhattan's wall, a wandering low channel, shoals toward New Jersey
-        const u = dCity[f] / (dCity[f] + dFar[f] + 1);
-        const wander = 0.38 + 0.13 * Math.sin(z / 1150 + 1.3) + 0.06 * Math.sin(z / 410);
-        const thalweg = 2.6 * Math.exp(-(((u - wander) / 0.16) ** 2));
-        h = -1.2 - 5.6 * bank - thalweg * bank;
-        // Wind from the west: sand banks up against the wall, and in bars across the bed
-        h += 3.4 * dunes(x, z, 310, 41) * sm(60, 260, dCity[f]) * bank;
-        h += (0.6 + 2.4 * fbm(z / 520, 3.3, 3, 77)) * Math.exp(-dCity[f] / 85) * bank;
-        const north = sm(-7200, -9500, z); // the bed narrows and fills toward the great bridge
-        h += north * 2.2;
-      } else if (canyon) h = -1.2 - 4.6 * bank;
-      else {
-        h = -1.2 - 2.4 * bank;
-        h += 2.6 * dunes(x, z, 280, 55) * bank;
-      }
-      // The harbour: a dead-level white pan from the Battery to the Narrows
-      const pan = Math.max(-3.3, -1.2 - 1.9 * bank + 0.5 * (fbm(x / 800, z / 800, 3, 12) - 0.5) * bank);
-      h = mix(h, pan, harbourAt(z));
-      // The dune sea of the lower bay
-      const rise = sm(13200, 17500, z);
-      h = mix(h, -3.0 + rise * 16 + (6 + 46 * rise) * dunes(x, z, 520, 23) + 12 * rise * dunes(x + 300, z, 190, 29), sm(12400, 13800, z));
-      if (id === DRY_ISLE) h = Math.min(h, -1.4); // the harbour islands keep their own ground
+      // Broad dry flats with dune ridges running into the districts lost on the eastern side.
+      const basin = sm(50, 390, dCity[f]);
+      const channel = 1840 + 290 * Math.sin(z / 1400) + 125 * Math.sin(z / 520);
+      const flats = Math.exp(-(((x - channel) / 310) ** 2));
+      const banks = 5 + 20 * dunes(x + z * 0.18, z, 405, 55);
+      h = -0.6 + basin * (banks * (1 - 0.86 * flats) - 2.1 * flats);
+      const shoulder = Math.exp(-(((x - 1960) / 810) ** 2 + ((z - 3170) / 1330) ** 2));
+      h += basin * shoulder * (15 + 22 * ridged(x / 340, z / 460, 3, 813));
     }
+    // The harbour: a dead-level white pan from the Battery to the Narrows
+    const pan = Math.max(-3.3, -1.2 - 1.9 * bank + 0.5 * (fbm(x / 800, z / 800, 3, 12) - 0.5) * bank);
+    h = mix(h, pan, harbourAt(z));
+    // The dune sea of the lower bay
+    const rise = sm(13200, 17500, z);
+    h = mix(h, -3.0 + rise * 16 + (6 + 46 * rise) * dunes(x, z, 520, 23) + 12 * rise * dunes(x + 300, z, 190, 29), sm(12400, 13800, z));
   } else {
     // Far land: a low bank, then each country's own relief
     const inland = dWater[f];
@@ -318,50 +285,23 @@ for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
       h += sm(100, 900, inland) * (14 + 60 * fbm(x / 1900, z / 1900, 4, 601)) + mesas(x, z, 607, 2200) * sm(900, 2200, inland);
     } else h += 4 + 7 * sm(30, 160, inland); // Rikers and the lesser islands: low tables
   }
+  if (id !== CITY && x > 1200 && x < 2170 && z > 3180 && z < 3970) {
+    let ridge = 0;
+    const waviness = 0.8 + fbm(x / 56, z / 56, 3, 1430) * 0.38;
+    for (const [cx, cz, w, d, top] of FAULTS) {
+      const r = Math.hypot((x - cx) / w, (z - cz) / d);
+      ridge = Math.max(ridge, top * (1 - sm(0.38, 1.34, r)));
+    }
+    h += ridge * waviness;
+  }
   // Rim: the world ends in high country on every side
   const rim = Math.max(Math.abs(x) / 14336, z < 0 ? -z / 17408 : z / 18432);
-  if (!isWet && id !== CITY) h += sm(0.80, 1.0, rim) * (70 + 240 * ridged(x / 4300, z / 4300, 4, 701));
+  if (id !== CITY) h += sm(0.80, 1.0, rim) * (70 + 240 * ridged(x / 4300, z / 4300, 4, 701));
   // Ranges stack up where a country's own mountains meet the rim: a soft ceiling keeps the peaks distinct
   if (h > 330) h = 330 + 170 * Math.tanh((h - 330) / 170);
   height[j * W + i] = h;
 }
 log('first relief');
-
-// Dams: flat crests over the old channel, tied into both banks
-for (const dam of D.DAMS) {
-  const i0 = Math.floor((Math.min(dam.a.x, dam.b.x) - 140 - X0) / S), i1 = Math.ceil((Math.max(dam.a.x, dam.b.x) + 140 - X0) / S);
-  const j0 = Math.floor((Math.min(dam.a.z, dam.b.z) - 140 - Z0) / S), j1 = Math.ceil((Math.max(dam.a.z, dam.b.z) + 140 - Z0) / S);
-  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-    if (kind[j * W + i] === CITY) continue;
-    const d = segDist(X0 + i * S, Z0 + j * S, dam.a, dam.b);
-    const top = dam.crest - Math.max(0, d - DAM_FLAT) / 2.6;
-    if (top > height[j * W + i]) height[j * W + i] = top;
-  }
-}
-
-// Breaches: the dune that climbs the seawall and what it spills into the streets
-const signedCoast = f => (land[f] === CITY ? -dCityIn[f] : dCity[f]);
-for (let b = 0; b < D.BREACHES.length; b++) {
-  const br = D.BREACHES[b], reachAll = BREACH_REACH[b] + 120;
-  const i0 = Math.max(0, Math.floor((br.x - reachAll - X0) / S)), i1 = Math.min(W - 1, Math.ceil((br.x + reachAll - X0) / S));
-  const j0 = Math.max(0, Math.floor((br.z - reachAll - Z0) / S)), j1 = Math.min(H - 1, Math.ceil((br.z + reachAll - Z0) / S));
-  for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
-    const x = X0 + i * S, z = Z0 + j * S, f = fi(i, j);
-    if (land[f] !== CITY && (land[f] !== 0 || wet[f])) continue;
-    const s = signedCoast(f), e = Math.hypot(x - br.x, z - br.z);
-    const along = sm(br.r, br.r * 0.45, e);
-    const lump = 0.75 + 0.5 * fbm(x / 70, z / 70, 3, 900 + b);
-    const profile = s >= 0 ? br.top * lump - s / 5.2 : br.top * lump * Math.pow(Math.max(0, 1 + s / br.reach), 1.6) - Math.max(0, -s - br.reach) * 0.06;
-    const level = profile - (1 - along) * 11;
-    if (level > height[j * W + i]) height[j * W + i] = level;
-  }
-}
-// The foot of the Wall inside the city: a film of sand over the last metres of the avenues
-for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-  const x = X0 + i * S, z = Z0 + j * S;
-  if (kind[j * W + i] !== CITY || z > D.WALL_Z + 100 || x < -2084 || x > 787) continue;
-  height[j * W + i] = Math.max(height[j * W + i], mix(0.06, D.UNDER_CITY, sm(D.WALL_Z + 40, D.WALL_Z + 100, z)));
-}
 
 // Level ground for what will be built
 const calm = new Float32Array(W * H);
@@ -479,26 +419,12 @@ function profileOf(route) {
   const p = route.path, n = p.length, y = new Float32Array(n), pinned = new Uint8Array(n);
   for (let k = 0; k < n; k++) y[k] = sampleH(p[k].x, p[k].z);
   const pin = (k, v) => { y[k] = v; pinned[k] = 1; };
-  if (route.id === 'pumps' || route.id === 'nord') {
-    // these two leave the city at street level
+  if (route.gate) {
     for (let k = 0; k < n; k++) {
-      const f = Math.round((p[k].z - Z0) / F) * FW + Math.round((p[k].x - X0) / F);
-      if (land[f] === CITY) pin(k, 0.05);
+      const { x, z } = p[k];
+      if (insideCity(x, z) || Math.hypot(x - route.gate.x, z - route.gate.z) < 64) pin(k, -0.055);
     }
-    if (route.id === 'nord') for (let k = 0; k < n; k++) if (p[k].z > D.WALL_Z - 60) pin(k, 0.08);
   }
-  // the circuit comes down to the level of every bridge's landing where their link joins it
-  if (route.closed) for (const other of ROUTES) if (other.spec) {
-    const end = other.path.at(-1);
-    for (let k = 0; k < n; k++) if (Math.hypot(p[k].x - end.x, p[k].z - end.z) < 75) pin(k, 0);
-  }
-  if (route.spec) {
-    // a bridge comes down to its landing at ground level
-    const b = route.spec.b;
-    for (let k = 0; k < n; k++) if (Math.hypot(p[k].x - b.x, p[k].z - b.z) < 150 || k < 6) pin(k, 0);
-  }
-  // over the moat a road rides a causeway; on the dry beds it follows the bed
-  for (let k = 0; k < n; k++) if (!pinned[k] && dWet[Math.round((p[k].z - Z0) / F) * FW + Math.round((p[k].x - X0) / F)] < 30) y[k] = Math.max(y[k], WATER + 1.4);
   const passes = route.kind === 'track' ? 50 : 110;
   const tmp = new Float32Array(n);
   for (let it = 0; it < passes; it++) {
@@ -554,32 +480,25 @@ for (let r = 1; r < ROUTES.length; r++) {
   for (let o = 0; o < W * H; o++) {
     if (best[o] > 125 || kind[o] === CITY) continue;
     const w = 1 - sm(38, 125, best[o]);
-    // cut and fill, but never drown the road nor dig the moat dry
+    // cut and fill, across the dry basin
     height[o] = mix(height[o], level[o], w);
     calm[o] = Math.max(calm[o], 1 - sm(24, 70, best[o]));
   }
 }
-// Calm ground also at the foot of Manhattan's wall, on the dams, and wherever the city stands
+// A continuous apron below the asphalt hides the mesh seam. The exact edge is enforced on the game lattice.
+const zone = new Uint8Array(W * H);
 for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
   const o = j * W + i, f = fi(i, j);
-  if (kind[o] === CITY) { calm[o] = Math.max(calm[o], height[o] > 0 ? 0.55 : 1); continue; }
-  calm[o] = Math.max(calm[o], 1 - sm(10, 46, dCity[f]));
-  if (wet[f]) calm[o] = 1;
-  for (const dam of D.DAMS) if (Math.abs(X0 + i * S - (dam.a.x + dam.b.x) / 2) < 1200 && Math.abs(Z0 + j * S - (dam.a.z + dam.b.z) / 2) < 1200) {
-    calm[o] = Math.max(calm[o], 1 - sm(DAM_FLAT + 10, DAM_FLAT + 60, segDist(X0 + i * S, Z0 + j * S, dam.a, dam.b)));
+  if (kind[o] === CITY) {
+    zone[o] = 2;
+    calm[o] = 1;
+  } else {
+    const d = dCity[f];
+    height[o] = mix(-0.055, height[o], sm(24, 145, d));
+    calm[o] = Math.max(calm[o], 1 - sm(32, 120, d));
   }
 }
 log('roads graded');
-
-// ---- Zones and masks ------------------------------------------------------------------------------------------------
-const zone = new Uint8Array(W * H);
-for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-  const f = fi(i, j), o = j * W + i;
-  if (kind[o] === CITY) zone[o] = 2;
-  else if (dWet[f] < 40 && height[o] < WATER + 2.2) zone[o] = 1;
-}
-// Nothing the moat touches may stand dry below the water, and nothing dry may be flagged wet above it
-for (let o = 0; o < W * H; o++) if (zone[o] === 1 && height[o] > WATER + 0.3 && dWet[fi(o % W, (o - o % W) / W)] > 20) zone[o] = 0;
 
 const MW = D.MASK_W, MH = D.MASK_H, MS = D.MASK_STEP;
 const masks = new Uint8Array(MW * MH * 4);
@@ -592,7 +511,7 @@ for (let j = 0; j < MH; j++) for (let i = 0; i < MW; i++) {
   const id = kind[o], h = height[o], slope = slopeAt(mi, mj);
   const flat = 1 - sm(0.10, 0.34, slope);
   let dune = 0, crack = 0, salt = 0, rock = 0;
-  const bed = id === 0 || id === DRY_ISLE;
+  const bed = id === 0;
   const patch = fbm(x / 900, z / 900, 4, 1201);
   if (bed) {
     // dry river bed: cracked mud in the lows, sand on the bars, a white line where the water last stood
@@ -635,7 +554,7 @@ for (let k = 0; k < W * H; k++) calm8[k] = Math.round(clamp01(calm[k]) * 255);
 const profileFloats = new Float32Array(profiles.reduce((n, p) => n + p.length, 0));
 { let o = 0; for (const p of profiles) { profileFloats.set(p, o); o += p.length; } }
 const header = {
-  version: 2, w: W, h: H, step: S, maskW: MW, maskH: MH, maskStep: MS, min: D.HEIGHT_MIN, range: D.HEIGHT_RANGE,
+  version: 3, w: W, h: H, step: S, maskW: MW, maskH: MH, maskStep: MS, min: D.HEIGHT_MIN, range: D.HEIGHT_RANGE,
   routes: ROUTES.map((r, k) => ({ id: r.id, count: profiles[k].length })), low: +lo.toFixed(2), high: +hi.toFixed(2)
 };
 let json = JSON.stringify(header);
@@ -671,7 +590,7 @@ if (PREVIEW) {
       const mi = Math.round((x - X0) / S), mj = Math.round((z - Z0) / S), o = Math.max(0, Math.min(H - 1, mj)) * W + Math.max(0, Math.min(W - 1, mi));
       let r, g, b;
       if (zone[o] === 2 && y <= 0.02) { r = 88; g = 90; b = 96; }
-      else if (zone[o] === 1 && y < WATER) { r = 44; g = 92; b = 104; }
+
       else {
         const dune = maskAt(x, z, 0), crack = maskAt(x, z, 1), salt = maskAt(x, z, 2), rock = maskAt(x, z, 3);
         r = 150; g = 118; b = 84;

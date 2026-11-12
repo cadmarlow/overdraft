@@ -9,7 +9,8 @@ import { loadModule } from './helpers/module.cjs';
 // The second wave of the Wasteland: the ships the water left on the bed (js/wasteland-wrecks.js) and the level
 // crossing where the road of the western gate cuts across the West Side Highway (js/highway-driving.js).
 
-const { WEST_GATE, insideCity, saltLandAt, saltRoadAt, saltWetAt, sampleSalt } = plan;
+const { WEST_GATE, insideCity, saltLandAt, saltRoadAt, sampleSalt } = plan;
+const surfaces = plan.createFrontierSurfaces();
 
 // What mergeGeometries does for the hulls: the positions end to end (nothing here needs the other attributes)
 function mergeGeometries(list) {
@@ -31,7 +32,7 @@ test('every hull lies on dry ground outside the city, clear of the roads and of 
     const { L, B } = KINDS[spec.kind], cs = Math.cos(spec.yaw), sn = Math.sin(spec.yaw);
     for (const t of [-0.5, -0.25, 0, 0.25, 0.5]) {
       const x = spec.x + t * L * cs, z = spec.z - t * L * sn;
-      assert.ok(saltLandAt(x, z) && !saltWetAt(x, z) && !insideCity(x, z), `${spec.kind} at ${spec.x}, ${spec.z}: ${t} of its length is not dry ground`);
+      assert.ok(saltLandAt(x, z) && !surfaces.wetAt(x, z) && !insideCity(x, z), `${spec.kind} at ${spec.x}, ${spec.z}: ${t} of its length is not dry ground`);
       if (saltRoadAt(x, z, road)) assert.ok(road.distance > road.half + B / 2, `${spec.kind} at ${spec.x}, ${spec.z} lies across ${road.kind}`);
     }
   }

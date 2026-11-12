@@ -152,10 +152,8 @@ node tools/wasteland/build-terrain.mjs                      # écrit js/wastelan
 node tools/wasteland/build-terrain.mjs --preview <dossier>  # et trois cartes ombrées, pour juger sans lancer le jeu
 ```
 
-Aucune ressource externe : l’outil part des rives réelles de `js/city-config.js` et du dessin de
-`js/wasteland-design.js` (digues, brèches, routes, lieux, portes). Il trace les rives sur une trame de 16 m, mesure
-les distances aux berges, remplit les douves depuis l’East River jusqu’aux digues (et s’arrête si une digue fuit),
-pose le relief de chaque rive (lit de l’Hudson, rade, falaises des Palisades relevées, mesas, dunes), creuse les
-ravines par érosion, nivelle les routes et les pistes, puis écrit hauteurs (32 m, 16 bits), zones, calme, masques de
-matière (64 m) et profils des routes. À relancer après tout changement du dessin ; `tests/wasteland.test.mjs` vérifie
-le résultat (lit à sec, douves fermées, routes praticables, débarquements des ponts au niveau du sol).
+Le calcul utilise le relevé de `js/city-config.js`, le périmètre urbain de `js/city-frontier.js` et les tracés de
+`js/wasteland-design.js`. Il dessine les anciens lits et le nouveau bord des rues sur une trame de 16 m, creuse les
+ravines par érosion, raccorde les chaussées au relief sec et écrit les hauteurs (32 m, 16 bits), les zones, les masques
+de matière (64 m) et les profils routiers. Relancez-le après une modification du périmètre, du relief ou des routes.
+`tests/wasteland.test.mjs` contrôle le terrain sec, les raccords à niveau, la pente des pistes et les itinéraires.

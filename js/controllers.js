@@ -431,7 +431,7 @@ class ThirdPersonControllerManager {
       ent.position.z = destination.z;
       ent.heading = heading;
       const deck = this._teleportDeckHit ??= {};
-      ent.position.y = heli ? altitude : this.frontier?.deckAt(destination.x, destination.z, Infinity, deck)
+      ent.position.y = heli ? altitude : this.frontier?.deckAt?.(destination.x, destination.z, Infinity, deck)
         ? deck.y : this.getGroundHeight(destination.x, destination.z, this.activeMode);
     }
     ent.speed = 0;
@@ -489,7 +489,7 @@ class ThirdPersonControllerManager {
     const cameraBack = Math.cos(0.09) * entity.chaseDistance;
     const cameraUp = entity.chaseHeight + Math.sin(0.09) * entity.chaseDistance * 0.85;
     const clampPoint = (px, pz) => {
-      if (this.frontier?.landAt(px, pz) || this.frontier?.deckAt(px, pz)) return { x: px, z: pz };
+      if (this.frontier?.landAt(px, pz) || this.frontier?.deckAt?.(px, pz)) return { x: px, z: pz };
       pz = Math.max(ISLAND_BOUNDS.minZ + (heli ? -6000 : 30), Math.min(ISLAND_BOUNDS.maxZ + margin, pz));
       px = Math.max(ISLAND_BOUNDS.minX - margin, Math.min(ISLAND_BOUNDS.maxX + margin, px));
       if (!heli && getIslandBoundsAtZ) {
@@ -503,7 +503,7 @@ class ThirdPersonControllerManager {
     const deck = this._teleportDeckHit ??= {};
     const clear = (p) => {
       if (!p) return false;
-      const baseY = heli ? altitude : this.frontier?.deckAt(p.x, p.z, Infinity, deck)
+      const baseY = heli ? altitude : this.frontier?.deckAt?.(p.x, p.z, Infinity, deck)
         ? deck.y : this.getGroundHeight(p.x, p.z, this.activeMode);
       // Keep other player models out of both the arrival and its default chase view. A corridor also prevents a
       // parked car between camera and character from hiding the character even when the camera itself is outside it.
@@ -1147,18 +1147,7 @@ class ThirdPersonControllerManager {
     // The detailed island (the helicopter may roam out over the harbour & the boroughs)
     const heli = mode === 'helicopter';
     const m = heli ? 6000 : 0;
-    // Down on the dry bed, Manhattan is a wall: nothing walks or drives in under the streets
-    if (this.frontier?.wall && entity && !heli && pos.y < -1.5) {
-      const ax = pos.x, az = pos.z;
-      if (this.frontier.wall(pos, entity._bedX ?? pos.x, entity._bedZ ?? pos.z)) {
-        const nx = pos.x - ax, nz = pos.z - az, l = Math.hypot(nx, nz) || 1;
-        if (carEntity?.body) impactBody(carEntity, ax, pos.y + 0.55, az, nx / l, 0, nz / l);
-        else if (carEntity?.speed) carEntity.speed *= 0.4;
-      }
-      entity._bedX = pos.x; entity._bedZ = pos.z;
-    }
-    // With the Wasteland round it, the island is no longer where the world ends: the seawall, the Wall and their
-    // gates decide who leaves, and the only fence is the edge of the relief
+    // The only world boundary is the edge of the relief.
     const canCross = !!this.frontier;
     if (canCross) this.frontier.confine(pos);
     else {
@@ -1678,7 +1667,7 @@ class ThirdPersonControllerManager {
   }
 
   overWater(x, z) {
-    if (this.frontier?.landAt(x, z)) return false;
+    if (this.frontier) return this.frontier.wetAt?.(x, z) ?? false;
     if (z < ISLAND_BOUNDS.minZ || z > ISLAND_BOUNDS.maxZ) return true;
     const shore = getIslandBoundsAtZ(z);
     return x < shore.westX || x > shore.eastX;

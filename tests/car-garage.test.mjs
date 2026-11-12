@@ -76,10 +76,10 @@ function harness() {
   return { garage, game, CHOICES, ordinary, document, saved: () => data, clearance: () => clearance, repaired: () => repairs };
 }
 
-test('garage preserves the first nine shortcuts while exposing every body and a valid current tile', () => {
+test('garage preserves the existing ground and helicopter shortcuts while exposing every body and a valid current tile', () => {
   const { garage, game, CHOICES } = harness();
-  assert.equal(CHOICES.length, 22);
-  assert.deepEqual(Array.from(CHOICES.slice(0, 9), c => c.id), ['foot', 'car', 'muscle', 'sport', 'super', 'moto', 'bicycle', 'boat', 'helicopter']);
+  assert.equal(CHOICES.length, 21);
+  assert.deepEqual(Array.from(CHOICES.slice(0, 9), c => c.id), ['foot', 'car', 'muscle', 'sport', 'super', 'moto', 'bicycle', 'classic', 'helicopter']);
   assert.equal(new Set(CHOICES.map(c => c.id)).size, CHOICES.length);
   for (const entry of CAR_CATALOG) {
     game.state = 'driving'; game.controllers.entities.car = game.rides.find(c => c.kind === entry.kind);
@@ -88,7 +88,7 @@ test('garage preserves the first nine shortcuts while exposing every body and a 
     garage.update();
   }
   for (const [flags, expected] of [[{ kind: 'cruiser' }, 'car'], [{ bicycle: true, mode: 'cyclist' }, 'bicycle'],
-    [{ moto: true }, 'moto'], [{ boat: true }, 'boat'], [{ mode: 'helicopter' }, 'helicopter'],
+    [{ moto: true }, 'moto'], [{ mode: 'helicopter' }, 'helicopter'],
     [{ mode: 'plane', kind: 'classic', flight: {} }, 'classic'], [{ mode: 'plane', kind: 'jet', flight: {} }, 'jet']]) {
     game.controllers.entities.car = flags;
     assert.equal(garage.current, expected); assert.ok(garage.currentIndex >= 0);
@@ -146,7 +146,7 @@ test('opening, arrow navigation and selection operate on the whole grid with the
   garage.show();
   assert.equal(game.modal, true); assert.equal(garage.panel.hidden, false); assert.equal(garage.sel, 0);
   const press = code => garage.key({ code, preventDefault() {}, stopImmediatePropagation() {} });
-  press('ArrowUp'); assert.equal(garage.sel, 15);
+  press('ArrowUp'); assert.equal(garage.sel, 14);
   press('ArrowDown'); assert.equal(garage.sel, 0);
   press('ArrowLeft'); assert.equal(garage.sel, CHOICES.length - 1);
   assert.match(garage.info.querySelector('strong').textContent, /FRET/);
@@ -223,7 +223,7 @@ test('prewarming the complete garage preserves a full restored fleet and does no
   assert.deepEqual(game.fleet, original);
   assert.equal(game.car, original[0]);
   assert.equal(parkingCalls, 0, 'hidden preparation must not remove a parked car at the world origin');
-  assert.equal(game.rides.length, CAR_CATALOG.length + 2);
+  assert.equal(game.rides.length, CAR_CATALOG.length + 1);
   assert.ok(game.rides.every(c => c.pooled && !game.fleet.includes(c)));
   assert.ok(game.rides.every(c => c.position.y === -100));
 });

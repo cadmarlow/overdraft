@@ -1,9 +1,9 @@
 import * as THREE from 'three/webgpu';
 import { cameraPosition, float, fract, instanceIndex, length, normalize, positionLocal, sin, smoothstep, time, uniform, vec3 } from 'three/tsl';
-import { ISLAND_BOUNDS, getIslandBoundsAtZ } from './city-config.js';
+import { CITY_NORTH, CITY_SOUTH, cityBoundsAt } from './city-frontier.js';
 import { sealEffect } from './effect-outputs.js';
 import { cityUniforms } from './tsl-materials.js';
-import { insideCity, insideSaltGrid, saltLandAt, saltLocation } from './wasteland-plan.js';
+import { saltLandAt, saltLocation } from './wasteland-plan.js';
 import { saltTints, saltUniforms } from './wasteland-materials.js';
 
 // The air of the Wasteland: how deep in it the camera stands, and what that does to the sky, the haze, the light
@@ -24,9 +24,9 @@ export class SaltAir {
     this.entered = 0; // seconds spent outside since the last crossing
     this.onCross = null; // called once each time the limit is crossed outward
     // The island's shores, for the haze: what lies beyond them is seen through dust even from a roof in Midtown
-    const rows = lighting.uShore.array, z0 = ISLAND_BOUNDS.minZ, z1 = ISLAND_BOUNDS.maxZ;
+    const rows = lighting.uShore.array, z0 = CITY_NORTH, z1 = CITY_SOUTH;
     for (let i = 0; i < rows.length; i++) {
-      const shore = getIslandBoundsAtZ(z0 + (z1 - z0) * i / (rows.length - 1));
+      const shore = cityBoundsAt(z0 + (z1 - z0) * i / (rows.length - 1));
       rows[i].set(shore.westX, shore.eastX);
     }
     lighting.uShoreZ.value.set(z0, z1);
@@ -35,14 +35,13 @@ export class SaltAir {
 
   // Metres beyond Manhattan's shores (0 on the island)
   beyond(x, z) {
-    const zc = Math.max(ISLAND_BOUNDS.minZ, Math.min(ISLAND_BOUNDS.maxZ, z)), shore = getIslandBoundsAtZ(zc);
+    const zc = Math.max(CITY_NORTH, Math.min(CITY_SOUTH, z)), shore = cityBoundsAt(zc);
     return Math.hypot(Math.max(shore.westX - x, 0, x - shore.eastX), z - zc);
   }
 
   update(dt, camera) {
     const { x, z } = camera;
-    let target = 0;
-    if (insideSaltGrid(x, z) && !insideCity(x, z)) target = saltLandAt(x, z) ? 1 : sm(50, 650, this.beyond(x, z)); // over the moat it comes on slowly
+    const target = saltLandAt(x, z) ? sm(16, 255, this.beyond(x, z)) : 0;
     const was = this.depth;
     this.depth += (target - this.depth) * Math.min(1, dt * (target > this.depth ? 0.85 : 0.6));
     // Crossing the limit, either way, is announced once: not again for someone who walks the line

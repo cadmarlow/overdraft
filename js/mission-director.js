@@ -1,6 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { ACT3, PLACES3, REGATTA } from './missions-act3.js';
-import { WATER, createYacht } from './boat.js';
+import { ACT3, PLACES3, SALT_SPRINT } from './missions-act3.js';
 import { PLACES, STORY, ACTIVITIES } from './missions.js';
 import { SKY_PLACES, SKY_ACTIVITIES, SKY_STORY } from './missions-sky.js';
 import { RoadNavigator } from './navigation.js';
@@ -94,7 +93,7 @@ class MissionContext {
   }
 
   spawnCar(kind, x, z, heading, paint, { label = '' } = {}) {
-    const car = this.game.makeCar(kind, paint, new THREE.Vector3(x, 0, z), heading);
+    const car = this.game.makeCar(kind, paint, new THREE.Vector3(x, this.game.controllers.getGroundHeight(x, z, 'car'), z), heading);
     car.mission = true;
     car.label2 = label;
     this.cars.push(car);
@@ -191,32 +190,6 @@ class MissionContext {
     return null;
   }
 
-  // -- on the water --
-  spawnBoat(x, z, heading, paint) {
-    const g = this.game;
-    const boat = g.makeCar('boat', paint, { x, y: WATER, z }, heading);
-    boat.mission = true;
-    boat.hp = boat.maxHp = 160;
-    this.cars.push(boat);
-    return boat;
-  }
-  enemyBoat(x, z, paint, { hp = 120, flee = false, label = '' } = {}) {
-    const g = this.game, spot = g.controllers.afloat(x, z) ? { x, z } : g.waterNear(x, z);
-    const boat = this.spawnBoat(spot.x, spot.z, Math.random() * 6.28, paint);
-    boat.locked = true;
-    boat.hp = boat.maxHp = hp;
-    boat.boatAI = { gunT: 1.5, flee, gaveUp: false };
-    if (label) boat.label2 = label;
-    return boat;
-  }
-  spawnYacht(x, z) {
-    const yacht = createYacht(this.game.scene);
-    yacht.position.x = x; yacht.position.z = z;
-    yacht.updateMatrixWorld(true);
-    this.props.push(yacht);
-    return yacht;
-  }
-
   // -- AI-driven cars (couriers, escorts, armoured vans, fleeing targets) --
   spawnNpcCar(kind, x, z, heading, paint, { label = '', hp = 100, maxSpeed = 17, corner = 8 } = {}) {
     const g = this.game;
@@ -279,7 +252,7 @@ class MissionDirector {
     if (story) list.push({ def: story, place: PLACES[story.contact], kind: 'contact', label: story.contactLabel, story: true });
     const contract = this.nextContract;
     if (contract) list.push({ def: contract, place: PLACES3[contract.place], kind: 'contact', label: contract.contactLabel, story: true });
-    list.push({ def: REGATTA, place: PLACES[REGATTA.place], kind: 'race', label: REGATTA.contactLabel, story: false }, ...this.game.gangs.takeovers());
+    list.push({ def: SALT_SPRINT, place: SALT_SPRINT.place, kind: 'race', label: SALT_SPRINT.contactLabel, story: false }, ...this.game.gangs.takeovers());
     // Manhattan from above (0.9): open from the start
     for (const s of SKY_STORY) if (!this.game.missionsDone.includes(s.id)) list.push({ def: s, place: SKY_PLACES[s.place], kind: 'contact', label: s.contactLabel, story: true });
     for (const a of SKY_ACTIVITIES) list.push({ def: a, place: SKY_PLACES[a.place], kind: 'race', label: a.contactLabel, story: false });

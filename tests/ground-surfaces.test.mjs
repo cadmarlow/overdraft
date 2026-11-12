@@ -49,7 +49,8 @@ test('a long park boundary stops car bodies at every segment and leaves the lawn
 test('traffic excludes large park sidewalks and exact irregular outlines while leaving real roadway open', () => {
   const source = name => readFileSync(new URL(`../js/${name}.js`, import.meta.url), 'utf8');
   const { buildRoadNetwork } = loadModule(source('road-network'), { imports: {
-    './city-config.js': { ALL_AVENUES: [], ALL_STREETS: [], BLOCKS: [], ISLAND_BOUNDS: { minZ: -100, maxZ: 100 }, getIslandBoundsAtZ: () => ({ westX: -1000, eastX: 1000 }) },
+    './city-config.js': { ALL_AVENUES: [], ALL_STREETS: [], CITY_BLOCKS: [], ISLAND_BOUNDS: { minZ: -100, maxZ: 100 }, getIslandBoundsAtZ: () => ({ westX: -1000, eastX: 1000 }) },
+    './city-frontier.js': { CITY_NORTH: -100, CITY_SOUTH: 100, cityContainsBox: () => true },
     './nyc-geodata.js': { GEO: {} }, './building-collision.js': { polygonBoxOverlaps },
     './road-layout.js': loadModule(source('road-layout'))
   } });

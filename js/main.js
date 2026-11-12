@@ -5,16 +5,17 @@ import GTAONode from 'three/addons/tsl/display/GTAONode.js';
 import DenoiseNode from 'three/addons/tsl/display/DenoiseNode.js';
 import { createPostProcessing } from './post-processing.js';
 import { ClusteredLighting } from 'three/addons/lighting/ClusteredLighting.js';
-import { getLocationLabel, isTypingInField, ROADS, NYC_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js';
+import { getLocationLabel, isTypingInField, CITY_ROADS, CITY_LANDMARKS, TELEPORT_LOCATIONS } from './city-config.js';
 import { buildCityGrid, centralParkClearings } from './city-grid.js';
-import { buildBoroughs, bridgeDeckAt } from './boroughs.js';
+import { buildFrontierField } from './frontier-ground.js';
+import { FrontierLife } from './frontier-life.js';
 import { buildWasteland } from './wasteland.js';
 import { surfaces as saltSurfaces, loadWastelandSurfaces } from './wasteland-surfaces.js';
 import { loadWastelandKit } from './wasteland-kit.js';
 import { WastelandEncounter } from './wasteland-encounter.js';
 import { SaltAir } from './wasteland-air.js';
 import { SaltNight } from './wasteland-night.js';
-import { WEST_GATE, saltLandAt, saltLocation } from './wasteland-plan.js';
+import { saltLandAt, saltLocation } from './wasteland-plan.js';
 import { buildLandmarks } from './landmarks.js';
 import { buildCityBlocks } from './buildings.js';
 import { buildStreetDetails } from './street-details.js';
@@ -53,11 +54,10 @@ import { createParking } from './parking.js';
 import { createSidewalkFurniture } from './sidewalk-furniture.js';
 import { createStreetLife } from './street-life.js';
 import { closeBlock, closePoint, fountainSite } from './morningside-plan.js';
-import { lincolnFountain, ovalBlock, ovalFountain } from './urban-places-plan.js';
-import { campusBlock, asphaltBlock, unBlock, unPool, riverLimits } from './manhattan-sites-plan.js';
+import { lincolnFountain } from './urban-places-plan.js';
+import { campusBlock } from './manhattan-sites-plan.js';
 import { createAmbientEvents } from './ambient-events.js';
 import { createBirds } from './birds.js';
-import { getIslandBoundsAtZ } from './city-config.js';
 import { STREET } from './street-geodata.js';
 import { buildRoadNetworkAsync } from './road-network.js';
 import { setTreeDetail } from './trees.js';
@@ -157,20 +157,18 @@ async function initApp() {
   markInit('lighting');
 
   // 3. Build Manhattan Geography, Iconic Landmarks, Blocks, Street Details & Traffic
-  await showLoadingStage('Préparation des rues et des quais…');
+  await showLoadingStage('Préparation du terrain et des rues…');
   await Promise.all([loadNature(), loadTrees(), loadWorld(), loadGround(), loadWastelandSurfaces(), loadWastelandKit(), loadClutter(), loadCars(undefined, { surveyedReflections: quality.id === 'high' }),
     loadStorefronts(), loadUrbanLight({ reflections: quality.id === 'high' }), loadCalibreKit(), loadFoodKit(),
     // (without its aircraft the game still plays: the garage's two tiles would be empty air)
     loadAircraftModels().catch((error) => console.warn(`[aircraft] ${error.message}`))]);
   setTreeDetail(quality.trees);
+  buildFrontierField();
   const cityGrid = buildCityGrid(scene);
   markInit('cityGrid');
-  await showLoadingStage('Préparation des ponts et des quartiers…');
-  const boroughs = buildBoroughs(scene, { sidewalks: cityGrid.sidewalks, wasteland: true });
-  // The Hudson and the harbour are dry: the only water left is the moat, which the Wasteland draws
-  cityGrid.harborWater.visible = false;
-  const wasteland = buildWasteland(scene, boroughs.decks, { surfaces: saltSurfaces, kit: await loadWastelandKit(), waterMaterial: cityGrid.harborWater.material });
-  markInit('boroughs');
+  await showLoadingStage('Préparation du Wasteland…');
+  const wasteland = buildWasteland(scene, { surfaces: saltSurfaces, kit: await loadWastelandKit() });
+  markInit('wasteland');
   await showLoadingStage('Préparation de Manhattan…');
   const { colliders: landmarkColliders } = buildLandmarks(scene, { groundSurfaces: cityGrid.groundSurfaces });
   markInit('landmarks');
@@ -182,11 +180,11 @@ async function initApp() {
   markInit('storefronts');
   // Window sills, hoods and air conditioners in 3D around the camera (the facades paint them further out)
   const facadeKit = createFacadeKit(scene, cityBlocks.records, { radius: { high: 200, balanced: 160, fluid: 0 }[quality.id] ?? 160 });
-  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...cityBlocks.calibreSites.flatMap(calibreFixtures), ...cityBlocks.eateries.all.flatMap(eateryFixtures), ...storefronts.colliders, ...boroughs.colliders, ...wasteland.colliders, ...(cityGrid.colliders || [])];
+  const allColliders = [...landmarkColliders, ...cityBlocks.colliders, ...cityBlocks.calibreSites.flatMap(calibreFixtures), ...cityBlocks.eateries.all.flatMap(eateryFixtures), ...storefronts.colliders, ...wasteland.colliders, ...(cityGrid.colliders || [])];
 
   await showLoadingStage('Préparation des rues…');
   const entranceReserves = [...cityBlocks.calibreSites.map(s => calibreBox(s, 0, 1.7, 3.4, 3.8, 0, 3.5)), ...cityBlocks.eateries.all.flatMap(eateryReserves)];
-  const streetDetails = buildStreetDetails(scene, [...allColliders, ...entranceReserves, ...wasteland.approachReserves]);
+  const streetDetails = buildStreetDetails(scene, [...allColliders, ...entranceReserves, ...wasteland.approachReserves], wasteland.trees);
   // Central Park's ground can now be told where its trees shade it (js/park-plan.js)
   surveyCentralPark(streetDetails.treeField.sites, (cityGrid.colliders || []).filter((c) => c.obstacle === 'rock'));
   markInit('streetDetails');
@@ -207,10 +205,9 @@ async function initApp() {
   // Elevated building sections that clear even a bus don't obstruct ground traffic.
   const grassHit = {};
   const grassCutStart = closePoint(-15, -970), grassCutEnd = closePoint(410, 85);
-  const grassCutBlocks = [ovalBlock, campusBlock, asphaltBlock, unBlock].filter(Boolean);
+  const grassCutBlocks = [campusBlock].filter(Boolean);
   const grass = quality.grass ? createGrass(scene, scene, new THREE.Vector3(0, 10, 140), (x, z, y) =>
     ((x > grassCutStart.x && x < grassCutEnd.x && z > grassCutStart.z && z < grassCutEnd.z) ||
-      (x > 2100 && z > riverLimits[0] && z < riverLimits[1]) ||
       grassCutBlocks.some(b => x > b.minX && x < b.maxX && z > b.minZ && z < b.maxZ)) &&
     cityGrid.groundSurfaces.sample(x, z, grassHit) && grassHit.y > y + 0.009) : null;
   // The road network first: the street furniture lines its curbs, then the traffic drives it
@@ -233,8 +230,7 @@ async function initApp() {
   markInit('furniture');
   const trafficSystem = createTrafficSystem(scene, cityGrid.sidewalks, [], streetDetails.signalIntersections, roadNetwork);
   markInit('traffic');
-  const highwayTraffic = createHighwayTraffic(scene, cityGrid.highwayLanes, trafficSystem);
-  highwayTraffic.addCrossing(WEST_GATE); // the road down to the Hudson's bed cuts across the West Side Highway
+  const highwayTraffic = createHighwayTraffic(scene, [], trafficSystem);
   // The cars parked along every curb, drawn with the traffic's models; gameplay.js takes them over when touched
   const parking = createParking(scene, trafficSystem.network, {
     hydrants: streetDetails.hydrants, footprints: [...cityGrid.footprints, ...streetDetails.footprints],
@@ -263,10 +259,8 @@ async function initApp() {
   await showLoadingStage('Préparation de votre personnage…');
   const jumpRamps = buildRamps(scene);
   const controllerManager = new ThirdPersonControllerManager(scene, [...allColliders, ...streetDetails.obstacles, ...jumpRamps.colliders]);
-  controllerManager.landAt = boroughs.landAt;
   controllerManager.frontier = wasteland.surfaces;
   wasteland.attach(controllerManager);
-  controllerManager.bridgeDeckAt = bridgeDeckAt;
   controllerManager.parkWater = centralParkClearings?.water || [];
   controllerManager.groundSurfaces = cityGrid.groundSurfaces;
   parking.attach(controllerManager);
@@ -277,7 +271,7 @@ async function initApp() {
     onSidewalk: (x, z) => roadNetwork.onSidewalk(x, z),
     perches: { x: toXZ(streetDetails.perches, 'x'), y: toXZ(streetDetails.perches, 'y'), z: toXZ(streetDetails.perches, 'z') },
     trashPiles: { x: toXZ(streetDetails.trashPiles, 'x'), z: toXZ(streetDetails.trashPiles, 'z') },
-    nearWater: (x, z) => { const s = getIslandBoundsAtZ(z); return Math.min(Math.abs(x - s.westX), Math.abs(x - s.eastX)) < 150; },
+    nearWater: (x, z) => controllerManager.parkWaterAt(x, z) != null,
     quality: quality.id
   });
   const birdWorld = { player: { x: 0, z: 0, speed: 0 }, cars: [], peds: [], hour: 12, night: 0 };
@@ -605,8 +599,8 @@ async function initApp() {
   });
 
   // Where you are: the place's name over its street corner, drawn as a pair of NYC street-name signs
-  const roadNames = new Set(ROADS.map((r) => r.name));
-  const placeNames = new Set(NYC_LANDMARKS.map((l) => l.name));
+  const roadNames = new Set(CITY_ROADS.map((r) => r.name));
+  const placeNames = new Set(CITY_LANDMARKS.map((l) => l.name));
   let locationText = '';
   function renderLocation(label) {
     if (!elLocation || label === locationText) return;
@@ -744,6 +738,7 @@ async function initApp() {
     scene, onMode: selectMode, onTime: selectTime, audio: audioSystem, map: mapSystem, touch: touchControls, gamepad: gamepadControls,
     lighting: lightingSystem, grade: colorGrade, parking });
   gameplay.frontierEncounter = new WastelandEncounter(gameplay);
+  gameplay.frontierLife = new FrontierLife(gameplay);
   const saltAir = gameplay.saltAir = new SaltAir({ lighting: lightingSystem, atmosphere: gameplay.atmosphere, scene });
   const saltNight = new SaltNight(scene, wasteland.works);
   saltNight.fx = gameplay.fx;
@@ -775,7 +770,7 @@ async function initApp() {
       probe.wasteland = saltLandAt(x,z) ? 1 : 0;
       const fountainDistance = Math.hypot(x - fountainSite.x, position.y - 0.8, z - fountainSite.z);
       probe.fountain = Math.max(0, 1 - fountainDistance / 33) * (x < closeBlock.minX + 5 ? 0.55 : 1);
-      for (const site of [lincolnFountain, ovalFountain, unPool]) {
+      for (const site of [lincolnFountain]) {
         const distance = Math.hypot(x - site.x, position.y - site.y, z - site.z);
         probe.fountain = Math.max(probe.fountain, 1 - distance / site.audible);
       }
@@ -783,8 +778,7 @@ async function initApp() {
       probe.subway = Math.max(probe.subway, 0.8 * (1 - nearestOf(furniture.grates, x, z, 30) / 30));
       probe.construction = 1 - nearestOf(furniture.sheds, x, z, 70) / 70;
       probe.bar = 1 - Math.min(40, streetLife.nearestOpen(BARS, x, z, 40)) / 40;
-      const shore = getIslandBoundsAtZ(z);
-      probe.water = Math.max(0, 1 - Math.min(Math.abs(x - shore.westX), Math.abs(x - shore.eastX)) / 160);
+      probe.water = controllerManager.parkWaterAt(x, z) == null ? 0 : 1;
       probe.birds = gameplay.birds?.near ? gameplay.birds.near(x, z) : 0;
       probe.indoor = gameplay.calibre.inside ? 0.88 : gameplay.eatery.inside ? 0.8 : 0;
       return probe;
@@ -943,7 +937,7 @@ async function initApp() {
     camera.updateMatrixWorld();
   };
   if (new URLSearchParams(location.search).has('qa')) {
-    window.__render = { wasteland, saltAir, saltNight, boroughs, eateryWorld, eateryProps, renderer, scene, lightingSystem, cameraSystem, pacer, THREE, cityGrid, highwayTraffic, streetDetails, storefronts, facadeKit, cityBlocks, parking, furniture, streetLife, birds, colorGrade, aoPass, aoNode,
+    window.__render = { wasteland, saltAir, saltNight, eateryWorld, eateryProps, renderer, scene, lightingSystem, cameraSystem, pacer, THREE, cityGrid, highwayTraffic, streetDetails, storefronts, facadeKit, cityBlocks, parking, furniture, streetLife, birds, colorGrade, aoPass, aoNode,
       // Inspection: the camera goes where it is told, whatever the game does
       view(x, y, z, tx, ty, tz, fov) {
         if (x === undefined) {
@@ -1036,7 +1030,6 @@ async function initApp() {
       savePlayerState();
       nextPlayerSave = now + 5000;
     }
-    if (boroughs.update) boroughs.update(elapsed); // Roosevelt Island Tramway cabins
     cityBlocks.update(cameraSystem.currentPos.x, cameraSystem.currentPos.z);
     cityBlocks.frontages.update(cameraSystem.camera.position);
     grass?.update(cameraSystem.camera.position);

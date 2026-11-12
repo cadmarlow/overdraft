@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { cityBoundsAt, cityContainsBox } from './city-frontier.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { createFireEscapes } from './fire-escapes.js';
 import { addBuildingDetails } from './building-details.js';
@@ -28,7 +29,6 @@ import {
   ALL_AVENUES,
   CENTRAL_PARK_BOUNDS,
   ISLAND_BOUNDS,
-  getIslandBoundsAtZ,
   LANDMARK_SITES,
   streetZ,
   avenueX
@@ -172,7 +172,7 @@ function buildCityBlocks(scene, landmarkColliders = [], frontageRadius = 155) {
   group.name = 'ManhattanCityBlocks';
   const cathedral = REAL_BUILDINGS.find(isCathedral);
   const theatres = lincolnTheatres(REAL_BUILDINGS);
-  const civicBuildings = manhattanSiteBuildings(REAL_BUILDINGS);
+  const civicBuildings = manhattanSiteBuildings(REAL_BUILDINGS).filter(b => cityContainsBox(b.record.minX, b.record.maxX, b.record.minZ, b.record.maxZ, 2));
   const authored = new Set([cathedral, ...theatres.map(({ record }) => record), ...civicBuildings.map(({ record }) => record)].filter(Boolean));
   const colliders = cathedral ? buildMorningsideCathedral(group, cathedral) : [];
   if (theatres.length) colliders.push(...buildLincolnTheatres(group, theatres));
@@ -226,7 +226,7 @@ function buildCityBlocks(scene, landmarkColliders = [], frontageRadius = 155) {
     return { height: Infinity, x: t.x, z: t.z, x0: t.x - t.w / 2 - 3, x1: t.x + t.w / 2 + 3, z0: t.z - t.d / 2 - 3, z1: t.z + t.d / 2 + 3, ...(o || {}) };
   }).filter(Boolean);
   // Keep the authored landmark models; the survey supplies the surrounding buildings.
-  const surveyedBuildings = REAL_BUILDINGS.filter((b) => !authored.has(b) && !LANDMARK_RESERVE.some((h) =>
+  const surveyedBuildings = REAL_BUILDINGS.filter((b) => cityContainsBox(b.minX, b.maxX, b.minZ, b.maxZ, 2) && !authored.has(b) && !LANDMARK_RESERVE.some((h) =>
     b.polygons.some((p) => polygonContains({ outer: p.outer, holes: [] }, h.x, h.z)))
     && !landmarkColliders.some((c) => b.minX < c.maxX && b.maxX > c.minX && b.minZ < c.maxZ && b.maxZ > c.minZ
       && b.polygons.some((p) => polygonBoxOverlaps(p, (c.minX + c.maxX) / 2, (c.minZ + c.maxZ) / 2,
@@ -391,9 +391,9 @@ function buildCityBlocks(scene, landmarkColliders = [], frontageRadius = 155) {
     s.nx > 0.9 && s.width >= 5 && SHOP_TYPES[s.type]?.id === 'restaurant');
   if (cafe) cafe.terrace = true;
   for (const [record, walls] of plan.wallsByRecord) record.shopWalls = walls;
-  const calibreSites = planCalibre(plan.shops, records, 48, { ...ISLAND_BOUNDS, shoreAt: getIslandBoundsAtZ });
+  const calibreSites = planCalibre(plan.shops, records, 48, { ...ISLAND_BOUNDS, shoreAt: cityBoundsAt });
   // The restaurants (BULLION, TRANCHE) take other ground floors the same way (eatery-plan.js)
-  const eateries = planEateries(plan.shops, records, { ...ISLAND_BOUNDS, shoreAt: getIslandBoundsAtZ });
+  const eateries = planEateries(plan.shops, records, { ...ISLAND_BOUNDS, shoreAt: cityBoundsAt });
   carveCalibreColliders(colliders, [...calibreSites, ...eateries.all]);
   // Reserve every fire escape before placing scaffolding on neighbouring buildings.
   for (const { b, detail, masonry, rand } of detailsToPlace) {

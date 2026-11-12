@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { frontierDistance, insideFrontierBounds } from './frontier-districts.js';
 import { AIDriver } from './ai-driver.js';
 import { settleBody } from './car-physics.js';
 import { routeThroughSalt, saltLandAt, sampleSalt, saltRoadAt, SALT_PLACES } from './wasteland-plan.js';
@@ -221,8 +222,9 @@ export class WastelandEncounter {
     this.cable.visible = false;
     for (const unit of this.units) if (!unit.active) unit.car.mesh.visible = false;
     const dry = saltLandAt(player.x, player.z), floor = dry ? sampleSalt(player.x,player.z) : 0;
-    const exposed = dry && player.y - floor < 16 && player.alive && !(player.inVehicle && g.car?.flight);
-    const area = dry ? 'LE WASTELAND' : 'MANHATTAN';
+    const distance = insideFrontierBounds(player.x, player.z) ? frontierDistance(player.x, player.z) : Infinity;
+    const exposed = dry && distance > 170 && player.y - floor < 16 && player.alive && !(player.inVehicle && g.car?.flight);
+    const area = distance > -54 && distance <= 170 ? 'LES LISIÈRES' : dry ? 'LE WASTELAND' : 'MANHATTAN';
     if (this.areaBadge && this.areaBadge.textContent !== area) this.areaBadge.textContent = area;
     this.tickContract(player, dry);
     this.convoy.update(dt, player, exposed);
@@ -232,7 +234,7 @@ export class WastelandEncounter {
     }
     if (!this.entered) {
       this.entered = true;
-      g.toast('Hors les murs', 'Les Rouliers tiennent les pistes. Surveillez les traînées de poussière, et gardez un pont ou une porte à portée.');
+      g.toast('Hors les murs', 'Les Rouliers tiennent les pistes. Surveillez les traînées de poussière, et gardez un relais ou une porte à portée.');
     }
     this.dust -= dt;
     if (this.dust <= 0) {

@@ -438,40 +438,30 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.27** | **Distressed Assets** | Le Wasteland vu de près : ruines aux fenêtres percées et carcasses où l’on roule, coques brisées qu’on traverse, cales où l’on entre, convois de Rouliers à piller, sable doré et ombres profondes, pleins phares hors les murs. |
 | **0.9.26** | **Scorched Earth** | Le Wasteland : Hudson à sec au pied des quais, douves de l’East River, Mur du nord et portes, ruines ensablées, Ceinture de 47 km, bascule d’ambiance au franchissement, navires échoués, camps, feux et projecteurs la nuit. |
 | **0.9.28** | **Brick & Mortar** | Manhattan à hauteur de trottoir : portails et fenêtres en retrait, soubassements en relief, halls vitrés et auvents, finitions par famille de bâtiment. |
+| **0.9.29** | **Consolidation** | Manhattan ramené de 42,8 à 27,7 km² à échelle constante. Frontière sèche, cinq raccords terrestres, relief de l’ancienne East River, atlas topographique et contrats de l’Acte III à terre. |
+| **0.9.30** | **Buffer Zone** | Rues rongées par le sable, végétation par plaques et six relais habités avec horaires, dialogues et feux. Le filtre du Marché des Lisières donne une première raison de quitter les rues et de revenir. |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |
 
 
-## Le Wasteland (Scorched Earth)
+## Le Wasteland
 
-**Le récit.** L’eau est partie. L’Hudson s’est vidé, la rade a séché en lac de sel, et la ville a gardé ce qu’elle a
-pu : l’East River, fermé par quatre digues, lui sert de douves et de réserve. Manhattan est un plateau fortifié de
-survivants ; tout ce qui l’entoure est le Wasteland. On l’appelle ici la crise de liquidité.
+Manhattan tient sur **27,7 km²**, à l’échelle du relevé réel. La coupe de l’ancienne rive est traverse des îlots
+d’East Harlem et du Lower East Side. Le Wasteland rejoint aussi les rues à l’ouest, au nord et jusqu’à Broad Street
+au sud. Central Park, Midtown et Wall Street gardent leurs repères. Les quartiers habités le long de cette frontière
+seront traités dans une autre passe.
 
-**La géographie est celle de New York.** Les rives sont les vraies (New Jersey, Brooklyn, Queens, Bronx, haut de
-Manhattan). À l’ouest, le lit de l’Hudson, large de 1,3 km, sept à neuf mètres sous les rues, puis la Corniche au pied
-des Palisades et le plateau du Haut-Sel. Au nord, le Mur ferme l’île sur sa coupe, et Harlem continue derrière en
-ruines. À l’est, les douves, puis les os de Brooklyn et du Queens. Au sud, la rade, blanche, avec ses îles et ses
-bouées échouées. Au loin, des chaînes ferment l’horizon.
+Les itinéraires racontent des paysages différents. À l’ouest, les conduites des Pompes descendent dans l’Hudson
+asséché et les Palisades ferment l’horizon. Au nord, les ruines se poursuivent derrière la Grande Porte. À l’est,
+les silos du Déversoir dominent l’ancien chenal et les Failles ouvrent un passage dans les reliefs de Brooklyn. Au
+sud, les balises de la Batterie conduisent à la Rade Blanche. La Ceinture relie ces régions et porte les convois.
 
-**La limite se franchit en trois endroits et de trois manières.** Par une porte dans un mur (la Grande Porte, au
-nord : la rue continue, le monde change). Par une descente (la porte des Pompes, à l’ouest : on quitte le plateau).
-Par un pont (à l’est : la ville s’éloigne dans la poussière). Dans tous les cas l’image bascule avant que le joueur
-ait lu quoi que ce soit : ciel, brume, exposition, étalonnage, sable dans l’air, puis le carton du lieu.
+Le périmètre de ville est dans `js/city-frontier.js`. Le relief cuit par `tools/wasteland/build-terrain.mjs` laisse
+une pente continue aux raccords. L’image et les roues partagent un treillis de 8 m. Les bâtiments, les trottoirs,
+la circulation et l’atlas suivent le même périmètre. Le GPS relie les rues et les pistes aux cinq accès.
 
-**Le sol.** `tools/wasteland/build-terrain.mjs` façonne le relief une fois (32 m) : rives, lit, digues, falaises,
-mesas, érosion, routes nivelées, masques de matière. Le jeu y ajoute le détail (dunes, pierraille) sur un treillis
-de 8 m, le même pour l’image et pour les appuis (`js/wasteland-plan.js`). Le dessin suit la caméra en niveaux de
-détail (`js/wasteland.js`). Sous les rues, le relief reste enfoui, sauf là où une brèche l’a laissé passer.
-
-**Ce qui l’habite.** Les navires sont restés où l’eau les a posés (`js/wasteland-wrecks.js`) : le Cimetière des
-Coques devant l’ancien terminal des paquebots, d’autres le long du lit et sur la rade, et à quai ceux qui n’ont jamais
-appareillé. Les camps (`js/wasteland-works.js`) se tiennent aux lieux nommés : le Relais des Veilleurs à la Cale,
-des camps de Rouliers ailleurs. La nuit (`js/wasteland-night.js`) se lit de loin : un feu est un point orange à deux
-kilomètres avant d’être une flamme qui éclaire, et les projecteurs du Mur disent où est la ville.
-
-**La règle des croisements.** Une route du dehors qui coupe une chaussée de la ville la ferme le temps du passage,
-comme un passage à niveau (`crossingStops` dans `js/highway-driving.js`). Le joueur ne doit jamais payer d’un
-accident le fait d’avoir pris une porte.
+Les navires échoués restent visitables. Les camps s’installent près des pistes et les feux guident le joueur de
+nuit. L’Acte III conserve ses contacts et ses étapes de progression. Son parcours traverse le Déversoir et la Rade
+Blanche. Le Sprint des Failles est une activité indépendante.
 
 **Deux distances.** Tout ce qui est hors les murs se lit deux fois. De loin : une silhouette (la ligne brisée de
 Harlem, une coque couchée, un panache de poussière sur la Ceinture). De près : un endroit où l’on entre. Une ruine est

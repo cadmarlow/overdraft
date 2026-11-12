@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>OVERDRAFT — 0.9.28 · Brick &amp; Mortar</title>
+  <title>OVERDRAFT — 0.9.30 Buffer Zone</title>
   <link rel="icon" href="data:," />
   <link rel="preload" as="image" href="./assets/opening/sacha-east-river.jpg" fetchpriority="high" />
   <meta name="description" content="OVERDRAFT. Un jeu d’action en monde ouvert dans Manhattan : missions, poursuites, combats et niveau de recherche à cinq étoiles." />
@@ -21,6 +21,11 @@
   <!-- Fetch the city modules in parallel before stylesheets; the module graph controls evaluation order. -->
   <link rel="modulepreload" href="./js/nyc-geodata.js" />
   <link rel="modulepreload" href="./js/city-config.js" />
+  <link rel="modulepreload" href="./js/city-frontier.js" />
+  <link rel="modulepreload" href="./js/frontier-ground.js" />
+  <link rel="modulepreload" href="./js/frontier-districts.js" />
+  <link rel="modulepreload" href="./js/frontier-structures.js" />
+  <link rel="modulepreload" href="./js/frontier-life.js" />
   <link rel="modulepreload" href="./js/tsl-materials.js" />
   <link rel="modulepreload" href="./js/trees.js" />
   <link rel="modulepreload" href="./js/tree-assets.js" />
@@ -38,7 +43,6 @@
   <link rel="modulepreload" href="./js/pedestrians.js" />
   <link rel="modulepreload" href="./js/lighting.js" />
   <link rel="modulepreload" href="./js/city-grid.js" />
-  <link rel="modulepreload" href="./js/boroughs.js" />
   <link rel="modulepreload" href="./js/wasteland-plan.js" />
   <link rel="modulepreload" href="./js/wasteland.js" />
   <link rel="modulepreload" href="./js/wasteland-design.js" />
@@ -85,12 +89,10 @@
   <link rel="modulepreload" href="./js/road-paint.js" />
   <link rel="modulepreload" href="./js/traffic.js" />
   <link rel="modulepreload" href="./js/traffic-density.js" />
-  <link rel="modulepreload" href="./js/highway-shore.js" />
   <link rel="modulepreload" href="./js/highway-layout.js" />
   <link rel="modulepreload" href="./js/highway-driving.js" />
   <link rel="modulepreload" href="./js/highway-geodata.js" />
   <link rel="modulepreload" href="./js/road-corridor.js" />
-  <link rel="modulepreload" href="./js/road-ground-cut.js" />
   <link rel="modulepreload" href="./js/road-layout.js" />
   <link rel="modulepreload" href="./js/parking-plan.js" />
   <link rel="modulepreload" href="./js/parking.js" />
@@ -187,7 +189,6 @@
   <link rel="modulepreload" href="./js/manhattan-sites-plan.js" />
   <link rel="modulepreload" href="./js/manhattan-monuments.js" />
   <link rel="modulepreload" href="./js/manhattan-grounds.js" />
-  <link rel="modulepreload" href="./js/east-river-park.js" />
   <link rel="modulepreload" href="./js/lincoln-theatres.js" />
   <link rel="modulepreload" href="./js/morningside-ground.js" />
   <link rel="modulepreload" href="./js/morningside-cathedral.js" />
@@ -311,7 +312,7 @@
         <span class="opening-audio-icon" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
         <span><strong>La dette</strong><small id="opening-music-label">Écouter le thème</small></span>
       </button>
-      <span class="opening-caption">Les quais de l’East River <b> / </b> 01</span>
+      <span class="opening-caption">Archives · East River <b> / </b> 01</span>
     </footer>
     <audio id="opening-theme" src="./assets/opening/la-dette.m4a" preload="none" loop></audio>
   </section>
@@ -483,21 +484,21 @@
       <div class="panel fullmap-title">
         <span class="mta-bullet" aria-hidden="true">NY</span>
         <div>
-          <h2>Manhattan Street Atlas</h2>
-          <p id="fullmap-player-info" class="fullmap-subtitle">You are at 5th Ave &amp; 35th St</p>
+          <h2>Atlas de Manhattan</h2>
+          <p id="fullmap-player-info" class="fullmap-subtitle">Position · Manhattan</p>
         </div>
       </div>
       <label class="panel fullmap-search-wrap">
         <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
-        <input id="fullmap-search" class="fullmap-search" type="text" placeholder="Search streets &amp; landmarks — Broadway, Canal, Wall St…" aria-label="Search street or landmark" autocomplete="off" spellcheck="false" />
+        <input id="fullmap-search" class="fullmap-search" type="text" placeholder="Rechercher une rue ou un lieu" aria-label="Rechercher une rue ou un lieu" autocomplete="off" spellcheck="false" />
       </label>
-      <button id="close-fullmap-btn" class="panel tool-btn fullmap-close" type="button" title="Close map [M / Esc]">
-        <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg><span class="tool-label">Close</span><kbd>Esc</kbd>
+      <button id="close-fullmap-btn" class="panel tool-btn fullmap-close" type="button" title="Fermer la carte [M / Échap]">
+        <svg class="icon" aria-hidden="true"><use href="#i-close"/></svg><span class="tool-label">Fermer</span><kbd>Échap</kbd>
       </button>
     </div>
 
     <div class="map-controls">
-      <div class="panel map-compass" title="True north · Manhattan's street grid runs 29° east of it">
+      <div class="panel map-compass" title="Nord géographique · les rues de Manhattan sont orientées à 29°">
         <svg viewBox="0 0 44 44" aria-hidden="true">
           <g id="map-compass-needle">
             <path d="M22 9.5 25.6 22h-7.2z" fill="#f05a4f"/>
@@ -507,12 +508,12 @@
         </svg>
       </div>
       <div class="panel map-zoom">
-        <button id="map-zoom-in" class="icon-btn" type="button" title="Zoom in" aria-label="Zoom in"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></button>
-        <button id="map-zoom-out" class="icon-btn" type="button" title="Zoom out" aria-label="Zoom out"><svg class="icon" aria-hidden="true"><use href="#i-minus"/></svg></button>
+        <button id="map-zoom-in" class="icon-btn" type="button" title="Agrandir" aria-label="Agrandir"><svg class="icon" aria-hidden="true"><use href="#i-plus"/></svg></button>
+        <button id="map-zoom-out" class="icon-btn" type="button" title="Réduire" aria-label="Réduire"><svg class="icon" aria-hidden="true"><use href="#i-minus"/></svg></button>
       </div>
       <div class="panel map-zoom">
-        <button id="map-center-player" class="icon-btn" type="button" title="Street view around you" aria-label="Center on player"><svg class="icon" aria-hidden="true"><use href="#i-locate"/></svg></button>
-        <button id="map-view-all" class="icon-btn" type="button" title="All of Manhattan (125th St to Battery Park)" aria-label="Fit all of Manhattan"><svg class="icon" aria-hidden="true"><use href="#i-fit"/></svg></button>
+        <button id="map-center-player" class="icon-btn" type="button" title="Voir les rues autour du joueur" aria-label="Centrer sur le joueur"><svg class="icon" aria-hidden="true"><use href="#i-locate"/></svg></button>
+        <button id="map-view-all" class="icon-btn" type="button" title="Cadrer Manhattan et sa frontière" aria-label="Cadrer Manhattan et sa frontière"><svg class="icon" aria-hidden="true"><use href="#i-fit"/></svg></button>
       </div>
     </div>
 
@@ -524,13 +525,13 @@
     </div>
 
     <div class="panel fullmap-legend">
-      <span class="legend-item"><span class="legend-swatch player-swatch"></span>You</span>
-      <span class="legend-item"><span class="legend-swatch landmark-swatch"></span>Landmark</span>
-      <span class="legend-item"><span class="legend-swatch gps-swatch"></span>GPS route</span>
+      <span class="legend-item"><span class="legend-swatch player-swatch"></span>Joueur</span>
+      <span class="legend-item"><span class="legend-swatch landmark-swatch"></span>Lieu</span>
+      <span class="legend-item"><span class="legend-swatch gps-swatch"></span>Itinéraire GPS</span>
       <span class="legend-item"><span class="legend-swatch gun-swatch"></span>Armurerie CALIBRE</span>
       <span class="legend-item"><span class="legend-swatch burger-swatch"></span>Burgers BULLION</span>
       <span class="legend-item"><span class="legend-swatch pizza-swatch"></span>Pizza TRANCHE</span>
-      <span class="legend-item"><span class="legend-swatch bridge-swatch"></span>Bridge / Hwy</span>
+      <span class="legend-item"><span class="legend-swatch bridge-swatch"></span>Route du Wasteland</span>
       <span id="fullmap-counts" class="legend-counts"></span>
     </div>
   </section>

@@ -12,12 +12,12 @@ const GANGS = {
 
 // [west, east, north, south] in world metres
 const ZONES = [
-  { id: 'quais', name: 'Les Quais', gang: 'dockers', box: [-2100, -1330, streetZ(45), streetZ(20)], hq: { x: -1670, z: streetZ(30) + 45 }, income: 900 },
+  { id: 'quais', name: 'Chelsea Ouest', gang: 'dockers', box: [-1490, -1090, streetZ(45), streetZ(20)], hq: { x: -1393, z: streetZ(32) + 45 }, income: 900 },
   { id: 'kitchen', name: 'Hell’s Kitchen', gang: 'meute', box: [-1330, -600, streetZ(59), streetZ(42)], hq: { x: -1100, z: streetZ(50) + 40 }, income: 1200 },
-  { id: 'harlem', name: 'Harlem', gang: 'meute', box: [-900, 900, streetZ(135), streetZ(112)], hq: { x: 12, z: streetZ(125) + 30 }, income: 1000 },
-  { id: 'lower', name: 'Lower East Side', gang: 'dockers', box: [300, 1800, 3376, 4300], hq: { x: 900, z: 3800 }, income: 1400 },
+  { id: 'harlem', name: 'Harlem', gang: 'meute', box: [-900, 570, -6330, streetZ(112)], hq: { x: 12, z: streetZ(118) + 30 }, income: 1000 },
+  { id: 'lower', name: 'Lower East Side', gang: 'dockers', box: [300, 1120, 3376, 4300], hq: { x: 900, z: 3800 }, income: 1400 },
   { id: 'chinatown', name: 'Chinatown', gang: 'syndic', box: [-350, 300, 4170, 4850], hq: { x: 0, z: 4500 }, income: 1800 },
-  { id: 'finance', name: 'Financial District', gang: 'syndic', box: [-600, 900, 4860, 6400], hq: { x: 265, z: 5450 }, income: 2600 }
+  { id: 'finance', name: 'Financial District', gang: 'syndic', box: [-285, 640, 4860, 6025], hq: { x: 265, z: 5450 }, income: 2600 }
 ];
 const inBox = (z, x, y) => x > z.box[0] && x < z.box[1] && y > z.box[2] && y < z.box[3];
 const zoneAt = (x, z) => ZONES.find((zone) => inBox(zone, x, z)) ?? null;

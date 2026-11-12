@@ -26,8 +26,7 @@ const CONTACTS = [
     } }
   ] },
   { id: 'mireille', name: 'Mireille Okafor', role: 'Garagiste', actions: [
-    { label: 'Réparer le véhicule', sub: '800 $', run: (g, p) => p.repair() },
-    { label: 'Amène-moi le hors-bord', sub: 'À la rive la plus proche', run: (g) => g.garage.summon('boat') }
+    { label: 'Réparer le véhicule', sub: '800 $', run: (g, p) => p.repair() }
   ] },
   { id: 'jules', name: 'Jules Ambrose', role: 'Ancien trader', actions: [
     { label: 'Fais oublier mes étoiles', sub: '1 500 $ par étoile', run: (g, p) => p.bribe() }

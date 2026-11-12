@@ -1,18 +1,17 @@
+import { CITY_NORTH, CITY_RING, CITY_SOUTH, cityBoundsAt, cityEdgeDistance, insideCity } from './city-frontier.js';
+import { FRONTIER_SITES } from './frontier-districts.js';
 import {
-  ELLIS_ISLAND_POLYGON, GOVERNORS_ISLAND_POLYGON, ISLAND_BOUNDS, LIBERTY_ISLAND_POLYGON, MANHATTAN_COASTLINE, WATERFRONT_PIERS
-} from './city-config.js';
-import {
-  FRONTIER_BRIDGES, HEIGHT_MIN, HEIGHT_RANGE, MACRO_H, MACRO_STEP, MACRO_W, MASK_H, MASK_STEP, MASK_W, MOAT_SEED, ROAD_HALF, SALT_LOOP,
+  FRONTIER_BRIDGES, HEIGHT_MIN, HEIGHT_RANGE, MACRO_H, MACRO_STEP, MACRO_W, MASK_H, MASK_STEP, MASK_W, ROAD_HALF, SALT_LOOP,
   SALT_MAX_X, SALT_MAX_Z, SALT_MIN_X, SALT_MIN_Z, SALT_PLACES, SALT_ROUTES, SALT_STEP, SALT_WATER, TRACK_HALF, WALL_Z
 } from './wasteland-design.js';
 
 // The Wasteland's ground as the game reads it: the baked relief (tools/wasteland/build-terrain.mjs), the 8 m lattice
-// that the picture and the wheels share, what is dry, what is moat and what is city, the roads and the way through.
+// that the picture and the wheels share, the urban edge, and the roads through the Wasteland.
 export {
   FRONTIER_BRIDGES, SALT_LOOP, SALT_ROUTES, SALT_PLACES, SALT_STEP, SALT_WATER, SALT_MIN_X, SALT_MAX_X, SALT_MIN_Z, SALT_MAX_Z,
   MACRO_STEP, MACRO_W, MACRO_H, MASK_STEP, MASK_W, MASK_H
 };
-export { WEST_GATE, NORTH_GATE, WALL_Z, DAMS, BREACHES, PADS, ROAD_HALF, TRACK_HALF } from './wasteland-design.js';
+export { CROSSINGS, WEST_GATE, NORTH_GATE, WALL_Z, PADS, ROAD_HALF, TRACK_HALF } from './wasteland-design.js';
 
 const sm = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const mix = (a, b, t) => a + (b - a) * t;
@@ -37,7 +36,7 @@ async function readTerrain() {
   const view = new DataView(body.buffer, body.byteOffset, body.byteLength);
   const headerLength = view.getUint32(0, true);
   const header = JSON.parse(new TextDecoder().decode(body.subarray(4, 4 + headerLength)));
-  if (header.version !== 2 || header.w !== MACRO_W || header.h !== MACRO_H || header.maskW !== MASK_W) throw new Error('Wasteland relief does not match this build: run tools/wasteland/build-terrain.mjs');
+  if (header.version !== 3 || header.w !== MACRO_W || header.h !== MACRO_H || header.maskW !== MASK_W) throw new Error('Wasteland relief does not match this build: run tools/wasteland/build-terrain.mjs');
   const n = MACRO_W * MACRO_H;
   let at = 4 + headerLength;
   const low = body.subarray(at, at + n), high = body.subarray(at + n, at + 2 * n); at += 2 * n;
@@ -57,53 +56,10 @@ async function readTerrain() {
   return { header, height, zone, calm, masks, profiles };
 }
 const terrain = await readTerrain();
-const macro = terrain.height, zoneGrid = terrain.zone, calmGrid = terrain.calm, maskGrid = terrain.masks;
+const macro = terrain.height, calmGrid = terrain.calm, maskGrid = terrain.masks;
 export const SALT_TERRAIN = terrain;
+export { CITY_RING, insideCity };
 export function prepareSaltGround() { /* the relief is read when this module loads */ }
-
-// ---- Where the city stands ------------------------------------------------------------------------------------------
-// The seawall of city-grid.js: the surveyed coastline pushed out by its 6 m coping
-export const CITY_RING = MANHATTAN_COASTLINE.map(p => ({
-  x: p.x + (p.x < -100 ? -6 : (p.x > 100 ? 6 : 0)),
-  z: p.z + (p.z > 1350 ? 6 : (p.z < -1550 ? -6 : 0))
-}));
-function indexRing(ring, step = 8) {
-  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-  for (const p of ring) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minZ = Math.min(minZ, p.z); maxZ = Math.max(maxZ, p.z); }
-  const rows = Array.from({ length: Math.ceil((maxZ - minZ) / step) + 1 }, () => []);
-  for (let i = 0; i < ring.length; i++) {
-    const a = ring[i], b = ring[(i + 1) % ring.length];
-    if (a.z === b.z) continue;
-    const j0 = Math.floor((Math.min(a.z, b.z) - minZ) / step), j1 = Math.floor((Math.max(a.z, b.z) - minZ) / step);
-    for (let j = j0; j <= j1; j++) rows[j].push(a.x, a.z, b.x, b.z);
-  }
-  return { minX, maxX, minZ, maxZ, step, rows: rows.map(r => Float64Array.from(r)) };
-}
-function insideRing(index, x, z) {
-  if (x < index.minX || x > index.maxX || z < index.minZ || z > index.maxZ) return false;
-  const edges = index.rows[Math.floor((z - index.minZ) / index.step)];
-  let inside = false;
-  for (let k = 0; k < edges.length; k += 4) {
-    const az = edges[k + 1], bz = edges[k + 3];
-    if ((az > z) !== (bz > z) && x < edges[k] + (edges[k + 2] - edges[k]) * (z - az) / (bz - az)) inside = !inside;
-  }
-  return inside;
-}
-const cityIndex = indexRing(CITY_RING);
-export const insideCity = (x, z) => insideRing(cityIndex, x, z);
-// The harbour islands on the dry side keep their own level ground (boroughs.js draws them)
-const PLATEAUS = [[GOVERNORS_ISLAND_POLYGON, 0.45], [LIBERTY_ISLAND_POLYGON, 0.6], [ELLIS_ISLAND_POLYGON, 0.6]]
-  .filter(([ring]) => ring?.length > 2).map(([ring, top]) => ({ index: indexRing(ring), level: top - 0.03 }));
-const plateauAt = (x, z) => { for (const p of PLATEAUS) if (insideRing(p.index, x, z)) return p.level; return null; };
-const PIERS = (WATERFRONT_PIERS ?? []).map(p => ({ cx: p.cx, cz: p.cz, ux: Math.cos(p.angle), uz: Math.sin(p.angle), hl: p.length / 2 + 4, hw: p.width / 2 + 4, r: Math.hypot(p.length, p.width) / 2 + 6 }));
-export function onPier(x, z) {
-  for (const p of PIERS) {
-    const dx = x - p.cx, dz = z - p.cz;
-    if (Math.abs(dx) > p.r || Math.abs(dz) > p.r) continue;
-    if (Math.abs(dx * p.ux + dz * p.uz) < p.hl && Math.abs(dz * p.ux - dx * p.uz) < p.hw) return true;
-  }
-  return false;
-}
 
 // ---- Roads and tracks ----------------------------------------------------------------------------------------------
 export function bridgeFrameAt(spec, x, z) {
@@ -112,7 +68,7 @@ export function bridgeFrameAt(spec, x, z) {
   const rx = x - spec.a.x, rz = z - spec.a.z;
   return { u: rx * ux + rz * uz, v: rz * ux - rx * uz, length, ux, uz };
 }
-export const SALT_LINES = [{ id: 'ceinture', kind: 'road', path: SALT_LOOP, closed: true, spec: null }, ...SALT_ROUTES];
+export const SALT_LINES = [{ id: 'ceinture', kind: 'road', path: SALT_LOOP, closed: true }, ...SALT_ROUTES];
 {
   let at = 0;
   if (terrain.header.routes.length !== SALT_LINES.length) throw new Error('Wasteland relief was baked for other roads: run tools/wasteland/build-terrain.mjs');
@@ -131,7 +87,7 @@ for (const line of SALT_LINES) {
   for (let i = 1; i < path.length; i++) {
     const a = path[i - 1], b = path[i], dx = b.x - a.x, dz = b.z - a.z, length = Math.hypot(dx, dz);
     if (length < 0.001) continue;
-    const segment = { a, dx, dz, length, y0: levels[i - 1], y1: levels[i], landing: line.spec?.b ?? null, half: line.half, kind: line.kind, line };
+    const segment = { a, dx, dz, length, y0: levels[i - 1], y1: levels[i], half: line.half, kind: line.kind, line };
     const minX = Math.floor((Math.min(a.x, b.x) - ROUTE_REACH) / ROUTE_CELL), maxX = Math.floor((Math.max(a.x, b.x) + ROUTE_REACH) / ROUTE_CELL);
     const minZ = Math.floor((Math.min(a.z, b.z) - ROUTE_REACH) / ROUTE_CELL), maxZ = Math.floor((Math.max(a.z, b.z) + ROUTE_REACH) / ROUTE_CELL);
     for (let x = minX; x <= maxX; x++) for (let z = minZ; z <= maxZ; z++) {
@@ -152,7 +108,6 @@ export function saltRoadAt(x, z, out) {
     if (d2 >= best) continue;
     best = d2; found = true;
     out.side = (ez * s.dx - ex * s.dz) / s.length;
-    out.landing = s.landing ? Math.hypot(x - s.landing.x, z - s.landing.z) : Infinity;
     out.level = s.y0 + (s.y1 - s.y0) * t; out.half = s.half; out.kind = s.kind;
   }
   out.distance = Math.sqrt(best);
@@ -224,9 +179,16 @@ export function latticeHeight(ix, iz) {
     const edge = roadScratch.distance - roadScratch.half;
     if (edge < 26) h = mix(roadScratch.level, h, sm(9, 26, edge));
   }
-  if (PLATEAUS.length) { const level = plateauAt(x, z); if (level !== null) h = level; }
-  // Under the streets the ground stays buried, except where a drift has come over the wall or a road runs out of a gate
-  if (m <= 0 && !(onRoad && roadScratch.distance < roadScratch.half + 2) && insideCity(x, z)) h = Math.min(h, m);
+  // Keep terrain triangles just beneath the asphalt on both sides of the exact city edge.
+  if (z > CITY_NORTH - 64 && z < CITY_SOUTH + 64 && x > -1820 && x < 1360) {
+    const { westX, eastX } = cityBoundsAt(z);
+    const nearSide = Math.min(Math.abs(x - westX), Math.abs(x - eastX)) < 64;
+    if (nearSide || Math.min(Math.abs(z - CITY_NORTH), Math.abs(z - CITY_SOUTH)) < 64) {
+      const d = cityEdgeDistance(x, z);
+      h = mix(-0.055, h, sm(14, 56, d));
+    }
+    if (insideCity(x, z)) h = Math.min(h, -0.055);
+  }
   return h;
 }
 
@@ -277,55 +239,25 @@ export function sampleSalt(x, z, out = null) {
   return y;
 }
 
-// ---- Dry, wet, or the city's --------------------------------------------------------------------------------------
-function moatZone(x, z) {
-  const i = Math.max(0, Math.min(MACRO_W - 1, Math.round((x - SALT_MIN_X) / MACRO_STEP))), j = Math.max(0, Math.min(MACRO_H - 1, Math.round((z - SALT_MIN_Z) / MACRO_STEP)));
-  return zoneGrid[j * MACRO_W + i] === 1;
-}
-// Water the dams still hold: the East River and the lower Harlem River
-export function saltWetAt(x, z) {
-  return insideSaltGrid(x, z) && moatZone(x, z) && sampleSalt(x, z) < SALT_WATER + 0.12;
-}
-// Dry ground of the Wasteland: neither the city's own ground nor the moat
-export function saltLandAt(x, z) {
-  if (!insideSaltGrid(x, z) || insideCity(x, z)) return false;
-  return !(moatZone(x, z) && sampleSalt(x, z) < SALT_WATER + 0.12);
-}
-
-// Bands of moat for the map: [x0, z, x1] runs of wet ground on rows 16 m apart
-let moatRuns = null;
-export function saltMoatRuns() {
-  if (moatRuns) return moatRuns;
-  moatRuns = [];
-  const STEP = 16;
-  let minI = MACRO_W, maxI = 0, minJ = MACRO_H, maxJ = 0;
-  for (let j = 0; j < MACRO_H; j++) for (let i = 0; i < MACRO_W; i++) if (zoneGrid[j * MACRO_W + i] === 1) { minI = Math.min(minI, i); maxI = Math.max(maxI, i); minJ = Math.min(minJ, j); maxJ = Math.max(maxJ, j); }
-  const x0 = SALT_MIN_X + (minI - 1) * MACRO_STEP, x1 = SALT_MIN_X + (maxI + 1) * MACRO_STEP;
-  for (let z = SALT_MIN_Z + (minJ - 1) * MACRO_STEP; z <= SALT_MIN_Z + (maxJ + 1) * MACRO_STEP; z += STEP) {
-    let start = null;
-    for (let x = x0; x <= x1 + STEP; x += STEP) {
-      // under the city's piers and seawall the map shows water too
-      const wet = x <= x1 && moatZone(x, z) && macroAt(Math.round((x - SALT_MIN_X) / SALT_STEP), Math.round((z - SALT_MIN_Z) / SALT_STEP)) < SALT_WATER + 0.12;
-      if (wet && start === null) start = x;
-      else if (!wet && start !== null) { moatRuns.push([start - STEP / 2, z, x - STEP / 2]); start = null; }
-    }
-  }
-  return moatRuns;
-}
+// Outside the inhabited footprint, even the old channels are dry.
+export const saltLandAt = (x, z) => insideSaltGrid(x, z) && !insideCity(x, z);
 
 const REGIONS = [
   ['Les Os de Harlem', (x, z) => z < WALL_Z && z > -10800 && x > -2300 && x < 900],
-  ['La Rade', (x, z) => z > 6500 && z < 13200 && x > -2300 && x < 2200],
+  ['La Rade Blanche', (x, z) => z > 6200 && z < 13200 && x > -2300 && x < 2200],
   ['Le Lit de l’Hudson', (x, z, y) => x < -100 && x > -3350 && z < 7000 && y < 0],
   ['Le Haut-Sel', (x, z, y) => x < -3300 && y > 30],
   ['La Corniche', (x) => x < -3000],
   ['Les Terrasses', (x, z) => z < -6800 && x >= 900],
-  ['La Traverse', (x, z) => x > 1500 && z < 800],
+  ['Les Failles', (x, z) => x > 1150 && x < 2800 && z > 2400 && z < 4600],
+  ['Les Terres du Levant', (x, z) => x > 900 && z < 1800],
   ['Les Sables de Brooklyn', (x) => x > 1200],
   ['La Mer de Dunes', (x, z) => z >= 13200]
 ];
 export function saltLocation(x, z) {
   if (!saltLandAt(x, z)) return null;
+  const settlement = FRONTIER_SITES.find(site => (x - site.x) ** 2 + (z - site.z) ** 2 < 55 ** 2);
+  if (settlement) return settlement.name;
   let nearest = null, best = 520 ** 2;
   for (const place of SALT_PLACES) {
     const d = (x - place.x) ** 2 + (z - place.z) ** 2;
@@ -337,86 +269,22 @@ export function saltLocation(x, z) {
   return 'Le Wasteland';
 }
 
-// ---- What a body stands on ----------------------------------------------------------------------------------------
-const DRIFT_STEP = 0.26; // sand thinner than a curb is only seen; deeper, it carries feet and wheels
-const UNDER_DECK = -1.2; // below this a body is under the piers and the streets, down on the bed
-export function createFrontierSurfaces(decks) {
-  const indexed = decks.filter(d => FRONTIER_BRIDGES.some(b => b.id === d.id)).map(d => ({
-    ...d,
-    minX: Math.min(d.ax, d.ax + d.ux * d.L) - d.half,
-    maxX: Math.max(d.ax, d.ax + d.ux * d.L) + d.half,
-    minZ: Math.min(d.az, d.az + d.uz * d.L) - d.half,
-    maxZ: Math.max(d.az, d.az + d.uz * d.L) + d.half
-  }));
-  const scratch = {};
-
-  function deckAt(x, z, maxY = Infinity, out = null) {
-    for (const d of indexed) {
-      if (x < d.minX || x > d.maxX || z < d.minZ || z > d.maxZ) continue;
-      const px = x - d.ax, pz = z - d.az;
-      const u = px * d.ux + pz * d.uz, v = pz * d.ux - px * d.uz;
-      if (u < 0 || u > d.L || Math.abs(v) > d.half - 1.1) continue;
-      const t = u / d.L, y = d.profile(t);
-      if (y > maxY || y < .018) continue;
-      if (out) {
-        const slope = (d.profile(Math.min(1, (u + .5) / d.L)) - d.profile(Math.max(0, (u - .5) / d.L)));
-        const scale = 1 / Math.hypot(slope, 1);
-        Object.assign(out, { y, nx: -slope * d.ux * scale, ny: scale, nz: -slope * d.uz * scale, grip: .94, rough: .01, curb: false, deck: true });
-      }
+// The city deck and the surrounding ground meet at grade.
+export function createFrontierSurfaces() {
+  return {
+    sample(x, z, _maxY, out) {
+      if (!saltLandAt(x, z)) return false;
+      sampleSalt(x, z, out);
       return true;
-    }
-    return false;
-  }
-
-  // The Wasteland's ground under (x, z) for a body no higher than maxY, or false where the city's own ground rules
-  function sample(x, z, maxY, out) {
-    if (deckAt(x, z, maxY, out)) return true;
-    if (!insideSaltGrid(x, z)) return false;
-    if (insideCity(x, z)) {
-      // a drift that came over the wall, or a body down on the bed against the foot of the wall
-      const y = sampleSalt(x, z);
-      if (y <= DRIFT_STEP && maxY > UNDER_DECK) return false;
-    } else {
-      if (maxY > UNDER_DECK && onPier(x, z)) return false;
-      if (moatZone(x, z) && sampleSalt(x, z) < SALT_WATER + 0.12) return false;
-    }
-    sampleSalt(x, z, out ?? scratch);
-    return true;
-  }
-
-  // Outside the city's seawall: the dry country, the moat and the piers over them
-  const exterior = (x, z) => !insideCity(x, z);
-
-  function confine(pos) {
-    pos.x = Math.max(SALT_MIN_X + 2, Math.min(SALT_MAX_X - 2, pos.x));
-    pos.z = Math.max(SALT_MIN_Z + 2, Math.min(SALT_MAX_Z - 2, pos.z));
-  }
-
-  // Manhattan stands on a wall: nothing down on the bed walks in under the streets
-  function wall(pos, fromX, fromZ) {
-    if (pos.y > UNDER_DECK - 0.3 || !insideCity(pos.x, pos.z)) return false;
-    if (sampleSalt(pos.x, pos.z) > pos.y - 1.2 && sampleSalt(pos.x, pos.z) > -1.6) return false; // on a drift that climbs the wall
-    if (!insideCity(pos.x, fromZ)) pos.z = fromZ;
-    else if (!insideCity(fromX, pos.z)) pos.x = fromX;
-    else if (!insideCity(fromX, fromZ)) { pos.x = fromX; pos.z = fromZ; }
-    else return false;
-    return true;
-  }
-
-  // Open water of the moat nearest (x, z)
-  function coastWaterNear(x, z, afloat) {
-    const ci = Math.round((x - SALT_MIN_X) / MACRO_STEP), cj = Math.round((z - SALT_MIN_Z) / MACRO_STEP);
-    for (let r = 0; r < 220; r++) {
-      for (let k = -r; k <= r; k++) for (const [i, j] of r === 0 ? [[ci, cj]] : [[ci + k, cj - r], [ci + k, cj + r], [ci - r, cj + k], [ci + r, cj + k]]) {
-        if (i < 0 || j < 0 || i >= MACRO_W || j >= MACRO_H || zoneGrid[j * MACRO_W + i] !== 1 || macro[j * MACRO_W + i] > SALT_WATER - 1.6) continue;
-        const px = SALT_MIN_X + i * MACRO_STEP, pz = SALT_MIN_Z + j * MACRO_STEP;
-        if (afloat(px, pz) && afloat(px + 7, pz + 7) && afloat(px - 7, pz - 7)) return { x: px, z: pz };
-      }
-    }
-    return { x: MOAT_SEED.x, z: MOAT_SEED.z };
-  }
-
-  return { deckAt, sample, exterior, confine, wall, landAt: saltLandAt, wetAt: saltWetAt, coastWaterNear };
+    },
+    exterior: (x, z) => !insideCity(x, z),
+    confine(pos) {
+      pos.x = Math.max(SALT_MIN_X + 2, Math.min(SALT_MAX_X - 2, pos.x));
+      pos.z = Math.max(SALT_MIN_Z + 2, Math.min(SALT_MAX_Z - 2, pos.z));
+    },
+    landAt: saltLandAt,
+    wetAt: () => false
+  };
 }
 
 // ---- The way through ------------------------------------------------------------------------------------------------
@@ -439,13 +307,11 @@ function nearestNode(point, limit = navPoints.length) {
   return result;
 }
 const lineNodes = [];
-for (const { spec, path, id } of SALT_ROUTES) {
+for (const { gate, path } of SALT_ROUTES) {
   const ids = path.map(node);
   for (let i = 1; i < ids.length; i++) link(ids[i - 1], ids[i]);
   lineNodes.push(ids);
-  // From the city: over the bridge to its landing, or straight through the gate
-  if (spec) { const gate = node(spec.a); link(gate, ids[0]); gateways.push(gate); }
-  else if (id === 'pumps' || id === 'nord') gateways.push(ids[0]);
+  if (gate) gateways.push(ids[0]);
 }
 // Every line joins whatever passes within 60 m of its ends
 SALT_ROUTES.forEach((route, r) => {

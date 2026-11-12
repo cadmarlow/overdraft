@@ -12,16 +12,16 @@ const PLACES = {
   spawn: { x: 11.9, z: streetZ(37) + 19, name: '5e Avenue' },
   garage: { x: -1398.5, z: streetZ(44) + 38, name: 'Garage Okafor', road: { x: -1404, z: streetZ(44) + 38 } },
   debtor: { x: -846, z: streetZ(29) + 35, name: '8e Avenue & 29e Rue' },
-  crew: { x: -1670, z: streetZ(34) + 45, name: '11e Avenue & 34e Rue' },
-  pier: { x: 1215, z: streetZ(34) + 6, name: 'Quai de la 34e Rue Est' }, // the Hudson is dry: the regatta runs on the moat
+  crew: { x: -1394, z: streetZ(34) + 45, name: '10e Avenue & 34e Rue' },
+  depot: { x: 831, z: streetZ(34) + 6, name: 'Dépôt de la 34e Rue Est' },
   meet: { x: 265, z: 5753, name: 'Wall Street', nearRoad: true },
   safehouse: { x: 1079, z: streetZ(12) + 40, name: 'Planque de la 1re Avenue' },
   raceStart: { x: -846, z: streetZ(57) + 30, name: '8e Avenue & 57e Rue', road: { x: -856, z: streetZ(57) + 30 } },
   bounty: { x: 466.5 + 11, z: streetZ(31) + 30, name: 'Lexington & 31e Rue' },
-  warehouse: { x: -1905, z: streetZ(27) + 10, name: 'Quais de l’Hudson' }
+  warehouse: { x: -1400, z: streetZ(27) + 10, name: 'Entrepôt de Chelsea' }
 };
 const HOSPITALS = [
-  { x: 1080, z: streetZ(27) + 30, name: 'Hôpital Sainte-Claire' },
+  { x: 837, z: streetZ(27) + 30, name: 'Hôpital Sainte-Claire' },
   { x: -1397, z: streetZ(58) + 30, name: 'Clinique de l’Ouest' },
   { x: 300, z: streetZ(1) + 1300, name: 'Hôpital du Port' },
   { x: 12, z: streetZ(96) + 30, name: 'Hôpital du Nord' }
@@ -305,8 +305,8 @@ const STORY = [
     contactLabel: 'Mireille · Garage Okafor',
     *run(m) {
       yield* m.say([
-        ['MIREILLE', 'Les Brisants m’ont volé un fourgon plein de pièces. Ils le gardent sur la 11e Avenue, vers la 34e.'],
-        ['MIREILLE', 'Ils sont quatre, armés. Reprends le fourgon et amène-le au quai 76. Mes gars s’occupent du reste.']
+        ['MIREILLE', 'Les Brisants m’ont volé un fourgon plein de pièces. Ils le gardent sur la 10e Avenue, vers la 34e.'],
+        ['MIREILLE', 'Ils sont quatre, armés. Reprends le fourgon et amène-le au dépôt de la 34e Rue Est. Mes gars s’occupent du reste.']
       ]);
       const c = m.place('crew');
       const vanSpot = m.spot(c.x - 8, c.z, 1.5);
@@ -319,7 +319,7 @@ const STORY = [
           behavior: 'guard', hostile: true, accuracy: 0.45, alert: false, heading: Math.random() * 6 }));
       });
       const marks = crew.map((a) => m.markOn(a, 'target'));
-      m.objective('Éliminez l’équipage des *Brisants* (11e Avenue & 34e Rue).');
+      m.objective('Éliminez l’équipage des *Brisants* (10e Avenue & 34e Rue).');
       m.gps(c.x, c.z);
       m.failIf(() => van.destroyed, 'Le fourgon est détruit.');
       while (crew.some((a) => !a.dead)) {
@@ -333,13 +333,13 @@ const STORY = [
       m.gps(van.position.x, van.position.z);
       yield* m.waitFor(() => m.inCar(van));
       m.unmark(mk);
-      const pier = m.place('pier');
-      m.objective('Livrez le fourgon au *quai 76* avant 3 minutes.');
-      mk = m.mark(pier.x, pier.z, 'destination', { radius: 4 });
-      m.gps(pier.x, pier.z);
+      const depot = m.place('depot');
+      m.objective('Livrez le fourgon au *dépôt de la 34e Rue Est* avant 3 minutes.');
+      mk = m.mark(depot.x, depot.z, 'destination', { radius: 4 });
+      m.gps(depot.x, depot.z);
       m.timer(180, 'Trop tard : les gars de Mireille sont partis.');
       m.failIf(() => !m.inCar(van) && m.distanceTo(van) > 100, 'Vous avez abandonné le fourgon.');
-      yield* m.waitFor(() => m.inCar(van) && m.near(pier.x, pier.z, 5));
+      yield* m.waitFor(() => m.inCar(van) && m.near(depot.x, depot.z, 5));
       m.unmark(mk);
       m.stopTimer();
       yield* m.stopCar(van);
@@ -572,12 +572,12 @@ const STORY = [
     contactLabel: 'Mireille · Garage Okafor',
     *run(m) {
       yield* m.say([
-        ['MIREILLE', 'Le registre parle d’un entrepôt sur les quais de l’Hudson. C’est là que Varga garde ce qui lui reste.'],
+        ['MIREILLE', 'Le registre parle d’un entrepôt à Chelsea. C’est là que Varga garde ce qui lui reste.'],
         ['SACHA', 'Alors on y va.'],
         ['MIREILLE', 'Pas « on ». Toi. Moi, je garde le moteur chaud.']
       ]);
       const w = m.roadSpotNear(m.place('warehouse').x, m.place('warehouse').z);
-      m.objective('Allez à l’*entrepôt* de Varga, sur les quais.');
+      m.objective('Allez à l’*entrepôt* de Varga, à Chelsea.');
       let mk = m.mark(w.x, w.z, 'objective', { radius: 5 });
       m.gps(w.x, w.z);
       const guards = [];

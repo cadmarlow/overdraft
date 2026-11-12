@@ -1,10 +1,10 @@
-import { blockAt } from './city-config.js';
+import { blockAt, surveyedBlockAt } from './city-config.js';
 
 const at = (ox, oz) => (x, z) => ({ x: ox + x, z: oz + z });
 const lincolnPoint = at(-1324, -1720);
 const ovalPoint = at(1395.7, 1985.2);
 const lincolnBlock = blockAt(-1200, -1725);
-const ovalBlock = blockAt(1395.7, 1985.2);
+const ovalBlock = surveyedBlockAt(1395.7, 1985.2);
 
 // Centres in the current NYC building survey, in the district's metre frame.
 const theatreSites = [
@@ -38,7 +38,7 @@ const ovalWalks = [
 ];
 // The original estate is a coherent brick ensemble, with the low later additions retaining their survey dress.
 function isStuyvesantResidence(b) {
-  return b.year === 1940 && b.height >= 25 && blockAt(b.cx, b.cz) === ovalBlock;
+  return b.year === 1940 && b.height >= 25 && surveyedBlockAt(b.cx, b.cz) === ovalBlock;
 }
 
 const urbanArrivals = {

@@ -8,7 +8,8 @@ const { polygonBoxOverlaps } = loadModule(source('building-collision'));
 
 function harness(onPolygon = () => {}) {
   return loadModule(source('road-network'), { imports: {
-    './city-config.js': { ALL_AVENUES: [], ALL_STREETS: [], BLOCKS: [], ISLAND_BOUNDS: { minZ: -100, maxZ: 100 }, getIslandBoundsAtZ: () => ({ westX: -1000, eastX: 1000 }) },
+    './city-config.js': { ALL_AVENUES: [], ALL_STREETS: [], CITY_BLOCKS: [], ISLAND_BOUNDS: { minZ: -100, maxZ: 100 }, getIslandBoundsAtZ: () => ({ westX: -1000, eastX: 1000 }) },
+    './city-frontier.js': { CITY_NORTH: -100, CITY_SOUTH: 100, cityContainsBox: () => true },
     './nyc-geodata.js': { GEO: {} },
     './road-layout.js': loadModule(source('road-layout')),
     './building-collision.js': { polygonBoxOverlaps: (...args) => { onPolygon(args[0]); return polygonBoxOverlaps(...args); } }

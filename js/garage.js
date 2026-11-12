@@ -1,7 +1,6 @@
 import { doorPosition } from './interaction-state.js';
 import { QuickStrip } from './quick-strip.js';
 import { settleBody } from './car-physics.js';
-import { WATER } from './boat.js';
 import { repairBody } from './drive-fx.js';
 import { CAR_CATALOG, GARAGE_KINDS } from './car-catalog.js';
 
@@ -17,9 +16,8 @@ const CHOICES = [
   { id: 'super', label: 'SUPERCAR', icon: 'i-car' },
   { id: 'moto', label: 'MOTO', icon: 'i-moto' },
   { id: 'bicycle', label: 'VÉLO', icon: 'i-bike' },
-  { id: 'boat', label: 'BATEAU', icon: 'i-boat' },
-  { id: 'helicopter', label: 'HÉLICO', icon: 'i-heli' },
   { id: 'classic', label: 'BOURRASQUE', sub: 'BIPLAN', icon: 'i-plane', name: 'HAUTURIER BOURRASQUE', spec: 'MOTEUR EN ÉTOILE 450 CH  ·  240 KM/H  ·  VOLTIGE' },
+  { id: 'helicopter', label: 'HÉLICO', icon: 'i-heli' },
   { id: 'jet', label: 'TRAMONTANE', sub: 'JET', icon: 'i-plane', name: 'CORSAIRE TRAMONTANE', spec: 'POSTCOMBUSTION  ·  MACH 1,25  ·  8 G' },
   ...CAR_CATALOG.filter(c => !['sedan', 'muscle', 'sport', 'super'].includes(c.kind))
     .map(c => ({ id: c.kind, label: c.type, icon: 'i-car' }))
@@ -42,7 +40,7 @@ class Garage extends QuickStrip {
     this.info.className = 'garage-spec';
     this.info.innerHTML = '<span>COLLECTION</span><strong></strong><small></small>';
     this.panel.prepend(this.info);
-    // The first nine keyboard shortcuts remain unchanged; the entire collection is also reachable by arrows.
+    // The first nine tiles have a direct shortcut. Arrows reach the rest of the collection.
     this.tiles.forEach((tile, i) => { if (i > 8) tile.querySelector('kbd').remove(); });
   }
 
@@ -51,7 +49,7 @@ class Garage extends QuickStrip {
     const g = this.game;
     if (g.state !== 'driving') return 'foot';
     const car = g.car;
-    return car.flight ? car.kind : car.moto ? 'moto' : car.boat ? 'boat' : car.bicycle ? 'bicycle' : car.mode || (car.kind === 'sedan' ? 'car' : GARAGE_KINDS.has(car.kind) ? car.kind : 'car');
+    return car.flight ? car.kind : car.moto ? 'moto' : car.boat ? 'foot' : car.bicycle ? 'bicycle' : car.mode || (car.kind === 'sedan' ? 'car' : GARAGE_KINDS.has(car.kind) ? car.kind : 'car');
   }
 
   get currentIndex() { return CHOICES.findIndex((c) => c.id === this.current); }
@@ -117,9 +115,9 @@ class Garage extends QuickStrip {
     const g = this.game;
     const from = this.origin();
     if (id === 'foot') { this.dismount(from); return; }
+    if (id === 'boat') return;
     const left = this.release();
-    if (id === 'boat') this.board(this.boat(from), from);
-    else if (id === 'car' || id === 'moto' || id === 'bicycle' || GARAGE_KINDS.has(id)) this.board(this.groundVehicle(id, from, left), from);
+    if (id === 'car' || id === 'moto' || id === 'bicycle' || GARAGE_KINDS.has(id)) this.board(this.groundVehicle(id, from, left), from);
     else if (id === 'helicopter') this.board(this.helicopter(from), from);
     else this.board(this.plane(id, from), from);
     g.state = 'driving';
@@ -181,20 +179,7 @@ class Garage extends QuickStrip {
     return car;
   }
 
-  // The nearest river: the boat waits a little way off the seawall
-  boat(from) {
-    const g = this.game;
-    const boat = this.prepare(g.rides.find((r) => r.boat));
-    boat.summoned = true;
-    boat.hp = 100;
-    const spot = g.waterNear(from.x, from.z);
-    boat.position.set(spot.x, WATER, spot.z);
-    boat.prevX = spot.x; boat.prevZ = spot.z;
-    // Bow to the open river
-    boat.heading = spot.x < 0 ? -Math.PI / 2 : Math.PI / 2;
-    boat.speed = 0;
-    return boat;
-  }
+
 
   helicopter(from) {
     const g = this.game;

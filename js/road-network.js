@@ -1,11 +1,10 @@
 import {
   ALL_AVENUES,
   ALL_STREETS,
-  ISLAND_BOUNDS,
-  getIslandBoundsAtZ,
-  BLOCKS,
+  CITY_BLOCKS as BLOCKS,
   blockAt
 } from './city-config.js';
+import { CITY_NORTH, CITY_SOUTH, cityContainsBox } from './city-frontier.js';
 import { GEO } from './nyc-geodata.js';
 import { polygonBoxOverlaps } from './building-collision.js';
 import { NO_LANES, PARK_OFF, layoutOneWay, layoutSide } from './road-layout.js';
@@ -19,8 +18,8 @@ import { NO_LANES, PARK_OFF, layoutOneWay, layoutSide } from './road-layout.js';
 // (rx, rz) = (-dz, dx). Lanes are lateral offsets to the right of the centreline, sorted left to right.
 
 const CELL = 32;
-const Z_MIN = Math.floor(ISLAND_BOUNDS.minZ) - 20; // the detailed island, ~129th St to the Battery
-const Z_MAX = Math.ceil(ISLAND_BOUNDS.maxZ) + 20;
+const Z_MIN = CITY_NORTH;
+const Z_MAX = CITY_SOUTH;
 const LANE_CLEAR = 1.2; // half width each lane keeps free of obstacles
 const CROSSWALK = 2.5; // depth between an intersection box and its stop lines
 const SHORE_MARGIN = 6;
@@ -81,13 +80,7 @@ function* roadNetworkSteps(sidewalks, obstacles, signalIntersections = [], curbs
     return false;
   }
 
-  function onLand(minX, maxX, minZ, maxZ) {
-    for (const z of [minZ, maxZ]) {
-      const shore = getIslandBoundsAtZ(z);
-      if (minX < shore.westX + SHORE_MARGIN || maxX > shore.eastX - SHORE_MARGIN) return false;
-    }
-    return true;
-  }
+  const onLand = (minX, maxX, minZ, maxZ) => cityContainsBox(minX, maxX, minZ, maxZ, SHORE_MARGIN);
 
   const blocked = (minX, maxX, minZ, maxZ) => !onLand(minX, maxX, minZ, maxZ) || query(hashes.blocked, minX, maxX, minZ, maxZ);
   const walkable = (minX, maxX, minZ, maxZ) => onLand(minX, maxX, minZ, maxZ) && !query(hashes.walk, minX, maxX, minZ, maxZ);

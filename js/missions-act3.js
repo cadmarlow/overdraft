@@ -1,21 +1,24 @@
 import { streetZ } from './city-config.js';
+import { SALT_ROUTES, routeThroughSalt } from './wasteland-plan.js';
 
-// Act III, Hostile Takeover: the hand behind Varga, offered as contracts. They can be taken at any time, one after the other,
-// and they end on the water.
-
+// Act III follows the same contacts and progression across the dry frontier.
 const ACT = 'ACTE III — HOSTILE TAKEOVER';
 const PLACES3 = {
   jules: { x: 1079, z: streetZ(12) + 40, name: 'Planque de la 1re Avenue' },
-  nadia: { x: -1670, z: streetZ(34) + 80, name: 'Nadia · 11e Avenue' }
+  nadia: { x: -1394, z: streetZ(34) + 80, name: 'Nadia · 10e Avenue' }
+};
+const branch = id => SALT_ROUTES.find(line => line.id === id).path;
+const checkpoints = (id, fractions) => {
+  const path = branch(id);
+  return fractions.map(f => path[Math.round(f * (path.length - 1))]);
 };
 
-// Round a course of points on the water, the boat under you, with a clock if there is one
-function* riverLeg(m, boat, points, text) {
+function* landLeg(m, car, points, text) {
   for (let i = 0; i < points.length; i++) {
-    const p = points[i], mk = m.mark(p.x, p.z, 'race', { radius: 16, height: 8 });
-    m.gps(p.x, p.z);
+    const { x, z } = points[i], mk = m.mark(x, z, 'race', { radius: 15, height: 7 });
+    m.gps(x, z);
     m.objective(`${text} (${i + 1}/${points.length})`);
-    yield* m.waitFor(() => m.inCar(boat) && m.near(p.x, p.z, 26));
+    yield* m.waitFor(() => m.inCar(car) && m.near(x, z, 23));
     m.unmark(mk);
     m.sound('checkpoint');
   }
@@ -29,35 +32,28 @@ const ACT3 = [
     place: 'jules',
     contactLabel: 'Jules · Planque de la 1re Avenue',
     *run(m) {
-      const g = m.game;
       yield* m.say([
-        ['JULES', 'J’ai retourné les comptes de Varga. Il n’était qu’un guichet. Tout remonte à une seule signature : Hélène Cazal, Liberty Trust.'],
+        ['JULES', 'J’ai retourné les comptes de Varga. Tout remonte à une seule signature : Hélène Cazal, Liberty Trust.'],
         ['SACHA', 'Une banquière.'],
-        ['JULES', 'La banquière. Elle a des bateaux qui déchargent de nuit dans les douves. On va lui prendre une cargaison, juste pour qu’elle lève la tête.'],
-        ['JULES', 'Le hors-bord t’attend dans le chenal. Fais vite.']
+        ['JULES', 'Ses camions passent par les silos du Déversoir. Prends celui qui attend au bord de la piste.']
       ]);
-      const w = g.waterNear(2200, streetZ(23));
-      const boat = m.spawnBoat(w.x, w.z, 1.57, 0x0c1f33);
-      let mk = m.markOn(boat, 'objective');
-      m.objective('Montez à bord du *hors-bord*.');
-      m.gps(w.x, w.z);
-      m.failIf(() => boat.destroyed, 'Le hors-bord a sombré.');
-      yield* m.waitFor(() => m.inCar(boat));
+      const [at] = checkpoints('deversoir', [0.29]);
+      const truck = m.spawnCar('pickup', at.x, at.z + 3, Math.PI / 2, 0x634a38, { label: 'CARGAISON DE LA LIBERTY TRUST' });
+      const guards = [[-12, 18], [9, 23], [16, -20]].map(([dx, dz]) => {
+        const p = m.spot(at.x + dx, at.z + dz);
+        return m.spawnActor({ x: p.x, z: p.z, look: 'guard', team: 'syndic', weapon: 'smg', hp: 90, behavior: 'guard', hostile: true });
+      });
+      const mk = m.markOn(truck, 'objective');
+      m.gps(at.x, at.z);
+      m.objective('Prenez le *pick-up* du Déversoir.');
+      m.failIf(() => truck.destroyed, 'La cargaison est perdue.');
+      yield* m.waitFor(() => m.inCar(truck));
       m.unmark(mk);
-      // the Hudson is dry: what floats, floats on the East River, the city's moat
-      const north = [g.waterNear(2200, streetZ(40)), g.waterNear(2200, streetZ(52)), g.waterNear(2200, streetZ(66))].map((p) => ({ x: p.x + 70, z: p.z }));
-      yield* riverLeg(m, boat, north.slice(0, 2), 'Remontez l’*East River*');
-      m.say1('JULES', 'Deux vedettes à toi. Ne t’arrête pas.');
-      const hunters = [m.enemyBoat(north[1].x + 30, north[1].z - 160, 0x202226), m.enemyBoat(north[1].x - 10, north[1].z - 230, 0x202226)];
-      yield* riverLeg(m, boat, north.slice(2), 'Foncez jusqu’à la *barge*');
-      const marks = hunters.map((h) => m.markOn(h, 'target'));
-      m.objective('Coulez les *vedettes* du Syndic. (Clic droit et clic : tir par-dessus bord)');
-      yield* m.waitFor(() => hunters.every((h) => h.destroyed));
-      marks.forEach((k) => m.unmark(k));
-      yield* m.say([
-        ['JULES', 'Elle a reçu le message. Maintenant, elle sait que tu existes.'],
-        ['SACHA', 'Bien.']
-      ]);
+      m.game.actors.alertTeam('syndic', at.x, at.z, 95);
+      m.say1('JULES', 'Remonte la piste vers le fret. Nos gens t’attendent à la Ceinture.');
+      yield* landLeg(m, truck, checkpoints('deversoir', [0.51, 0.76, 0.98]), 'Livrez la cargaison');
+      for (const guard of guards) if (guard && !guard.dead) guard.alert = false;
+      yield* m.say([['JULES', 'Cargaison reçue. Maintenant, elle sait que tu existes.'], ['SACHA', 'Bien.']]);
       m.complete(9000);
     }
   },
@@ -116,12 +112,12 @@ const ACT3 = [
     title: 'LE CASSE DE LA LIBERTY TRUST',
     act: ACT,
     place: 'nadia',
-    contactLabel: 'Nadia · 11e Avenue',
+    contactLabel: 'Nadia · 10e Avenue',
     *run(m) {
       const g = m.game;
       yield* m.say([
         ['NADIA', 'Trois temps. Tu entres par Wall Street, tu tiens la salle des coffres le temps que la charge perce, tu prends tout.'],
-        ['NADIA', 'Sors par l’eau : un hors-bord t’attend au Pier 11. La police ne sait pas nager. Le coffre, lui, a une alarme.']
+        ['NADIA', 'Un tout-terrain t’attend près de Broad Street. Sors par la Batterie. Le coffre a une alarme.']
       ]);
       const vault = m.spot(265, 5720, 0.6);
       m.objective('Rejoignez la *Liberty Trust*, Wall Street.');
@@ -155,24 +151,21 @@ const ACT3 = [
       yield* m.waitFor(() => bags.every((b) => b.collected));
       m.stopTimer();
       g.wanted.alarm(4, vault.x, vault.z);
-      const w = g.waterNear(700, 5500);
-      const boat = m.spawnBoat(w.x, w.z, 0.4, 0x0c1f33);
-      mk = m.markOn(boat, 'destination');
-      m.gps(w.x, w.z);
-      m.objective('Fuyez jusqu’au *hors-bord* du Pier 11.');
-      m.failIf(() => boat.destroyed, 'Votre hors-bord a coulé.');
-      yield* m.waitFor(() => m.inCar(boat));
+      const escape = m.roadSpotNear(350, 5940);
+      const car = m.spawnCar('suv', escape.x, escape.z, escape.heading, 0x383b34, { label: 'VÉHICULE D’EXTRACTION' });
+      mk = m.markOn(car, 'destination');
+      m.gps(escape.x, escape.z);
+      m.objective('Rejoignez le *tout-terrain* de Nadia.');
+      m.failIf(() => car.destroyed, 'Le véhicule d’extraction est détruit.');
+      yield* m.waitFor(() => m.inCar(car));
       m.unmark(mk);
-      m.say1('NADIA', 'Remonte l’East River, passe les ponts. Ils ont des vedettes.');
-      const launch = [m.enemyBoat(w.x + 60, w.z + 220, 0xe8ecf0), m.enemyBoat(w.x + 130, w.z + 120, 0xe8ecf0)];
-      const river = [1600, 900, -300].map((z) => { const p = g.waterNear(2200, z); return { x: p.x + 60, z: p.z }; });
-      yield* riverLeg(m, boat, river, 'Remontez l’*East River*');
-      for (const b of launch) if (!b.destroyed) b.boatAI.gaveUp = true;
+      m.say1('NADIA', 'Sors par Broad Street. Après les balises de la Batterie, file sur la Rade Blanche.');
+      yield* landLeg(m, car, checkpoints('batterie', [0.18, 0.39, 0.64, 0.82]), 'Sortez par la Rade Blanche');
       g.wanted.clear();
       yield* m.say([
         ['NADIA', 'Personne derrière toi. Deux cent mille, et les registres de Cazal avec.'],
         ['SACHA', 'Il reste quelqu’un à voir.'],
-        ['NADIA', 'Son yacht mouille devant le Pier 86. Elle part à l’aube.']
+        ['NADIA', 'Cazal quitte le Déversoir par la route du fret. Son escorte ouvre la voie.']
       ]);
       m.complete(120000);
     }
@@ -182,82 +175,79 @@ const ACT3 = [
     title: 'PRISE DE CONTRÔLE',
     act: ACT,
     place: 'nadia',
-    contactLabel: 'Nadia · 11e Avenue',
+    contactLabel: 'Nadia · 10e Avenue',
     *run(m) {
       const g = m.game;
       yield* m.say([
-        ['NADIA', 'Son yacht, deux vedettes d’escorte. Elle se sauvera sur son canot rapide : c’est lui qu’il te faut.'],
+        ['NADIA', 'Cazal prépare son départ au Déversoir. Si elle rejoint la Ceinture, elle disparaît.'],
         ['SACHA', 'Ma dette, elle l’a écrite de sa main. Elle va la solder de la même main.']
       ]);
-      const w = g.waterNear(2200, streetZ(34));
-      const boat = m.spawnBoat(w.x, w.z, 1.57, 0x0c1f33);
-      m.objective('Prenez le *hors-bord*.');
-      let mk = m.markOn(boat, 'objective');
-      m.gps(w.x, w.z);
-      m.failIf(() => boat.destroyed, 'Votre hors-bord a coulé.');
-      yield* m.waitFor(() => m.inCar(boat));
-      m.unmark(mk);
-      const anchor = g.waterNear(2200, streetZ(46));
-      const yacht = m.spawnYacht(anchor.x + 230, anchor.z);
-      const at = { x: anchor.x + 230, z: anchor.z };
-      mk = m.mark(at.x - 50, at.z, 'target', { radius: 18, height: 10 });
-      m.gps(at.x - 50, at.z);
-      m.objective('Approchez du *yacht de Cazal*.');
-      yield* m.waitFor(() => m.near(at.x, at.z, 240));
-      m.unmark(mk);
+      const [at, end] = checkpoints('deversoir', [0.31, 0.96]);
+      const heading = Math.PI / 2;
+      const cazal = m.spawnNpcCar('suv', at.x, at.z, heading, 0x262324, { label: 'CAZAL', hp: 310, maxSpeed: 26 });
+      const escorts = [m.spawnNpcCar('suv', at.x + 15, at.z + 5, heading, 0x504138, { label: 'ESCORTE', hp: 160 }),
+        m.spawnNpcCar('sedan', at.x - 18, at.z - 4, heading, 0x312b28, { label: 'ESCORTE', hp: 130 })];
+      const guards = [[-12, 17], [20, -20], [23, 18]].map(([dx, dz]) => {
+        const p = m.spot(at.x + dx, at.z + dz);
+        return m.spawnActor({ ...p, look: 'guard', team: 'syndic', weapon: 'smg', hp: 100, behavior: 'guard', hostile: true });
+      });
+      const mark = m.markOn(cazal, 'target');
+      m.gps(at.x, at.z);
+      m.objective('Approchez du *convoi de Cazal*.');
+      yield* m.waitFor(() => m.near(at.x, at.z, 105) || m.disabled(cazal));
+      g.actors.alertTeam('syndic', at.x, at.z, 110);
       m.say1('HÉLÈNE CAZAL', 'Monsieur Roux. Vous auriez dû prendre rendez-vous.');
-      const escorts = [m.enemyBoat(at.x + 40, at.z - 60, 0x202226), m.enemyBoat(at.x + 50, at.z + 70, 0x202226), m.enemyBoat(at.x - 40, at.z + 90, 0x202226)];
-      const marks = escorts.map((e) => m.markOn(e, 'target'));
-      m.objective('Coulez l’*escorte*.');
-      yield* m.waitFor(() => escorts.every((e) => e.destroyed));
-      marks.forEach((k) => m.unmark(k));
-      const cazal = m.enemyBoat(at.x - 30, at.z + 10, 0xd8d4c8, { hp: 320, flee: true, label: 'CANOT DE CAZAL' });
-      m.say1('HÉLÈNE CAZAL', 'On ne saisit pas une banque, Roux. Elle se déplace.');
-      mk = m.markOn(cazal, 'target');
-      m.objective('Rattrapez le *canot de Cazal* et coulez-le.');
-      m.failIf(() => m.distanceTo(cazal) > 800, 'Cazal a pris le large.');
+      for (const car of [cazal, ...escorts]) car.driver.nav = { route: (x, z, tx, tz) => routeThroughSalt({ x, z }, { x: tx, z: tz })?.slice(1) };
+      m.driveTo(cazal, end.x, end.z, { stopAt: 10 });
+      for (const car of escorts) m.driveTo(car, end.x, end.z, { stopAt: 18 });
+      m.failIf(() => !m.disabled(cazal) && m.arrived(cazal), 'Cazal a rejoint la Ceinture.');
       let gpsT = 0;
-      while (!cazal.destroyed) {
+      while (!m.disabled(cazal)) {
+        m.objective('Immobilisez le *tout-terrain de Cazal*.');
         if ((gpsT -= m.dt) <= 0) { gpsT = 1.5; m.gps(cazal.position.x, cazal.position.z); }
         yield;
       }
       m.clearFails();
+      m.unmark(mark);
+      for (const car of escorts) m.stopNpc(car);
+      for (const guard of guards) if (guard && !guard.dead) guard.alert = false;
+      const dossier = m.pickup('package', cazal.position.x + 3, cazal.position.z);
+      const mk = m.mark(dossier.x, dossier.z, 'objective', { radius: 1.5 });
+      m.gps(dossier.x, dossier.z);
+      m.objective('Récupérez le *dossier* de Cazal.');
+      yield* m.waitFor(() => dossier.collected);
       m.unmark(mk);
       g.debt = 0;
-      yield* m.wait(2);
       yield* m.say([
         ['JULES', 'Le conseil de la Liberty Trust vient de te racheter ta dette pour un dollar. Ils préfèrent ne pas savoir.'],
         ['SACHA', 'Et mon frère ?'],
-        ['NADIA', 'Le carnet parle d’un navire, le Sterne. Immatriculé à un nom que tu connais. Le tien.']
+        ['NADIA', 'Le carnet parle d’un navire échoué, le Sterne. Immatriculé à un nom que tu connais. Le tien.']
       ]);
-      void yacht;
       m.complete(60000, 'FIN DE L’ACTE III');
     }
   }
 ];
 
-// A run round the tip of the island against the clock, whenever you feel like it
-const REGATTA = {
-  id: 'regate',
-  title: 'RÉGATE DES DOUVES',
-  place: 'pier',
-  contactLabel: 'Régate · Quai de la 34e Rue Est',
+const SALT_SPRINT = {
+  id: 'sprint-sel',
+  title: 'SPRINT DES FAILLES',
+  place: { ...checkpoints('failles', [0.13])[0], name: 'Les Failles' },
+  contactLabel: 'Sprint · Les Failles',
   *run(m) {
-    const g = m.game;
-    const w = g.waterNear(2200, streetZ(40));
-    const boat = m.spawnBoat(w.x, w.z, 0.4, 0x7a1414);
-    m.objective('Montez sur le *hors-bord*.');
-    const mk = m.markOn(boat, 'objective');
-    m.gps(w.x, w.z);
-    yield* m.waitFor(() => m.inCar(boat));
+    const { x, z } = SALT_SPRINT.place;
+    const car = m.spawnCar('offroad', x, z, 1.9, 0x8c4227, { label: 'SPRINT DES FAILLES' });
+    const mk = m.markOn(car, 'objective');
+    m.gps(x, z);
+    m.objective('Montez dans la voiture du *sprint*.');
+    m.failIf(() => car.destroyed, 'Votre voiture est hors service.');
+    yield* m.waitFor(() => m.inCar(car));
     m.unmark(mk);
     yield* m.countdown();
-    m.timer(120, 'Temps écoulé.');
-    const zs = [1300, 2700, 4100, 5300];
-    yield* riverLeg(m, boat, zs.map((z) => { const p = g.waterNear(2200, z); return { x: p.x + 70, z: p.z }; }), 'Descendez les douves');
+    m.timer(145, 'Temps écoulé.');
+    yield* landLeg(m, car, checkpoints('failles', [0.24, 0.36, 0.48, 0.60, 0.72, 0.84, 0.98]), 'Suivez la piste des Failles');
     m.stopTimer();
     m.complete(5000);
   }
 };
 
-export { ACT3, PLACES3, REGATTA };
+export { ACT3, PLACES3, SALT_SPRINT };

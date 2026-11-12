@@ -323,9 +323,10 @@ function unGround(scene,city,m) {
   ];
 }
 
-function buildManhattanGrounds(scene,city) {
+function buildManhattanGrounds(scene,city,{ coreOnly = false } = {}) {
   const m=litMaterials();
-  return [...campusGround(scene,city,m),...asphaltGround(scene,city,m),...unGround(scene,city,m)];
+  const campus = campusGround(scene,city,m);
+  return coreOnly ? campus : [...campus,...asphaltGround(scene,city,m),...unGround(scene,city,m)];
 }
 
 export { buildManhattanGrounds, litMaterials, pitch, fence, tilted };

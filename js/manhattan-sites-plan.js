@@ -1,4 +1,4 @@
-import { blockAt, getIslandBoundsAtZ } from './city-config.js';
+import { blockAt, getIslandBoundsAtZ, surveyedBlockAt } from './city-config.js';
 import { highwayScale, highwayX } from './highway-layout.js';
 
 const frame = (x0, z0) => (x, z) => ({ x: x0 + x, z: z0 + z });
@@ -9,8 +9,8 @@ const unPoint = (x, z) => {
   return { x: Math.max(1077 + x, highwayX(false, wz) + 9.65 * highwayScale(false, wz)), z: wz };
 };
 const campusBlock = blockAt(-1542, -5992);
-const asphaltBlock = blockAt(1370, -3937);
-const unBlock = blockAt(1100, -184);
+const asphaltBlock = surveyedBlockAt(1370, -3937);
+const unBlock = surveyedBlockAt(1100, -184);
 
 const campusWalk = [[-122,-8],[-88,-8],[-45,-8],[0,-8],[45,-8],[89,-8],[119,-8],
   [119,8],[89,8],[45,8],[0,8],[-45,8],[-88,8],[-122,8]];

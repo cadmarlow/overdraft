@@ -12,7 +12,7 @@ test('geodata builds with default paths in a checkout containing spaces and non-
   try {
     fs.mkdirSync(path.join(dir, 'tools'));
     fs.mkdirSync(path.join(dir, 'js'));
-    fs.copyFileSync(path.join(root, 'js/city-config.js'), path.join(dir, 'js/city-config.js'));
+    for (const name of ['city-config.js', 'city-frontier.js']) fs.copyFileSync(path.join(root, 'js', name), path.join(dir, 'js', name));
     for (const name of fs.readdirSync(path.join(root, 'tools'))) {
       if (name.endsWith('.mjs')) fs.copyFileSync(path.join(root, 'tools', name), path.join(dir, 'tools', name));
     }

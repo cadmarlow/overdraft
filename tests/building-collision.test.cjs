@@ -133,9 +133,10 @@ test('acoustic rays measure occupied wall thickness, leaving courtyards open', (
 test('road queries preserve the open area inside concave and courtyard bounds', () => {
   const { buildRoadNetwork } = loadModule(readFileSync(join(__dirname, '../js/road-network.js'), 'utf8'), { imports: {
     './city-config.js': {
-      ALL_AVENUES: [], ALL_STREETS: [], BLOCKS: [], ISLAND_BOUNDS: { minZ: -100, maxZ: 100 },
+      ALL_AVENUES: [], ALL_STREETS: [], CITY_BLOCKS: [], ISLAND_BOUNDS: { minZ: -100, maxZ: 100 },
       getIslandBoundsAtZ: () => ({ westX: -200, eastX: 200 })
     },
+    './city-frontier.js': { CITY_NORTH: -100, CITY_SOUTH: 100, cityContainsBox: () => true },
     './nyc-geodata.js': { GEO: {} }, './building-collision.js': { polygonBoxOverlaps },
     './road-layout.js': loadModule(readFileSync(join(__dirname, '../js/road-layout.js'), 'utf8'))
   } });

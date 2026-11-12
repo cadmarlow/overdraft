@@ -4,8 +4,9 @@ import {
   abs, max, min, clamp, mix, smoothstep, dot, length, normalize, sin, texture, transformDirection, uniform
 } from 'three/tsl';
 import { bumpNormal, cityUniforms } from './tsl-materials.js';
+import { applyFrontierGround } from './frontier-ground.js';
 import { ground } from './ground-assets.js';
-import { MASK_H, MASK_STEP, MASK_W, SALT_MAX_X, SALT_MAX_Z, SALT_MIN_X, SALT_MIN_Z, SALT_WATER } from './wasteland-design.js';
+import { MASK_H, MASK_STEP, MASK_W, SALT_MIN_X, SALT_MIN_Z } from './wasteland-design.js';
 
 // The Wasteland's surfaces. One ground material for the whole country: photographed sand, cracked mud and rock
 // (tools/wasteland, Poly Haven, CC0) laid by the baked masks, by slope and by the old water lines.
@@ -45,13 +46,13 @@ const flatDetail = (surface, uvNode) => {
   return { tilt: vec3(t.r.mul(2).sub(1), 0, t.g.mul(2).sub(1).negate()), rough: t.a };
 };
 
-export function createSaltGroundMaterial(surfaces, maps) {
+export function createSaltGroundMaterial(surfaces, maps, { frontier = false } = {}) {
   const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.92, metalness: 0 });
-  mat.name = 'Wasteland · sol';
+  mat.name = frontier ? 'Wasteland · sol des Lisières' : 'Wasteland · sol';
   mat.aoNode = saltUniforms.uAmbient;
   const p = positionWorld, n = normalWorldGeometry;
   const masks = texture(maps.masks, maskUV(p));
-  const lines = texture(maps.lines, spanUV(p, maps.lineW, maps.lineH, maps.lineStep)); // R road or track, G asphalt, B moat
+  const lines = texture(maps.lines, spanUV(p, maps.lineW, maps.lineH, maps.lineStep)); // R road or track, G asphalt
   const far = smoothstep(90, 420, length(p.sub(cameraPosition)));
   const slope = float(1).sub(n.y);
 
@@ -96,9 +97,6 @@ export function createSaltGroundMaterial(surfaces, maps) {
   const beaten = smoothstep(0.35, 0.8, lines.r).mul(lines.g.oneMinus());
   albedo = mix(albedo, v3(TINT.asphalt).mul(sand.rel.g.mul(0.5).add(0.6)), paved.mul(wDune.mul(0.55).oneMinus()));
   albedo = albedo.mul(mix(float(1), float(0.74), beaten));
-  // The moat's banks are dark with damp
-  const damp = lines.b.mul(smoothstep(SALT_WATER + 1.1, SALT_WATER + 0.1, p.y));
-  albedo = albedo.mul(mix(float(1), float(0.5), damp));
   // Sand on the move: pale streaks that run with the wind, an arm's length above the ground
   const windAxis = normalize(saltUniforms.uWind);
   const alongWind = dot(p.xz, windAxis), acrossWind = dot(p.xz, vec2(windAxis.y.negate(), windAxis.x));
@@ -107,13 +105,14 @@ export function createSaltGroundMaterial(surfaces, maps) {
   albedo = mix(albedo, v3(TINT.dune).mul(1.15), sheet.mul(0.55));
   mat.colorNode = albedo;
 
-  const sandN = flatDetail(surfaces.sand, sandUV), duneN = flatDetail(surfaces.dune, duneUV), mudN = flatDetail(surfaces.crack, mudUV);
+  // The terrain shares one detail normal across its three photographed surfaces.
+  const sandN = flatDetail(surfaces.sand, sandUV), duneN = flatDetail(surfaces.sand, duneUV), mudN = flatDetail(surfaces.sand, mudUV);
   mat.roughnessNode = Fn(() => {
     let r = mix(sandN.rough, duneN.rough, wDune);
     r = mix(r, mudN.rough, wMud);
     r = mix(r, mudN.rough.mul(0.62), wSalt); // a crust glints
     r = mix(r, float(0.9), max(wFace, wCap));
-    return clamp(mix(r, float(0.9), far.mul(0.7)).add(damp.mul(-0.35)), 0.22, 1);
+    return clamp(mix(r, float(0.9), far.mul(0.7)), 0.22, 1);
   })();
   mat.normalNode = Fn(() => {
     let tilt = mix(sandN.tilt.mul(0.9), duneN.tilt.mul(1.25), wDune);
@@ -140,7 +139,7 @@ export function createSaltGroundMaterial(surfaces, maps) {
     });
     mat.receivedShadowNode = Fn(([shadow]) => shadow.mul(reliefShadow()));
   }
-  return mat;
+  return frontier ? applyFrontierGround(mat, p) : mat;
 }
 
 // The old shore roads: cracked asphalt, sand over the edges and in tongues across it, a centre line worn to ghosts
@@ -170,29 +169,5 @@ export function createSaltRoadMaterial(surfaces) {
   const duneN = flatDetail(surfaces.dune, duneUV);
   const tilt = mix(vec3(pavingN.r.mul(2).sub(1), 0, pavingN.g.mul(2).sub(1).negate()).mul(0.8), duneN.tilt, cover);
   mat.normalNode = transformDirection(normalize(normalWorldGeometry.add(tilt)), cameraViewMatrix);
-  return mat;
-}
-
-// The wall Manhattan stands on, bared when the river left: stained concrete, a white line where the water stood
-export function createQuayWallMaterial(surfaces) {
-  const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.9, metalness: 0 });
-  mat.name = 'Wasteland · quai';
-  mat.aoNode = saltUniforms.uAmbient;
-  const coord = attribute('wallCoord', 'vec2'); // metres along the wall, metres up
-  const s = surfaces.bunker;
-  const uvNode = coord.div(s.metres * 1.6);
-  const t = grain(s, uvNode);
-  const y = positionWorld.y;
-  const streaks = texture(ground.masksA, vec2(coord.x.div(9), y.div(21))).a;
-  const tide = smoothstep(SALT_WATER - 0.55, SALT_WATER - 0.1, y).mul(smoothstep(SALT_WATER + 0.5, SALT_WATER + 0.05, y));
-  const depth = smoothstep(SALT_WATER, SALT_WATER - 6.5, y);
-  let albedo = t.rel.mul(mix(vec3(0.33, 0.31, 0.28), vec3(0.16, 0.135, 0.11), depth));
-  albedo = mix(albedo, vec3(0.30, 0.14, 0.07), smoothstep(0.6, 0.92, streaks).mul(0.55)); // rust runs down from the ladders and rings
-  albedo = mix(albedo, v3(TINT.salt), tide.mul(0.8).add(smoothstep(0.35, 0.8, streaks.mul(depth.oneMinus())).mul(0.22)));
-  // sand has blown against its foot (coord.y is the height above the bed there)
-  albedo = mix(albedo, v3(TINT.dune).mul(0.8), smoothstep(1.5, 0.15, coord.y.sub(texture(ground.masksA, vec2(coord.x.div(40), 0.3)).r.mul(1.3))).mul(0.75));
-  mat.colorNode = albedo;
-  mat.roughnessNode = texture(s.normal, uvNode).a;
-  mat.normalNode = bumpNormal(t.height.mul(0.05));
-  return mat;
+  return applyFrontierGround(mat, positionWorld);
 }

@@ -1,4 +1,6 @@
 import * as THREE from 'three/webgpu';
+import { cityContainsBox } from './city-frontier.js';
+import { FRONTIER_BLEND_IN } from './frontier-districts.js';
 import { CURB_HEIGHT, accumulator, buildIsland, buildRoads } from './ground-plan.js';
 import { dressRoads, dressIsland } from './ground-dressing.js';
 import { OBJECT_ATLAS, MARK_ATLAS } from './ground-atlas.js';
@@ -69,6 +71,7 @@ function buildIslands(group, blocks) {
 /** The lane bands of every roadway of the network, over the island's asphalt deck */
 function buildRoadSurface(scene, network) {
   const material = createGroundRoadMaterial({ street: true });
+  const verge = createGroundRoadMaterial({ street: true, frontier: true });
   const cells = new Map();
   const cellOf = (x, z) => {
     const key = cellKey(x, z);
@@ -79,10 +82,17 @@ function buildRoadSurface(scene, network) {
   buildRoads(network, cellOf);
   const group = new THREE.Group();
   group.name = 'GroundRoads';
-  let first = null;
+  let first = null, frontierFirst = null;
   for (const acc of cells.values()) {
-    const m = mesh('GroundRoad', acc, material, [['road', 4], ['band', 4], ['flow', 4]], first);
-    first ??= m;
+    const m = mesh('GroundRoad', acc, material, [['road', 4], ['band', 4], ['flow', 4]]);
+    m.geometry.computeBoundingBox();
+    const { min, max } = m.geometry.boundingBox;
+    const core = cityContainsBox(min.x, max.x, min.z, max.z, FRONTIER_BLEND_IN + 4);
+    if (!core) m.material = verge;
+    const representative = core ? first : frontierFirst;
+    if (representative) m.userData.sharesPipelineWith = representative;
+    else if (core) first = m;
+    else frontierFirst = m;
     group.add(m);
   }
   scene.add(group);

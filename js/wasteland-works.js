@@ -1,16 +1,16 @@
 import * as THREE from 'three/webgpu';
-import { abs, attribute, float, frontFacing, mix, normalWorldGeometry, positionWorld, select, smoothstep, texture, varying, vec2, vec3 } from 'three/tsl';
-import { ISLAND_BOUNDS, getIslandBoundsAtZ } from './city-config.js';
+import { abs, attribute, float, frontFacing, mix, normalWorldGeometry, positionWorld, select, smoothstep, texture, uv, varying, vec2, vec3 } from 'three/tsl';
+import { CITY_NORTH, cityBoundsAt } from './city-frontier.js';
 import { bumpNormal, cityUniforms } from './tsl-materials.js';
 import { ground } from './ground-assets.js';
-import { FRONTIER_BRIDGES, NORTH_GATE, SALT_LINES, SALT_PLACES, WALL_Z, WEST_GATE, saltLandAt, saltRoadAt, sampleSalt } from './wasteland-plan.js';
+import { CROSSINGS, NORTH_GATE, SALT_LINES, SALT_PLACES, WALL_Z, WEST_GATE, saltLandAt, saltRoadAt, sampleSalt } from './wasteland-plan.js';
 import { saltUniforms } from './wasteland-materials.js';
 import { fixItem } from './wasteland-scatter.js';
+import { buildFrontierStructures } from './frontier-structures.js';
 import { buildWastelandWrecks } from './wasteland-wrecks.js';
 import { buildWastelandRuins } from './wasteland-ruins.js';
 
-// What people built and what they left: the Wall across the island and its Great Gate, the watch towers of the quays,
-// the pump works at the foot of the western ramp, and the bones of the old city outside, sunk in the sand.
+// The gates, dry industrial sites and ruins that mark the approaches to the city.
 
 const BOX = { L: 12.19, H: 2.59, W: 2.44 }; // a forty-foot container
 const PAINTS = [[0.30, 0.085, 0.05], [0.07, 0.16, 0.24], [0.10, 0.20, 0.12], [0.34, 0.22, 0.07], [0.33, 0.31, 0.27], [0.20, 0.10, 0.06], [0.05, 0.11, 0.13], [0.26, 0.24, 0.20]];
@@ -86,8 +86,10 @@ export function buildWastelandWorks(group, surfaces) {
   // A drum with a fire in it, out on the Wasteland's side of a gate
   const fireBarrel = (x, z) => { fixItem({ name: 'fire_barrel', x, z }); fires.push([x, sampleSalt(x, z) + 0.85, z, 0.42]); };
 
-  // The Wall: three courses of containers on the island's northern edge, from the dry Hudson to the moat
-  const wallZ = WALL_Z - 7.6, west = -2096, east = 884, gate = NORTH_GATE.x, GAP = 9.5;
+  // The Wall: three courses of containers on the island's northern edge, between the two shoulders of the city
+  const wallZ = WALL_Z - 7.6, gate = NORTH_GATE.x, GAP = 12;
+  const north = cityBoundsAt(CITY_NORTH);
+  const west = north.westX + 30, east = north.eastX - 30;
   for (let course = 0; course < 3; course++) {
     for (let x = west + (course % 2) * BOX.L / 2; x < east; x += BOX.L + 0.12) {
       if (Math.abs(x - gate) < GAP + BOX.L / 2) continue;
@@ -129,12 +131,6 @@ export function buildWastelandWorks(group, surfaces) {
     block(x - 1.4, x + 1.4, z - 1.4, z + 1.4, y, y + BOX.L + BOX.H);
   };
   for (let x = west + 140; x < east - 60; x += 230) if (Math.abs(x - gate) > 60) tower(x, wallZ + 3.6, Math.PI);
-  // along the western quays, looking out over the dry river
-  for (let z = ISLAND_BOUNDS.minZ + 380; z < 5600; z += 520) {
-    const shore = getIslandBoundsAtZ(z);
-    if (Math.abs(z - WEST_GATE.z) < 90) continue;
-    tower(shore.westX + 1.5, z, -Math.PI / 2);
-  }
   // The western gate, where 34th Street runs out onto the ramp
   {
     const gx = WEST_GATE.x + 5, gz = WEST_GATE.z;
@@ -142,7 +138,7 @@ export function buildWastelandWorks(group, surfaces) {
       const tz = gz + side * 11.5;
       container(gx, 0, tz, 1, true);
       container(gx, 0, tz + side * 2.7, 1, true);
-      block(gx - 1.5, gx + 1.5, tz - 1.4, tz + side * 4 + 1.4 * side, 0, BOX.L);
+      block(gx - 1.5, gx + 1.5, Math.min(tz, tz + side * 2.7) - 1.4, Math.max(tz, tz + side * 2.7) + 1.4, 0, BOX.L);
       fireBarrel(WEST_GATE.x - 15, tz - side * 1.5);
       fixItem({ name: 'road_barrier', x: gx - 8, z: tz - side * 2.5, yaw: 1.57 });
     }
@@ -153,16 +149,18 @@ export function buildWastelandWorks(group, surfaces) {
     sign(parent, gx - BOX.W / 2 - 0.25, BOX.L - 1.5, gz, -Math.PI / 2, 'MANHATTAN', 'PORTE DE L’OUEST', 15);
     lamps.push([gx - 2, BOX.L + 3, gz - 9, -Math.PI / 2], [gx - 2, BOX.L + 3, gz + 9, -Math.PI / 2]);
   }
-  // A post where each bridge lands on the far bank
-  for (const spec of FRONTIER_BRIDGES) {
-    const dx = spec.b.x - spec.a.x, dz = spec.b.z - spec.a.z, length = Math.hypot(dx, dz), ux = dx / length, uz = dz / length;
-    const px = spec.b.x + ux * 46, pz = spec.b.z + uz * 46;
+  // Open wayfinding posts at the eastern and southern crossings.
+  for (const crossing of CROSSINGS.slice(2)) {
+    const { x, z, dx, dz, name, sign: subtitle } = crossing;
+    const yaw = Math.atan2(-dx, -dz);
     for (const side of [-1, 1]) {
-      const x = px - uz * side * 12, z = pz + ux * side * 12;
-      if (!saltLandAt(x, z)) continue;
-      tower(x, z, Math.atan2(ux, uz));
-      fixItem({ name: 'road_barrier', x: x + uz * side * -3.2, z: z - ux * side * -3.2, yaw: Math.atan2(ux, uz) });
-      fixItem({ name: 'tyre_stack', x: x + ux * 3, z: z + uz * 3 });
+      const px = x + dx * 34 + dz * side * 17, pz = z + dz * 34 - dx * side * 17;
+      if (!saltLandAt(px, pz)) continue;
+      const y = sampleSalt(px, pz);
+      container(px, y - 0.1, pz, 0, true, true);
+      block(px - 1.8, px + 1.8, pz - 1.4, pz + 1.4, y - 0.3, y + BOX.L / 2);
+      sign(parent, px - dx * 1.6, y + 4.5, pz - dz * 1.6, yaw, name.toUpperCase(), subtitle, 8);
+      fixItem({ name: 'concrete_block', x: px + dx * 5, z: pz + dz * 5, yaw });
     }
   }
   // ---- Camps: a yard walled with containers, a fire, what a crew needs ---------------------------------------------
@@ -212,6 +210,70 @@ export function buildWastelandWorks(group, surfaces) {
   };
   settle({ x: SALT_PLACES[0].x + 10, z: SALT_PLACES[0].z - 2 }, 'RELAIS DES VEILLEURS', 'UNE BOBINE POUR LE HAUT-SEL');
   for (const place of SALT_PLACES.slice(2)) if (place.name !== 'La Grande Porte') settle(place, 'ROULIERS');
+  // Each close landmark gets a different silhouette at driving distance.
+  const worksMaterial = new THREE.MeshStandardNodeMaterial({ color: 0x847269, roughness: 0.87 });
+  const tankMaterial = new THREE.MeshStandardNodeMaterial({ color: 0x55382d, roughness: 0.79, metalness: 0.36 });
+  const ballast = new THREE.BoxGeometry(1, 1, 1);
+  const tank = new THREE.CylinderGeometry(1, 1.08, 1, 32);
+  const tankUv = uv().mul(vec2(4, 3));
+  const rust = texture(surfaces.rust.color, tankUv);
+  const seam = smoothstep(0.025, 0.09, abs(uv().y.mul(5).fract().sub(0.5)));
+  const bands = smoothstep(0.69, 0.71, uv().y).mul(smoothstep(0.77, 0.75, uv().y));
+  const faded = mix(vec3(0.19, 0.19, 0.16), vec3(0.43, 0.28, 0.09), bands);
+  tankMaterial.colorNode = mix(faded, rust.rgb, smoothstep(0.36, 0.75, rust.a)).mul(seam.mul(0.20).add(0.79));
+  tankMaterial.normalNode = bumpNormal(rust.a.mul(0.06));
+  tankMaterial.aoNode = saltUniforms.uFill;
+  const roof = new THREE.CylinderGeometry(0.44, 1.05, 1.4, 32);
+  const railing = new THREE.TorusGeometry(1.02, 0.035, 6, 32).rotateX(Math.PI / 2);
+  const blackened = new THREE.MeshStandardNodeMaterial({ color: 0x443329, metalness: 0.42, roughness: 0.7 });
+  const structure = (name, x, z, width, height, depth, geometry, material) => {
+    const y = sampleSalt(x, z);
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.name = name;
+    mesh.scale.set(width, height, depth);
+    mesh.position.set(x, y + height / 2 - 0.7, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    parent.add(mesh);
+    const k = geometry === tank ? 1 : 0.5;
+    block(x - width * k, x + width * k, z - depth * k, z + depth * k, y - 1, y + height - 0.7);
+    keepOut.push({ x, z, r: Math.max(width, depth) * k + 4 });
+  };
+  for (const [x, z, h, r] of [[1490, -1306, 20, 8], [1515, -1317, 26, 8.8], [1544, -1322, 16, 7.5]]) {
+    structure('Silo du Déversoir', x, z, r, h, r, tank, tankMaterial);
+    const y = sampleSalt(x, z) + h;
+    const cap = new THREE.Mesh(roof, blackened);
+    cap.position.set(x, y, z);
+    cap.scale.set(r, 1, r);
+    cap.castShadow = true;
+    parent.add(cap);
+    for (const lift of [-0.7, 0.55]) {
+      const rail = new THREE.Mesh(railing, blackened);
+      rail.position.set(x, y + lift, z);
+      rail.scale.set(r, 1, r);
+      parent.add(rail);
+    }
+    const rungs = Math.floor((h - 0.6) / 0.45) + 1;
+    const ladder = new THREE.InstancedMesh(ballast, blackened, rungs + 2);
+    const pose = new THREE.Matrix4();
+    for (let i = 0; i < rungs; i++) {
+      pose.makeScale(0.65, 0.055, 0.07).setPosition(x, y - h + 0.6 + i * 0.45, z + r + 0.33);
+      ladder.setMatrixAt(i, pose);
+    }
+    for (const [i, offset] of [-0.31, 0.31].entries()) {
+      pose.makeScale(0.08, h, 0.08).setPosition(x + offset, y - h / 2, z + r + 0.33);
+      ladder.setMatrixAt(rungs + i, pose);
+    }
+    parent.add(ladder);
+  }
+  for (const [x, z, h] of [[1715, 3489, 10], [1752, 3472, 15], [1788, 3488, 7], [1817, 3504, 5]]) {
+    structure('Mur disloqué des Failles', x, z, 16, h, 3.8, ballast, worksMaterial);
+    fixItem({ name: 'outcrop_a', x: x + 10, z: z - 8, scale: 2.4, yaw: 1.2, sink: 0.8 });
+  }
+  for (const [x, z, h] of [[623, 6414, 8], [635, 6440, 12], [638, 6468, 18]]) {
+    structure('Balise de la Rade Blanche', x, z, 2, h, 2, ballast, worksMaterial);
+    lamps.push([x, sampleSalt(x, z) + h, z, -Math.PI / 2]);
+  }
 
   {
     const steel = steelMaterial(surfaces);
@@ -238,6 +300,7 @@ export function buildWastelandWorks(group, surfaces) {
   }
 
   // ---- The bones of the old city (js/wasteland-ruins.js) ---------------------------------------------------------------
+  buildFrontierStructures(parent, { sign, colliders, fires, keepOut });
   const ruins = buildWastelandRuins(parent, surfaces, { keepOut, colliders });
 
   // ---- The pump works: three mains climb the ramp from the bed to the city --------------------------------------------

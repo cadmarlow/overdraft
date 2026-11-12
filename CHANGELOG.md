@@ -1,5 +1,51 @@
 # Changelog
 
+## 0.9.30 — Buffer Zone — 12 novembre 2026
+
+- **Le sable gagne les rues.** Sur tout le pourtour de Manhattan, les chaussées s’écaillent, la terre apparaît par
+  plaques et le sable remonte les rues par endroits. Les pistes les plus empruntées restent lisibles. Des bosquets et
+  des broussailles occupent les accotements avant de se raréfier au large.
+- **Six lieux habités.** Marché des Lisières, Serres de l’Ouest, Atelier du Levant, Balance, Vigie de la Batterie et
+  Cour des Récupérateurs. Chacun a un usage, des gens à rencontrer et des horaires. Leurs feux restent visibles la nuit.
+- **De l’eau pour les Lisières.** À East Harlem, Leïla paie 850 $ pour un filtre à récupérer dans une ancienne pépinière.
+  Les repères guident l’aller et le retour, et la livraison reprend après le chargement d’une sauvegarde.
+- Les six relais sont repérables dans l’atlas. La poussière monte à mesure qu’on avance et les patrouilles hostiles
+  commencent au-delà des derniers accotements.
+- **Marche.** Sacha suit le relief sec sous le niveau des rues. La marche au clavier joue à l’allure de la capture
+  de mouvement. **Espace** lance la course.
+- **Appui des véhicules.** Les îlots retirés ne fournissent plus de trottoir invisible. À Cedar Street, les pneus,
+  les pieds et l’ombre de contact retrouvent la chaussée. Une voiture garée termine aussi sa descente sur les ressorts.
+
+### Validation de Buffer Zone
+
+- Chrome WebGPU sur M1 Pro. Traversée de la 119e Rue en pick-up au clavier, visite des six relais, marché observé
+  à 14 h et à 1 h. Livraison jouée avec **F** et déplacements de test entre les repères. Le build statique a repris
+  la livraison après rechargement et versé les 850 $.
+- Sur cette vue de la 119e Rue, à 1 440 × 950 sans plafond, la médiane en Équilibrée est de 33 i/s avec une échelle
+  de rendu de 0,70. La cible de 60 i/s reste à atteindre. Son et manette à vérifier.
+- 1 178 tests réussis, dont l’essai HTTP isolé, et build statique réussi.
+
+## 0.9.29 — Consolidation — 12 novembre 2026
+
+- **Manhattan plus compact.** 15 km² repris par le Wasteland, soit 35 % de la surface urbaine précédente. Les rues
+  gardent leur échelle. 965 îlots urbains sortent du périmètre. Les plus fortes coupes sont sur l’ancienne rive est.
+- **Tout le pourtour à sec.** Fin des douves, des digues, des ponts, des îles décoratives, des pontons et des voies
+  rapides de rive. Le terrain et les rues se rejoignent à niveau. Les épaves échouées restent à explorer.
+- **Cinq accès terrestres.** La Grande Porte et les Pompes rejoignent les silos du Déversoir, les Failles et le
+  passage de la Batterie. Le relief, le GPS et les courbes de niveau de l’atlas utilisent les nouveaux tracés.
+- **Contrats à terre.** L’Acte III conserve ses identifiants et ses gains. Les livraisons, la fuite de Wall Street et
+  l’interception de Cazal empruntent les pistes. Le Sprint des Failles remplace la Régate des Douves.
+
+
+### Validation de Consolidation
+
+- Chrome WebGPU sur M1 Pro. Franchissement au clavier des cinq accès, dans les deux sens, en qualité Haute. Build
+  statique lancé séparément en qualité Équilibrée. Acte III, Pièces détachées et Sprint des Failles menés à leur
+  terme en suivant leurs balises, avec placement de test. Sauvegarde de l’ancienne rive relue sur le terrain sec.
+- À 1 440 × 900, échelle 1, sans plafond, la médiane aux Pompes passe de 63 à 81 i/s en qualité Haute. En qualité
+  Équilibrée, 51 i/s à Midtown et 108 i/s au Déversoir. Midtown reste sous la cible de 60 i/s dans cette vue.
+- 1 171 tests réussis, dont l’essai HTTP isolé, et build statique réussi.
+
 ## 0.9.28 — Brick & Mortar — 12 novembre 2026
 
 - Les façades de Manhattan s’ouvrent au rez-de-chaussée. Les entrées suivent la largeur des travées et l’approche

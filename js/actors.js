@@ -49,9 +49,10 @@ class ActorSystem {
 
   spawn({ x, z, y = null, heading = 0, look = 'cop', team = 'police', weapon = 'pistol', hp = 100, behavior = 'combat', hostile = true,
     accuracy = 0.5, alert = true, name = '', tag = '', female = false, armor = 0, cover = null }) {
-    const shopCast = team === 'calibre';
-    const population = this.actors.filter(a => (a.team === 'calibre') === shopCast);
-    if (population.length >= (shopCast ? 4 : MAX_ACTORS)) {
+    const isSeparateCast = t => t === 'calibre' || t === 'frontier';
+    const separate = isSeparateCast(team);
+    const population = this.actors.filter(a => separate ? a.team === team : !isSeparateCast(a.team));
+    if (population.length >= (separate ? 4 : MAX_ACTORS)) {
       // recycle the farthest corpse, else refuse
       const corpse = population.filter((a) => a.dead).sort((a, b) => b.deadAt - a.deadAt).pop();
       if (!corpse) return null;

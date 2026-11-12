@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { BLOCKS } from '../js/city-config.js';
+import { CITY_BLOCKS as BLOCKS } from '../js/city-config.js';
+import { insideCity } from '../js/city-frontier.js';
 import { curbOutline } from '../js/ground-plan.js';
 import { groundFootprint } from '../js/ground-surfaces.js';
 import { buildRoadNetwork, buildRoadNetworkAsync } from '../js/road-network.js';
@@ -11,7 +12,7 @@ test('Manhattan traffic keeps every lane and turn off the real curb islands, wit
   const layout = BLOCKS.filter(b => b.rect && !b.median && b.park < 0.6).map(b => ({ minX: b.minX, maxX: b.maxX, minZ: b.minZ, maxZ: b.maxZ }));
   const curbs = BLOCKS.map(b => groundFootprint(b.park > 0.6 && !b.median && b.parkName !== 'Bryant Park' ? b.poly : curbOutline(b.poly).loop));
   const n = buildRoadNetwork(layout, [], [], curbs), p = {};
-  assert.ok(n.edges.length > 4500, `road coverage collapsed: ${n.edges.length}`);
+  assert.ok(n.edges.length > 3000, `road coverage collapsed: ${n.edges.length}`);
   let curves = 0;
   for (const e of n.edges) {
     for (let i = 0; i < e.lanes.length; i++) {
@@ -28,11 +29,12 @@ test('Manhattan traffic keeps every lane and turn off the real curb islands, wit
       curves++;
       for (let s = 0; s <= c.len; s += 0.5) {
         n.curvePoint(c, s, p);
+        assert.ok(insideCity(p.x, p.z), `turn ${e.id} leaves the compact city`);
         assert.equal(n.onSidewalk(p.x, p.z), false, `turn ${e.id}:${i} -> ${m.to.id}:${j} on sidewalk`);
       }
     }
   }
-  assert.ok(curves > 11000, `turn coverage collapsed: ${curves}`);
+  assert.ok(curves > 7800, `turn coverage collapsed: ${curves}`);
   let beats = 0;
   const timer = setInterval(() => beats++, 1);
   let incremental;

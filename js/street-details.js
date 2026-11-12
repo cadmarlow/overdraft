@@ -1,4 +1,5 @@
 import * as THREE from 'three/webgpu';
+import { insideCity } from './city-frontier.js';
 import { Fn, float, color, positionWorld, uniform, mod, fract, step, smoothstep, mix } from 'three/tsl';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
@@ -11,7 +12,7 @@ import {
   blockAt,
   fromOldFrame,
   CENTRAL_PARK_BOUNDS as CPB,
-  BLOCKS,
+  CITY_BLOCKS as BLOCKS,
   LANDMARK_SITES
 } from './city-config.js';
 import { cityUniforms, createSteamMaterial, createGodRayMaterial } from './tsl-materials.js';
@@ -23,9 +24,8 @@ import { placeStreetTrees } from './tree-placements.js';
 import { createSubwayEntranceParts, createFoodCartParts } from './street-props.js';
 import { createSubwayEntrances } from './subway-entrances.js';
 import { STREET } from './street-geodata.js';
-import { pavedPlazaRects, centralParkClearings, parkTreeSites, parkLampSites, fdrViaduct } from './city-grid.js';
+import { pavedPlazaRects, centralParkClearings, parkTreeSites, parkLampSites } from './city-grid.js';
 import { bryantParkLawn } from './landmarks.js';
-import { highwayCorridor } from './highway-layout.js';
 
 // Instanced street furniture, traffic signals, trees and nearby light pools.
 
@@ -110,7 +110,7 @@ function roundObstacle(x, y, z, radius, height, kind) {
   return { round: radius, cx: x, cz: z, minX: x - radius, maxX: x + radius, minZ: z - radius, maxZ: z + radius, minY: y, maxY: y + height, obstacle: kind };
 }
 
-function buildStreetDetails(scene, colliders = []) {
+function buildStreetDetails(scene, colliders = [], frontierTrees = []) {
   const group = new THREE.Group();
   group.name = 'ManhattanStreetDetails';
 
@@ -219,7 +219,7 @@ function buildStreetDetails(scene, colliders = []) {
 
   // True only when (x, z) and its surrounding pad-meter footprint sit on a real curb island (never in a road or median)
   const isOnCurbIsland = (x, z, pad = 0.55) => {
-    if (highwayCorridor.contains(x, z, pad) || fdrViaduct?.keepOut(x, z, pad)) return false;
+    if (!insideCity(x, z)) return false;
     const b = blockAt(x, z);
     if (!b || b.median) return false;
     if (pad <= 0) return true;
@@ -238,7 +238,7 @@ function buildStreetDetails(scene, colliders = []) {
   };
 
   const isClearOfPoles = (x, z, minDist = 6.0) => {
-    if (highwayCorridor.contains(x, z, 1) || fdrViaduct?.keepOut(x, z, 1)) return false;
+    if (!insideCity(x, z)) return false;
     const md2 = minDist * minDist;
     for (let ix = Math.floor((x - minDist) / POLE_CELL); ix <= Math.floor((x + minDist) / POLE_CELL); ix++) {
       for (let iz = Math.floor((z - minDist) / POLE_CELL); iz <= Math.floor((z + minDist) / POLE_CELL); iz++) {
@@ -711,7 +711,7 @@ function buildStreetDetails(scene, colliders = []) {
   // =========================================================================
   // 4. MTA SUBWAY ENTRANCES WITH GLOWING GREEN GLOBE LAMPS
   // =========================================================================
-  const subwaySites = createSubwayEntrances(colliders, footprints);
+  const subwaySites = createSubwayEntrances(colliders, footprints).filter(({ x, z }) => insideCity(x, z));
   const subwayMatrices = [];
   const subwayColliders = [];
   for (const { x, y, z, yaw } of subwaySites) {
@@ -989,7 +989,7 @@ function buildStreetDetails(scene, colliders = []) {
   let sidewalkTreePositions = placeStreetTrees(REAL_TREES, treePositions,
     (x, z) => !inPlaza(x, z, 1.5) && isClearOfPoles(x, z, 2.2), REAL_TREE_SPECIES, REAL_TREE_DBH);
   for (const tree of sidewalkTreePositions) treePositions.push(tree);
-  const treeField = createTreeField(scene, treePositions.filter(t => !highwayCorridor.contains(t.x, t.z, 1.2)), [...colliders, ...subwayColliders]);
+  const treeField = createTreeField(scene, [...treePositions.filter(t => insideCity(t.x, t.z)), ...frontierTrees], [...colliders, ...subwayColliders]);
   group.add(treeField.group);
   sidewalkTreePositions = sidewalkTreePositions.filter((t) => treeField.sites.has(t));
   console.info(`[streetDetails] ${treeField.stats.trees} trees (${sidewalkTreePositions.length} street trees)`, treeField.stats.perType);

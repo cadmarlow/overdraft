@@ -1,14 +1,15 @@
 import * as THREE from 'three/webgpu';
 import {
-  CHUNK, CITY_RING, FRONTIER_BRIDGES, LATTICE_H, LATTICE_W, MACRO_H, MACRO_STEP, MACRO_W, MASK_H, MASK_W, SALT_LINES, SALT_MAX_X, SALT_MAX_Z,
-  SALT_MIN_X, SALT_MIN_Z, SALT_STEP, SALT_TERRAIN, SALT_WATER, WEST_GATE, createFrontierSurfaces, insideCity, latticeHeight, saltChunk, sampleSalt
+  CHUNK, CROSSINGS, LATTICE_H, LATTICE_W, MACRO_H, MACRO_STEP, MACRO_W, MASK_H, MASK_W, SALT_LINES, SALT_MAX_X, SALT_MAX_Z,
+  SALT_MIN_X, SALT_MIN_Z, SALT_STEP, SALT_TERRAIN, createFrontierSurfaces, insideCity, latticeHeight, saltChunk, sampleSalt
 } from './wasteland-plan.js';
-import { createQuayWallMaterial, createSaltGroundMaterial, createSaltRoadMaterial, saltTints, saltUniforms } from './wasteland-materials.js';
+import { createSaltGroundMaterial, createSaltRoadMaterial, saltTints, saltUniforms } from './wasteland-materials.js';
+import { FRONTIER_BLEND_OUT, FRONTIER_SITES, frontierDistance, frontierGroves } from './frontier-districts.js';
+import { saltRoadAt } from './wasteland-plan.js';
 import { SaltScatter } from './wasteland-scatter.js';
 import { buildWastelandWorks } from './wasteland-works.js';
 
-// The Wasteland as it is drawn: the ground in levels of detail around the camera, the moat, the old roads, and the
-// wall Manhattan stands on. Every height comes from wasteland-plan.js, so the picture is what the wheels roll on.
+// The Wasteland as it is drawn: the ground in levels of detail around the camera and the routes that cross it. Every height comes from wasteland-plan.js, so the picture is what the wheels roll on.
 
 const TILE_CHUNKS = 4, TILE = CHUNK * TILE_CHUNKS;
 const CHUNKS_X = LATTICE_W / CHUNK, CHUNKS_Z = LATTICE_H / CHUNK;
@@ -27,14 +28,9 @@ function buildMaps() {
   // Rows padded to a multiple of four texels: two-byte texels on an odd width come out sheared on some back ends
   const HW = Math.ceil(MACRO_W / 4) * 4, heights = new Uint16Array(HW * MACRO_H);
   for (let j = 0; j < MACRO_H; j++) for (let i = 0; i < HW; i++) heights[j * HW + i] = THREE.DataUtils.toHalfFloat(SALT_TERRAIN.height[j * MACRO_W + Math.min(i, MACRO_W - 1)]);
-  // Roads, tracks and the moat at 16 m: R how much road, G asphalt (1) or beaten earth (0), B moat
+  // Roads and tracks at 16 m: R coverage, G asphalt (1) or beaten earth (0)
   const STEP = 16, W = (SALT_MAX_X - SALT_MIN_X) / STEP + 1, H = (SALT_MAX_Z - SALT_MIN_Z) / STEP + 1;
   const lines = new Uint8Array(W * H * 4);
-  const zone = SALT_TERRAIN.zone;
-  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-    const mi = Math.min(MACRO_W - 1, (i + 1) >> 1), mj = Math.min(MACRO_H - 1, (j + 1) >> 1);
-    lines[(j * W + i) * 4 + 2] = zone[mj * MACRO_W + mi] === 1 ? 255 : 0;
-  }
   for (const line of SALT_LINES) {
     const road = line.kind === 'road', half = line.half;
     for (let k = 1; k < line.path.length; k++) {
@@ -111,22 +107,22 @@ function buildPatch(ix0, iz0, cellsX, cellsZ, stride, heightAt, blockCells = 0) 
 }
 
 class SaltGround {
-  constructor(parent, material) {
+  constructor(parent, material, frontierMaterial) {
     this.material = material;
+    this.frontierMaterial = frontierMaterial;
     this.group = new THREE.Group(); this.group.name = 'Sol du Wasteland';
     parent.add(this.group);
     this.chunks = new Map();
-    // Chunks nobody will ever see: under the streets with no drift on them, or deep under the moat
+    // Chunks nobody will ever see: buried under the streets
     const { height, zone } = SALT_TERRAIN, per = CHUNK * SALT_STEP / MACRO_STEP;
     this.dead = new Uint8Array(CHUNKS_X * CHUNKS_Z);
     for (let cz = 0; cz < CHUNKS_Z; cz++) for (let cx = 0; cx < CHUNKS_X; cx++) {
-      let city = true, deep = true;
-      for (let j = cz * per - 1; j <= (cz + 1) * per + 1 && (city || deep); j++) for (let i = cx * per - 1; i <= (cx + 1) * per + 1; i++) {
+      let city = true;
+      for (let j = cz * per - 1; j <= (cz + 1) * per + 1 && city; j++) for (let i = cx * per - 1; i <= (cx + 1) * per + 1; i++) {
         const o = clampI(j, MACRO_H - 1) * MACRO_W + clampI(i, MACRO_W - 1);
         if (zone[o] !== 2 || height[o] > -0.4) city = false;
-        if (zone[o] !== 1 || height[o] > SALT_WATER - 0.5) deep = false;
       }
-      this.dead[cz * CHUNKS_X + cx] = city || deep ? 1 : 0;
+      this.dead[cz * CHUNKS_X + cx] = city ? 1 : 0;
     }
     this.tiles = [];
     for (let tz = 0; tz < TILES_Z; tz++) for (let tx = 0; tx < TILES_X; tx++) {
@@ -146,10 +142,17 @@ class SaltGround {
     return cz >= CHUNKS_Z || this.dead[cz * CHUNKS_X + cx] === 1;
   }
 
+  materialAt(cx, cz, width, depth) {
+    // Signed distance cannot vary by more than the radius of the patch.
+    const radius = Math.hypot(width, depth) * 0.5;
+    return Math.abs(frontierDistance(cx, cz)) <= radius + FRONTIER_BLEND_OUT + SALT_STEP
+      ? this.frontierMaterial : this.material;
+  }
+
   buildTile(tile, stride) {
     const patch = buildPatch(tile.tx * TILE, tile.tz * TILE, TILE, tile.cells, stride, latticeHeight, CHUNK);
     if (tile.mesh) { this.group.remove(tile.mesh); tile.mesh.geometry.dispose(); }
-    tile.mesh = new THREE.Mesh(patch.geometry, this.material);
+    tile.mesh = new THREE.Mesh(patch.geometry, this.materialAt(tile.cx, tile.cz, TILE * SALT_STEP, tile.cells * SALT_STEP));
     tile.mesh.name = 'Sol lointain'; tile.mesh.receiveShadow = true; tile.mesh.matrixAutoUpdate = false;
     tile.stride = stride; tile.blocks = patch.blocks; tile.source = patch.source; tile.skirtStart = patch.skirtStart; tile.mask = -1;
     this.group.add(tile.mesh);
@@ -157,7 +160,7 @@ class SaltGround {
     this.maskTile(tile);
   }
 
-  // Leave out the blocks that finer chunks, the city or the moat stand in for
+  // Leave out the blocks that finer chunks, or the city stand in for
   maskTile(tile) {
     let mask = 0;
     const rows = tile.cells / CHUNK;
@@ -188,7 +191,9 @@ class SaltGround {
       heightAt = (ix, iz) => (ix >= ix0 && ix <= ix0 + CHUNK && iz >= iz0 && iz <= iz0 + CHUNK ? hs[(iz - iz0) * (CHUNK + 1) + ix - ix0] : latticeHeight(ix, iz));
     }
     const { geometry } = buildPatch(ix0, iz0, CHUNK, CHUNK, stride, heightAt);
-    const mesh = new THREE.Mesh(geometry, this.material);
+    const span = CHUNK * SALT_STEP;
+    const material = this.materialAt(SALT_MIN_X + (cx + 0.5) * span, SALT_MIN_Z + (cz + 0.5) * span, span, span);
+    const mesh = new THREE.Mesh(geometry, material);
     mesh.name = 'Sol proche'; mesh.receiveShadow = true; mesh.castShadow = stride === 1; mesh.matrixAutoUpdate = false;
     if (old) { this.group.remove(old.mesh); old.mesh.geometry.dispose(); }
     this.group.add(mesh);
@@ -234,74 +239,7 @@ class SaltGround {
   }
 }
 
-// ---- The moat -------------------------------------------------------------------------------------------------------
-function buildMoat(parent, material) {
-  const { zone } = SALT_TERRAIN;
-  // two cells beyond the wet ground on every side: under the seawall, the piers and the dams' own slopes
-  const near = new Uint8Array(MACRO_W * MACRO_H);
-  for (let j = 0; j < MACRO_H; j++) for (let i = 0; i < MACRO_W; i++) {
-    if (zone[j * MACRO_W + i] !== 1) continue;
-    for (let b = Math.max(0, j - 2); b <= Math.min(MACRO_H - 1, j + 2); b++) for (let a = Math.max(0, i - 2); a <= Math.min(MACRO_W - 1, i + 2); a++) near[b * MACRO_W + a] = 1;
-  }
-  const position = [], index = [];
-  for (let j = 0; j + 1 < MACRO_H; j++) {
-    let start = -1;
-    for (let i = 0; i < MACRO_W; i++) {
-      const wet = i + 1 < MACRO_W && (near[j * MACRO_W + i] || near[j * MACRO_W + i + 1] || near[(j + 1) * MACRO_W + i] || near[(j + 1) * MACRO_W + i + 1]);
-      if (wet && start < 0) start = i;
-      else if (!wet && start >= 0) {
-        const x0 = SALT_MIN_X + start * MACRO_STEP, x1 = SALT_MIN_X + i * MACRO_STEP, z0 = SALT_MIN_Z + j * MACRO_STEP, z1 = z0 + MACRO_STEP, v = position.length / 3;
-        position.push(x0, SALT_WATER, z0, x1, SALT_WATER, z0, x0, SALT_WATER, z1, x1, SALT_WATER, z1);
-        index.push(v, v + 2, v + 1, v + 1, v + 2, v + 3);
-        start = -1;
-      }
-    }
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
-  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(position.length).map((_, k) => (k % 3 === 1 ? 1 : 0)), 3));
-  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(position.length / 3 * 2), 2));
-  geometry.setIndex(index); geometry.computeBoundingSphere();
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.name = 'Douves'; mesh.receiveShadow = true;
-  parent.add(mesh);
-  return mesh;
-}
-
-// ---- The wall Manhattan stands on ---------------------------------------------------------------------------------
-function buildQuayWall(parent, material) {
-  let area = 0;
-  for (let i = 0; i < CITY_RING.length; i++) { const a = CITY_RING[i], b = CITY_RING[(i + 1) % CITY_RING.length]; area += a.x * b.z - b.x * a.z; }
-  const out = area > 0 ? 1 : -1; // which side of an edge is the outside
-  const position = [], normal = [], coord = [], index = [];
-  const TOP = -2.25;
-  let along = 0;
-  for (let i = 0; i < CITY_RING.length; i++) {
-    const a = CITY_RING[i], b = CITY_RING[(i + 1) % CITY_RING.length], dx = b.x - a.x, dz = b.z - a.z, length = Math.hypot(dx, dz);
-    if (length < 0.01) continue;
-    const nx = dz / length * out, nz = -dx / length * out, parts = Math.max(1, Math.ceil(length / 14));
-    for (let k = 0; k <= parts; k++) {
-      const x = a.x + dx * k / parts, z = a.z + dz * k / parts;
-      const bed = sampleSalt(x + nx * 2.5, z + nz * 2.5) ?? -8, foot = Math.min(bed, TOP) - 1.6, v = position.length / 3;
-      position.push(x, TOP, z, x, foot, z);
-      normal.push(nx, 0, nz, nx, 0, nz);
-      coord.push(along + length * k / parts, TOP - bed, along + length * k / parts, foot - bed);
-      if (k < parts) index.push(v, v + 1, v + 2, v + 2, v + 1, v + 3, v, v + 2, v + 1, v + 2, v + 3, v + 1);
-    }
-    along += length;
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
-  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normal, 3));
-  geometry.setAttribute('wallCoord', new THREE.Float32BufferAttribute(coord, 2));
-  geometry.setIndex(index); geometry.computeBoundingSphere();
-  const mesh = new THREE.Mesh(geometry, material);
-  mesh.name = 'Quai à sec'; mesh.receiveShadow = true;
-  parent.add(mesh);
-  return mesh;
-}
-
-// ---- Old roads ------------------------------------------------------------------------------------------------------
+// ---- Roads ---------------------------------------------------------------------------------------------------------
 function densify(path, spacing) {
   const result = [path[0]];
   for (let i = 1; i < path.length; i++) {
@@ -379,30 +317,21 @@ function ribbon(material, path, from, to, halfWidth, metre, deckHeight = null) {
 }
 
 class SaltRoads {
-  constructor(parent, material, decks) {
+  constructor(parent, material) {
     this.parent = parent; this.material = material;
     this.sectors = [];
     const SECTOR = 56; // points of 8 m: about 450 m of road each
     for (const line of SALT_LINES) {
       if (line.kind !== 'road') continue;
       let path = densify(line.path, 8);
-      // Inside the city and on a bridge the street or the deck is the road
+      // The asphalt inside the city already has its own material.
       let first = 0;
-      if (line.spec) first = path.findIndex(p => Math.hypot(p.x - line.spec.b.x, p.z - line.spec.b.z) < 4);
-      else while (first < path.length - 2 && insideCity(path[first].x, path[first].z)) first++;
-      path = path.slice(Math.max(0, first));
+      while (first < path.length - 2 && insideCity(path[first].x, path[first].z)) first++;
+      path = path.slice(Math.max(0, first - 1));
       for (let from = 0; from < path.length - 1; from += SECTOR) {
         const to = Math.min(from + SECTOR, path.length - 1), mid = path[(from + to) >> 1];
         this.sectors.push({ path, from, to, half: line.half, x: mid.x, z: mid.z, mesh: null });
       }
-    }
-    for (const spec of FRONTIER_BRIDGES) {
-      const deck = decks.find(d => d.id === spec.id);
-      if (!deck) continue;
-      const n = Math.ceil(deck.L / 5);
-      const points = Array.from({ length: n + 1 }, (_, i) => ({ x: deck.ax + deck.L * deck.ux * i / n, z: deck.az + deck.L * deck.uz * i / n }));
-      const { mesh } = ribbon(material, points, 0, n, deck.half - 1.55, 0, i => deck.profile(i / n));
-      parent.add(mesh); mesh.updateMatrixWorld();
     }
   }
 
@@ -420,27 +349,18 @@ class SaltRoads {
   }
 }
 
-function approachReserves(decks) {
-  const d = decks.find(deck => deck.id === 'manhattan');
-  if (!d) return [];
-  // nothing is planted in the western gate, nor on the Manhattan Bridge's new ramp
-  const reserves = [{ minX: WEST_GATE.x - 12, maxX: WEST_GATE.x + 62, minZ: WEST_GATE.z - 12, maxZ: WEST_GATE.z + 12, minY: 0, maxY: 14 }];
-  for (let u = 15; u < 87; u += 8) {
-    const x = d.ax + u * d.ux, z = d.az + u * d.uz;
-    reserves.push({ minX: x - 5, maxX: x + 5, minZ: z - 5, maxZ: z + 5, minY: 0, maxY: 12 });
-  }
-  return reserves;
-}
-
-export function buildWasteland(scene, decks, { surfaces, kit, waterMaterial }) {
+export function buildWasteland(scene, { surfaces, kit }) {
   const group = new THREE.Group(); group.name = 'Wasteland';
   const maps = buildMaps();
-  const ground = new SaltGround(group, createSaltGroundMaterial(surfaces, maps));
-  const moat = buildMoat(group, waterMaterial);
-  const quay = buildQuayWall(group, createQuayWallMaterial(surfaces));
-  const roads = new SaltRoads(group, createSaltRoadMaterial(surfaces), decks);
+  const ground = new SaltGround(group, createSaltGroundMaterial(surfaces, maps), createSaltGroundMaterial(surfaces, maps, { frontier: true }));
+  const roads = new SaltRoads(group, createSaltRoadMaterial(surfaces));
   const works = buildWastelandWorks(group, surfaces);
   const scatter = new SaltScatter(group, kit);
+  const road = {};
+  const trees = frontierGroves().filter(({ x, z }) =>
+    (!saltRoadAt(x, z, road) || road.distance > road.half + 5) &&
+    FRONTIER_SITES.every(site => Math.hypot(x - site.x, z - site.z) > site.width * 0.65 + 9)
+  ).map(site => ({ ...site, y: sampleSalt(site.x, site.z) }));
   scene.add(group);
   group.updateMatrixWorld(true);
   const update = (camera, time) => {
@@ -451,5 +371,6 @@ export function buildWasteland(scene, decks, { surfaces, kit, waterMaterial }) {
   };
   // The rocks and wrecks near the camera are given to the colliders as it moves
   const attach = (controllers) => { scatter.controllers = controllers; };
-  return { group, ground, moat, quay, roads, scatter, works, attach, maps, tints: saltTints, uniforms: saltUniforms, colliders: works.colliders, surfaces: createFrontierSurfaces(decks), approachReserves: approachReserves(decks), update };
+  return { group, ground, roads, scatter, works, trees, attach, maps, tints: saltTints, uniforms: saltUniforms, colliders: works.colliders, surfaces: createFrontierSurfaces(),
+    approachReserves: CROSSINGS.map(({ x, z }) => ({ minX: x - 17, maxX: x + 17, minZ: z - 17, maxZ: z + 17, minY: 0, maxY: 12 })), update };
 }
