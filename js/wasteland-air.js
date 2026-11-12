@@ -59,6 +59,8 @@ export class SaltAir {
     const t = performance.now() / 1000, storm = this.atmosphere.storm ?? 0;
     this.gust += (Math.min(1, 0.3 + 0.25 * Math.sin(t * 0.11) + 0.2 * Math.sin(t * 0.37 + 1.7) + 0.8 * storm) - this.gust) * Math.min(1, dt * 0.5);
     saltUniforms.uGust.value = this.gust;
+    // By night the sky is all the light there is away from the moon's own: the ground takes more of it
+    saltUniforms.uAmbient.value = 0.25 + 0.22 * cityUniforms.uNight.value;
     if (this.sand) {
       this.uCam.value.set(x, camera.y, z);
       const grains = Math.round(SAND_GRAINS * this.depth * (0.2 + 0.8 * this.gust) * (camera.y < 400 ? 1 : 0));

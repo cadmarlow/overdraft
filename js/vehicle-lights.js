@@ -12,7 +12,12 @@ const HEADLIGHTS = {
   decay: 2,
   pitch: 0.145,
   toeOut: 0.005,
-  noseOffset: 0.08
+  noseOffset: 0.08,
+  // Full beam, used outside the walls (js/controllers.js): how much brighter, how far, how wide, how much the aim point
+  // (10 m ahead) rises (0.5 m: from 8 degrees below the horizon to 5.5) and how the light falls off. Light that
+  // strikes flat ground at a grazing angle fades with the cube of the distance: a real inverse-square lamp shows
+  // nothing past ten metres, so the full beam falls off with the distance only.
+  full: { gain: 0.2, distance: 110, angle: 0.2, lift: 0.5, decay: 1.05 }
 };
 
 function createVehicleHeadlight() {

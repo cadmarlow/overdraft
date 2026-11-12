@@ -1,12 +1,13 @@
 import * as THREE from 'three/webgpu';
-import { abs, attribute, float, mix, normalWorldGeometry, positionWorld, select, smoothstep, step, texture, varying, vec2, vec3, fract, floor, sin, max } from 'three/tsl';
+import { abs, attribute, float, frontFacing, mix, normalWorldGeometry, positionWorld, select, smoothstep, texture, varying, vec2, vec3 } from 'three/tsl';
 import { ISLAND_BOUNDS, getIslandBoundsAtZ } from './city-config.js';
 import { bumpNormal, cityUniforms } from './tsl-materials.js';
 import { ground } from './ground-assets.js';
 import { FRONTIER_BRIDGES, NORTH_GATE, SALT_LINES, SALT_PLACES, WALL_Z, WEST_GATE, saltLandAt, saltRoadAt, sampleSalt } from './wasteland-plan.js';
-import { saltTints } from './wasteland-materials.js';
+import { saltUniforms } from './wasteland-materials.js';
 import { fixItem } from './wasteland-scatter.js';
 import { buildWastelandWrecks } from './wasteland-wrecks.js';
+import { buildWastelandRuins } from './wasteland-ruins.js';
 
 // What people built and what they left: the Wall across the island and its Great Gate, the watch towers of the quays,
 // the pump works at the foot of the western ramp, and the bones of the old city outside, sunk in the sand.
@@ -16,7 +17,7 @@ const PAINTS = [[0.30, 0.085, 0.05], [0.07, 0.16, 0.24], [0.10, 0.20, 0.12], [0.
 function rng(seed) { let s = seed >>> 0; return () => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 4294967296); }
 
 // Painted corrugated steel, rusting from the bottom up and wherever the paint has gone
-function steelMaterial(surfaces, s = surfaces.sheet) {
+function steelMaterial(surfaces, s = surfaces.sheet, hull = false) {
   const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.72, metalness: 0.25 });
   mat.name = 'Wasteland · tôle peinte';
   mat.aoNode = float(1);
@@ -33,43 +34,13 @@ function steelMaterial(surfaces, s = surfaces.sheet) {
   mat.roughnessNode = mix(float(0.55), texture(s.normal, uvNode).a, rust);
   mat.metalnessNode = mix(float(0.35), float(0.1), rust);
   mat.normalNode = bumpNormal(sheet.a.mul(0.05));
-  return mat;
-}
-
-// Shells of buildings: blind windows, a broken skyline, sand banked against the walls
-function ruinMaterial(surfaces) {
-  const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.92, metalness: 0, side: THREE.DoubleSide, alphaTest: 0.5 });
-  mat.name = 'Wasteland · ruine';
-  mat.aoNode = float(1);
-  const p = positionWorld, n = normalWorldGeometry, s = surfaces.bunker;
-  const local = varying(attribute('position', 'vec3')); // the unit box: y from 0 at the foot to 1 at the top
-  const size = varying(attribute('ruin', 'vec4')); // width, height, depth, seed
-  const isWall = abs(n.y).lessThan(0.5), wall = select(isWall, float(1), float(0));
-  const along = select(abs(n.x).greaterThan(abs(n.z)), p.z, p.x);
-  const up = local.y.mul(size.y);
-  const grain = texture(s.color, select(isWall, vec2(along, p.y), p.xz).div(s.metres * 1.4));
-  const rel = grain.rgb.div(vec3(...s.mean));
-  // windows: bays of 3.1 m, storeys of 3.3 m, measured from this building's own corner
-  const bay = along.add(size.w.mul(37)).div(3.1), storey = up.div(3.3);
-  const cell = vec2(floor(bay), floor(storey));
-  const chance = fract(sin(cell.x.mul(12.9898).add(cell.y.mul(78.233)).add(size.w.mul(41.7))).mul(43758.5453));
-  const hole = step(0.2, fract(bay)).mul(step(fract(bay), 0.8)).mul(step(0.24, fract(storey))).mul(step(fract(storey), 0.78))
-    .mul(step(0.16, chance)).mul(wall).mul(step(1.2, up));
-  const soot = smoothstep(0.78, 1.0, fract(storey)).mul(step(0.2, fract(bay))).mul(step(fract(bay), 0.8)).mul(0.5);
-  const stain = texture(ground.masksA, vec2(along.div(13), p.y.div(26))).a;
-  const tint = attribute('paint', 'vec3');
-  let albedo = tint.mul(rel).mul(stain.mul(0.35).add(0.72)).mul(soot.oneMinus());
-  // sand lies against the foot and on every ledge and roof
-  const banked = smoothstep(4.5, 0.4, up.add(stain.mul(3)));
-  albedo = mix(albedo, saltTints.dune.mul(0.85), max(banked.mul(0.8), wall.oneMinus().mul(0.75)));
-  mat.colorNode = mix(albedo, vec3(0.012, 0.011, 0.01), hole);
-  mat.roughnessNode = mix(float(0.9), float(0.4), hole);
-  // the top storeys are bitten off
-  const bite = texture(ground.masksA, vec2(along.div(31).add(size.w), size.w.mul(3.7))).r;
-  // open shells: the roofs fell in long ago
-  mat.opacityNode = select(isWall, step(up, size.y.sub(bite.mul(bite).mul(size.y.mul(0.34).add(3)))), float(0));
-  mat.normalNode = bumpNormal(grain.a.mul(0.03));
-  mat.emissiveNode = vec3(0);
+  if (hull) {
+    // a hull is seen from inside too: bare plating gone to rust, and little of the sky gets in
+    mat.side = THREE.DoubleSide;
+    const inside = select(frontFacing, float(0), float(1));
+    mat.colorNode = mix(mat.colorNode, mix(sheet.rgb, vec3(0.15, 0.085, 0.055), 0.6).mul(0.85), inside);
+    mat.aoNode = mix(float(1), float(0.45), inside).mul(saltUniforms.uFill);
+  }
   return mat;
 }
 
@@ -266,81 +237,8 @@ export function buildWastelandWorks(group, surfaces) {
     parent.add(lamp);
   }
 
-  // ---- The bones of the old city -------------------------------------------------------------------------------------
-  const ruins = [];
-  const ruin = (x, z, w, d, h, sink, tint) => {
-    for (const [ox, oz] of [[0, 0], [w / 2, d / 2], [-w / 2, d / 2], [w / 2, -d / 2], [-w / 2, -d / 2]]) if (!saltLandAt(x + ox, z + oz)) return;
-    if (saltRoadAt(x, z, road) && road.distance < road.half + Math.max(w, d) / 2 + 5) return;
-    for (const k of keepOut) if (Math.abs(x - k.x) < k.r + w / 2 && Math.abs(z - k.z) < k.r + d / 2) return;
-    const y = sampleSalt(x, z) - sink;
-    ruins.push({ x, y, z, w, d, h, tint, seed: random() });
-    colliders.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, minY: y, maxY: y + h * 0.8, roof: true });
-  };
-  const TINTS = [[0.25, 0.20, 0.15], [0.22, 0.10, 0.06], [0.17, 0.15, 0.13], [0.30, 0.23, 0.15], [0.20, 0.115, 0.07]];
-  const tintOf = () => TINTS[Math.floor(random() * TINTS.length)];
-  // Harlem beyond the Wall: the avenues and the cross streets run on, and what stood along them
-  const avenues = [-2000, -1683, -1408, -1134, -860, -585, -310, 0, 311, 622, 880];
-  for (let k = 0; k < 24; k++) {
-    const zs = WALL_Z - 92 - k * 80.4, thin = 0.5 + 0.3 * Math.min(1, k / 12);
-    for (let a = 0; a + 1 < avenues.length; a++) {
-      for (let x = avenues[a] + 26; x < avenues[a + 1] - 26; x += 20 + random() * 12) {
-        for (const side of [-1, 1]) {
-          if (random() < thin) continue;
-          const w = 16 + random() * 9, d = 13 + random() * 9, tall = random();
-          ruin(x, zs + side * (9.5 + d / 2), w, d, 9 + tall * tall * 34 + (tall > 0.94 ? 30 : 0), 1.5 + random() * 4, tintOf());
-        }
-      }
-    }
-  }
-  // The far banks: Jersey City and Hoboken under the cliffs, Brooklyn and Queens across the moat
-  const cluster = (x, z, cx, cz, r) => Math.max(0, 1 - Math.hypot(x - cx, z - cz) / r);
-  for (let z = -5200; z < 8200; z += 58) {
-    const shore = getIslandBoundsAtZ(Math.max(ISLAND_BOUNDS.minZ, Math.min(ISLAND_BOUNDS.maxZ, z)));
-    // east: from the first dry ground beyond the moat
-    let bank = null;
-    for (let x = shore.eastX + 60; x < shore.eastX + 2600; x += 24) if (saltLandAt(x, z) && sampleSalt(x, z) > 0.4) { bank = x; break; }
-    if (bank !== null && z < 6000) for (let x = bank + 30; x < bank + 950; x += 46 + random() * 30) {
-      const downtown = Math.max(cluster(x, z, 2500, 5750, 900), cluster(x, z, 2450, -1200, 800), cluster(x, z, 3600, 3300, 700));
-      if (random() > 0.34 + 0.4 * downtown) continue;
-      const w = 18 + random() * 16, tall = random();
-      ruin(x, z + (random() - 0.5) * 30, w, 16 + random() * 14, 8 + tall * tall * 30 + downtown * (20 + tall * 95), 1 + random() * 5, tintOf());
-    }
-    // west: the flats between the old shore and the cliffs
-    if (z > 300) for (let x = -2500; x > -4300; x -= 46 + random() * 30) {
-      if (!saltLandAt(x, z)) continue;
-      const y = sampleSalt(x, z);
-      if (y < 0.6 || y > 14) continue;
-      const downtown = Math.max(cluster(x, z, -2450, 5150, 900), cluster(x, z, -2950, 2300, 600));
-      if (random() > 0.3 + 0.45 * downtown) continue;
-      const w = 18 + random() * 16, tall = random();
-      ruin(x, z + (random() - 0.5) * 30, w, 16 + random() * 14, 8 + tall * tall * 28 + downtown * (25 + tall * 110), 1 + random() * 5, tintOf());
-    }
-  }
-  {
-    const material = ruinMaterial(surfaces);
-    const box = new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
-    const SPAN = 1500, cells = new Map();
-    for (const r of ruins) {
-      const id = `${Math.floor(r.x / SPAN)},${Math.floor(r.z / SPAN)}`;
-      if (!cells.has(id)) cells.set(id, []);
-      cells.get(id).push(r);
-    }
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), s = new THREE.Vector3();
-    for (const list of cells.values()) {
-      const geometry = box.clone();
-      const paint = new Float32Array(list.length * 3), size = new Float32Array(list.length * 4);
-      const mesh = new THREE.InstancedMesh(geometry, material, list.length);
-      list.forEach((r, i) => {
-        mesh.setMatrixAt(i, m.compose(v.set(r.x, r.y, r.z), q, s.set(r.w, r.h, r.d)));
-        paint.set(r.tint, i * 3); size.set([r.w, r.h, r.d, r.seed], i * 4);
-      });
-      geometry.setAttribute('paint', new THREE.InstancedBufferAttribute(paint, 3));
-      geometry.setAttribute('ruin', new THREE.InstancedBufferAttribute(size, 4));
-      mesh.name = 'Os de la vieille ville'; mesh.castShadow = true; mesh.receiveShadow = true;
-      mesh.computeBoundingSphere();
-      parent.add(mesh);
-    }
-  }
+  // ---- The bones of the old city (js/wasteland-ruins.js) ---------------------------------------------------------------
+  const ruins = buildWastelandRuins(parent, surfaces, { keepOut, colliders });
 
   // ---- The pump works: three mains climb the ramp from the bed to the city --------------------------------------------
   {
@@ -378,9 +276,12 @@ export function buildWastelandWorks(group, surfaces) {
   }
   // ---- The ships the water left -------------------------------------------------------------------------------------
   {
-    const hull = steelMaterial(surfaces, surfaces.rust);
-    hull.name = 'Wasteland · coque'; hull.side = THREE.DoubleSide;
-    colliders.push(...buildWastelandWrecks(parent, hull).colliders);
+    const hull = steelMaterial(surfaces, surfaces.rust, true);
+    hull.name = 'Wasteland · coque';
+    const fleet = buildWastelandWrecks(parent, hull);
+    colliders.push(...fleet.colliders);
+    for (const prop of fleet.props) fixItem(prop);
+    fires.push(...fleet.fires);
   }
-  return { colliders, lamps, fires };
+  return { colliders, lamps, fires, ruins };
 }

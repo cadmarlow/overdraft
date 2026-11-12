@@ -23,7 +23,12 @@ export const saltUniforms = {
   uWind: uniform(new THREE.Vector2(0.94, 0.34)), // where the sand blows to
   uGust: uniform(0), // 0 calm .. 1 storm: how much sand is in the air just above the ground
   uTime: uniform(0),
-  uFarShadow: uniform(1)
+  uFarShadow: uniform(1),
+  // How much of the sky the ground takes. Seen at a grazing angle, flat ground mirrors the sky: at full strength that
+  // sheen washed the sand pale to the horizon and lit the shade as bright as the sun. Dry sand has none of it.
+  uAmbient: uniform(0.25),
+  // The same for what stands on the ground (walls, slabs, hulls): the fill light of an open sky
+  uFill: uniform(0.6)
 };
 
 // Texel centres of the baked maps lie on their vertices
@@ -43,7 +48,7 @@ const flatDetail = (surface, uvNode) => {
 export function createSaltGroundMaterial(surfaces, maps) {
   const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.92, metalness: 0 });
   mat.name = 'Wasteland · sol';
-  mat.aoNode = float(1);
+  mat.aoNode = saltUniforms.uAmbient;
   const p = positionWorld, n = normalWorldGeometry;
   const masks = texture(maps.masks, maskUV(p));
   const lines = texture(maps.lines, spanUV(p, maps.lineW, maps.lineH, maps.lineStep)); // R road or track, G asphalt, B moat
@@ -142,7 +147,7 @@ export function createSaltGroundMaterial(surfaces, maps) {
 export function createSaltRoadMaterial(surfaces) {
   const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.9, metalness: 0 });
   mat.name = 'Wasteland · bitume';
-  mat.aoNode = float(1);
+  mat.aoNode = saltUniforms.uAmbient;
   mat.polygonOffset = true; mat.polygonOffsetFactor = -2; mat.polygonOffsetUnits = -4;
   const road = attribute('roadCoord', 'vec3'); // across -1..1, metres along, sand cover 0..1
   const p = positionWorld.xz;
@@ -172,7 +177,7 @@ export function createSaltRoadMaterial(surfaces) {
 export function createQuayWallMaterial(surfaces) {
   const mat = new THREE.MeshStandardNodeMaterial({ roughness: 0.9, metalness: 0 });
   mat.name = 'Wasteland · quai';
-  mat.aoNode = float(1);
+  mat.aoNode = saltUniforms.uAmbient;
   const coord = attribute('wallCoord', 'vec2'); // metres along the wall, metres up
   const s = surfaces.bunker;
   const uvNode = coord.div(s.metres * 1.6);

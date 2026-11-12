@@ -41,6 +41,14 @@ test('every hull lies on dry ground outside the city, clear of the roads and of 
   }
 });
 
+// Is the point (x, z) at height y inside one of these colliders?
+const inside = (colliders, x, y, z) => colliders.some(c => {
+  if (y < c.minY || y > c.maxY) return false;
+  const { cx, cz, cs, sn, hx, hz } = c.obb, dx = x - cx, dz = z - cz;
+  return Math.abs(dx * cs - dz * sn) < hx && Math.abs(dx * sn + dz * cs) < hz;
+});
+const at = (spec, u, s) => { const cs = Math.cos(spec.yaw), sn = Math.sin(spec.yaw); return [spec.x + u * cs + s * sn, spec.z - u * sn + s * cs]; };
+
 test('a hull is sunk into the bed, stands well above it and stops a car', () => {
   const { FLEET, KINDS, wreck } = wrecks;
   for (const spec of FLEET) {
@@ -50,12 +58,59 @@ test('a hull is sunk into the bed, stands well above it and stops a car', () => 
     assert.ok(box.min.y < bed - 0.3, `${spec.kind}: keel at ${box.min.y.toFixed(1)}, bed at ${bed.toFixed(1)}`);
     assert.ok(box.max.y > bed + kind.D * 0.6, `${spec.kind} stands ${(box.max.y - bed).toFixed(1)} m`);
     assert.ok(Math.hypot(box.max.x - box.min.x, box.max.z - box.min.z) > kind.L * 0.85, 'all of its length is there, broken or not');
-    assert.equal(colliders.length, 4);
+    assert.ok(colliders.length >= 4);
     for (const c of colliders) {
-      assert.ok(c.minX < c.maxX && c.minZ < c.maxZ && c.maxY > bed + 2 && c.minY < bed, spec.kind);
+      assert.ok(c.minX < c.maxX && c.minZ < c.maxZ && c.maxY > bed + 2, spec.kind);
       assert.ok(Math.abs(Math.hypot(c.obb.cs, c.obb.sn) - 1) < 1e-9);
-      assert.ok(Math.hypot(c.obb.cx - spec.x, c.obb.cz - spec.z) < kind.L / 2);
+      assert.ok(Math.hypot(c.obb.cx - spec.x, c.obb.cz - spec.z) < kind.L / 2 + kind.B);
     }
+    // bow and stern stop a car whatever she is
+    for (const t of [0.08, 0.93]) { const [x, z] = at(spec, (t - 0.5) * kind.L, 0); assert.ok(inside(colliders, x, bed + 1, z), `${spec.kind} at ${t}`); }
+  }
+});
+
+test('a ship with her back broken leaves a way through between the two halves', () => {
+  const { FLEET, KINDS, wreck } = wrecks;
+  const broken = FLEET.filter(s => s.broken && (s.gap ?? 0) >= 12);
+  assert.ok(broken.length >= 2);
+  for (const spec of broken) {
+    const kind = KINDS[spec.kind], { colliders } = wreck(spec), bed = sampleSalt(spec.x, spec.z);
+    for (const s of [-kind.B * 0.4, 0, kind.B * 0.4]) {
+      const [x, z] = at(spec, (spec.broken - 0.5) * kind.L, s);
+      assert.equal(inside(colliders, x, bed + 1, z), false, `${spec.kind}: the break is closed at ${s}`);
+    }
+    const [x, z] = at(spec, (spec.broken - 0.5) * kind.L + spec.gap / 2 + 6, 0);
+    assert.ok(inside(colliders, x, bed + 1, z), 'and each half is solid right behind its break');
+  }
+});
+
+test('a hold is entered through its door at ground level, walled all round and decked over', () => {
+  const { FLEET, KINDS, wreck } = wrecks;
+  const holds = FLEET.filter(s => s.hold);
+  assert.equal(holds.length, 3);
+  for (const spec of holds) {
+    const kind = KINDS[spec.kind], { L, B, D } = kind, built = wreck(spec), { colliders } = built, bed = sampleSalt(spec.x, spec.z);
+    const [h0, h1] = spec.hold, [d0, d1, side] = spec.door, sink = spec.sink;
+    assert.ok(!spec.broken && Math.abs(spec.roll) < 0.08, 'she sits upright enough to walk in');
+    assert.ok(sink >= D * 0.15, 'the sill of the door is at or under the ground');
+    assert.ok(D * 0.45 - sink > 3, `a car goes under the lintel: ${(D * 0.45 - sink).toFixed(1)} m`);
+    assert.ok((d1 - d0) * L > 9, 'and through the width of it');
+    const u = ((d0 + d1) / 2 - 0.5) * L;
+    for (const s of [B / 2 + 3, B / 2 - 0.5, B / 2 - 4]) { const [x, z] = at(spec, u, side * s); assert.equal(inside(colliders, x, bed + 1, z), false, `door blocked ${s} m from the centre line`); }
+    const [wx, wz] = at(spec, u, -side * (B / 2 - 0.5));
+    assert.ok(inside(colliders, wx, bed + 1, wz), 'the far side is plated');
+    for (const t of [h0 + 0.04, (h0 + h1) / 2, h1 - 0.04]) {
+      const [x, z] = at(spec, (t - 0.5) * L, 0);
+      assert.equal(inside(colliders, x, bed + 1, z), false, 'the floor of the hold is clear');
+      assert.ok(inside(colliders, x, bed - sink + D - 0.2, z), 'and the deck above carries a body');
+    }
+    for (const t of [h0 - 0.03, h1 + 0.03]) { const [x, z] = at(spec, (t - 0.5) * L, 0); assert.ok(inside(colliders, x, bed + 1, z), 'a bulkhead closes each end'); }
+    // the crew's fire burns inside, by the door
+    assert.equal(built.fires.length, 1);
+    const [fx, , fz] = built.fires[0];
+    assert.equal(inside(colliders, fx, bed + 1, fz), false);
+    assert.ok(Math.hypot(fx - spec.x, fz - spec.z) < L / 2 && built.props.length > 8);
+    for (const prop of built.props) assert.equal(inside(colliders, prop.x, bed + 0.5, prop.z), false, `${prop.name} is in a wall`);
   }
 });
 

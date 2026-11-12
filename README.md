@@ -3,7 +3,7 @@
 > Every debt gets paid.
 
 Un jeu d'action en monde ouvert pour navigateur, dans un Manhattan reconstruit à l'échelle 1:1.
-Version **0.9.26 — Scorched Earth**. Manhattan est une ville de survivants au milieu du **Wasteland**. L’Hudson est
+Version **0.9.27 — Distressed Assets**. Manhattan est une ville de survivants au milieu du **Wasteland**. L’Hudson est
 à sec : son lit commence au pied des quais, sept mètres sous les rues. La rade est un lac de sel, et l’East River,
 retenu par quatre digues, sert de douves. Au nord, la ville finit sur un mur de conteneurs. On sort par la **Grande
 Porte** (avenue Adam Clayton Powell, tout au nord), par la **porte des Pompes** (au bout de la 34e Rue, côté ouest,
@@ -11,6 +11,11 @@ puis la rampe) ou par les quatre ponts de l’East River. Dehors : la Ceinture, 
 les ruines ensablées de Harlem, de Hoboken et de Brooklyn, les falaises et le plateau du Haut-Sel, et les Rouliers.
 Quinze navires gisent dans le lit et sur la rade (le **Cimetière des Coques** est à hauteur de la 48e Rue), des camps
 tiennent les carrefours, et la nuit se lit aux feux et aux projecteurs du Mur.
+
+Depuis la 0.9.27, le dehors se visite : on roule sous les carcasses de béton de Harlem, entre les deux moitiés du
+paquebot brisé, et l’on entre en voiture dans la cale de trois cargos (dont le bleu du Cimetière des Coques, par la
+tôle arrachée de son flanc). Des **convois de Rouliers** tournent sur la Ceinture : on les voit venir à leur poussière,
+on les laisse passer ou l’on casse un camion pour ramasser sa cargaison. Hors les murs, la voiture passe en pleins phares.
 
 La carte permet de chercher **Les Pompes**, **La Grande Porte**, **Le Cimetière des Coques** ou **Cale des Veilleurs**. En local, `?spawn=sel`
 démarre à pied au fond du lit de l’Hudson, au pied de la rampe. La session de visite ne sauvegarde pas la progression.

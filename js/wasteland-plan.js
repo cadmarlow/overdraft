@@ -460,6 +460,30 @@ SALT_ROUTES.forEach((route, r) => {
   }
 });
 
+// The Ceinture as a ring: the index of its point nearest (x, z), and the road from a point of it on, `length` metres
+// of it, going round with the list (direction 1) or against it (-1). The convoys of the Wasteland run on these.
+export function saltLoopNearest(x, z) {
+  const ring = SALT_LINES[0].path, n = ring.length - 1;
+  let best = Infinity, index = 0;
+  for (let i = 0; i < n; i++) {
+    const d = (ring[i].x - x) ** 2 + (ring[i].z - z) ** 2;
+    if (d < best) { best = d; index = i; }
+  }
+  return { index, distance: Math.sqrt(best) };
+}
+export function saltLoopAhead(index, direction, length) {
+  const ring = SALT_LINES[0].path, n = ring.length - 1, out = [];
+  let i = ((index % n) + n) % n, run = 0;
+  out.push({ x: ring[i].x, z: ring[i].z, index: i });
+  while (run < length && out.length <= n) {
+    const next = (i + direction + n) % n;
+    run += Math.hypot(ring[next].x - ring[i].x, ring[next].z - ring[i].z);
+    i = next;
+    out.push({ x: ring[i].x, z: ring[i].z, index: i });
+  }
+  return out;
+}
+
 // Routing is requested by the map at bounded intervals. Entering from the city considers every crossing.
 export function routeThroughSalt(from, to) {
   const sourceOutside = saltLandAt(from.x, from.z);

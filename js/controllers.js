@@ -1395,9 +1395,18 @@ class ThirdPersonControllerManager {
     const beamScale = Math.min(1.28, Math.max(0.0, (glow - 0.60) * 1.45));
     const car = this.entities.car;
     if (car.headLights) {
+      // Out on the Wasteland there is no street lamp and nobody to dazzle: full beam, longer, wider and aimed higher
+      const out = this.frontier?.landAt(car.position.x, car.position.z) ? 1 : 0;
+      this.fullBeam = (this.fullBeam ?? 0) + (out - (this.fullBeam ?? 0)) * Math.min(1, dt * 1.6);
+      const full = this.fullBeam;
       for (const spot of car.headLights) {
         // Accelerating does not change the headlamp output or range.
-        spot.intensity = HEADLIGHTS.intensity * beamScale;
+        spot.intensity = HEADLIGHTS.intensity * beamScale * (1 + HEADLIGHTS.full.gain * full);
+        spot.distance = HEADLIGHTS.distance + (HEADLIGHTS.full.distance - HEADLIGHTS.distance) * full;
+        spot.angle = HEADLIGHTS.angle + (HEADLIGHTS.full.angle - HEADLIGHTS.angle) * full;
+        spot.decay = HEADLIGHTS.decay + (HEADLIGHTS.full.decay - HEADLIGHTS.decay) * full;
+        const low = spot.userData.lowBeamY ?? (spot.userData.lowBeamY = spot.target.position.y);
+        spot.target.position.y = low + HEADLIGHTS.full.lift * full;
       }
     }
     const bike = this.entities.cyclist;

@@ -435,6 +435,7 @@ Les versions portent des noms de la finance, comme la dette de Sacha.
 | **0.9.23** | **Free Float** | Menu pause : circulation Aucun / Faible / Moyen / Dense, mémorisée, pour les rues et les voies rapides ; réduction réelle de la simulation et du rendu. |
 | **0.9.24** | **Flight to Quality** | Pilotage refait : modèle de vol à corps rigide, deux avions neufs (biplan Bourrasque, chasseur Tramontane), caméra de vol, cockpit et viseur tête haute, instruments, effets, son, collisions avec la ville et figures récompensées. |
 | **0.9.25** | **Consumer Staples** | Deux franchises de restauration dans toute la ville : BULLION (burgers, 36 succursales) et TRANCHE (pizza à la part, 54). On y entre, on commande, on porte son plateau, on s’assoit, on mange ; équipiers et clients vivent leur vie ; en-cas à emporter, braquage de la caisse. |
+| **0.9.27** | **Distressed Assets** | Le Wasteland vu de près : ruines aux fenêtres percées et carcasses où l’on roule, coques brisées qu’on traverse, cales où l’on entre, convois de Rouliers à piller, sable doré et ombres profondes, pleins phares hors les murs. |
 | **0.9.26** | **Scorched Earth** | Le Wasteland : Hudson à sec au pied des quais, douves de l’East River, Mur du nord et portes, ruines ensablées, Ceinture de 47 km, bascule d’ambiance au franchissement, navires échoués, camps, feux et projecteurs la nuit. |
 | 1.0 | Closing Bell | Le jeu fini : fin de l’histoire, coopération en ligne, mode photo, optimisation mobile. Pas avant. |
 
@@ -471,5 +472,19 @@ kilomètres avant d’être une flamme qui éclaire, et les projecteurs du Mur d
 comme un passage à niveau (`crossingStops` dans `js/highway-driving.js`). Le joueur ne doit jamais payer d’un
 accident le fait d’avoir pris une porte.
 
-**Ce qui vient ensuite.** Convois des Rouliers sur la Ceinture, carburant et eau comme monnaie du dehors, tempêtes de
-sable qui gagnent la ville, intérieurs des coques, phares plus longs hors les murs, missions hors les murs.
+**Deux distances.** Tout ce qui est hors les murs se lit deux fois. De loin : une silhouette (la ligne brisée de
+Harlem, une coque couchée, un panache de poussière sur la Ceinture). De près : un endroit où l’on entre. Une ruine est
+soit une coquille (quatre murs, fenêtres percées, planchers restants : on regarde dedans), soit une carcasse (colonnes
+et dalles : on roule dessous). Une coque est soit pleine, soit brisée (on passe entre les moitiés), soit ouverte (on
+entre dans la cale). Le plan est dans `js/wasteland-ruins-plan.js` et `js/wasteland-wrecks.js`, sans rendu, testé.
+
+**Les convois** (`js/wasteland-convoy.js`). Une colonne de quatre sur la Ceinture : éclaireur, deux camions bâchés,
+voiture de queue. Elle entre en scène hors de vue, à 640 m, et passe devant le joueur. C’est le premier habitant du
+dehors qui ne s’intéresse pas à lui : on peut la regarder passer. La toucher déclenche l’escorte (cinquante secondes
+de rancune) et fait fuir les camions ; casser un camion fait tomber une caisse, 2 200 $. Risque choisi, gain immédiat.
+
+**La lumière.** Le sable est mat : il ne renvoie pas le ciel. C’est ce qui lui donne sa couleur et ce qui rend les
+ombres lisibles (`uAmbient`, `uFill` dans `js/wasteland-materials.js`).
+
+**Ce qui vient ensuite.** Carburant et eau comme monnaie du dehors, tempêtes de sable qui gagnent la ville, ponts des
+coques praticables à pied, contrats d’escorte ou d’attaque de convoi, missions hors les murs.

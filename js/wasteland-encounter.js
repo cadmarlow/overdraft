@@ -2,6 +2,7 @@ import * as THREE from 'three/webgpu';
 import { AIDriver } from './ai-driver.js';
 import { settleBody } from './car-physics.js';
 import { routeThroughSalt, saltLandAt, sampleSalt, saltRoadAt, SALT_PLACES } from './wasteland-plan.js';
+import { WastelandConvoy } from './wasteland-convoy.js';
 
 const FORGE = { x: SALT_PLACES[0].x + 46, z: SALT_PLACES[0].z + 28 };
 const RELAY = SALT_PLACES[3];
@@ -86,6 +87,8 @@ export class WastelandEncounter {
     game.scene.add(this.cable);
     this.cable.updateMatrixWorld();
     if (this.contract === 'transport') this.pointToRelay();
+    // the columns that run the Ceinture (js/wasteland-convoy.js)
+    this.convoy = new WastelandConvoy(game, { steel, lamp });
   }
 
   get contract() { return this.game.saltContract ?? null; }
@@ -97,6 +100,7 @@ export class WastelandEncounter {
 
   appendCars(cars) {
     for (const unit of this.units) if (unit.active && !unit.car.destroyed) cars.push(unit.car);
+    this.convoy.appendCars(cars);
   }
 
   retire() {
@@ -221,6 +225,7 @@ export class WastelandEncounter {
     const area = dry ? 'LE WASTELAND' : 'MANHATTAN';
     if (this.areaBadge && this.areaBadge.textContent !== area) this.areaBadge.textContent = area;
     this.tickContract(player, dry);
+    this.convoy.update(dt, player, exposed);
     if (!exposed) {
       if (this.phase !== 'calme') this.retire();
       return;
@@ -234,7 +239,7 @@ export class WastelandEncounter {
       this.dust = .085;
       const tracked = { distance: Infinity };
       saltRoadAt(player.x,player.z,tracked);
-      const all = [player.inVehicle && tracked.distance > 7 ? g.car : null, ...this.units.filter(u=>u.active).map(u=>u.car)];
+      const all = [player.inVehicle && tracked.distance > 7 ? g.car : null, ...this.units.filter(u=>u.active).map(u=>u.car), ...this.convoy.units.filter(u=>u.active&&!u.car.destroyed).map(u=>u.car)];
       for (const car of all) {
         if (!car?.body || !car.mesh.visible || Math.abs(car.speed)<6 || distance(player,car.position)>275) continue;
         const x = car.position.x - Math.sin(car.heading)*2.7, z=car.position.z-Math.cos(car.heading)*2.7;

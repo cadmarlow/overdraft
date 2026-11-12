@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.9.27 — Distressed Assets — 12 novembre 2026
+
+Le Wasteland vu de près. Ce qui se regardait de loin se visite.
+
+- **Ruines.** Les immeubles éventrés ont de vraies fenêtres percées : on voit au travers le mur d’en face, les
+  planchers restés accrochés et le sable entré dedans. 177 carcasses de béton (colonnes, dalles, pans de mur, dalles
+  effondrées dans un angle) se dressent derrière la Grande Porte et le long des routes : on roule dessous, entre les
+  colonnes. De loin, la silhouette de Harlem est celle d’une ville morte, plus celle d’un jeu de cubes.
+- **Coques.** Le paquebot et le pétrolier au dos brisé laissent un passage où l’on roule entre leurs deux moitiés,
+  ponts visibles en coupe. Trois cargos ont une cale où l’on entre en voiture par une tôle arrachée : membrures,
+  panneaux de cale ouverts sur le ciel, feu de l’équipage. Ce sont le cargo bleu du Cimetière des Coques, le cargo
+  vert du lit sud et celui des Veilleurs à la Cale.
+- **Convois.** Une colonne de Rouliers, deux camions chargés entre deux voitures d’escorte, roule sur la Ceinture et
+  s’annonce de loin par sa poussière. Laissée tranquille, elle passe. Touchée, l’escorte se retourne contre vous et
+  les camions filent. Un camion détruit laisse tomber sa cargaison : 2 200 $ à ramasser avant le retour de l’escorte.
+- **Lumière du désert.** Le sable ne renvoie plus le ciel comme un miroir quand on le regarde en rasant : il est doré
+  jusqu’à l’horizon, les ombres sont profondes au pied des ruines et des coques, le couchant est rouge.
+- **Pleins phares hors les murs.** Passé une porte, les phares portent à 110 m, plus larges et réglés plus haut ;
+  ils reviennent en codes dès qu’on rentre en ville.
+
+### Validation de Distressed Assets
+
+- Chrome WebGPU séparé sur M1 Pro, qualité HAUTE, vraies touches CDP. Entrée en voiture sous une carcasse de neuf
+  étages (les colonnes et les dalles tombées arrêtent la voiture, le reste se traverse). Entrée à 76 km/h dans la
+  cale du cargo du Cimetière par sa porte, arrêt contre la paroi d’en face. Convoi attendu au bord de la Ceinture :
+  il arrive à 65 km/h en colonne serrée ; percuté, l’escorte donne l’alerte et les camions montent à 92 km/h. Camion
+  détruit : la caisse tombe, on la ramasse, 2 200 $. Vues de jour, au couchant et de nuit.
+- Images par seconde (échelle 1, 1600 × 900, sans plafond) : 33 à Midtown, 55 à 79 dans le désert (73 dans les ruines
+  de Harlem, 55 au Cimetière des Coques). Pas de recul par rapport à la 0.9.26.
+- 1 137 tests réussis, 37 ignorés comme sur la base, aucun échec. Build statique réussi.
+- Non vérifié : le son, la manette, la traque de l’escorte suivie jusqu’au bout (durée, retour dans la colonne), un
+  convoi croisé de nuit, les deux autres cargos à cale visités en voiture, le jeu en ligne.
+
 ## 0.9.26 — Scorched Earth — 12 novembre 2026
 
 Le Wasteland. Manhattan est une ville de survivants, et le monde s’arrête à ses quais.
